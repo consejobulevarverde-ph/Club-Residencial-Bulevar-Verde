@@ -1,0 +1,21 @@
+{
+  "name": "Club Residencial Bulevar Verde",
+  "short_name": "Bulevar Verde",
+  "description": "Club Residencial Bulevar Verde - Conjunto residencial en Itagüí, Antioquia",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e8f5e9",
+  "theme_color": "#2c5f2d",
+  "icons": [
+    {
+      "src": "/images/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/images/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

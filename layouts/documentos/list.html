@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.LanguageCode }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ .Description }}">
+    <title>{{ .Title }} - {{ .Site.Title }}</title>
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <meta name="theme-color" content="{{ .Site.Params.themeColor }}">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    
+    <!-- Google Fonts - Montserrat -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --font-primary: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --color-primary: #2c5f2d;
+            --color-secondary: #4a8c4b;
+            --color-light: #e8f5e9;
+            --color-white: #ffffff;
+        }
+        
+        body {
+            font-family: var(--font-primary);
+            background-color: var(--color-light);
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background-color: var(--color-primary) !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: 800;
+            font-size: 1.5rem;
+            color: var(--color-white) !important;
+        }
+        
+        .nav-link {
+            color: var(--color-light) !important;
+            font-weight: 600;
+        }
+        
+        .nav-link:hover {
+            color: var(--color-white) !important;
+        }
+        
+        .page-header {
+            background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary) 100%);
+            color: var(--color-light);
+            padding: 60px 0;
+            margin-bottom: 40px;
+        }
+        
+        .content-section {
+            background-color: var(--color-white);
+            border-radius: 10px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .document-category {
+            background-color: var(--color-white);
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .document-category h3 {
+            color: var(--color-primary);
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .document-category h3 i {
+            margin-right: 10px;
+            font-size: 1.5rem;
+        }
+        
+        .document-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .document-item {
+            padding: 15px;
+            border-bottom: 1px solid var(--color-light);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.3s ease;
+        }
+        
+        .document-item:hover {
+            background-color: var(--color-light);
+        }
+        
+        .document-item:last-child {
+            border-bottom: none;
+        }
+        
+        .document-link {
+            text-decoration: none;
+            color: var(--color-primary);
+            font-weight: 600;
+            flex-grow: 1;
+        }
+        
+        .document-link:hover {
+            color: var(--color-secondary);
+        }
+        
+        .document-icon {
+            color: var(--color-primary);
+            font-size: 1.2rem;
+            margin-right: 10px;
+        }
+        
+        .btn-download {
+            background-color: var(--color-primary);
+            color: var(--color-white);
+            border: none;
+            padding: 5px 15px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: background-color 0.3s ease;
+        }
+        
+        .btn-download:hover {
+            background-color: var(--color-secondary);
+            color: var(--color-white);
+        }
+        
+        footer {
+            background-color: var(--color-primary);
+            color: var(--color-light);
+            padding: 40px 0;
+            margin-top: 60px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-houses-fill"></i> Club Bulevar Verde
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {{ range .Site.Menus.main }}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ .URL }}">{{ .Name }}</a>
+                    </li>
+                    {{ end }}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <section class="page-header text-center">
+        <div class="container">
+            <h1 class="display-4">{{ .Title }}</h1>
+            <p class="lead">{{ .Description }}</p>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="content-section">
+            {{ .Content }}
+        </div>
+
+        <!-- Document Categories -->
+        <div class="document-category">
+            <h3><i class="bi bi-file-earmark-ruled"></i> Reglamentos</h3>
+            <ul class="document-list">
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/reglamentos/reglamento-convivencia.pdf" class="document-link">Reglamento de Convivencia</a></span>
+                    <a href="/documentos/reglamentos/reglamento-convivencia.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/reglamentos/reglamento-interno.pdf" class="document-link">Reglamento Interno</a></span>
+                    <a href="/documentos/reglamentos/reglamento-interno.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/reglamentos/uso-zonas-comunes.pdf" class="document-link">Uso de Zonas Comunes</a></span>
+                    <a href="/documentos/reglamentos/uso-zonas-comunes.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="document-category">
+            <h3><i class="bi bi-journal-text"></i> Actas de Asamblea</h3>
+            <ul class="document-list">
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/actas/acta-2024-12.pdf" class="document-link">Acta Asamblea - Diciembre 2024</a></span>
+                    <a href="/documentos/actas/acta-2024-12.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/actas/acta-2024-06.pdf" class="document-link">Acta Asamblea - Junio 2024</a></span>
+                    <a href="/documentos/actas/acta-2024-06.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="document-category">
+            <h3><i class="bi bi-file-earmark-spreadsheet"></i> Formularios</h3>
+            <ul class="document-list">
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/formularios/solicitud-salon-social.pdf" class="document-link">Solicitud Uso Salón Social</a></span>
+                    <a href="/documentos/formularios/solicitud-salon-social.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/formularios/autorizacion-visitantes.pdf" class="document-link">Autorización de Visitantes</a></span>
+                    <a href="/documentos/formularios/autorizacion-visitantes.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/formularios/pqrs.pdf" class="document-link">Formato PQRS</a></span>
+                    <a href="/documentos/formularios/pqrs.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="document-category">
+            <h3><i class="bi bi-megaphone"></i> Comunicados</h3>
+            <ul class="document-list">
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/comunicados/comunicado-ultima-fecha.pdf" class="document-link">Último Comunicado Oficial</a></span>
+                    <a href="/documentos/comunicados/comunicado-ultima-fecha.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="document-category">
+            <h3><i class="bi bi-cash-coin"></i> Financiero</h3>
+            <ul class="document-list">
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/financiero/presupuesto-2024.pdf" class="document-link">Presupuesto 2024</a></span>
+                    <a href="/documentos/financiero/presupuesto-2024.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+                <li class="document-item">
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/financiero/estado-financiero-2024.pdf" class="document-link">Estado Financiero 2024</a></span>
+                    <a href="/documentos/financiero/estado-financiero-2024.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="alert alert-info mt-4" role="alert">
+            <i class="bi bi-info-circle-fill"></i> <strong>Nota:</strong> Los documentos se irán agregando a medida que estén disponibles. Si necesitas un documento específico, contacta a la administración.
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container text-center">
+            <p>&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+baseURL = 'https://clubbulevarverde.co/'
+languageCode = 'es-co'
+title = 'Club Residencial Bulevar Verde'
+
+[params]
+  description = 'Club Residencial Bulevar Verde - Itagüí, Antioquia'
+  author = 'handresc1127'
+  themeColor = '#2c5f2d'
+  
+  # Información de contacto - Administración
+  phone = '+573222289066'
+  email = 'bulevarverdeadmon@gmail.com'
+  address = 'Calle 70 # 59 265, Itagüí, Antioquia'
+  horario = 'Lunes a viernes: 9:00 a.m - 1:00 p.m y 2:00 p.m - 5:00 p.m. Sábado: 9:00 a.m - 1:00 p.m'
+  
+  # Consejo de Administración
+  emailConsejo = 'consejo.bulevarverde@gmail.com'
+  
+  # Comité de Convivencia
+  emailConvivencia = 'comiteconvivenciabulevarverde@gmail.com'
+  
+  # Portería
+  phonePorteria1 = '+573009728851'
+  phonePorteria2 = '+573245820968'
+  
+  # Comunidad
+  whatsappComunidad = 'https://chat.whatsapp.com/HonY8ALBTlR6ivBNxyx0pv'
+  
+  # Redes sociales
+  facebook = ''
+  instagram = ''
+
+[menu]
+  [[menu.main]]
+    name = 'Inicio'
+    url = '/'
+    weight = 1
+    
+  [[menu.main]]
+    name = 'Documentos'
+    url = '#galeria'
+    weight = 2
+  
+  [[menu.main]]
+    name = 'Comunidad'
+    url = '#comunidad'
+    weight = 3
+    
+  [[menu.main]]
+    name = 'Contacto'
+    url = '#contacto'
+    weight = 4

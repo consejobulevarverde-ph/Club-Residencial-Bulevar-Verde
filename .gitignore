@@ -1,0 +1,22 @@
+# Hugo
+public/
+resources/_gen/
+.hugo_build.lock
+
+# Fonts (commercial licenses - not for version control)
+static/fonts/*.woff
+static/fonts/*.woff2
+static/fonts/*.ttf
+static/fonts/*.otf
+!static/fonts/README.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
