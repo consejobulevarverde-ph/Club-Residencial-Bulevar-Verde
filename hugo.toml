@@ -48,7 +48,7 @@ title = 'Club Residencial Bulevar Verde'
     
   [[menu.main]]
     name = 'PQRS'
-    url = '/pqrs/'
+    url = 'pqrs/'
     weight = 4
     
   [[menu.main]]

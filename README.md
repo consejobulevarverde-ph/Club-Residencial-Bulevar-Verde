@@ -77,7 +77,7 @@ static/images/
 ```
 
 Archivos importantes:
-- `logo.png` - Logo del club (250px ancho recomendado)
+- `.png` - Logo del club (250px ancho recomendado)
 - `favicon-16x16.png` - Favicon 16x16
 - `favicon-32x32.png` - Favicon 32x32
 - `apple-touch-icon.png` - Icono iOS 180x180

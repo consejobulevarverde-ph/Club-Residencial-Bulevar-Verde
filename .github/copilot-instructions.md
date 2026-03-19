@@ -15,12 +15,16 @@ Club-Residencial-Bulevar-Verde/
 ├── hugo.toml              # Configuración del sitio
 ├── content/               # Contenido del sitio
 │   ├── _index.md         # Página principal
-│   └── documentos/       # Sección de documentos
+│   ├── documentos/       # Sección de documentos
+│   │   └── _index.md
+│   └── pqrs/             # Sección PQRS
 │       └── _index.md     
 ├── layouts/               # Plantillas HTML
 │   ├── index.html        # Layout página principal
-│   └── documentos/       
-│       └── list.html     # Layout lista de documentos
+│   ├── documentos/       
+│   │   └── list.html     # Layout lista de documentos
+│   └── pqrs/
+│       └── list.html     # Layout formulario PQRS
 ├── static/                # Archivos estáticos
 │   ├── documentos/       # Documentos del club (PDFs)
 │   │   ├── reglamentos/  
@@ -57,7 +61,8 @@ Club-Residencial-Bulevar-Verde/
 1. Inicio (/)
 2. Documentos (#galeria - sección de documentos compartidos en Drive)
 3. Comunidad (#comunidad - grupo de WhatsApp)
-4. Contacto (#contacto)
+4. PQRS (/pqrs/ - formulario de peticiones, quejas, reclamos y sugerencias)
+5. Contacto (#contacto)
 ## 🔐 Información de Contacto
 
 ### Administración
@@ -101,6 +106,37 @@ El sitio incluye una galería de instalaciones embebida desde Google Drive:
    - Enlace: `https://drive.google.com/drive/folders/ID_DE_TU_CARPETA?usp=sharing`
    - ID: `ID_DE_TU_CARPETA`
 4. Reemplaza el ID en el iframe de `layouts/index.html`
+
+## 📝 Formulario PQRS
+
+### Google Forms Embebido
+
+El sitio incluye un formulario PQRS (Peticiones, Quejas, Reclamos y Sugerencias) en una página dedicada:
+
+- **Ubicación**: `content/pqrs/_index.md` + `layouts/pqrs/list.html`
+- **URL**: `/pqrs/`
+- **Formulario**: https://docs.google.com/forms/d/e/1FAIpQLSfUum_qRdTFr2Pl1n1Z_p0rkI162pxVyFqRm-jHbiGP_LwARg/viewform
+
+#### Características:
+
+1. **Dos Opciones de Acceso**:
+   - **Formulario embebido**: Se puede completar directamente en la página `/pqrs/`
+   - **Enlace externo**: Botón para abrir el formulario en una nueva pestaña de Google Forms
+
+2. **Acceso desde Index**:
+   - Sección `#pqrs` en la página principal con tarjeta informativa
+   - Botón "Ir al Formulario" → Lleva a `/pqrs/`
+   - Botón "Abrir en ventana externa" → Abre Google Forms directamente
+
+3. **Entrada en el Menú**: El menú principal incluye enlace directo a PQRS
+
+#### Cómo actualizar el formulario:
+
+1. Crea un nuevo Google Form o modifica el existente
+2. Obtén el enlace para compartir
+3. Reemplaza la URL en:
+   - `layouts/index.html` (sección PQRS - botón externo)
+   - `layouts/pqrs/list.html` (iframe embebido y botón externo)
 
 ## �📁 Sistema de Documentos Compartidos
 
@@ -185,6 +221,7 @@ static/images/
 - 6 tarjetas de características (seguridad, áreas verdes, comunidad, salón social, ubicación, documentos)
 - **Documentos Compartidos - Google Drive**: Iframe embebido mostrando carpeta de documentos del club
 - **Comunidad WhatsApp**: Botón para unirse al grupo de residentes
+- **PQRS**: Tarjeta con enlaces al formulario (embebido en `/pqrs/` y externo)
 - **Directorio de Contacto**: Información completa de:
   - Administración (dirección, teléfono WhatsApp, email, horario)
   - Consejo de Administración (email)
@@ -197,6 +234,15 @@ static/images/
 - Botón de descarga para cada documento
 - Diseño responsive con Bootstrap 5
 - Iconos descriptivos para cada tipo de documento
+
+### Página PQRS (/pqrs/)
+- Header con navegación completa
+- Descripción de los tipos de PQRS
+- Tarjeta informativa con explicación de cada tipo
+- Formulario de Google Forms embebido
+- Botón para abrir en ventana externa
+- Diseño responsive con Bootstrap 5
+- Mensaje informativo sobre atención de solicitudes
 
 ## 🔗 Tecnologías Utilizadas
 
@@ -247,6 +293,9 @@ El sitio es completamente responsive y se adapta a:
 - Usar plantillas de Hugo (Go templates)
 - Mantener layouts separados por tipo de página
 - Usar variables de configuración desde `hugo.toml`
+- **IMPORTANTE**: Usar `relURL` para todas las rutas internas (imágenes, enlaces, assets)
+  - Ejemplo: `{{ "images/logo.png" | relURL }}` en lugar de `/images/logo.png`
+  - Esto asegura compatibilidad con subdirectorios en GitHub Pages
 
 ### CSS
 - CSS inline en los layouts (por simplicidad y rendimiento)
@@ -299,6 +348,8 @@ Este proyecto está basado en la estructura del sitio web de PetVerde, adaptado 
 2. **SEO**: Actualizar meta descriptions en cada página de contenido.
 3. **Performance**: Optimizar imágenes antes de subirlas (usar formatos modernos como WebP si es posible).
 4. **Seguridad**: No incluir información sensible en el repositorio Git.
+5. **Rutas**: Siempre usar `relURL` en templates de Hugo para asegurar compatibilidad con diferentes estructuras de URL (desarrollo local vs GitHub Pages).
+6. **PQRS**: El formulario de Google Forms debe tener permisos configurados para que cualquier persona con el enlace pueda responder.
 
 ## 📞 Soporte
 

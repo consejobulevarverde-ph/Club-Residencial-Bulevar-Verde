@@ -7,10 +7,10 @@
     <title>{{ .Title }} - {{ .Site.Title }}</title>
     
     <!-- Favicons -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
-    <link rel="manifest" href="/site.webmanifest">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ "images/favicon-32x32.png" | relURL }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ "images/favicon-16x16.png" | relURL }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ "images/apple-touch-icon.png" | relURL }}">
+    <link rel="manifest" href="{{ "site.webmanifest" | relURL }}">
     <meta name="theme-color" content="{{ .Site.Params.themeColor }}">
     
     <!-- Bootstrap CSS -->
@@ -197,7 +197,7 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
-            <a class="navbar-brand" href="/">
+            <a class="navbar-brand" href="{{ "/" | relURL }}">
                 <i class="bi bi-houses-fill"></i> Club Bulevar Verde
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -219,7 +219,7 @@
     <section class="hero-section text-center">
         <div class="container">
             <!-- Logo will go here when uploaded -->
-            <img src="/images/logo.png" alt="Club Residencial Bulevar Verde" class="hero-logo" onerror="this.style.display='none'">
+            <img src="{{ "images/logo.png" | relURL }}" alt="Club Residencial Bulevar Verde" class="hero-logo" onerror="this.style.display='none'">
             <h1 class="display-4">{{ .Site.Title }}</h1>
             <p class="lead">{{ .Site.Params.description }}</p>
         </div>
@@ -336,7 +336,7 @@
                                 Tu feedback nos ayuda a mejorar continuamente.
                             </p>
                             <div class="d-flex flex-column gap-3">
-                                <a href="/pqrs/" class="btn btn-primary btn-lg">
+                                <a href="{{ "pqrs/" | relURL }}" class="btn btn-primary btn-lg">
                                     <i class="bi bi-pencil-square"></i> Ir al Formulario
                                 </a>
                                 <a href="https://docs.google.com/forms/d/e/1FAIpQLSfUum_qRdTFr2Pl1n1Z_p0rkI162pxVyFqRm-jHbiGP_LwARg/viewform" 
