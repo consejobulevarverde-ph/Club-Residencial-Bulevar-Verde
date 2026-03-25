@@ -47,11 +47,16 @@ title = 'Club Residencial Bulevar Verde'
     weight = 3
     
   [[menu.main]]
+    name = 'Reservas'
+    url = 'reservas/'
+    weight = 4
+
+  [[menu.main]]
     name = 'PQRS'
     url = 'pqrs/'
-    weight = 4
+    weight = 5
     
   [[menu.main]]
     name = 'Contacto'
     url = '#contacto'
-    weight = 5
+    weight = 6
