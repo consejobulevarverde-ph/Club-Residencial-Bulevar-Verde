@@ -14,7 +14,7 @@
  * 4. Quién tiene acceso: Cualquier persona
  * 5. Copiar la URL y pegarla en layouts/sanciones/list.html (constante WEBAPP_URL)
  ***************************************/
-const SHEET_ID_SANCIONES = '1Y3m862bfVbR1vUXprc6DJwlw2oomj3Wb';
+const SHEET_ID_SANCIONES = '1GeJZ4Rd4-ddzE6Vi8kpq9iB2_oxuLW87UiAnbZQ6Iow';
 const SHEET_PLANILLA = 'PLANILLA';
 
 /***************************************
@@ -56,7 +56,7 @@ function consultarSanciones_(aptoInput, placaInput) {
   }
 
   const apto = safeTrim_(aptoInput);
-  const placa = safeTrim_(placaInput).toUpperCase();
+  const placa = normalizePlaca_(placaInput);
 
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
@@ -74,26 +74,32 @@ function consultarSanciones_(aptoInput, placaInput) {
     }
 
     const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
     const rawHeaders = allData[0];
-    const headers = rawHeaders.map(function (h) { return safeTrim_(h).toLowerCase(); });
+    const headers = rawHeaders.map(function (h) { 
+      return normalizeHeader_(h); 
+    });
 
     // Mapa de nombre de columna → índice
     var colMap = {};
     headers.forEach(function (h, i) { colMap[h] = i; });
 
     // Índices de columnas clave
-    var IDX = {
-      id:               findColIdx_(colMap, ['id']),
-      fecha:            findColIdx_(colMap, ['fecha']),
-      vigilante:        findColIdx_(colMap, ['vigilante que toma el registro', 'vigilante', 'agente']),
-      tipoVehiculo:     findColIdx_(colMap, ['tipo de vehículo', 'tipo de vehiculo', 'tipo vehiculo', 'vehiculo', 'vehículo']),
-      placa:            findColIdx_(colMap, ['placa']),
-      apto:             findColIdx_(colMap, ['apto', 'apartamento', 'apt', 'numero de apto', 'número de apto', 'no. apto', 'nro apto']),
-      residenteVisitante: findColIdx_(colMap, ['residente o visitante', 'residente', 'tipo residente', 'residente/visitante']),
-      observaciones:    findColIdx_(colMap, ['observaciones', 'observacion', 'observación']),
-      foto:             findColIdx_(colMap, ['foto', 'imagen', 'fotografía', 'fotografia']),
-      firma:            findColIdx_(colMap, ['firma'])
-    };
+   var IDX = {
+    id: findColIdx_(colMap, ['id']),
+    fecha: findColIdx_(colMap, ['fecha']),
+    vigilante: findColIdx_(colMap, ['vigilante que toma el registro', 'vigilante', 'agente']),
+    tipoVehiculo: findColIdx_(colMap, ['tipo de vehiculo', 'tipo vehiculo', 'vehiculo']),
+    placa: findColIdx_(colMap, ['placa']),
+    apto: findColIdx_(colMap, ['apto', 'apartamento', 'apt', 'numero de apto', 'no. apto', 'nro apto']),
+    residenteVisitante: findColIdx_(colMap, ['residente o visitante', 'residente', 'tipo residente', 'residente/visitante']),
+    observaciones: findColIdx_(colMap, ['observaciones', 'observacion']),
+    foto: findColIdx_(colMap, ['foto', 'imagen', 'fotografia']),
+    firma: findColIdx_(colMap, ['firma'])
+  };
+
+  Logger.log('HEADERS NORMALIZADOS: ' + JSON.stringify(headers));
+  Logger.log('IDX: ' + JSON.stringify(IDX));
 
     if (IDX.placa === -1) {
       return jsonOutput_({ ok: false, error: 'No se encontró la columna "placa" en la hoja PLANILLA.' });
@@ -104,8 +110,29 @@ function consultarSanciones_(aptoInput, placaInput) {
 
     // Paso 1: buscar filas donde la placa coincide
     var placaRows = rows.filter(function (row) {
-      return safeTrim_(row[IDX.placa]).toUpperCase() === placa;
+      return normalizePlaca_(row[IDX.placa]) === placa;
     });
+
+    Logger.log('PLACA BUSCADA: ' + placa);
+    Logger.log('TOTAL FILAS LEÍDAS: ' + rows.length);
+    Logger.log('PLACA BUSCADA: ' + placa);
+    Logger.log('EXISTE PLACA: ' + rows.some(function(row) {
+        return normalizePlaca_(row[IDX.placa]) === placa;
+      }));
+
+
+    var placaRows = rows.filter(function (row) {
+      return normalizePlaca_(row[IDX.placa]) === placa;
+    });
+
+    Logger.log('FILAS CON ESA PLACA: ' + placaRows.length);
+    Logger.log('APTOS DE ESA PLACA: ' + JSON.stringify(placaRows.map(function(row) {
+      return safeTrim_(row[IDX.apto]);
+    })));
+    Logger.log('APTO BUSCADO: ' + apto);
+    Logger.log('APTO NORMALIZADO: ' + aptoNorm);
+
+
 
     if (placaRows.length === 0) {
       return jsonOutput_({
@@ -119,6 +146,8 @@ function consultarSanciones_(aptoInput, placaInput) {
       return rowMatchesApto_(row, IDX, aptoNorm);
     });
 
+    Logger.log('MATCHES APTO: ' + matchesApto);
+
     if (!matchesApto) {
       return jsonOutput_({
         ok: false,
@@ -127,24 +156,61 @@ function consultarSanciones_(aptoInput, placaInput) {
     }
 
     // Paso 3: obtener TODOS los registros del apartamento
-    var aptoRows = rows.filter(function (row) {
-      return rowMatchesApto_(row, IDX, aptoNorm);
+    // y también todos los registros de la placa consultada,
+    // aunque por error estén asociados a otro apartamento.
+    // Guardamos también el índice real de la fila en Google Sheets.
+    var registrosFinales = [];
+
+    rows.forEach(function (row, index) {
+      var realRowIndex = index + 1; // +1 porque allData[0] son los encabezados
+      var perteneceAlApto = rowMatchesApto_(row, IDX, aptoNorm);
+      var perteneceALaPlaca = normalizePlaca_(row[IDX.placa]) === placa;
+
+      if (perteneceAlApto || perteneceALaPlaca) {
+        registrosFinales.push({
+          row: row,
+          realRowIndex: realRowIndex
+        });
+      }
     });
 
-    var sanciones = aptoRows.map(function (row) {
+    // Evitar duplicados por ID
+    var idsVistos = {};
+    registrosFinales = registrosFinales.filter(function(item) {
+      var row = item.row;
+      var id = IDX.id !== -1 ? safeTrim_(row[IDX.id]) : '';
+
+      if (!id) return true;
+      if (idsVistos[id]) return false;
+
+      idsVistos[id] = true;
+      return true;
+    });
+
+    var sanciones = registrosFinales.map(function (item) {
+      var row = item.row;
+      var realRowIndex = item.realRowIndex;
+
       return {
-        id:                 IDX.id !== -1               ? safeTrim_(row[IDX.id])               : '',
-        fecha:              IDX.fecha !== -1             ? formatFecha_(row[IDX.fecha])          : '',
-        vigilante:          IDX.vigilante !== -1         ? safeTrim_(row[IDX.vigilante])         : '',
-        tipoVehiculo:       IDX.tipoVehiculo !== -1      ? safeTrim_(row[IDX.tipoVehiculo])      : '',
-        placa:              IDX.placa !== -1             ? safeTrim_(row[IDX.placa]).toUpperCase() : '',
+        id: IDX.id !== -1 ? safeTrim_(row[IDX.id]) : '',
+        fecha: IDX.fecha !== -1 ? formatFecha_(row[IDX.fecha]) : '',
+        apartamento: IDX.apto !== -1 ? safeTrim_(row[IDX.apto]) : '',
+        vigilante: IDX.vigilante !== -1 ? safeTrim_(row[IDX.vigilante]) : '',
+        tipoVehiculo: IDX.tipoVehiculo !== -1 ? safeTrim_(row[IDX.tipoVehiculo]) : '',
+        placa: IDX.placa !== -1 ? safeTrim_(row[IDX.placa]).toUpperCase() : '',
         residenteOVisitante: IDX.residenteVisitante !== -1 ? safeTrim_(row[IDX.residenteVisitante]) : '',
-        observaciones:      IDX.observaciones !== -1     ? safeTrim_(row[IDX.observaciones])     : '',
-        foto:               IDX.foto !== -1              ? safeTrim_(row[IDX.foto])              : '',
-        firma:              IDX.firma !== -1             ? safeTrim_(row[IDX.firma])             : ''
+        observaciones: IDX.observaciones !== -1 ? safeTrim_(row[IDX.observaciones]) : '',
+        foto: IDX.foto !== -1 ? getCellUrlOrText_(richData, allData, realRowIndex, IDX.foto) : '',
+        firma: IDX.firma !== -1 ? getCellUrlOrText_(richData, allData, realRowIndex, IDX.firma) : ''
       };
     });
 
+
+
+
+    Logger.log('TOTAL SANCIONES DEL APTO: ' + sanciones.length);
+    Logger.log('SANCIONES DEL APTO:');
+    Logger.log(JSON.stringify(sanciones, null, 2));
     return jsonOutput_({ ok: true, apto: apto, sanciones: sanciones });
 
   } catch (error) {
@@ -166,16 +232,11 @@ function findColIdx_(colMap, names) {
 
 // Verifica si una fila pertenece al apartamento indicado
 function rowMatchesApto_(row, IDX, aptoNorm) {
-  // Primero busca en la columna dedicada de apartamento
   if (IDX.apto !== -1) {
     var rowApto = normalizeText_(row[IDX.apto]);
-    return rowApto === aptoNorm || rowApto.indexOf(aptoNorm) !== -1;
+    return rowApto === aptoNorm;
   }
-  // Respaldo: busca el número de apto dentro del campo "residente o visitante"
-  if (IDX.residenteVisitante !== -1) {
-    var rowRV = normalizeText_(row[IDX.residenteVisitante]);
-    return rowRV.indexOf(aptoNorm) !== -1;
-  }
+
   return false;
 }
 
@@ -216,6 +277,17 @@ function normalizeText_(value) {
   return safeTrim_(value).toLowerCase().replace(/\s+/g, ' ');
 }
 
+function getCellUrlOrText_(richData, allData, rowIndex, colIndex) {
+  var rich = richData[rowIndex][colIndex];
+
+  if (rich) {
+    var url = rich.getLinkUrl();
+    if (url) return url;
+  }
+
+  return safeTrim_(allData[rowIndex][colIndex]);
+}
+
 /***************************************
  * TEST - Ejecutar manualmente para verificar
  ***************************************/
@@ -223,10 +295,25 @@ function testConsultarSanciones() {
   var fakeEvent = {
     parameter: {
       action: 'consultar',
-      apto: '101',       // Reemplaza con un apto real de tu hoja
-      placa: 'ABC123'    // Reemplaza con una placa real de tu hoja
+      apto: '1029',       // Reemplaza con un apto real de tu hoja
+      placa: 'TSF66G'    // Reemplaza con una placa real de tu hoja
     }
   };
   var result = doGet(fakeEvent);
   Logger.log(result.getContent());
+}
+
+function normalizeHeader_(value) {
+  return safeTrim_(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quita tildes
+    .replace(/\s+/g, ' ')            // quita saltos de línea y espacios dobles
+    .trim();
+}
+
+function normalizePlaca_(value) {
+  return safeTrim_(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
 }
