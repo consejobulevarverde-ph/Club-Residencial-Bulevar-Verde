@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.LanguageCode }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Consulta de Sanciones - {{ .Site.Title }}">
+    <title>{{ .Title }} - {{ .Site.Title }}</title>
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ "images/favicon-32x32.png" | relURL }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ "images/favicon-16x16.png" | relURL }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ "images/apple-touch-icon.png" | relURL }}">
+    <link rel="manifest" href="{{ "site.webmanifest" | relURL }}">
+    <meta name="theme-color" content="{{ .Site.Params.themeColor }}">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+
+    <!-- Google Fonts - Montserrat -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --font-primary: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-weight-regular: 400;
+            --font-weight-semibold: 600;
+            --font-weight-bold: 700;
+            --font-weight-extrabold: 800;
+            --color-primary: #2c5f2d;
+            --color-secondary: #4a8c4b;
+            --color-tertiary: #7bb77d;
+            --color-light: #e8f5e9;
+            --color-white: #ffffff;
+        }
+
+        body {
+            font-family: var(--font-primary);
+            font-weight: var(--font-weight-regular);
+            background-color: var(--color-light);
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background-color: var(--color-primary) !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .navbar-brand {
+            font-weight: var(--font-weight-extrabold);
+            font-size: 1.5rem;
+            color: var(--color-white) !important;
+        }
+        .nav-link {
+            color: var(--color-light) !important;
+            font-weight: var(--font-weight-semibold);
+            transition: color 0.3s ease;
+        }
+        .nav-link:hover {
+            color: var(--color-white) !important;
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary) 100%);
+            color: var(--color-white);
+            padding: 60px 0 40px;
+            margin-bottom: 40px;
+        }
+        .page-header h1 {
+            font-weight: var(--font-weight-extrabold);
+            font-size: 2.5rem;
+        }
+
+        .content-section {
+            background-color: var(--color-white);
+            border-radius: 10px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .content-section h2 {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: 20px;
+        }
+
+        .btn-primary {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+        }
+        .btn-primary:hover {
+            background-color: var(--color-secondary);
+            border-color: var(--color-secondary);
+        }
+
+        footer {
+            background-color: var(--color-primary);
+            color: var(--color-light);
+            padding: 40px 0;
+            margin-top: 60px;
+        }
+        footer a {
+            color: var(--color-light);
+            text-decoration: none;
+        }
+        footer a:hover {
+            color: var(--color-white);
+        }
+
+        .info-card {
+            background-color: var(--color-light);
+            border-left: 4px solid var(--color-primary);
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+        }
+
+        /* === Sanciones === */
+
+        #loading-spinner {
+            display: none;
+        }
+        #loading-spinner.show {
+            display: block;
+        }
+
+        .sancion-card {
+            border: 2px solid var(--color-light);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: box-shadow 0.2s ease;
+        }
+        .sancion-card:hover {
+            box-shadow: 0 4px 16px rgba(44, 95, 45, 0.15);
+        }
+
+        .sancion-header {
+            background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            color: var(--color-white);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .sancion-badge {
+            font-weight: var(--font-weight-bold);
+            font-size: 1rem;
+        }
+        .sancion-fecha {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .sancion-body {
+            padding: 20px;
+        }
+
+        .sancion-field {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 8px;
+            background-color: #fafafa;
+            border-radius: 6px;
+            height: 100%;
+        }
+        .sancion-label {
+            font-size: 0.75rem;
+            font-weight: var(--font-weight-semibold);
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .sancion-value {
+            font-size: 0.95rem;
+            font-weight: var(--font-weight-semibold);
+            color: #333;
+            word-break: break-word;
+        }
+
+        .media-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 2px solid var(--color-primary);
+            color: var(--color-primary);
+            font-size: 0.85rem;
+            font-weight: var(--font-weight-semibold);
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        .media-link:hover {
+            background-color: var(--color-primary);
+            color: var(--color-white);
+        }
+
+        .controversy-section {
+            background-color: var(--color-light);
+            border-radius: 10px;
+            padding: 30px;
+            border: 2px solid var(--color-tertiary);
+        }
+        .controversy-section h5 {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: 8px;
+        }
+
+        .btn-whatsapp {
+            background-color: #25d366;
+            border-color: #25d366;
+            color: var(--color-white);
+            font-weight: var(--font-weight-bold);
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            border: 2px solid #25d366;
+        }
+        .btn-whatsapp:hover:not(:disabled) {
+            background-color: #1ebe5d;
+            border-color: #1ebe5d;
+            color: var(--color-white);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+        }
+        .btn-whatsapp:disabled {
+            background-color: #ccc;
+            border-color: #ccc;
+            color: #888;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ "/" | relURL }}">
+                <i class="bi bi-houses-fill"></i> Club Bulevar Verde
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {{ range .Site.Menus.main }}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ .URL }}">{{ .Name }}</a>
+                    </li>
+                    {{ end }}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <section class="page-header text-center">
+        <div class="container">
+            <h1><i class="bi bi-shield-exclamation"></i> {{ .Title }}</h1>
+            <p class="lead">Consulta los registros de sanciones asociados a tu apartamento</p>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="content-section">
+            {{ .Content }}
+
+            <!-- Información importante -->
+            <div class="info-card">
+                <h5><i class="bi bi-info-circle"></i> ¿Cómo funciona?</h5>
+                <ol class="mb-0">
+                    <li>Ingresa el número de tu apartamento.</li>
+                    <li>Ingresa la placa de uno de los vehículos asociados a tu apartamento.</li>
+                    <li>El sistema verificará la información y mostrará las sanciones registradas.</li>
+                    <li>Si deseas controvertir alguna sanción, usa el formulario al final del listado.</li>
+                </ol>
+            </div>
+
+            <!-- Formulario de búsqueda -->
+            <div class="row g-3 justify-content-center mb-4">
+                <div class="col-md-4">
+                    <label for="input-apto" class="form-label fw-bold">
+                        <i class="bi bi-building"></i> Número de apartamento
+                    </label>
+                    <input type="text"
+                           id="input-apto"
+                           class="form-control form-control-lg"
+                           placeholder="Ej: 101"
+                           autocomplete="off"
+                           maxlength="20">
+                </div>
+                <div class="col-md-4">
+                    <label for="input-placa" class="form-label fw-bold">
+                        <i class="bi bi-card-text"></i> Placa del vehículo
+                    </label>
+                    <input type="text"
+                           id="input-placa"
+                           class="form-control form-control-lg"
+                           placeholder="Ej: ABC123"
+                           autocomplete="off"
+                           maxlength="10"
+                           style="text-transform: uppercase;">
+                </div>
+            </div>
+
+            <div class="text-center mb-4">
+                <button class="btn btn-primary btn-lg" onclick="consultarSanciones()">
+                    <i class="bi bi-search"></i> Consultar sanciones
+                </button>
+            </div>
+
+            <!-- Spinner de carga -->
+            <div id="loading-spinner" class="text-center py-4">
+                <div class="spinner-border text-success" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2 text-muted">Consultando registros...</p>
+            </div>
+
+            <!-- Alerta de error -->
+            <div id="consulta-error" class="alert alert-warning d-none" role="alert">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span id="consulta-error-msg"></span>
+            </div>
+
+            <!-- Sección de resultados -->
+            <div id="sanciones-result" class="d-none">
+                <hr class="my-4">
+
+                <h4 class="mb-1" style="color: var(--color-primary);">
+                    <i class="bi bi-list-check"></i>
+                    Sanciones del Apto <span id="display-apto" class="fw-bold"></span>
+                </h4>
+                <p id="sanciones-count" class="text-muted small mb-4"></p>
+
+                <!-- Listado de sanciones -->
+                <div id="sanciones-list" class="d-flex flex-column gap-3 mb-5"></div>
+
+                <!-- Sección de controversia -->
+                <div class="controversy-section">
+                    <h5><i class="bi bi-chat-square-text"></i> ¿Desea controvertir alguna sanción?</h5>
+                    <p class="text-muted small mb-4">
+                        Si considera que algún registro es incorrecto, indique los IDs y escriba su observación.
+                        La controversia será enviada a la administración por WhatsApp.
+                    </p>
+
+                    <div class="mb-3">
+                        <label for="input-ids" class="form-label fw-bold">
+                            Indique los IDs a controvertir <span class="text-danger">*</span>
+                        </label>
+                        <input type="text"
+                               id="input-ids"
+                               class="form-control"
+                               placeholder="Ej: 1, 3, 7"
+                               oninput="updateWhatsAppButton()">
+                        <div class="form-text">Separe los IDs con comas. Ejemplo: 1, 2, 5</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="input-controversia" class="form-label fw-bold">
+                            Mensaje de controversia u observación <span class="text-danger">*</span>
+                        </label>
+                        <textarea id="input-controversia"
+                                  class="form-control"
+                                  rows="4"
+                                  placeholder="Explique los motivos de su controversia u observación..."
+                                  oninput="updateWhatsAppButton()"></textarea>
+                    </div>
+
+                    <div class="text-center">
+                        <p id="whatsapp-validation" class="text-danger small mb-2 d-none">
+                            <i class="bi bi-exclamation-circle"></i>
+                            Debe completar los campos de IDs y mensaje de controversia para continuar.
+                        </p>
+                        <button id="btn-whatsapp"
+                                class="btn btn-whatsapp btn-lg"
+                                onclick="enviarControversia()"
+                                disabled>
+                            <i class="bi bi-whatsapp"></i> Enviar por WhatsApp
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container text-center">
+            <p>&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</p>
+            <p class="mt-2">
+                {{ with .Site.Params.facebook }}
+                <a href="{{ . }}" target="_blank" class="me-3"><i class="bi bi-facebook"></i></a>
+                {{ end }}
+                {{ with .Site.Params.instagram }}
+                <a href="{{ . }}" target="_blank" class="me-3"><i class="bi bi-instagram"></i></a>
+                {{ end }}
+                {{ with .Site.Params.whatsappComunidad }}
+                <a href="{{ . }}" target="_blank"><i class="bi bi-whatsapp"></i></a>
+                {{ end }}
+            </p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // URL del Web App de Google Apps Script para Sanciones.
+        // Reemplaza este valor con la URL de despliegue de google/sanciones.js.
+        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbx7abkQhvf-N9o0hLeSYsLJ1GtTzrTJl3YfumFk4t6Zmcqf-ds512JzQwZqPHWdKjgqHQ/exec';
+
+        var currentApto = '';
+        var selectedIds = [];
+
+        document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('input-apto').addEventListener('keydown', handleEnter_);
+            document.getElementById('input-placa').addEventListener('keydown', handleEnter_);
+
+            // Forzar mayúsculas en placa mientras escribe
+            document.getElementById('input-placa').addEventListener('input', function () {
+                this.value = this.value.toUpperCase();
+            });
+        });
+
+        function handleEnter_(e) {
+            if (e.key === 'Enter') {
+                consultarSanciones();
+            }
+        }
+
+        // ========== CONSULTA ==========
+
+        window.consultarSanciones = function () {
+            var apto = document.getElementById('input-apto').value.trim();
+            var placa = document.getElementById('input-placa').value.trim().toUpperCase();
+
+            if (!apto) {
+                showError_('Por favor ingrese el número de apartamento.');
+                document.getElementById('input-apto').focus();
+                return;
+            }
+            if (!placa) {
+                showError_('Por favor ingrese la placa del vehículo.');
+                document.getElementById('input-placa').focus();
+                return;
+            }
+
+            currentApto = apto;
+
+            document.getElementById('loading-spinner').classList.add('show');
+            document.getElementById('consulta-error').classList.add('d-none');
+            document.getElementById('sanciones-result').classList.add('d-none');
+
+            var url = WEBAPP_URL +
+                '?action=consultar' +
+                '&apto=' + encodeURIComponent(apto) +
+                '&placa=' + encodeURIComponent(placa);
+
+            fetch(url)
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    document.getElementById('loading-spinner').classList.remove('show');
+                    if (data.ok) {
+                        renderSanciones_(data);
+                    } else {
+                        showError_(data.error || 'No se pudo consultar la información.');
+                    }
+                })
+                .catch(function () {
+                    document.getElementById('loading-spinner').classList.remove('show');
+                    showError_('Error de conexión. Verifique su internet e intente de nuevo.');
+                });
+        };
+
+        // ========== RENDER DE RESULTADOS ==========
+
+        function renderSanciones_(data) {
+            var resultEl = document.getElementById('sanciones-result');
+            var listEl = document.getElementById('sanciones-list');
+            var countEl = document.getElementById('sanciones-count');
+
+            document.getElementById('display-apto').textContent = data.apto;
+            listEl.innerHTML = '';
+
+            // Reiniciar formulario de controversia
+            document.getElementById('input-ids').value = '';
+            selectedIds = [];
+            document.getElementById('input-controversia').value = '';
+            document.getElementById('whatsapp-validation').classList.add('d-none');
+            document.getElementById('btn-whatsapp').disabled = true;
+
+            
+            if (!data.sanciones || data.sanciones.length === 0) {
+                countEl.textContent = '';
+                listEl.innerHTML =
+                    '<div class="alert alert-success">' +
+                    '<i class="bi bi-check-circle-fill"></i> ' +
+                    'No se encontraron sanciones registradas para el Apto ' +
+                    escapeHtml_(data.apto) + '.' +
+                    '</div>';
+                resultEl.classList.remove('d-none');
+                return;
+            }
+
+            countEl.textContent = 'Se encontraron ' + data.sanciones.length + ' registro(s) de sanción.';
+
+            data.sanciones.forEach(function (s, idx) {
+                var card = buildSancionCard_(s, idx);
+                listEl.appendChild(card);
+            });
+
+            resultEl.classList.remove('d-none');
+
+            setTimeout(function () {
+                resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 120);
+        }
+
+        function buildSancionCard_(s, idx) {
+            var card = document.createElement('div');
+            card.className = 'sancion-card';
+
+            var idLabel = s.id ? String(s.id) : String(idx + 1);
+            var fotoHtml = buildMediaHtml_(s.foto, 'Foto', 'bi-camera-fill');
+            var firmaHtml = buildMediaHtml_(s.firma, 'Firma', 'bi-pen-fill');
+
+            var mediaRow = (fotoHtml || firmaHtml)
+                ? '<div class="col-12"><div class="d-flex gap-2 flex-wrap pt-1">' + fotoHtml + firmaHtml + '</div></div>'
+                : '';
+
+            var obsRow = s.observaciones
+                ? '<div class="col-12"><div class="sancion-field">' +
+                '<span class="sancion-label"><i class="bi bi-chat-left-text"></i> Observaciones</span>' +
+                '<span class="sancion-value">' + escapeHtml_(s.observaciones) + '</span>' +
+                '</div></div>'
+                : '';
+
+            card.innerHTML =
+                '<div class="sancion-header">' +
+                    '<div class="form-check m-0">' +
+                        '<input class="form-check-input sancion-checkbox" type="checkbox" value="' + escapeHtml_(idLabel) + '" id="sancion-check-' + escapeHtml_(idLabel) + '">' +
+                        '<label class="form-check-label sancion-badge" for="sancion-check-' + escapeHtml_(idLabel) + '">' +
+                            '<i class="bi bi-shield-exclamation"></i> ID ' + escapeHtml_(idLabel) +
+                        '</label>' +
+                    '</div>' +
+                    '<span class="sancion-fecha"><i class="bi bi-calendar3"></i> ' + escapeHtml_(s.fecha || '-') + '</span>' +
+                '</div>' +
+                '<div class="sancion-body">' +
+                    '<div class="row g-2">' +
+
+                        '<div class="col-sm-4">' +
+                            '<div class="sancion-field">' +
+                                '<span class="sancion-label"><i class="bi bi-card-text"></i> Placa</span>' +
+                                '<span class="sancion-value fw-bold">' + escapeHtml_(s.placa || '-') + '</span>' +
+                            '</div>' +
+                        '</div>' +
+
+                        '<div class="col-sm-4">' +
+                            '<div class="sancion-field">' +
+                                '<span class="sancion-label"><i class="bi bi-car-front-fill"></i> Tipo de vehículo</span>' +
+                                '<span class="sancion-value">' + escapeHtml_(s.tipoVehiculo || '-') + '</span>' +
+                            '</div>' +
+                        '</div>' +
+
+                        '<div class="col-sm-4">' +
+                            '<div class="sancion-field">' +
+                                '<span class="sancion-label"><i class="bi bi-house-door"></i> Apartamento</span>' +
+                                '<span class="sancion-value fw-bold">' + escapeHtml_(s.apartamento || currentApto || '-') + '</span>' +
+                            '</div>' +
+                        '</div>' +
+
+                        '<div class="col-sm-6">' +
+                            '<div class="sancion-field">' +
+                                '<span class="sancion-label"><i class="bi bi-person"></i> Residente / Visitante</span>' +
+                                '<span class="sancion-value">' + escapeHtml_(s.residenteOVisitante || '-') + '</span>' +
+                            '</div>' +
+                        '</div>' +
+
+                        obsRow +
+                        mediaRow +
+                    '</div>' +
+                '</div>';
+
+            var checkbox = card.querySelector('.sancion-checkbox');
+            checkbox.addEventListener('change', updateSelectedIds_);
+
+            return card;
+        }
+
+        function updateSelectedIds_() {
+            var checks = document.querySelectorAll('.sancion-checkbox:checked');
+            selectedIds = Array.from(checks).map(function (check) {
+                return check.value;
+            });
+
+            document.getElementById('input-ids').value = selectedIds.join(', ');
+            updateWhatsAppButton();
+        }
+
+        function buildMediaHtml_(value, label, icon) {
+            if (!value) return '';
+
+            var rawValue = String(value).trim();
+            var lower = rawValue.toLowerCase();
+
+            if (
+                lower === 'no' ||
+                lower === 'sin foto' ||
+                lower === 'sin firma' ||
+                lower === 'n/a' ||
+                lower === 'full size'
+            ) {
+                return '';
+            }
+
+            var url = normalizeMediaUrl_(rawValue);
+
+            if (url) {
+                return '<a href="' + escapeHtml_(url) + '" target="_blank" rel="noopener noreferrer" class="media-link">' +
+                    '<i class="bi ' + icon + '"></i> Ver ' + label +
+                    '</a>';
+            }
+
+            return '<span class="media-link"><i class="bi ' + icon + '"></i> ' + label + ': ' + escapeHtml_(rawValue) + '</span>';
+        }
+        // ========== CONTROVERSIA ==========
+
+        window.updateWhatsAppButton = function () {
+            var ids = document.getElementById('input-ids').value.trim();
+            var msg = document.getElementById('input-controversia').value.trim();
+            var btn = document.getElementById('btn-whatsapp');
+            var validation = document.getElementById('whatsapp-validation');
+
+            var isReady = ids.length > 0 && msg.length > 0;
+            btn.disabled = !isReady;
+
+            // Mostrar aviso solo si el usuario empezó a escribir en alguno
+            if (!isReady && (ids.length > 0 || msg.length > 0)) {
+                validation.classList.remove('d-none');
+            } else {
+                validation.classList.add('d-none');
+            }
+        };
+
+        window.enviarControversia = function () {
+            var ids = document.getElementById('input-ids').value.trim();
+            var msg = document.getElementById('input-controversia').value.trim();
+
+            if (!ids) {
+                document.getElementById('input-ids').focus();
+                return;
+            }
+            if (!msg) {
+                document.getElementById('input-controversia').focus();
+                return;
+            }
+
+            var text =
+                'Quiero controvertir las sanciones del apto ' + currentApto + '. ' +
+                'Los IDs de las sanciones son ' + ids + ', ' +
+                'debido a: ' + msg;
+
+            var url = 'https://wa.me/573243515987?text=' + encodeURIComponent(text);
+            window.open(url, '_blank');
+        };
+
+        // ========== UTILIDADES ==========
+
+        function normalizeMediaUrl_(value) {
+            if (!value) return '';
+
+            var v = String(value).trim();
+
+            if (v.indexOf('http://') === 0 || v.indexOf('https://') === 0) {
+                return v;
+            }
+
+            if (v.indexOf('drive.google.com') !== -1) {
+                return 'https://' + v;
+            }
+
+            return '';
+        }
+
+        function showError_(msg) {
+            var errEl = document.getElementById('consulta-error');
+            document.getElementById('consulta-error-msg').textContent = msg;
+            errEl.classList.remove('d-none');
+        }
+
+        function escapeHtml_(text) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(String(text)));
+            return div.innerHTML;
+        }
+    })();
+    </script>
+</body>
+</html>
