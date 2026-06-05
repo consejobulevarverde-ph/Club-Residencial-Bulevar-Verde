@@ -399,12 +399,21 @@
                             <i class="bi bi-exclamation-circle"></i>
                             Debe completar los campos de IDs y mensaje de controversia para continuar.
                         </p>
+                       <!--
                         <button id="btn-whatsapp"
                                 class="btn btn-whatsapp btn-lg"
                                 onclick="enviarControversia()"
                                 disabled>
                             <i class="bi bi-whatsapp"></i> Enviar por WhatsApp
                         </button>
+                        -->
+
+                        <button id="btn-whatsapp"
+                            class="btn btn-whatsapp btn-lg"
+                            onclick="enviarControversia()"
+                            disabled>
+                        <i class="bi bi-envelope-fill"></i> Enviar por correo
+                    </button>
                     </div>
                 </div>
             </div>
@@ -438,8 +447,9 @@
 
         // URL del Web App de Google Apps Script para Sanciones.
         // Reemplaza este valor con la URL de despliegue de google/sanciones.js.
-        // https://script.google.com/macros/s/AKfycbzmxzNAKsyqUHfjTgQsU2hPhN3K7-5aFzd0OGvhxNA5qe3r2Y6ehGjuo7pprxn4E5tnYg/exec
-        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzmxzNAKsyqUHfjTgQsU2hPhN3K7-5aFzd0OGvhxNA5qe3r2Y6ehGjuo7pprxn4E5tnYg/exec';
+        // V2 https://script.google.com/macros/s/AKfycbzmxzNAKsyqUHfjTgQsU2hPhN3K7-5aFzd0OGvhxNA5qe3r2Y6ehGjuo7pprxn4E5tnYg/exec
+        // V3 https://script.google.com/macros/s/AKfycbzZQqrzCHS2bDB4GEc90hpPkCqorymAIfEor1NG8MY3W6motSy33sacZeXxFmKex7EeEw/exec
+        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzZQqrzCHS2bDB4GEc90hpPkCqorymAIfEor1NG8MY3W6motSy33sacZeXxFmKex7EeEw/exec';
 
         var currentApto = '';
         var selectedIds = [];
@@ -688,6 +698,8 @@
             }
         };
 
+        /*
+
         window.enviarControversia = function () {
             var ids = document.getElementById('input-ids').value.trim();
             var msg = document.getElementById('input-controversia').value.trim();
@@ -708,7 +720,44 @@
 
             var url = 'https://wa.me/573243515987?text=' + encodeURIComponent(text);
             window.open(url, '_blank');
+        };*/
+
+        window.enviarControversia = function () {
+            var ids = document.getElementById('input-ids').value.trim();
+            var msg = document.getElementById('input-controversia').value.trim();
+
+            if (!ids) {
+                document.getElementById('input-ids').focus();
+                return;
+            }
+
+            if (!msg) {
+                document.getElementById('input-controversia').focus();
+                return;
+            }
+
+            var to = 'bulevarverdeadmon@gmail.com';
+
+            var subject = 'Controversia de sanciones - Apto ' + currentApto;
+
+            var body =
+                'Cordial saludo,\n\n' +
+                'Quiero controvertir las siguientes sanciones:\n\n' +
+                'Apartamento: ' + currentApto + '\n' +
+                'IDs de sanciones: ' + ids + '\n\n' +
+                'Motivo de la controversia:\n' +
+                msg + '\n\n' +
+                'Gracias.';
+
+            var mailtoUrl =
+                'mailto:' + to +
+                '?subject=' + encodeURIComponent(subject) +
+                '&body=' + encodeURIComponent(body);
+
+            window.location.href = mailtoUrl;
         };
+
+
 
         // ========== UTILIDADES ==========
 
