@@ -201,6 +201,22 @@
             color: var(--color-white);
         }
 
+
+        .sancion-photo-thumb {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid var(--color-primary);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .sancion-photo-thumb:hover {
+            transform: scale(1.04);
+            box-shadow: 0 4px 12px rgba(44, 95, 45, 0.25);
+        }
+
         .controversy-section {
             background-color: var(--color-light);
             border-radius: 10px;
@@ -422,7 +438,8 @@
 
         // URL del Web App de Google Apps Script para Sanciones.
         // Reemplaza este valor con la URL de despliegue de google/sanciones.js.
-        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbx7abkQhvf-N9o0hLeSYsLJ1GtTzrTJl3YfumFk4t6Zmcqf-ds512JzQwZqPHWdKjgqHQ/exec';
+        // https://script.google.com/macros/s/AKfycbzmxzNAKsyqUHfjTgQsU2hPhN3K7-5aFzd0OGvhxNA5qe3r2Y6ehGjuo7pprxn4E5tnYg/exec
+        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzmxzNAKsyqUHfjTgQsU2hPhN3K7-5aFzd0OGvhxNA5qe3r2Y6ehGjuo7pprxn4E5tnYg/exec';
 
         var currentApto = '';
         var selectedIds = [];
@@ -531,16 +548,23 @@
             }, 120);
         }
 
+        
         function buildSancionCard_(s, idx) {
             var card = document.createElement('div');
             card.className = 'sancion-card';
 
             var idLabel = s.id ? String(s.id) : String(idx + 1);
-            var fotoHtml = buildMediaHtml_(s.foto, 'Foto', 'bi-camera-fill');
-            var firmaHtml = buildMediaHtml_(s.firma, 'Firma', 'bi-pen-fill');
+            var checkboxId = 'sancion-check-' + idLabel.replace(/[^a-zA-Z0-9_-]/g, '');
 
-            var mediaRow = (fotoHtml || firmaHtml)
-                ? '<div class="col-12"><div class="d-flex gap-2 flex-wrap pt-1">' + fotoHtml + firmaHtml + '</div></div>'
+            var fotoHtml = buildPhotoHtml_(s.foto);
+
+            var mediaRow = fotoHtml
+                ? '<div class="col-12">' +
+                    '<div class="sancion-field">' +
+                        '<span class="sancion-label"><i class="bi bi-camera-fill"></i> Foto</span>' +
+                        '<div class="pt-2">' + fotoHtml + '</div>' +
+                    '</div>' +
+                '</div>'
                 : '';
 
             var obsRow = s.observaciones
@@ -553,13 +577,14 @@
             card.innerHTML =
                 '<div class="sancion-header">' +
                     '<div class="form-check m-0">' +
-                        '<input class="form-check-input sancion-checkbox" type="checkbox" value="' + escapeHtml_(idLabel) + '" id="sancion-check-' + escapeHtml_(idLabel) + '">' +
-                        '<label class="form-check-label sancion-badge" for="sancion-check-' + escapeHtml_(idLabel) + '">' +
+                        '<input class="form-check-input sancion-checkbox" type="checkbox" value="' + escapeHtml_(idLabel) + '" id="' + escapeHtml_(checkboxId) + '">' +
+                        '<label class="form-check-label sancion-badge" for="' + escapeHtml_(checkboxId) + '">' +
                             '<i class="bi bi-shield-exclamation"></i> ID ' + escapeHtml_(idLabel) +
                         '</label>' +
                     '</div>' +
                     '<span class="sancion-fecha"><i class="bi bi-calendar3"></i> ' + escapeHtml_(s.fecha || '-') + '</span>' +
                 '</div>' +
+
                 '<div class="sancion-body">' +
                     '<div class="row g-2">' +
 
@@ -584,15 +609,9 @@
                             '</div>' +
                         '</div>' +
 
-                        '<div class="col-sm-6">' +
-                            '<div class="sancion-field">' +
-                                '<span class="sancion-label"><i class="bi bi-person"></i> Residente / Visitante</span>' +
-                                '<span class="sancion-value">' + escapeHtml_(s.residenteOVisitante || '-') + '</span>' +
-                            '</div>' +
-                        '</div>' +
-
                         obsRow +
                         mediaRow +
+
                     '</div>' +
                 '</div>';
 
@@ -601,6 +620,8 @@
 
             return card;
         }
+
+
 
         function updateSelectedIds_() {
             var checks = document.querySelectorAll('.sancion-checkbox:checked');
@@ -612,7 +633,9 @@
             updateWhatsAppButton();
         }
 
-        function buildMediaHtml_(value, label, icon) {
+       
+
+        function buildPhotoHtml_(value) {
             if (!value) return '';
 
             var rawValue = String(value).trim();
@@ -621,7 +644,6 @@
             if (
                 lower === 'no' ||
                 lower === 'sin foto' ||
-                lower === 'sin firma' ||
                 lower === 'n/a' ||
                 lower === 'full size'
             ) {
@@ -630,14 +652,23 @@
 
             var url = normalizeMediaUrl_(rawValue);
 
-            if (url) {
-                return '<a href="' + escapeHtml_(url) + '" target="_blank" rel="noopener noreferrer" class="media-link">' +
-                    '<i class="bi ' + icon + '"></i> Ver ' + label +
-                    '</a>';
-            }
+            if (!url) return '';
 
-            return '<span class="media-link"><i class="bi ' + icon + '"></i> ' + label + ': ' + escapeHtml_(rawValue) + '</span>';
+            return '' +
+                '<a href="' + escapeHtml_(url) + '" target="_blank" rel="noopener noreferrer">' +
+                    '<img ' +
+                        'src="' + escapeHtml_(url) + '" ' +
+                        'alt="Foto de la sanción" ' +
+                        'class="sancion-photo-thumb" ' +
+                        'loading="lazy" ' +
+                        'referrerpolicy="no-referrer" ' +
+                        'onerror="this.style.display=\'none\'; this.parentElement.insertAdjacentHTML(\'afterend\', \'<a class=&quot;media-link&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot; href=&quot;' + escapeHtml_(url) + '&quot;><i class=&quot;bi bi-camera-fill&quot;></i> Abrir foto</a>\');"' +
+                    '>' +
+                '</a>';
         }
+
+
+
         // ========== CONTROVERSIA ==========
 
         window.updateWhatsAppButton = function () {
