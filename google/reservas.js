@@ -24,6 +24,15 @@ function doGet(e) {
   try {
     const action = getParam_(e, 'action');
 
+    const aptoIngresado = getParam_(e, 'apto') || '';
+    const placaIngresada = getParam_(e, 'placa') || '';
+
+    Logger.log('=== CONSULTA doGet ===');
+    Logger.log('Action: ' + action);
+    Logger.log('Apto ingresado: ' + aptoIngresado);
+    Logger.log('Placa ingresada: ' + placaIngresada);
+    Logger.log('Parámetros completos: ' + JSON.stringify(e.parameter));
+
     // Listar bienes activos
     if (action === 'listBienes') {
       return jsonOutput_({
@@ -173,7 +182,7 @@ function onFormSubmit(e) {
 
     MailApp.sendEmail({
       to: ADMIN_EMAIL,
-      cc: CC_EMAIL,
+      //cc: CC_EMAIL,
       subject: asuntoEmail,
       body: cuerpo
     });
@@ -924,4 +933,248 @@ function failValidation_(estado, message) {
     estado: estado,
     observaciones: message
   };
+}
+
+
+
+
+
+/***************************************
+ * CALENDARIO VISUAL DE RESERVAS
+ * Crea/actualiza tab: Calendario Reservas
+ * Muestra mes actual y siguiente mes
+ ***************************************/
+function crearCalendarioVisualReservas() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const hojaDatos = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+  const headers = getHeaders_(hojaDatos);
+  const data = getDataObjects_(hojaDatos, headers);
+
+  const nombreHojaCalendario = 'Calendario Reservas';
+  let hojaCalendario = ss.getSheetByName(nombreHojaCalendario);
+
+  if (!hojaCalendario) {
+    hojaCalendario = ss.insertSheet(nombreHojaCalendario);
+  } else {
+    hojaCalendario.clear();
+  }
+
+  const hoy = new Date();
+
+  const anioActual = hoy.getFullYear();
+  const mesActual = hoy.getMonth();
+
+  const siguienteMesFecha = new Date(anioActual, mesActual + 1, 1);
+  const anioSiguiente = siguienteMesFecha.getFullYear();
+  const mesSiguiente = siguienteMesFecha.getMonth();
+
+  // Mes actual
+  pintarCalendarioReservas_(hojaCalendario, data, anioActual, mesActual, 1);
+
+  // Siguiente mes debajo
+  pintarCalendarioReservas_(hojaCalendario, data, anioSiguiente, mesSiguiente, 10);
+}
+
+/***************************************
+ * CALENDARIO VISUAL - MES ESPECÍFICO
+ * Ejemplo: crearCalendarioVisualReservasPorMes(2026, 6)
+ ***************************************/
+function crearCalendarioVisualReservasPorMes(anio, mesNumero) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const hojaDatos = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+  const headers = getHeaders_(hojaDatos);
+  const data = getDataObjects_(hojaDatos, headers);
+
+  const nombreHojaCalendario = 'Calendario Reservas';
+  let hojaCalendario = ss.getSheetByName(nombreHojaCalendario);
+
+  if (!hojaCalendario) {
+    hojaCalendario = ss.insertSheet(nombreHojaCalendario);
+  } else {
+    hojaCalendario.clear();
+  }
+
+  // mesNumero: Enero = 1, Febrero = 2, Junio = 6
+  pintarCalendarioReservas_(hojaCalendario, data, anio, mesNumero - 1, 1);
+}
+
+
+/***************************************
+ * PINTAR CALENDARIO
+ ***************************************/
+function pintarCalendarioReservas_(hoja, data, anio, mes, filaInicio) {
+  const meses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  const diasSemana = [
+    'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'
+  ];
+
+  const reservasPorDia = {};
+
+  data.forEach(row => {
+    const fechaReserva = normalizeSheetDate_(row['FechaReserva']);
+    if (!fechaReserva) return;
+
+    if (
+      fechaReserva.getFullYear() !== anio ||
+      fechaReserva.getMonth() !== mes
+    ) {
+      return;
+    }
+
+    const estado = safeTrim_(row['Estado']);
+
+    // No mostrar canceladas
+    if (estado === ESTADO_CANCELADA) return;
+
+    const dia = fechaReserva.getDate();
+
+    if (!reservasPorDia[dia]) {
+      reservasPorDia[dia] = [];
+    }
+
+    const horarioMinutos = parseTimeToMinutes_(row['Horario']);
+    const horario = horarioMinutos !== null
+      ? minutesToHHmm_(horarioMinutos)
+      : safeTrim_(row['Horario']);
+
+    const inmueble = safeTrim_(row['Inmueble']);
+    const torre = safeTrim_(row['Torre']);
+    const apto = safeTrim_(row['Apto']);
+    const nombre = safeTrim_(row['Nombre']);
+    const observaciones = safeTrim_(row['Observaciones']);
+
+    let textoReserva = `${horario} - ${getInmuebleCorto_(inmueble)}\n${torre}-${apto} | ${nombre}`;
+
+    if (observaciones) {
+      textoReserva += `\n📝 ${observaciones}`;
+    }
+
+    reservasPorDia[dia].push(textoReserva);
+  });
+
+  // Título
+  hoja.getRange(filaInicio, 1, 1, 7).merge();
+  hoja.getRange(filaInicio, 1)
+    .setValue(`${meses[mes]} ${anio}`)
+    .setFontSize(18)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setBackground('#b7e1cd');
+
+  // Encabezados días
+  hoja.getRange(filaInicio + 1, 1, 1, 7).setValues([diasSemana]);
+  hoja.getRange(filaInicio + 1, 1, 1, 7)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setBackground('#d9ead3');
+
+  const primerDiaMes = new Date(anio, mes, 1);
+  const ultimoDiaMes = new Date(anio, mes + 1, 0);
+
+  let columna = primerDiaMes.getDay(); 
+  columna = columna === 0 ? 7 : columna; // domingo pasa a columna 7
+
+  let fila = filaInicio + 2;
+
+  for (let dia = 1; dia <= ultimoDiaMes.getDate(); dia++) {
+    const reservas = reservasPorDia[dia] || [];
+
+    const textoCelda = reservas.length
+      ? `${dia}\n\n${reservas.join('\n\n')}`
+      : String(dia);
+
+    const celda = hoja.getRange(fila, columna);
+
+    celda
+      .setValue(textoCelda)
+      .setVerticalAlignment('top')
+      .setWrap(true);
+
+    if (reservas.length > 0) {
+      celda.setBackground('#fff2cc');
+    } else {
+      celda.setBackground('#ffffff');
+    }
+
+    columna++;
+
+    if (columna > 7) {
+      columna = 1;
+      fila++;
+    }
+  }
+
+  hoja.setColumnWidths(1, 7, 190);
+
+  for (let i = filaInicio + 2; i <= filaInicio + 7; i++) {
+    hoja.setRowHeight(i, 135);
+  }
+
+  hoja.getRange(filaInicio, 1, 8, 7)
+  .setBorder(true, true, true, true, true, true);
+
+  hoja.setFrozenRows(2);
+}
+
+
+/***************************************
+ * TRIGGER DIARIO - CALENDARIO RESERVAS
+ ***************************************/
+function crearTriggerDiarioCalendarioReservas() {
+  // Evita crear triggers duplicados
+  eliminarTriggersCalendarioReservas_();
+
+  ScriptApp.newTrigger('crearCalendarioVisualReservas')
+    .timeBased()
+    .everyDays(1)
+    .atHour(6) // Se ejecuta todos los días entre 6:00 y 7:00 AM
+    .create();
+
+  Logger.log('Trigger diario creado para actualizar Calendario Reservas.');
+}
+
+
+/***************************************
+ * ELIMINAR TRIGGERS EXISTENTES
+ * Solo elimina los triggers de crearCalendarioVisualReservas
+ ***************************************/
+function eliminarTriggersCalendarioReservas_() {
+  const triggers = ScriptApp.getProjectTriggers();
+
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'crearCalendarioVisualReservas') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}
+
+/***************************************
+ * NOMBRE CORTO PARA CALENDARIO
+ ***************************************/
+function getInmuebleCorto_(inmueble) {
+  const value = safeTrim_(inmueble).toLowerCase();
+
+  if (value.includes('salon social 1') || value.includes('salón social 1')) {
+    return '🏛️🌇1';
+  }
+
+  if (value.includes('salon social 2') || value.includes('salón social 2')) {
+    return '🏛️🏢2';
+  }
+
+  if (value.includes('salon social 3') || value.includes('salón social 3')) {
+    return '🏛️💂‍♂️3';
+  }
+
+  if (value.includes('cancha')) {
+    return '⚽';
+  }
+
+  return inmueble;
 }

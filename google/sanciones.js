@@ -25,14 +25,24 @@ function doGet(e) {
   try {
     const action = getParam_(e, 'action');
 
+    const aptoConsultado = getParam_(e, 'apto') || '';
+    const placaConsultada = getParam_(e, 'placa') || '';
+
+    Logger.log('=== CONSULTA WEB APP SANCIONES ===');
+    Logger.log('Action: ' + action);
+    Logger.log('Apto consultado: ' + aptoConsultado);
+    Logger.log('Placa consultada: ' + placaConsultada);
+    Logger.log('Parámetros completos: ' + JSON.stringify(e.parameter));
+
     if (action === 'consultar') {
-      const apto = getParam_(e, 'apto');
-      const placa = getParam_(e, 'placa');
+      const apto = aptoConsultado;
+      const placa = placaConsultada;
       return consultarSanciones_(apto, placa);
     }
 
     return jsonOutput_({ ok: false, error: 'Acción no reconocida.' });
   } catch (error) {
+    Logger.log('ERROR doGet: ' + (error.message || String(error)));
     return jsonOutput_({ ok: false, error: error.message || String(error) });
   }
 }
