@@ -37,31 +37,16 @@ title = 'Club Residencial Bulevar Verde'
     weight = 1
     
   [[menu.main]]
-    name = 'Documentos'
-    url = '#galeria'
-    weight = 2
-  
-  [[menu.main]]
-    name = 'Comunidad'
-    url = '#comunidad'
-    weight = 3
-    
-  [[menu.main]]
     name = 'Reservas'
-    url = 'reservas/'
-    weight = 4
+    url = '/reservas/'
+    weight = 2
 
   [[menu.main]]
     name = 'PQRS'
-    url = 'pqrs/'
-    weight = 5
+    url = '/pqrs/'
+    weight = 3
 
   [[menu.main]]
     name = 'Sanciones'
-    url = 'sanciones/'
-    weight = 6
-
-  [[menu.main]]
-    name = 'Contacto'
-    url = '#contacto'
-    weight = 7
+    url = '/sanciones/'
+    weight = 4
