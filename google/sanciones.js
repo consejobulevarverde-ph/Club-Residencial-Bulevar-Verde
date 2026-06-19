@@ -16,6 +16,13 @@
  ***************************************/
 const SHEET_ID_SANCIONES = '1GeJZ4Rd4-ddzE6Vi8kpq9iB2_oxuLW87UiAnbZQ6Iow';
 const SHEET_PLANILLA = 'PLANILLA';
+const SHEET_ID_VIGILANCIA_PLACAS = '1_Lwp2jYRuYjJu_PiXGOibD5TjfPf9jQ_pBO9kio7AZY';
+const SHEET_GID_VIGILANCIA_PLACAS = 1955503575;
+
+const DRY_RUN = false;
+const UMBRAL_MAYORIA = 0.75;
+const UMBRAL_OUTLIER = 0.15;
+const MIN_REGISTROS_PARA_CORREGIR = 5;
 
 /***************************************
  * WEB APP - ENDPOINT PRINCIPAL
@@ -297,6 +304,20 @@ function testConsultarSanciones() {
   Logger.log(result.getContent());
 }
 
+function testLeerVigilanciaPlacas() {
+  const mapa = leerMapaVigilanciaPlacas_();
+
+  Logger.log('Total registros vigilancia: ' + Object.keys(mapa).length);
+
+  Logger.log(JSON.stringify(
+    Object.keys(mapa).slice(0, 20).map(function(placa) {
+      return mapa[placa];
+    }),
+    null,
+    2
+  ));
+}
+
 function normalizeHeader_(value) {
   return safeTrim_(value)
     .toLowerCase()
@@ -414,11 +435,6 @@ function analizarInconsistenciasSancionesDesdeResultado_(
   aptoNormConsultado,
   placaNormConsultada
 ) {
-  const DRY_RUN = false;
-  const UMBRAL_MAYORIA = 0.90;
-  const UMBRAL_OUTLIER = 0.10;
-  const MIN_REGISTROS_PARA_CORREGIR = 5;
-
   Logger.log("=== INICIO ANALISIS INTELIGENTE DESDE RESULTADO ===");
   Logger.log("DRY_RUN: " + DRY_RUN);
   Logger.log("Apto normalizado consultado: " + aptoNormConsultado);
@@ -630,12 +646,8 @@ function analizarInconsistenciasSancionesDesdeResultado_(
  * - Marca inconsistencias no reparables en rojo
  ***************************************/
 function normalizarTodoElArchivoSanciones() {
-  const APLICAR_CORRECCIONES = true;
-  const UMBRAL_ALTA_CERTEZA = 0.90;
-  const MIN_REGISTROS_PLACA = 3;
-
   Logger.log("=== INICIO NORMALIZACION GENERAL DE SANCIONES ===");
-  Logger.log("APLICAR_CORRECCIONES: " + APLICAR_CORRECCIONES);
+  Logger.log("DRY_RUN: " + DRY_RUN);
 
   const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
   const sheet = ss.getSheetByName(SHEET_PLANILLA);
@@ -699,7 +711,7 @@ function normalizarTodoElArchivoSanciones() {
     sheet,
     rows,
     IDX,
-    APLICAR_CORRECCIONES
+    !DRY_RUN
   );
 
   Logger.log("Placas revisadas: " + resultadoPlacas.revisadas);
@@ -718,6 +730,17 @@ function normalizarTodoElArchivoSanciones() {
   // 3. Cargar o crear hoja maestra.
   const hojaMaestra = getOrCreateHojaMaestra_(ss);
   const mapaMaestra = leerMapaMaestra_(hojaMaestra);
+  const mapaVigilancia = leerMapaVigilanciaPlacas_();
+
+  const resultadoSyncVigilancia = sincronizarVigilanciaConMaestra_(
+    hojaMaestra,
+    mapaMaestra,
+    mapaVigilancia,
+    !DRY_RUN
+  );
+
+  Logger.log("Vigilancia agregadas a maestra: " + resultadoSyncVigilancia.nuevos.length);
+  Logger.log("Vigilancia omitidas por existir: " + resultadoSyncVigilancia.omitidos.length);
 
   // 4. Analizar todas las placas.
   const resultadoAnalisis = analizarYCorregirTodasLasPlacas_({
@@ -726,16 +749,17 @@ function normalizarTodoElArchivoSanciones() {
     IDX: IDX,
     hojaMaestra: hojaMaestra,
     mapaMaestra: mapaMaestra,
-    aplicarCorrecciones: APLICAR_CORRECCIONES,
-    umbralAltaCerteza: UMBRAL_ALTA_CERTEZA,
-    minRegistrosPlaca: MIN_REGISTROS_PLACA
+    mapaVigilancia: mapaVigilancia,
+    aplicarCorrecciones: !DRY_RUN,
+    umbralAltaCerteza: UMBRAL_MAYORIA,
+    minRegistrosPlaca: MIN_REGISTROS_PARA_CORREGIR
   });
 
   Logger.log("=== RESUMEN NORMALIZACION GENERAL ===");
   Logger.log("Correcciones apto: " + resultadoAnalisis.correccionesApto.length);
   Logger.log("Correcciones tipo vehículo: " + resultadoAnalisis.correccionesTipo.length);
   Logger.log(
-    (APLICAR_CORRECCIONES ? "Registros maestra creados: " : "Registros maestra propuestos: ") +
+    (!DRY_RUN ? "Registros maestra creados: " : "Registros maestra propuestos: ") +
     resultadoAnalisis.maestraCreados.length
   );
   Logger.log("Inconsistencias no reparadas: " + resultadoAnalisis.inconsistenciasNoReparadas.length);
@@ -1040,6 +1064,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
   const correccionesTipo = [];
   const maestraCreados = [];
   const inconsistenciasNoReparadas = [];
+  const mapaVigilancia = config.mapaVigilancia || {};
 
   const gruposPorPlaca = agruparPorCampo_(registros, "placaNorm");
 
@@ -1051,7 +1076,14 @@ function analizarYCorregirTodasLasPlacas_(config) {
     Logger.log("=== ANALIZANDO PLACA: " + placaNorm + " ===");
     Logger.log("Total registros placa: " + registrosPlaca.length);
 
-    const master = mapaMaestra[placaNorm];
+    const masterInterna = mapaMaestra[placaNorm];
+    const masterVigilancia = mapaVigilancia[placaNorm];
+
+    // Prioridad:
+    // 1. Maestra interna
+    // 2. Vigilancia
+    // 3. Mayoría histórica
+    const master = masterInterna || masterVigilancia;
 
     const regexInfo = getTipoVehiculoEsperadoPorRegexPlaca_(placaNorm);
 
@@ -1092,7 +1124,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
       aptoCorrectoNorm = master.apartamentoNorm;
       aptoCorrectoTexto = master.apartamento;
       confianzaApto = master.confianzaApto || 1;
-      fuenteApto = "MAESTRA_EXISTENTE";
+      fuenteApto = masterInterna ? "MAESTRA_INTERNA_EXISTENTE" : "VIGILANCIA_PLACAS";
 
       Logger.log("Placa existe en maestra. Se respeta maestra:");
       Logger.log(JSON.stringify(master, null, 2));
@@ -1114,16 +1146,18 @@ function analizarYCorregirTodasLasPlacas_(config) {
 
         const tipoParaMaestra = resolverTipoParaMaestra_(regexInfo, mayoriaTipo);
 
-        agregarRegistroMaestra_(hojaMaestra, {
-          placa: placaNorm,
-          apartamento: aptoCorrectoTexto,
-          tipoVehiculo: tipoParaMaestra.tipo,
-          confianzaApto: confianzaApto,
-          totalRegistros: registrosPlaca.length,
-          fuente: fuenteApto,
-          estado: "ALTA_CERTEZA",
-          notas: "Creado automáticamente por normalización global."
-        });
+        if (aplicarCorrecciones) {
+          agregarRegistroMaestra_(hojaMaestra, {
+            placa: placaNorm,
+            apartamento: aptoCorrectoTexto,
+            tipoVehiculo: tipoParaMaestra.tipo,
+            confianzaApto: confianzaApto,
+            totalRegistros: registrosPlaca.length,
+            fuente: fuenteApto,
+            estado: "ALTA_CERTEZA",
+            notas: "Creado automáticamente por normalización global."
+          });
+        }
 
         mapaMaestra[placaNorm] = {
           placa: placaNorm,
@@ -1301,7 +1335,7 @@ function resolverTipoParaMaestra_(regexInfo, mayoriaTipo) {
     };
   }
 
-  if (mayoriaTipo && mayoriaTipo.porcentaje >= 0.90) {
+  if (mayoriaTipo && mayoriaTipo.porcentaje >= UMBRAL_MAYORIA) {
     return {
       tipo: mayoriaTipo.valor,
       fuente: "MAYORIA_HISTORICA_TIPO",
@@ -1356,4 +1390,258 @@ function marcarInconsistenciaNoReparable_(params) {
         .setBackground("#f4cccc");
     }
   });
+}
+
+function getSheetByGid_(ss, gid) {
+  const sheets = ss.getSheets();
+
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId() === Number(gid)) {
+      return sheets[i];
+    }
+  }
+
+  return null;
+}
+
+function leerMapaVigilanciaPlacas_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_VIGILANCIA_PLACAS);
+  const sheet = getSheetByGid_(ss, SHEET_GID_VIGILANCIA_PLACAS);
+
+  if (!sheet) {
+    throw new Error('No se encontró la hoja de vigilancia con gid ' + SHEET_GID_VIGILANCIA_PLACAS);
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2 || lastCol < 2) {
+    return {};
+  }
+
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+
+  const mapa = {};
+  const conflictos = [];
+  const placasConflictivas = {};
+
+  // Formato esperado:
+  // Col A-B, D-E, G-H, etc.
+  const paresColumnas = generarParesColumnasVigilancia_(lastCol);
+
+  data.forEach(function(row, rowIndex) {
+    paresColumnas.forEach(function(par) {
+      const placaRaw = row[par.placaCol];
+      const aptoRaw = row[par.aptoCol];
+
+      const placa = normalizePlaca_(placaRaw);
+      const apto = safeTrim_(aptoRaw);
+      const aptoNorm = normalizeText_(apto);
+
+      if (!placa || !apto) return;
+
+      // Evitar tomar encabezados o basura.
+      if (!esPlacaColombianaBasica_(placa)) return;
+      if (!/^\d{2,5}$/.test(aptoNorm)) return;
+      if (placasConflictivas[placa]) {
+        return;
+      }
+
+
+      if (mapa[placa] && mapa[placa].apartamentoNorm !== aptoNorm) {
+        conflictos.push({
+          placa: placa,
+          aptoExistente: mapa[placa].apartamento,
+          aptoNuevo: apto,
+          fila: rowIndex + 1
+        });
+
+        delete mapa[placa];
+        placasConflictivas[placa] = true;
+
+        return;
+      }
+
+      mapa[placa] = {
+        placa: placa,
+        apartamento: apto,
+        apartamentoNorm: aptoNorm,
+        fuente: 'VIGILANCIA_PLACAS',
+        row: rowIndex + 1,
+        placaCol: par.placaCol + 1,
+        aptoCol: par.aptoCol + 1
+      };
+    });
+  });
+
+  Logger.log('Total placas cargadas desde vigilancia: ' + Object.keys(mapa).length);
+
+  if (conflictos.length > 0) {
+    Logger.log('Conflictos encontrados en vigilancia:');
+    Logger.log(JSON.stringify(conflictos, null, 2));
+  }
+
+  return mapa;
+}
+
+function esPlacaColombianaBasica_(placa) {
+  const p = normalizePlaca_(placa);
+
+  // Carro: ABC123
+  if (/^[A-Z]{3}[0-9]{3}$/.test(p)) return true;
+
+  // Moto: ABC12D
+  if (/^[A-Z]{3}[0-9]{2}[A-Z]$/.test(p)) return true;
+
+  return false;
+}
+
+function generarParesColumnasVigilancia_(lastCol) {
+  const pares = [];
+
+  // Patrón:
+  // A-B, D-E, G-H, J-K, M-N, P-Q, S-T, V-W, Y-Z, AB-AC
+  for (var placaCol = 0; placaCol < lastCol; placaCol += 3) {
+    var aptoCol = placaCol + 1;
+
+    if (aptoCol < lastCol) {
+      pares.push({
+        placaCol: placaCol,
+        aptoCol: aptoCol
+      });
+    }
+  }
+
+  Logger.log("Pares de columnas vigilancia detectados:");
+  Logger.log(JSON.stringify(
+    pares.map(function(p) {
+      return {
+        placaCol: p.placaCol + 1,
+        aptoCol: p.aptoCol + 1,
+        placaLetra: columnToLetter_(p.placaCol + 1),
+        aptoLetra: columnToLetter_(p.aptoCol + 1)
+      };
+    }),
+    null,
+    2
+  ));
+
+  return pares;
+}
+
+function columnToLetter_(column) {
+  var temp = "";
+  var letter = "";
+
+  while (column > 0) {
+    temp = (column - 1) % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    column = (column - temp - 1) / 26;
+  }
+
+  return letter;
+}
+
+function sincronizarVigilanciaConMaestra_(hojaMaestra, mapaMaestra, mapaVigilancia, aplicarCorrecciones) {
+  const nuevos = [];
+  const omitidos = [];
+
+  Object.keys(mapaVigilancia).forEach(function(placa) {
+    const registroVigilancia = mapaVigilancia[placa];
+
+    if (!registroVigilancia || !registroVigilancia.apartamentoNorm) {
+      omitidos.push({
+        placa: placa,
+        motivo: "Registro de vigilancia incompleto."
+      });
+      return;
+    }
+
+    if (mapaMaestra[placa]) {
+      omitidos.push({
+        placa: placa,
+        apartamentoMaestra: mapaMaestra[placa].apartamento,
+        apartamentoVigilancia: registroVigilancia.apartamento,
+        motivo: "Ya existe en maestra. Se respeta maestra."
+      });
+      return;
+    }
+
+    const regexInfo = getTipoVehiculoEsperadoPorRegexPlaca_(placa);
+    const tipoVehiculo = regexInfo.ok ? regexInfo.tipo : "";
+
+    nuevos.push({
+      placa: placa,
+      apartamento: registroVigilancia.apartamento,
+      apartamentoNorm: registroVigilancia.apartamentoNorm,
+      tipoVehiculo: tipoVehiculo,
+      confianzaApto: 1,
+      totalRegistros: 0,
+      fuente: "VIGILANCIA_PLACAS",
+      estado: "ALTA_CERTEZA_VIGILANCIA",
+      notas: "Creado automáticamente desde hoja de vigilancia."
+    });
+  });
+
+  Logger.log("=== SINCRONIZACION VIGILANCIA → MAESTRA ===");
+  Logger.log("Registros vigilancia revisados: " + Object.keys(mapaVigilancia).length);
+  Logger.log("Nuevos para maestra: " + nuevos.length);
+  Logger.log("Omitidos: " + omitidos.length);
+
+  Logger.log("Nuevos muestra:");
+  Logger.log(JSON.stringify(nuevos.slice(0, 50), null, 2));
+
+  if (nuevos.length > 50) {
+    Logger.log("Más nuevos no mostrados: " + (nuevos.length - 50));
+  }
+
+  if (aplicarCorrecciones && nuevos.length > 0) {
+    const now = Utilities.formatDate(
+      new Date(),
+      Session.getScriptTimeZone(),
+      "yyyy-MM-dd HH:mm"
+    );
+
+    const values = nuevos.map(function(item) {
+      return [
+        item.placa,
+        item.apartamento,
+        item.tipoVehiculo,
+        item.confianzaApto,
+        item.totalRegistros,
+        item.fuente,
+        now,
+        item.estado,
+        item.notas
+      ];
+    });
+
+    hojaMaestra
+      .getRange(hojaMaestra.getLastRow() + 1, 1, values.length, 9)
+      .setValues(values);
+
+    Logger.log("Registros insertados en maestra: " + nuevos.length);
+  } else {
+    Logger.log("No se insertaron registros en maestra. aplicarCorrecciones: " + aplicarCorrecciones);
+  }
+
+  // Actualizar mapaMaestra en memoria para que el análisis posterior ya los respete.
+  nuevos.forEach(function(item) {
+    mapaMaestra[item.placa] = {
+      placa: item.placa,
+      apartamento: item.apartamento,
+      apartamentoNorm: item.apartamentoNorm,
+      tipoVehiculo: item.tipoVehiculo,
+      confianzaApto: item.confianzaApto,
+      totalRegistros: item.totalRegistros,
+      fuente: item.fuente,
+      estado: item.estado,
+      notas: item.notas
+    };
+  });
+
+  return {
+    nuevos: nuevos,
+    omitidos: omitidos
+  };
 }
