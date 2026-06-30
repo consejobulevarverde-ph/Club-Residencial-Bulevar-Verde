@@ -21,8 +21,29 @@ const SHEET_GID_VIGILANCIA_PLACAS = 1955503575;
 
 const DRY_RUN = false;
 const UMBRAL_MAYORIA = 0.75;
+const MIN_CONFIANZA_PLACA_SIMILAR_AUTO = 0.85;
 const UMBRAL_OUTLIER = 0.15;
 const MIN_REGISTROS_PARA_CORREGIR = 5;
+const MIN_REGISTROS_PLACA_DOMINANTE = 10;
+const MAX_REGISTROS_PLACA_SOSPECHOSA = 2;
+const MAX_DISTANCIA_PLACA_SIMILAR = 100;
+const MOSTRAR_PLACAS_SIMILARES_DESCARTADAS = true;
+const LIMITE_PLACAS_SIMILARES_DESCARTADAS = 50;
+const MAX_DISTANCIA_DESCARTADA_PARA_ANALISIS = 180;
+
+const SHEET_ID_CORREOS_APTOS = '1MjNg_qR134dB-8vdK0NEJyeXlLS848dsOpu-bylkVBQ';
+const SHEET_GID_CORREOS_APTOS = 0;
+const VALOR_UNITARIO_SANCION_MOTO = 1000;
+const VALOR_UNITARIO_SANCION_CARRO = 7000;
+const SHEET_RESUMEN_ENVIO_SANCIONES = 'resumen_envio_sanciones';
+const EMAIL_DRY_RUN = false; // true = prueba, false = envía correos reales
+const URL_CONSULTA_SANCIONES = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/sanciones/';
+
+const LOG_LEVEL = "RESUMEN"; 
+// Opciones:
+// "SILENCIO"  = casi nada
+// "RESUMEN"   = recomendado
+// "DETALLE"   = debug completo
 
 /***************************************
  * WEB APP - ENDPOINT PRINCIPAL
@@ -316,6 +337,107 @@ function testLeerVigilanciaPlacas() {
     null,
     2
   ));
+}
+
+function testLeerCorreosApartamentos() {
+  const mapa = leerMapaCorreosApartamentos_();
+
+  Logger.log("Total apartamentos con correo: " + Object.keys(mapa).length);
+
+  Logger.log(JSON.stringify(
+    Object.keys(mapa).slice(0, 20).map(function(apto) {
+      return mapa[apto];
+    }),
+    null,
+    2
+  ));
+}
+
+function testEnviarCorreoApto1029() {
+  const APTO_TEST = "1728";
+  const CC_TEST = "bulevarverdeadmon@gmail.com";
+  const ENVIAR_CORREO_REAL_TEST = true; // false = solo log, true = envía correo real
+
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+  if (!sheet) {
+    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2) {
+    throw new Error("No hay sanciones para procesar.");
+  }
+
+  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
+
+  const IDX = obtenerIdxPlanilla_(allData[0]);
+  const rows = allData.slice(1);
+
+  const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
+
+  const aptoNorm = normalizeText_(APTO_TEST);
+
+  const sancionesApto = registros.filter(function(reg) {
+    return reg.aptoNorm === aptoNorm;
+  });
+
+  if (sancionesApto.length === 0) {
+    throw new Error("No se encontraron sanciones para el apartamento " + APTO_TEST);
+  }
+
+  const mapaCorreos = leerMapaCorreosApartamentos_();
+  const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(APTO_TEST)];
+
+  if (!correoInfo || !correoInfo.email) {
+    throw new Error("No se encontró correo para el apartamento " + APTO_TEST);
+  }
+
+
+
+
+  const resumenPlacas = agruparSancionesPorPlaca_(sancionesApto);
+
+  const valorTotal = resumenPlacas.reduce(function(total, item) {
+    return total + item.valorTotal;
+  }, 0);
+
+
+
+
+  const subject = "Notificación de sanción por uso indebido del parqueadero de visitantes - Apto " + APTO_TEST;
+
+  const htmlBody = construirHtmlCorreoSancionesTest_({
+    apartamento: APTO_TEST,
+    cantidad: sancionesApto.length,
+    valorTotal: valorTotal,
+    resumenPlacas: resumenPlacas
+  });
+
+  Logger.log("=== TEST ENVÍO CORREO APTO " + APTO_TEST + " ===");
+  Logger.log("Para: " + correoInfo.email);
+  Logger.log("CC: " + CC_TEST);
+  Logger.log("Cantidad sanciones: " + sancionesApto.length);
+  Logger.log("Valor total: " + formatCOP_(valorTotal));
+
+  if (ENVIAR_CORREO_REAL_TEST) {
+    MailApp.sendEmail({
+      //to: correoInfo.email,
+      to: "consejo.bulevarverde@gmail.com",
+      cc: CC_TEST,
+      subject: subject,
+      htmlBody: correoInfo.email+ " "+htmlBody,
+      name: "Administración Bulevar Verde"
+    });
+
+    Logger.log("Correo TEST enviado correctamente.");
+  } else {
+    Logger.log("ENVIAR_CORREO_REAL_TEST está en false. No se envió correo real.");
+  }
 }
 
 function normalizeHeader_(value) {
@@ -725,7 +847,14 @@ function normalizarTodoElArchivoSanciones() {
     allData
   );
 
-  Logger.log("Registros normalizados: " + registrosNormalizados.length);
+  const resultadoPlacasSimilares = detectarYCorregirPlacasSimilares_(
+    sheet,
+    registrosNormalizados,
+    IDX,
+    !DRY_RUN
+  );
+
+  Logger.log("Placas similares candidatas a corrección: " + resultadoPlacasSimilares.length);
 
   // 3. Cargar o crear hoja maestra.
   const hojaMaestra = getOrCreateHojaMaestra_(ss);
@@ -771,7 +900,7 @@ function normalizarTodoElArchivoSanciones() {
   Logger.log(JSON.stringify(resultadoAnalisis.correccionesTipo.slice(0, 100), null, 2));
 
   Logger.log("Inconsistencias no reparadas:");
-  Logger.log(JSON.stringify(resultadoAnalisis.inconsistenciasNoReparadas.slice(0, 100), null, 2));
+  logResumenInconsistencias_(resultadoAnalisis.inconsistenciasNoReparadas);
 
   Logger.log("=== FIN NORMALIZACION GENERAL DE SANCIONES ===");
 }
@@ -1068,13 +1197,20 @@ function analizarYCorregirTodasLasPlacas_(config) {
 
   const gruposPorPlaca = agruparPorCampo_(registros, "placaNorm");
 
+  let totalPlacasAnalizadas = 0;
+  let totalConMaestraInterna = 0;
+  let totalConVigilancia = 0;
+  let totalPorMayoriaHistorica = 0;
+  let totalSinCerteza = 0;
+  let totalRegexInvalida = 0;
+
   Object.keys(gruposPorPlaca).forEach(function(placaNorm) {
     const registrosPlaca = gruposPorPlaca[placaNorm];
 
     if (!placaNorm) return;
 
-    Logger.log("=== ANALIZANDO PLACA: " + placaNorm + " ===");
-    Logger.log("Total registros placa: " + registrosPlaca.length);
+    logDetalle_("=== ANALIZANDO PLACA: " + placaNorm + " ===");
+    logDetalle_("Total registros placa: " + registrosPlaca.length);
 
     const masterInterna = mapaMaestra[placaNorm];
     const masterVigilancia = mapaVigilancia[placaNorm];
@@ -1084,9 +1220,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
     // 2. Vigilancia
     // 3. Mayoría histórica
     const master = masterInterna || masterVigilancia;
-
     const regexInfo = getTipoVehiculoEsperadoPorRegexPlaca_(placaNorm);
-
     const conteoAptos = contarPorCampo_(registrosPlaca, "aptoNorm");
     const mayoriaApto = obtenerMayoria_(conteoAptos, registrosPlaca.length);
 
@@ -1097,20 +1231,23 @@ function analizarYCorregirTodasLasPlacas_(config) {
     const conteoTipos = contarPorCampo_(registrosConTipo, "tipoVehiculoNorm");
     const mayoriaTipo = obtenerMayoria_(conteoTipos, registrosConTipo.length);
 
-    Logger.log("Regex placa:");
-    Logger.log(JSON.stringify(regexInfo, null, 2));
 
-    Logger.log("Distribución aptos:");
-    Logger.log(JSON.stringify(conteoAptos, null, 2));
 
-    Logger.log("Mayoría apto:");
-    Logger.log(JSON.stringify(mayoriaApto, null, 2));
+    totalPlacasAnalizadas++;
+    if (masterInterna) {
+      totalConMaestraInterna++;
+    } else if (masterVigilancia) {
+      totalConVigilancia++;
+    }
+    if (!regexInfo.ok) {
+      totalRegexInvalida++;
+    }
 
-    Logger.log("Distribución tipos:");
-    Logger.log(JSON.stringify(conteoTipos, null, 2));
-
-    Logger.log("Mayoría tipo:");
-    Logger.log(JSON.stringify(mayoriaTipo, null, 2));
+    logJsonDetalle_("Regex placa:", regexInfo);
+    logJsonDetalle_("Distribución aptos:", conteoAptos);
+    logJsonDetalle_("Mayoría apto:", mayoriaApto);
+    logJsonDetalle_("Distribución tipos:", conteoTipos);
+    logJsonDetalle_("Mayoría tipo:", mayoriaTipo);
 
     let aptoCorrectoNorm = "";
     let aptoCorrectoTexto = "";
@@ -1126,8 +1263,8 @@ function analizarYCorregirTodasLasPlacas_(config) {
       confianzaApto = master.confianzaApto || 1;
       fuenteApto = masterInterna ? "MAESTRA_INTERNA_EXISTENTE" : "VIGILANCIA_PLACAS";
 
-      Logger.log("Placa existe en maestra. Se respeta maestra:");
-      Logger.log(JSON.stringify(master, null, 2));
+      logDetalle_("Placa existe en maestra. Se respeta maestra:");
+      logDetalle_(JSON.stringify(master, null, 2));
     }
 
     /***************************************
@@ -1198,13 +1335,14 @@ function analizarYCorregirTodasLasPlacas_(config) {
           if (aplicarCorrecciones) {
             sheet.getRange(reg.sheetRow, IDX.apto + 1)
               .setValue(aptoCorrectoTexto)
-              .setBackground("#d9ead3");
+              .setBackground("#d9ead3"); //VERDE
 
             reg.apto = aptoCorrectoTexto;
             reg.aptoNorm = normalizeText_(aptoCorrectoTexto);
           }
         }
       });
+      totalPorMayoriaHistorica++;
     } else {
       marcarInconsistenciaNoReparable_({
         sheet: sheet,
@@ -1215,6 +1353,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
         inconsistenciasNoReparadas: inconsistenciasNoReparadas,
         aplicarCorrecciones: aplicarCorrecciones
       });
+      totalSinCerteza++;
     }
 
     /***************************************
@@ -1237,7 +1376,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
           if (aplicarCorrecciones) {
             sheet.getRange(reg.sheetRow, IDX.tipoVehiculo + 1)
               .setValue(regexInfo.tipo)
-              .setBackground("#d9ead3");
+              .setBackground("#d9ead3"); //VERDE
 
             reg.tipoVehiculo = regexInfo.tipo;
             reg.tipoVehiculoNorm = regexInfo.tipo;
@@ -1271,7 +1410,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
             if (aplicarCorrecciones) {
               sheet.getRange(reg.sheetRow, IDX.tipoVehiculo + 1)
                 .setValue(mayoriaTipo.valor)
-                .setBackground("#d9ead3");
+                .setBackground("#d9ead3"); //VERDE
 
               reg.tipoVehiculo = mayoriaTipo.valor;
               reg.tipoVehiculoNorm = mayoriaTipo.valor;
@@ -1291,6 +1430,17 @@ function analizarYCorregirTodasLasPlacas_(config) {
       }
     }
   });
+
+  logResumen_("=== RESUMEN ANALISIS PLACAS ===");
+  logResumen_("Placas analizadas: " + totalPlacasAnalizadas);
+  logResumen_("Con maestra interna: " + totalConMaestraInterna);
+  logResumen_("Con vigilancia: " + totalConVigilancia);
+  logResumen_("Creadas por mayoría histórica: " + totalPorMayoriaHistorica);
+  logResumen_("Sin certeza: " + totalSinCerteza);
+  logResumen_("Regex inválida: " + totalRegexInvalida);
+  logResumen_("Correcciones apto: " + correccionesApto.length);
+  logResumen_("Correcciones tipo: " + correccionesTipo.length);
+  logResumen_("Inconsistencias no reparadas: " + inconsistenciasNoReparadas.length);
 
   return {
     correccionesApto: correccionesApto,
@@ -1375,22 +1525,33 @@ function marcarInconsistenciaNoReparable_(params) {
 
   if (colIndex === -1) return;
 
-  registros.forEach(function(reg) {
-    inconsistenciasNoReparadas.push({
-      sheetRow: reg.sheetRow,
-      placa: reg.placaNorm,
-      apto: reg.apto,
-      tipoVehiculo: reg.tipoVehiculo,
-      columna: columna,
-      motivo: motivo
-    });
 
+
+  if (registros.length > 0) {
+    const placaNorm = registros[0].placaNorm;
+
+    inconsistenciasNoReparadas.push(
+      crearResumenInconsistenciaPlaca_(
+        placaNorm,
+        registros,
+        columna,
+        motivo
+      )
+    );
+  }
+
+  registros.forEach(function(reg) {
     if (aplicarCorrecciones) {
       sheet.getRange(reg.sheetRow, colIndex + 1)
-        .setBackground("#f4cccc");
+        .setBackground("#f4cccc"); //ROJO
     }
   });
+
+
+
 }
+
+
 
 function getSheetByGid_(ss, gid) {
   const sheets = ss.getSheets();
@@ -1474,11 +1635,10 @@ function leerMapaVigilanciaPlacas_() {
     });
   });
 
-  Logger.log('Total placas cargadas desde vigilancia: ' + Object.keys(mapa).length);
+  logResumen_('Total placas cargadas desde vigilancia: ' + Object.keys(mapa).length);
 
   if (conflictos.length > 0) {
-    Logger.log('Conflictos encontrados en vigilancia:');
-    Logger.log(JSON.stringify(conflictos, null, 2));
+    logMuestra_('Conflictos encontrados en vigilancia', conflictos, 20);
   }
 
   return mapa;
@@ -1512,8 +1672,8 @@ function generarParesColumnasVigilancia_(lastCol) {
     }
   }
 
-  Logger.log("Pares de columnas vigilancia detectados:");
-  Logger.log(JSON.stringify(
+  logDetalle_("Pares de columnas vigilancia detectados:");
+  logDetalle_(JSON.stringify(
     pares.map(function(p) {
       return {
         placaCol: p.placaCol + 1,
@@ -1583,16 +1743,13 @@ function sincronizarVigilanciaConMaestra_(hojaMaestra, mapaMaestra, mapaVigilanc
     });
   });
 
-  Logger.log("=== SINCRONIZACION VIGILANCIA → MAESTRA ===");
-  Logger.log("Registros vigilancia revisados: " + Object.keys(mapaVigilancia).length);
-  Logger.log("Nuevos para maestra: " + nuevos.length);
-  Logger.log("Omitidos: " + omitidos.length);
+  logResumen_("=== SINCRONIZACION VIGILANCIA → MAESTRA ===");
+  logResumen_("Registros vigilancia revisados: " + Object.keys(mapaVigilancia).length);
+  logResumen_("Nuevos para maestra: " + nuevos.length);
+  logResumen_("Omitidos: " + omitidos.length);
 
-  Logger.log("Nuevos muestra:");
-  Logger.log(JSON.stringify(nuevos.slice(0, 50), null, 2));
-
-  if (nuevos.length > 50) {
-    Logger.log("Más nuevos no mostrados: " + (nuevos.length - 50));
+  if (nuevos.length > 0) {
+    logMuestra_("Nuevos para maestra", nuevos, 20);
   }
 
   if (aplicarCorrecciones && nuevos.length > 0) {
@@ -1644,4 +1801,1472 @@ function sincronizarVigilanciaConMaestra_(hojaMaestra, mapaMaestra, mapaVigilanc
     nuevos: nuevos,
     omitidos: omitidos
   };
+}
+
+function prepararResumenSancionesPorApartamento() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+  if (!sheet) {
+    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2) {
+    Logger.log("No hay sanciones para procesar.");
+    return;
+  }
+
+  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
+
+  const IDX = obtenerIdxPlanilla_(allData[0]);
+
+  const rows = allData.slice(1);
+  const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
+
+  const mapaCorreos = leerMapaCorreosApartamentos_();
+  const resumenPorApto = agruparSancionesPorApartamento_(registros);
+
+  const hojaResumen = getOrCreateHojaResumenEnvio_(ss);
+  hojaResumen.clear();
+
+  hojaResumen.getRange(1, 1, 1, 9).setValues([[
+    "Apartamento",
+    "Email",
+    "CantidadSanciones",
+    "ValorUnitario",
+    "ValorTotal",
+    "Estado",
+    "FechaPreparacion",
+    "Detalle",
+    "Observaciones"
+  ]]);
+
+  hojaResumen.getRange(1, 1, 1, 9)
+    .setFontWeight("bold")
+    .setBackground("#d9ead3"); //VERDE
+
+  const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+
+  const values = Object.keys(resumenPorApto)
+    .sort(function(a, b) {
+      return Number(a) - Number(b);
+    })
+    .map(function(aptoNorm) {
+      const item = resumenPorApto[aptoNorm];
+      const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(item.apartamento)];
+
+
+
+      const cantidad = item.sanciones.length;
+
+      const resumenPlacas = agruparSancionesPorPlaca_(item.sanciones);
+
+      const valorTotal = resumenPlacas.reduce(function(total, placaItem) {
+        return total + placaItem.valorTotal;
+      }, 0);
+
+      const detalle = convertirResumenPlacasATexto_(resumenPlacas);
+
+      const cantidadSinTipo = item.sanciones.filter(function(s) {
+        const tipoNorm = normalizarTipoVehiculo_(s.tipoVehiculo);
+        return tipoNorm !== "MOTO" && tipoNorm !== "CARRO";
+      }).length;
+
+
+
+
+      let observaciones = "";
+
+      if (!correoInfo) {
+        observaciones = "No se encontró correo para este apartamento.";
+      }
+
+      if (cantidadSinTipo > 0) {
+        observaciones += " Hay " + cantidadSinTipo + " sanciones sin tipo de vehículo reconocido.";
+      }
+
+      return [
+        item.apartamento,
+        correoInfo ? correoInfo.email : "",
+        cantidad,
+        "Moto: " + formatCOP_(VALOR_UNITARIO_SANCION_MOTO) + " / Carro: " + formatCOP_(VALOR_UNITARIO_SANCION_CARRO),
+        valorTotal,
+        correoInfo ? "PENDIENTE" : "SIN_CORREO",
+        now,
+        detalle,
+        observaciones
+      ];
+    });
+
+  if (values.length > 0) {
+    hojaResumen.getRange(2, 1, values.length, 9).setValues(values);
+    hojaResumen.autoResizeColumns(1, 9);
+  }
+
+  Logger.log("Apartamentos con resumen generado: " + values.length);
+}
+
+function leerMapaCorreosApartamentos_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CORREOS_APTOS);
+  const sheet = getSheetByGid_(ss, SHEET_GID_CORREOS_APTOS);
+
+  if (!sheet) {
+    throw new Error('No se encontró la hoja de correos con gid ' + SHEET_GID_CORREOS_APTOS);
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2 || lastCol < 1) {
+    return {};
+  }
+
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  const headers = data[0].map(function(h) {
+    return normalizeHeader_(h);
+  });
+
+  const idxApto = buscarColumnaPorNombres_(headers, [
+    "apartamento",
+    "apto"
+  ]);
+
+  const idxNombre = buscarColumnaPorNombres_(headers, [
+    "nombre"
+  ]);
+
+  const idxNombre2 = buscarColumnaPorNombres_(headers, [
+    "nombre 2do comprador",
+    "nombre segundo comprador"
+  ]);
+
+  const idxCorreo1 = buscarColumnaPorNombres_(headers, [
+    "correo electronico",
+    "correo",
+    "email"
+  ]);
+
+  const idxCorreo2 = buscarColumnaPorNombres_(headers, [
+    "correo electronico 2do comprador",
+    "correo electronico segundo comprador",
+    "correo 2do comprador",
+    "email 2do comprador"
+  ]);
+
+  if (idxApto === -1) {
+    throw new Error('No se encontró la columna "Apartamento" en la hoja de correos.');
+  }
+
+  if (idxCorreo1 === -1 && idxCorreo2 === -1) {
+    throw new Error('No se encontró ninguna columna de correo electrónico en la hoja de correos.');
+  }
+
+  const mapa = {};
+  const duplicados = [];
+
+  data.slice(1).forEach(function(row, index) {
+    const aptoRaw = safeTrim_(row[idxApto]);
+    const aptoKey = normalizarApartamentoDesdeCorreo_(aptoRaw);
+
+    if (!aptoKey) return;
+
+    const nombre1 = idxNombre !== -1 ? safeTrim_(row[idxNombre]) : "";
+    const nombre2 = idxNombre2 !== -1 ? safeTrim_(row[idxNombre2]) : "";
+
+    const correo1 = idxCorreo1 !== -1 ? safeTrim_(row[idxCorreo1]).toLowerCase() : "";
+    const correo2 = idxCorreo2 !== -1 ? safeTrim_(row[idxCorreo2]).toLowerCase() : "";
+
+    const correos = [];
+
+    if (esEmailValido_(correo1)) {
+      correos.push(correo1);
+    }
+
+    if (esEmailValido_(correo2) && correos.indexOf(correo2) === -1) {
+      correos.push(correo2);
+    }
+
+    if (correos.length === 0) return;
+
+    if (mapa[aptoKey]) {
+      duplicados.push({
+        apto: aptoKey,
+        filaExistente: mapa[aptoKey].row,
+        filaNueva: index + 2,
+        correosExistentes: mapa[aptoKey].email,
+        correosNuevos: correos.join(", ")
+      });
+
+      // Une correos si el apartamento aparece repetido.
+      correos.forEach(function(correo) {
+        if (mapa[aptoKey].correos.indexOf(correo) === -1) {
+          mapa[aptoKey].correos.push(correo);
+        }
+      });
+
+      mapa[aptoKey].email = mapa[aptoKey].correos.join(", ");
+      return;
+    }
+
+    mapa[aptoKey] = {
+      apartamento: aptoKey,
+      apartamentoOriginal: aptoRaw,
+      email: correos.join(", "),
+      correos: correos,
+      nombre: nombre1,
+      nombre2: nombre2,
+      row: index + 2,
+      fuente: "HOJA_CORREOS_APTOS"
+    };
+  });
+
+  Logger.log("Correos cargados por apartamento: " + Object.keys(mapa).length);
+
+  if (duplicados.length > 0) {
+    Logger.log("Apartamentos duplicados en hoja de correos:");
+    Logger.log(JSON.stringify(duplicados.slice(0, 100), null, 2));
+  }
+
+  return mapa;
+}
+
+function agruparSancionesPorApartamento_(registros) {
+  const mapa = {};
+
+  registros.forEach(function(reg) {
+    if (!reg.aptoNorm) return;
+
+    if (!mapa[reg.aptoNorm]) {
+      mapa[reg.aptoNorm] = {
+        apartamento: reg.apto,
+        sanciones: []
+      };
+    }
+
+    mapa[reg.aptoNorm].sanciones.push(reg);
+  });
+
+  return mapa;
+}
+
+function getOrCreateHojaResumenEnvio_(ss) {
+  let sheet = ss.getSheetByName(SHEET_RESUMEN_ENVIO_SANCIONES);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_RESUMEN_ENVIO_SANCIONES);
+  }
+
+  return sheet;
+}
+
+function obtenerIdxPlanilla_(rawHeaders) {
+  const headers = rawHeaders.map(function(h) {
+    return normalizeHeader_(h);
+  });
+
+  const colMap = {};
+  headers.forEach(function(h, i) {
+    colMap[h] = i;
+  });
+
+  return {
+    id: findColIdx_(colMap, ["id"]),
+    fecha: findColIdx_(colMap, ["fecha"]),
+    vigilante: findColIdx_(colMap, ["vigilante que toma el registro", "vigilante", "agente"]),
+    tipoVehiculo: findColIdx_(colMap, ["tipo de vehiculo", "tipo vehiculo", "vehiculo"]),
+    placa: findColIdx_(colMap, ["placa"]),
+    apto: findColIdx_(colMap, ["apto", "apartamento", "apt", "numero de apto", "no. apto", "nro apto"]),
+    residenteVisitante: findColIdx_(colMap, ["residente o visitante", "residente", "tipo residente", "residente/visitante"]),
+    observaciones: findColIdx_(colMap, ["observaciones", "observacion"]),
+    foto: findColIdx_(colMap, ["foto", "imagen", "fotografia"]),
+    firma: findColIdx_(colMap, ["firma"])
+  };
+}
+
+function enviarCorreosResumenSanciones() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_RESUMEN_ENVIO_SANCIONES);
+
+  if (!sheet) {
+    throw new Error('Primero debes ejecutar prepararResumenSancionesPorApartamento().');
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2) {
+    Logger.log("No hay correos pendientes.");
+    return;
+  }
+
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+
+  const headers = data[0].map(function(h) {
+    return normalizeHeader_(h);
+  });
+
+  const colMap = {};
+  headers.forEach(function(h, i) {
+    colMap[h] = i;
+  });
+
+  const idxApto = colMap["apartamento"];
+  const idxEmail = colMap["email"];
+  const idxCantidad = colMap["cantidadsanciones"];
+  const idxValorUnitario = colMap["valorunitario"];
+  const idxValorTotal = colMap["valortotal"];
+  const idxEstado = colMap["estado"];
+  const idxDetalle = colMap["detalle"];
+  const idxObs = colMap["observaciones"];
+
+  let enviados = 0;
+  let omitidos = 0;
+
+  data.slice(1).forEach(function(row, index) {
+    const sheetRow = index + 2;
+
+    const apto = safeTrim_(row[idxApto]);
+    const email = safeTrim_(row[idxEmail]);
+    const estado = safeTrim_(row[idxEstado]);
+
+    if (!apto || !email) {
+      omitidos++;
+      return;
+    }
+
+    if (estado !== "PENDIENTE") {
+      omitidos++;
+      return;
+    }
+
+    const cantidad = Number(row[idxCantidad]) || 0;
+    const valorUnitario = Number(row[idxValorUnitario]) || 0;
+    const valorTotal = Number(row[idxValorTotal]) || 0;
+    const detalle = safeTrim_(row[idxDetalle]);
+
+    const subject = "NO RESPONDER - Abril y Mayo - Notificación de sanción por uso indebido del parqueadero de visitantes - Apto " + apto;
+
+    const htmlBody = construirHtmlCorreoSanciones_({
+      apartamento: apto,
+      cantidad: cantidad,
+      valorUnitario: valorUnitario,
+      valorTotal: valorTotal,
+      detalle: detalle
+    });
+
+    Logger.log("Preparando correo para apto " + apto + " -> " + email);
+
+    if (!EMAIL_DRY_RUN) {
+      MailApp.sendEmail({
+        to: email,
+        cc: "bulevarverdeadmon@gmail.com",
+        subject: subject,
+        htmlBody: htmlBody,
+        name: "Administración Bulevar Verde"
+      });
+
+      sheet.getRange(sheetRow, idxEstado + 1).setValue("ENVIADO");
+      sheet.getRange(sheetRow, idxObs + 1).setValue(
+        "Enviado: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+      );
+    } else {
+      sheet.getRange(sheetRow, idxEstado + 1).setValue("SIMULADO");
+      sheet.getRange(sheetRow, idxObs + 1).setValue("EMAIL_DRY_RUN activo. No se envió correo real.");
+    }
+
+    enviados++;
+  });
+
+  Logger.log("Correos procesados: " + enviados);
+  Logger.log("Omitidos: " + omitidos);
+}
+
+function construirHtmlCorreoSanciones_(data) {
+  const fechaTexto = obtenerFechaComunicacion_();
+
+  // Soporta dos escenarios:
+  // 1. data.resumenPlacas ya viene calculado.
+  // 2. data.detalle viene desde la hoja resumen_envio_sanciones.
+  const resumenPlacas = data.resumenPlacas || obtenerResumenPlacasDesdeDetalle_(data.detalle);
+
+  let resumenPlacasHtml = `
+    <table style="border-collapse: collapse; width: 100%; max-width: 650px; font-size: 14px; margin: 16px 0;">
+      <tr>
+        <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Placa</th>
+        <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Tipo</th>
+        <th style="border: 1px solid #ccc; padding: 8px; text-align: center;">Días / registros</th>
+        <th style="border: 1px solid #ccc; padding: 8px; text-align: right;">Valor sanción</th>
+      </tr>
+  `;
+
+  resumenPlacas.forEach(function(item) {
+    resumenPlacasHtml += `
+      <tr>
+        <td style="border: 1px solid #ccc; padding: 8px;">${escapeHtml_(item.placa)}</td>
+        <td style="border: 1px solid #ccc; padding: 8px;">${escapeHtml_(item.tipoVehiculo)}</td>
+        <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${item.cantidad}</td>
+        <td style="border: 1px solid #ccc; padding: 8px; text-align: right;"><strong>${formatCOP_(item.valorTotal)}</strong></td>
+      </tr>
+    `;
+  });
+
+  resumenPlacasHtml += "</table>";
+
+  const placasTexto = resumenPlacas.map(function(item) {
+    return item.placa;
+  }).join(", ");
+
+  return `
+    <div style="font-family: Arial, sans-serif; color: #222; line-height: 1.55; font-size: 14px; max-width: 760px;">
+      <p><strong>Itagüí, ${fechaTexto}</strong></p>
+
+      <p>
+        Señor(a):<br>
+        <strong>Copropietario(a) / Residente</strong><br>
+        Apartamento: <strong>${escapeHtml_(data.apartamento)}</strong>
+      </p>
+
+      <p>
+        <strong>Asunto:</strong> Notificación de sanción por uso indebido del parqueadero de visitantes
+      </p>
+
+      <p>Cordial saludo,</p>
+
+      <p>
+        La administración de <strong>Club Residencial Bulevar Verde</strong> se permite informar que,
+        de acuerdo con la verificación realizada por el personal de seguridad y los registros de control
+        de la copropiedad, se evidenció que el/los vehículo(s) identificado(s) con placa(s)
+        <strong>${escapeHtml_(placasTexto)}</strong> permaneció/permanecieron estacionado(s) en el
+        parqueadero de visitantes durante <strong>${data.cantidad}</strong> días/registros,
+        incumpliendo la reglamentación establecida para el uso de dichas zonas comunes.
+      </p>
+
+      <p>
+        La anterior conducta constituye un incumplimiento de las disposiciones internas de la copropiedad,
+        en especial de lo establecido en el <strong>Artículo 40 – Obligaciones de los propietarios o residentes,
+        numeral 20</strong>, el cual dispone:
+      </p>
+
+      <blockquote style="border-left: 4px solid #ccc; margin: 12px 0; padding: 8px 14px; color: #444;">
+        "En general, someterse a las normas del presente reglamento y a las decisiones válidamente adoptadas
+        por la Asamblea General de Propietarios, el Consejo de Administración y el Administrador."
+      </blockquote>
+
+      <p>
+        Teniendo en cuenta que el reglamento de uso de parqueaderos de visitantes fue debidamente aprobado
+        y comunicado por los órganos de administración de la copropiedad, su incumplimiento genera la aplicación
+        de las medidas correctivas y sancionatorias correspondientes.
+      </p>
+
+      <p>
+        En consecuencia, se impone una sanción pecuniaria conforme al siguiente resumen:
+      </p>
+
+      <table style="border-collapse: collapse; margin: 16px 0; max-width: 650px;">
+        <tr>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>Total sanciones</strong></td>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;">${data.cantidad}</td>
+        </tr>
+      </table>
+
+      ${resumenPlacasHtml}
+
+      <table style="border-collapse: collapse; margin: 16px 0; max-width: 650px;">
+        <tr>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>Valor total a pagar</strong></td>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>${formatCOP_(data.valorTotal)}</strong></td>
+        </tr>
+      </table>
+
+      <p>
+        Esta sanción será cargada y reflejada en la factura de administración correspondiente al siguiente
+        período de facturación.
+      </p>
+
+      <p>
+        No obstante, en garantía del derecho constitucional al debido proceso, se concede un término de
+        <strong>cinco (5) días hábiles</strong> contados a partir de la recepción de la presente comunicación
+        para que presente por escrito los respectivos descargos, aporte las pruebas que considere pertinentes
+        y ejerza su derecho de defensa y contradicción.
+      </p>
+
+      <p>
+        Los descargos deberán ser remitidos al correo electrónico de la administración:
+        <a href="mailto:bulevarverdeadmon@gmail.com">bulevarverdeadmon@gmail.com</a>
+      </p>
+
+      <p>
+        Para ver el detalle de sus sanciones ingrese al siguiente enlace:<br>
+        <a href="${URL_CONSULTA_SANCIONES}" target="_blank">${URL_CONSULTA_SANCIONES}</a>
+      </p>
+
+      <p>
+        En caso de no presentar descargos dentro del término establecido, se entenderá que acepta los hechos
+        aquí expuestos y la sanción impuesta quedará en firme, procediéndose a su aplicación en la facturación
+        correspondiente.
+      </p>
+
+      <p>
+        La copropiedad es el hogar de más de 880 familias y el cumplimiento de las normas contribuye al orden,
+        la convivencia, la adecuada utilización de las zonas comunes, la seguridad y la valorización de nuestro
+        conjunto residencial.
+      </p>
+
+      <p>
+        Sin otro particular, agradecemos su atención y colaboración.
+      </p>
+
+      <p>
+        Cordialmente,<br><br>
+        <strong>ADMINISTRACIÓN</strong><br>
+        <strong>CLUB RESIDENCIAL BULEVAR VERDE</strong>
+      </p>
+    </div>
+  `;
+}
+
+function convertirDetalleATablaHtml_(detalle) {
+  if (!detalle) {
+    return "<p>No se encontró detalle de sanciones.</p>";
+  }
+
+  const filas = detalle.split("\n");
+
+  let html = `
+    <table style="border-collapse: collapse; width: 100%; font-size: 13px;">
+      <tr>
+        <th style="border: 1px solid #ccc; padding: 6px;">#</th>
+        <th style="border: 1px solid #ccc; padding: 6px;">Fecha</th>
+        <th style="border: 1px solid #ccc; padding: 6px;">Placa</th>
+        <th style="border: 1px solid #ccc; padding: 6px;">Tipo</th>
+        <th style="border: 1px solid #ccc; padding: 6px;">Valor</th>
+        <th style="border: 1px solid #ccc; padding: 6px;">Observación</th>
+      </tr>
+  `;
+
+  filas.forEach(function(linea) {
+    const partes = linea.split("|").map(function(p) {
+      return safeTrim_(p);
+    });
+
+    html += `
+      <tr>
+        <td style="border: 1px solid #ccc; padding: 6px;">${escapeHtml_(partes[0] || "")}</td>
+        <td style="border: 1px solid #ccc; padding: 6px;">${escapeHtml_(partes[1] || "")}</td>
+        <td style="border: 1px solid #ccc; padding: 6px;">${escapeHtml_(partes[2] || "")}</td>
+        <td style="border: 1px solid #ccc; padding: 6px;">${escapeHtml_(partes[3] || "")}</td>
+        <td style="border: 1px solid #ccc; padding: 6px;">${escapeHtml_(partes[4] || "")}</td>
+        <td style="border: 1px solid #ccc; padding: 6px;">${escapeHtml_(partes[5] || "")}</td>
+      </tr>
+    `;
+  });
+
+  html += "</table>";
+
+  return html;
+}
+
+function formatCOP_(value) {
+  const number = Number(value) || 0;
+  return "$" + number.toLocaleString("es-CO");
+}
+
+function escapeHtml_(value) {
+  return safeTrim_(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function buscarColumnaPorNombres_(headers, nombres) {
+  for (var i = 0; i < headers.length; i++) {
+    for (var j = 0; j < nombres.length; j++) {
+      if (headers[i] === normalizeHeader_(nombres[j])) {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function normalizarApartamentoDesdeCorreo_(value) {
+  const raw = safeTrim_(value).toUpperCase();
+
+  if (!raw) return "";
+
+  // Ejemplos:
+  // APT-4-1127 → 1127
+  // APT-4-0430 → 430
+  // 1127 → 1127
+  const match = raw.match(/(\d{2,5})$/);
+
+  if (!match) return "";
+
+  return quitarCerosIzquierda_(match[1]);
+}
+
+function quitarCerosIzquierda_(value) {
+  const limpio = safeTrim_(value).replace(/^0+/, "");
+  return limpio || "0";
+}
+
+function esEmailValido_(email) {
+  const e = safeTrim_(email).toLowerCase();
+
+  if (!e) return false;
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
+
+function getValorSancionPorTipo_(tipoVehiculo) {
+  const tipo = normalizarTipoVehiculo_(tipoVehiculo);
+
+  if (tipo === "MOTO") {
+    return VALOR_UNITARIO_SANCION_MOTO;
+  }
+
+  if (tipo === "CARRO") {
+    return VALOR_UNITARIO_SANCION_CARRO;
+  }
+
+  // Si no se reconoce el tipo, no se cobra automático.
+  return 0;
+}
+
+function construirHtmlCorreoSancionesTest_(data) {
+  const fechaTexto = obtenerFechaComunicacion_();
+
+  let resumenPlacasHtml = `
+    <table style="border-collapse: collapse; width: 100%; max-width: 650px; font-size: 14px; margin: 16px 0;">
+      <tr>
+        <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Placa</th>
+        <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Tipo</th>
+        <th style="border: 1px solid #ccc; padding: 8px; text-align: center;">Días / registros</th>
+        <th style="border: 1px solid #ccc; padding: 8px; text-align: right;">Valor sanción</th>
+      </tr>
+  `;
+
+  data.resumenPlacas.forEach(function(item) {
+    resumenPlacasHtml += `
+      <tr>
+        <td style="border: 1px solid #ccc; padding: 8px;">${escapeHtml_(item.placa)}</td>
+        <td style="border: 1px solid #ccc; padding: 8px;">${escapeHtml_(item.tipoVehiculo)}</td>
+        <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${item.cantidad}</td>
+        <td style="border: 1px solid #ccc; padding: 8px; text-align: right;"><strong>${formatCOP_(item.valorTotal)}</strong></td>
+      </tr>
+    `;
+  });
+
+  resumenPlacasHtml += "</table>";
+
+  const placasTexto = data.resumenPlacas.map(function(item) {
+    return item.placa;
+  }).join(", ");
+
+  const diasTexto = data.cantidad;
+
+  return `
+    <div style="font-family: Arial, sans-serif; color: #222; line-height: 1.55; font-size: 14px; max-width: 760px;">
+      <p><strong>Itagüí, ${fechaTexto}</strong></p>
+
+      <p>
+        Señor(a):<br>
+        <strong>Copropietario(a) / Residente</strong><br>
+        Apartamento: <strong>${escapeHtml_(data.apartamento)}</strong>
+      </p>
+
+      <p>
+        <strong>Asunto:</strong> Notificación de sanción por uso indebido del parqueadero de visitantes
+      </p>
+
+      <p>Cordial saludo,</p>
+
+      <p>
+        La administración de <strong>Club Residencial Bulevar Verde</strong> se permite informar que,
+        de acuerdo con la verificación realizada por el personal de seguridad y los registros de control
+        de la copropiedad, se evidenció que el/los vehículo(s) identificado(s) con placa(s)
+        <strong>${escapeHtml_(placasTexto)}</strong> permaneció/permanecieron estacionado(s) en el
+        parqueadero de visitantes durante <strong>${escapeHtml_(diasTexto)}</strong> días/registros,
+        incumpliendo la reglamentación establecida para el uso de dichas zonas comunes.
+      </p>
+
+      <p>
+        La anterior conducta constituye un incumplimiento de las disposiciones internas de la copropiedad,
+        en especial de lo establecido en el <strong>Artículo 40 – Obligaciones de los propietarios o residentes,
+        numeral 20</strong>, el cual dispone:
+      </p>
+
+      <blockquote style="border-left: 4px solid #ccc; margin: 12px 0; padding: 8px 14px; color: #444;">
+        "En general, someterse a las normas del presente reglamento y a las decisiones válidamente adoptadas
+        por la Asamblea General de Propietarios, el Consejo de Administración y el Administrador."
+      </blockquote>
+
+      <p>
+        Teniendo en cuenta que el reglamento de uso de parqueaderos de visitantes fue debidamente aprobado
+        y comunicado por los órganos de administración de la copropiedad, su incumplimiento genera la aplicación
+        de las medidas correctivas y sancionatorias correspondientes.
+      </p>
+
+      <p>
+        En consecuencia, se impone una sanción pecuniaria conforme al siguiente resumen:
+      </p>
+
+      <table style="border-collapse: collapse; margin: 16px 0; max-width: 650px;">
+        <tr>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>Total sanciones</strong></td>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;">${data.cantidad}</td>
+        </tr>
+      </table>
+
+      ${resumenPlacasHtml}
+
+      <table style="border-collapse: collapse; margin: 16px 0; max-width: 650px;">
+        <tr>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>Valor total a pagar</strong></td>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>${formatCOP_(data.valorTotal)}</strong></td>
+        </tr>
+      </table>
+
+      <p>
+        Esta sanción será cargada y reflejada en la factura de administración correspondiente al siguiente
+        período de facturación.
+      </p>
+
+      <p>
+        No obstante, en garantía del derecho constitucional al debido proceso, se concede un término de
+        <strong>cinco (5) días hábiles</strong> contados a partir de la recepción de la presente comunicación
+        para que presente por escrito los respectivos descargos, aporte las pruebas que considere pertinentes
+        y ejerza su derecho de defensa y contradicción.
+      </p>
+
+      <p>
+        Los descargos deberán ser remitidos al correo electrónico de la administración:
+        <a href="mailto:bulevarverdeadmon@gmail.com">bulevarverdeadmon@gmail.com</a>
+      </p>
+
+      <p>
+        Para ver el detalle de sus sanciones ingrese al siguiente enlace:<br>
+        <a href="${URL_CONSULTA_SANCIONES}" target="_blank">${URL_CONSULTA_SANCIONES}</a>
+      </p>
+
+      <p>
+        En caso de no presentar descargos dentro del término establecido, se entenderá que acepta los hechos
+        aquí expuestos y la sanción impuesta quedará en firme, procediéndose a su aplicación en la facturación
+        correspondiente.
+      </p>
+
+      <p>
+        La copropiedad es el hogar de más de 880 familias y el cumplimiento de las normas contribuye al orden,
+        la convivencia, la adecuada utilización de las zonas comunes, la seguridad y la valorización de nuestro
+        conjunto residencial.
+      </p>
+
+      <p>
+        Sin otro particular, agradecemos su atención y colaboración.
+      </p>
+
+      <p>
+        Cordialmente,<br><br>
+        <strong>ADMINISTRACIÓN</strong><br>
+        <strong>CLUB RESIDENCIAL BULEVAR VERDE</strong>
+      </p>
+    </div>
+  `;
+}
+
+function agruparSancionesPorPlaca_(sanciones) {
+  const mapa = {};
+
+  sanciones.forEach(function(s) {
+    const placa = s.placaNorm || normalizePlaca_(s.placa) || "SIN_PLACA";
+    const tipo = normalizarTipoVehiculo_(s.tipoVehiculo) || "SIN_TIPO";
+    const key = placa + "|" + tipo;
+
+    if (!mapa[key]) {
+      mapa[key] = {
+        placa: placa,
+        tipoVehiculo: tipo,
+        cantidad: 0,
+        valorTotal: 0
+      };
+    }
+
+    mapa[key].cantidad++;
+    mapa[key].valorTotal += getValorSancionPorTipo_(tipo);
+  });
+
+  return Object.keys(mapa).map(function(key) {
+    return mapa[key];
+  });
+}
+
+function logResumen_(msg) {
+  if (LOG_LEVEL === "RESUMEN" || LOG_LEVEL === "DETALLE") {
+    Logger.log(msg);
+  }
+}
+
+function logDetalle_(msg) {
+  if (LOG_LEVEL === "DETALLE") {
+    Logger.log(msg);
+  }
+}
+
+function logJsonDetalle_(label, obj) {
+  if (LOG_LEVEL === "DETALLE") {
+    Logger.log(label);
+    Logger.log(JSON.stringify(obj, null, 2));
+  }
+}
+
+function logMuestra_(label, arr, limite) {
+  if (LOG_LEVEL === "RESUMEN" || LOG_LEVEL === "DETALLE") {
+    const max = limite || 20;
+    Logger.log(label + " total: " + arr.length);
+    Logger.log(JSON.stringify(arr.slice(0, max), null, 2));
+
+    if (arr.length > max) {
+      Logger.log("Más registros no mostrados: " + (arr.length - max));
+    }
+  }
+}
+
+function crearResumenInconsistenciaPlaca_(placaNorm, registrosPlaca, columna, motivo) {
+  const conteoAptos = contarPorCampo_(registrosPlaca, "aptoNorm");
+  const mayoriaApto = obtenerMayoria_(conteoAptos, registrosPlaca.length);
+
+  const registrosConTipo = registrosPlaca.filter(function(reg) {
+    return reg.tipoVehiculoNorm;
+  });
+
+  const conteoTipos = contarPorCampo_(registrosConTipo, "tipoVehiculoNorm");
+  const mayoriaTipo = obtenerMayoria_(conteoTipos, registrosConTipo.length);
+
+  const aptosDetalle = Object.keys(conteoAptos)
+    .sort(function(a, b) {
+      return conteoAptos[b] - conteoAptos[a];
+    })
+    .map(function(apto) {
+      return apto + "=" + conteoAptos[apto];
+    })
+    .join(", ");
+
+  const tiposDetalle = Object.keys(conteoTipos)
+    .sort(function(a, b) {
+      return conteoTipos[b] - conteoTipos[a];
+    })
+    .map(function(tipo) {
+      return tipo + "=" + conteoTipos[tipo];
+    })
+    .join(", ");
+
+  const filas = registrosPlaca.map(function(reg) {
+    return reg.sheetRow;
+  });
+
+  const porcentajeMayoria = mayoriaApto ? mayoriaApto.porcentaje : 0;
+  const porcentajeTexto = Math.round(porcentajeMayoria * 10000) / 100 + "%";
+  const umbralTexto = Math.round(UMBRAL_MAYORIA * 100) + "%";
+  const diferenciaUmbral = Math.max(0, UMBRAL_MAYORIA - porcentajeMayoria);
+  const diferenciaTexto = Math.round(diferenciaUmbral * 10000) / 100 + "%";
+
+  let recomendacion = "Revisión manual.";
+
+  if (registrosPlaca.length < MIN_REGISTROS_PARA_CORREGIR) {
+    recomendacion = "No corrige porque tiene pocos registros históricos.";
+  } else if (mayoriaApto && porcentajeMayoria < UMBRAL_MAYORIA) {
+    recomendacion = "No corrige porque la mayoría no alcanza el umbral de certeza.";
+  }
+
+  let prioridad = "BAJA";
+  let criterioRevision = "";
+
+  if (registrosPlaca.length >= MIN_REGISTROS_PARA_CORREGIR && mayoriaApto && porcentajeMayoria < UMBRAL_MAYORIA) {
+    prioridad = "ALTA";
+    criterioRevision = "Tiene suficientes registros, pero la mayoría no alcanza el umbral.";
+  } else if (registrosPlaca.length < MIN_REGISTROS_PARA_CORREGIR && registrosPlaca.length >= 3) {
+    prioridad = "MEDIA";
+    criterioRevision = "Tiene pocos registros, pero ya hay alguna repetición histórica.";
+  } else {
+    prioridad = "BAJA";
+    criterioRevision = "Tiene muy pocos registros históricos.";
+  }
+
+  return {
+    prioridad: prioridad,
+    placa: placaNorm,
+    columna: columna,
+    motivo: motivo,
+    totalRegistros: registrosPlaca.length,
+    aptosDetectados: aptosDetalle,
+    mayoriaApto: mayoriaApto ? mayoriaApto.valor : "",
+    cantidadMayoriaApto: mayoriaApto ? mayoriaApto.cantidad : 0,
+    certezaApto: porcentajeTexto,
+    umbralRequerido: umbralTexto,
+    diferenciaContraUmbral: diferenciaTexto,
+    tiposDetectados: tiposDetalle,
+    mayoriaTipo: mayoriaTipo ? mayoriaTipo.valor : "",
+    filasAfectadas: filas.slice(0, 20).join(", "),
+    totalFilasAfectadas: filas.length,
+    recomendacion: recomendacion,
+    criterioRevision: criterioRevision
+  };
+}
+
+function logResumenInconsistencias_(inconsistencias) {
+  Logger.log("=== INCONSISTENCIAS PARA REVISIÓN MANUAL ===");
+  Logger.log("Total placas con inconsistencia: " + inconsistencias.length);
+
+  const pesoPrioridad = {
+    "ALTA": 3,
+    "MEDIA": 2,
+    "BAJA": 1
+  };
+
+  const ordenadas = inconsistencias.slice().sort(function(a, b) {
+    const prioridadDiff = (pesoPrioridad[b.prioridad] || 0) - (pesoPrioridad[a.prioridad] || 0);
+    if (prioridadDiff !== 0) return prioridadDiff;
+
+    return b.totalRegistros - a.totalRegistros;
+  });
+
+  ordenadas.slice(0, 50).forEach(function(item, index) {
+    Logger.log(
+      [
+        index + 1,
+        "Prioridad: " + item.prioridad,
+        "Placa: " + item.placa,
+        "Registros: " + item.totalRegistros,
+        "Aptos: " + item.aptosDetectados,
+        "Mayoría: " + item.mayoriaApto + " (" + item.cantidadMayoriaApto + " registros / " + item.certezaApto + ")",
+        "Umbral: " + item.umbralRequerido,
+        "Faltó: " + item.diferenciaContraUmbral,
+        "Tipos: " + item.tiposDetectados,
+        "Filas: " + item.filasAfectadas,
+        "Criterio: " + item.criterioRevision,
+        "Recomendación: " + item.recomendacion
+      ].join(" | ")
+    );
+  });
+
+  if (ordenadas.length > 50) {
+    Logger.log("Más inconsistencias no mostradas: " + (ordenadas.length - 50));
+  }
+}
+
+function obtenerFechaComunicacion_() {
+  const meses = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+  ];
+
+  const fecha = new Date();
+  const dia = fecha.getDate();
+  const mes = meses[fecha.getMonth()];
+  const anio = fecha.getFullYear();
+
+  return dia + " de " + mes + " de " + anio;
+}
+
+function obtenerResumenPlacasDesdeDetalle_(detalle) {
+  const mapa = {};
+
+  if (!detalle) return [];
+
+  const filas = detalle.split("\n");
+
+  filas.forEach(function(linea) {
+    const partes = linea.split("|").map(function(p) {
+      return safeTrim_(p);
+    });
+
+    let placa = "";
+    let tipo = "";
+    let cantidad = 1;
+    let valorTotal = 0;
+
+    // Nuevo formato resumido:
+    // placa | tipo | cantidad | valor
+    if (partes.length === 4 && !/^\d+$/.test(partes[0])) {
+      placa = normalizePlaca_(partes[0] || "SIN_PLACA");
+      tipo = normalizarTipoVehiculo_(partes[1] || "SIN_TIPO");
+      cantidad = Number(partes[2]) || 0;
+      valorTotal = Number(String(partes[3]).replace(/[^0-9]/g, "")) || 0;
+    }
+
+    // Formato anterior:
+    // # | fecha | placa | tipo | valor | observacion
+    else {
+      placa = normalizePlaca_(partes[2] || "SIN_PLACA");
+      tipo = normalizarTipoVehiculo_(partes[3] || "SIN_TIPO");
+      cantidad = 1;
+
+      if (partes[4]) {
+        valorTotal = Number(String(partes[4]).replace(/[^0-9]/g, "")) || 0;
+      }
+
+      if (!valorTotal) {
+        valorTotal = getValorSancionPorTipo_(tipo);
+      }
+    }
+
+    const key = placa + "|" + tipo;
+
+    if (!mapa[key]) {
+      mapa[key] = {
+        placa: placa,
+        tipoVehiculo: tipo,
+        cantidad: 0,
+        valorTotal: 0
+      };
+    }
+
+    mapa[key].cantidad += cantidad;
+    mapa[key].valorTotal += valorTotal;
+  });
+
+  return Object.keys(mapa).map(function(key) {
+    return mapa[key];
+  });
+}
+
+
+function convertirResumenPlacasATexto_(resumenPlacas) {
+  return resumenPlacas.map(function(item) {
+    return [
+      item.placa,
+      item.tipoVehiculo,
+      item.cantidad,
+      formatCOP_(item.valorTotal)
+    ].join(" | ");
+  }).join("\n");
+}
+
+function distanciaPlacas_(a, b) {
+  const placaA = normalizePlaca_(a);
+  const placaB = normalizePlaca_(b);
+
+  if (!placaA || !placaB) return 999;
+  if (placaA.length !== placaB.length) return 999;
+
+  let distanciaTotal = 0;
+
+  for (var i = 0; i < placaA.length; i++) {
+    distanciaTotal += distanciaCaracterPlaca_(placaA[i], placaB[i]);
+  }
+
+  // Normaliza a escala 0 - 999
+  const distanciaNormalizada = Math.round((distanciaTotal / placaA.length) * 999);
+
+  return Math.min(999, distanciaNormalizada);
+}
+
+function distanciaCaracterPlaca_(charA, charB) {
+  if (charA === charB) return 0;
+
+  const esNumeroA = /^[0-9]$/.test(charA);
+  const esNumeroB = /^[0-9]$/.test(charB);
+
+  const esLetraA = /^[A-Z]$/.test(charA);
+  const esLetraB = /^[A-Z]$/.test(charB);
+
+  // Número contra número: 5 → 6 pesa menos que 5 → 9
+  if (esNumeroA && esNumeroB) {
+    return Math.abs(Number(charA) - Number(charB)) / 9;
+  }
+
+  // Letra contra letra: X → Z pesa menos que A → Z
+  if (esLetraA && esLetraB) {
+    const posA = charA.charCodeAt(0) - 65; // A = 0
+    const posB = charB.charCodeAt(0) - 65;
+    return Math.abs(posA - posB) / 25;
+  }
+
+  // Letra contra número es diferencia fuerte
+  return 1;
+}
+
+function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecciones) {
+  const grupos = {};
+
+  registros.forEach(function(reg) {
+    if (!reg.aptoNorm || !reg.tipoVehiculoNorm || !reg.placaNorm) return;
+
+    const key = reg.aptoNorm + "|" + reg.tipoVehiculoNorm;
+
+    if (!grupos[key]) {
+      grupos[key] = [];
+    }
+
+    grupos[key].push(reg);
+  });
+
+  const candidatos = [];
+  const descartados = [];
+
+  Object.keys(grupos).forEach(function(key) {
+    const registrosGrupo = grupos[key];
+    const conteoPlacas = {};
+
+    registrosGrupo.forEach(function(reg) {
+      if (!conteoPlacas[reg.placaNorm]) {
+        conteoPlacas[reg.placaNorm] = {
+          placa: reg.placaNorm,
+          cantidad: 0,
+          registros: []
+        };
+      }
+
+      conteoPlacas[reg.placaNorm].cantidad++;
+      conteoPlacas[reg.placaNorm].registros.push(reg);
+    });
+
+    const placas = Object.keys(conteoPlacas).map(function(placa) {
+      return conteoPlacas[placa];
+    });
+
+    const dominantes = placas.filter(function(item) {
+      return item.cantidad >= MIN_REGISTROS_PLACA_DOMINANTE;
+    });
+
+    const sospechosas = placas.filter(function(item) {
+      return item.cantidad <= MAX_REGISTROS_PLACA_SOSPECHOSA;
+    });
+
+    sospechosas.forEach(function(sospechosa) {
+      let mejorCandidato = null;
+
+      dominantes.forEach(function(dominante) {
+        if (sospechosa.placa === dominante.placa) return;
+
+        const distancia = distanciaPlacas_(sospechosa.placa, dominante.placa);
+        const tipoSimilitud = obtenerTipoSimilitudPlaca_(sospechosa.placa, dominante.placa);
+
+        const baseDescartado = {
+          apartamento: sospechosa.registros[0].apto,
+          tipoVehiculo: sospechosa.registros[0].tipoVehiculoNorm,
+          placaActual: sospechosa.placa,
+          placaComparada: dominante.placa,
+          registrosPlacaActual: sospechosa.cantidad,
+          registrosPlacaComparada: dominante.cantidad,
+          distancia: distancia,
+          tipoSimilitud: tipoSimilitud,
+          filas: sospechosa.registros.map(function(reg) {
+            return reg.sheetRow;
+          }).join(", ")
+        };
+
+
+
+
+        if (
+          distancia > MAX_DISTANCIA_PLACA_SIMILAR &&
+          tipoSimilitud !== "TRANSPOSICION_SIMPLE"
+        ) {
+          if (
+            MOSTRAR_PLACAS_SIMILARES_DESCARTADAS &&
+            distancia <= MAX_DISTANCIA_DESCARTADA_PARA_ANALISIS
+          ) {
+            descartados.push(Object.assign({}, baseDescartado, {
+              motivoDescarte: "Distancia supera el máximo permitido: " + distancia + " > " + MAX_DISTANCIA_PLACA_SIMILAR
+            }));
+          }
+          return;
+        }
+
+
+
+        const regexSospechosa = getTipoVehiculoEsperadoPorRegexPlaca_(sospechosa.placa);
+        const regexDominante = getTipoVehiculoEsperadoPorRegexPlaca_(dominante.placa);
+
+        if (!regexSospechosa.ok || !regexDominante.ok) {
+          descartados.push(Object.assign({}, baseDescartado, {
+            motivoDescarte: "Una de las placas no cumple formato colombiano reconocido."
+          }));
+          return;
+        }
+
+        if (regexSospechosa.tipo !== regexDominante.tipo) {
+          descartados.push(Object.assign({}, baseDescartado, {
+            motivoDescarte: "El tipo esperado por regex no coincide: " + regexSospechosa.tipo + " vs " + regexDominante.tipo
+          }));
+          return;
+        }
+
+        const confianza = dominante.cantidad / (dominante.cantidad + sospechosa.cantidad);
+
+        const candidato = {
+          apartamento: sospechosa.registros[0].apto,
+          apartamentoNorm: sospechosa.registros[0].aptoNorm,
+          tipoVehiculo: sospechosa.registros[0].tipoVehiculoNorm,
+          placaActual: sospechosa.placa,
+          placaSugerida: dominante.placa,
+          registrosPlacaActual: sospechosa.cantidad,
+          registrosPlacaSugerida: dominante.cantidad,
+          distancia: distancia,
+          tipoSimilitud: tipoSimilitud,
+          confianza: confianza,
+          filas: sospechosa.registros.map(function(reg) {
+            return reg.sheetRow;
+          }),
+          motivo: "Placa poco frecuente muy similar a placa dominante del mismo apartamento y tipo."
+        };
+
+        if (
+          !mejorCandidato ||
+          candidato.distancia < mejorCandidato.distancia ||
+          candidato.registrosPlacaSugerida > mejorCandidato.registrosPlacaSugerida
+        ) {
+          mejorCandidato = candidato;
+        }
+      });
+
+      if (mejorCandidato) {
+        const motivoNoCorreccion = obtenerMotivoNoCorreccionPlacaSimilar_(mejorCandidato);
+
+        const puedeCorregirAuto =
+          !motivoNoCorreccion &&
+          mejorCandidato.confianza >= MIN_CONFIANZA_PLACA_SIMILAR_AUTO &&
+          mejorCandidato.registrosPlacaSugerida >= MIN_REGISTROS_PLACA_DOMINANTE &&
+          (
+            mejorCandidato.tipoSimilitud === "TRANSPOSICION_SIMPLE" ||
+            mejorCandidato.tipoSimilitud === "DIFERENCIA_BAJA"
+          );
+
+        mejorCandidato.decisionAuto = puedeCorregirAuto ? "CORREGIR_AUTO" : "SOLO_REVISION";
+        mejorCandidato.estadoEjecucion = aplicarCorrecciones
+          ? (puedeCorregirAuto ? "CORREGIDA" : "NO_CORREGIDA")
+          : "DRY_RUN_NO_APLICA";
+
+        mejorCandidato.motivoNoCorreccion = motivoNoCorreccion || (
+          aplicarCorrecciones
+            ? ""
+            : "DRY_RUN activo. No se aplican cambios físicos."
+        );
+
+        candidatos.push(mejorCandidato);
+
+        if (aplicarCorrecciones && puedeCorregirAuto) {
+          sospechosa.registros.forEach(function(reg) {
+            sheet.getRange(reg.sheetRow, IDX.placa + 1)
+              .setValue(mejorCandidato.placaSugerida)
+              .setBackground("#fff2cc");
+
+            reg.placa = mejorCandidato.placaSugerida;
+            reg.placaNorm = mejorCandidato.placaSugerida;
+          });
+        }
+      }
+    });
+  });
+
+  escribirRevisionPlacasSimilares_(candidatos);
+
+  Logger.log("=== REVISION PLACAS SIMILARES ===");
+  Logger.log("Candidatos encontrados: " + candidatos.length);
+
+  candidatos.slice(0, 50).forEach(function(item, index) {
+    Logger.log(
+      [
+        index + 1,
+        "Apto: " + item.apartamento,
+        "Tipo: " + item.tipoVehiculo,
+        "Corregir: " + item.placaActual + " → " + item.placaSugerida,
+        "Actual: " + item.registrosPlacaActual,
+        "Dominante: " + item.registrosPlacaSugerida,
+        "Distancia: " + item.distancia,
+        "Similitud: " + item.tipoSimilitud,
+        "Confianza: " + Math.round(item.confianza * 10000) / 100 + "%",
+        "DecisionAuto: " + item.decisionAuto,
+        "Estado: " + item.estadoEjecucion,
+        "MotivoNoCorreccion: " + item.motivoNoCorreccion,
+        "Filas: " + item.filas.join(", ")
+      ].join(" | ")
+    );
+  });
+
+  const noCorregidas = candidatos.filter(function(item) {
+    return item.decisionAuto !== "CORREGIR_AUTO";
+  });
+
+  Logger.log("=== CANDIDATOS NO CORREGIDOS AUTOMATICAMENTE ===");
+  Logger.log("Total candidatos solo revisión: " + noCorregidas.length);
+
+  noCorregidas.slice(0, 30).forEach(function(item, index) {
+    Logger.log(
+      [
+        index + 1,
+        "Apto: " + item.apartamento,
+        "Tipo: " + item.tipoVehiculo,
+        "Placa: " + item.placaActual + " → " + item.placaSugerida,
+        "Distancia: " + item.distancia,
+        "Similitud: " + item.tipoSimilitud,
+        "Confianza: " + Math.round(item.confianza * 10000) / 100 + "%",
+        "Motivo: " + item.motivoNoCorreccion,
+        "Filas: " + item.filas.join(", ")
+      ].join(" | ")
+    );
+  });
+
+  if (MOSTRAR_PLACAS_SIMILARES_DESCARTADAS) {
+    Logger.log("=== POSIBLES PLACAS SIMILARES DESCARTADAS ===");
+    Logger.log("Total descartadas para análisis: " + descartados.length);
+
+    descartados.slice(0, LIMITE_PLACAS_SIMILARES_DESCARTADAS).forEach(function(item, index) {
+      Logger.log(
+        [
+          index + 1,
+          "Apto: " + item.apartamento,
+          "Tipo: " + item.tipoVehiculo,
+          "Comparación: " + item.placaActual + " vs " + item.placaComparada,
+          "Actual: " + item.registrosPlacaActual,
+          "Comparada: " + item.registrosPlacaComparada,
+          "Distancia: " + item.distancia,
+          "Similitud: " + item.tipoSimilitud,
+          "MotivoDescarte: " + item.motivoDescarte,
+          "Filas: " + item.filas
+        ].join(" | ")
+      );
+    });
+
+    if (descartados.length > LIMITE_PLACAS_SIMILARES_DESCARTADAS) {
+      Logger.log("Más descartadas no mostradas: " + (descartados.length - LIMITE_PLACAS_SIMILARES_DESCARTADAS));
+    }
+  }
+
+  return candidatos;
+}
+
+function escribirRevisionPlacasSimilares_(candidatos) {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const nombreHoja = "revision_placas_similares";
+
+  let sheet = ss.getSheetByName(nombreHoja);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(nombreHoja);
+  }
+
+  sheet.clear();
+
+  sheet.getRange(1, 1, 1, 14).setValues([[
+    "Apartamento",
+    "TipoVehiculo",
+    "PlacaActual",
+    "PlacaSugerida",
+    "RegistrosPlacaActual",
+    "RegistrosPlacaSugerida",
+    "Distancia",
+    "Similitud",
+    "Confianza",
+    "DecisionAuto",
+    "EstadoEjecucion",
+    "MotivoNoCorreccion",
+    "Filas",
+    "DecisionManual"
+  ]]);
+
+  sheet.getRange(1, 1, 1, 14)
+    .setFontWeight("bold")
+    .setBackground("#fff2cc");
+
+  if (candidatos.length === 0) {
+    return;
+  }
+
+  const values = candidatos.map(function(item) {
+    return [
+      item.apartamento,
+      item.tipoVehiculo,
+      item.placaActual,
+      item.placaSugerida,
+      item.registrosPlacaActual,
+      item.registrosPlacaSugerida,
+      item.distancia,
+      item.tipoSimilitud,
+      Math.round(item.confianza * 10000) / 100 + "%",
+      item.decisionAuto || "",
+      item.estadoEjecucion || "",
+      item.motivoNoCorreccion || "",
+      item.filas.join(", "),
+      ""
+    ];
+  });
+
+  sheet.getRange(2, 1, values.length, 14).setValues(values);
+  sheet.autoResizeColumns(1, 14);
+}
+function obtenerTipoSimilitudPlaca_(placaActual, placaSugerida) {
+  if (placaActual === placaSugerida) return "IGUAL";
+
+  if (esTransposicionSimple_(placaActual, placaSugerida)) {
+    return "TRANSPOSICION_SIMPLE";
+  }
+
+  const distancia = distanciaPlacas_(placaActual, placaSugerida);
+
+  if (distancia <= 50) return "DIFERENCIA_BAJA";
+  if (distancia <= 120) return "DIFERENCIA_MEDIA";
+
+  return "DIFERENCIA_ALTA";
+}
+
+function esTransposicionSimple_(a, b) {
+  const placaA = normalizePlaca_(a);
+  const placaB = normalizePlaca_(b);
+
+  if (!placaA || !placaB) return false;
+  if (placaA.length !== placaB.length) return false;
+
+  const diferencias = [];
+
+  for (var i = 0; i < placaA.length; i++) {
+    if (placaA[i] !== placaB[i]) {
+      diferencias.push(i);
+    }
+  }
+
+  // Solo aplica si hay exactamente 2 diferencias
+  if (diferencias.length !== 2) return false;
+
+  const pos1 = diferencias[0];
+  const pos2 = diferencias[1];
+
+  // Las diferencias deben estar juntas
+  if (pos2 !== pos1 + 1) return false;
+
+  // Valida que sea intercambio directo:
+  // CZW11D vs CWZ11D
+  // posiciones Z/W invertidas
+  return (
+    placaA[pos1] === placaB[pos2] &&
+    placaA[pos2] === placaB[pos1]
+  );
+}
+
+function obtenerMotivoNoCorreccionPlacaSimilar_(item) {
+  if (item.confianza < MIN_CONFIANZA_PLACA_SIMILAR_AUTO) {
+    return "Confianza menor al mínimo requerido: " +
+      Math.round(item.confianza * 10000) / 100 + "%";
+  }
+
+  if (item.registrosPlacaSugerida < MIN_REGISTROS_PLACA_DOMINANTE) {
+    return "La placa dominante no tiene suficientes registros.";
+  }
+
+  if (
+    item.tipoSimilitud !== "TRANSPOSICION_SIMPLE" &&
+    item.tipoSimilitud !== "DIFERENCIA_BAJA"
+  ) {
+    return "Similitud no permitida para corrección automática: " + item.tipoSimilitud;
+  }
+
+  return "";
 }
