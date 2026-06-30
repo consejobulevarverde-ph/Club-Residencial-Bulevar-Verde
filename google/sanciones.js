@@ -18,6 +18,7 @@ const SHEET_ID_SANCIONES = '1GeJZ4Rd4-ddzE6Vi8kpq9iB2_oxuLW87UiAnbZQ6Iow';
 const SHEET_PLANILLA = 'PLANILLA';
 const SHEET_ID_VIGILANCIA_PLACAS = '1_Lwp2jYRuYjJu_PiXGOibD5TjfPf9jQ_pBO9kio7AZY';
 const SHEET_GID_VIGILANCIA_PLACAS = 1955503575;
+const SHEET_LOG_CONSULTAS_SANCIONES = "log_consultas_sanciones";
 
 const DRY_RUN = false;
 const UMBRAL_MAYORIA = 0.75;
@@ -50,12 +51,11 @@ const LOG_LEVEL = "RESUMEN";
  * GET ?action=consultar&apto=101&placa=ABC123
  ***************************************/
 function doGet(e) {
+  const action = getParam_(e, 'action');
+  const aptoConsultado = getParam_(e, 'apto') || '';
+  const placaConsultada = getParam_(e, 'placa') || '';
+
   try {
-    const action = getParam_(e, 'action');
-
-    const aptoConsultado = getParam_(e, 'apto') || '';
-    const placaConsultada = getParam_(e, 'placa') || '';
-
     Logger.log('=== CONSULTA WEB APP SANCIONES ===');
     Logger.log('Action: ' + action);
     Logger.log('Apto consultado: ' + aptoConsultado);
@@ -63,14 +63,40 @@ function doGet(e) {
     Logger.log('Parámetros completos: ' + JSON.stringify(e.parameter));
 
     if (action === 'consultar') {
-      const apto = aptoConsultado;
-      const placa = placaConsultada;
-      return consultarSanciones_(apto, placa);
+      return consultarSanciones_(aptoConsultado, placaConsultada, e);
     }
 
+    registrarConsultaSanciones_({
+      action: action,
+      aptoInput: aptoConsultado,
+      placaInput: placaConsultada,
+      aptoNorm: normalizeText_(aptoConsultado),
+      placaNorm: normalizePlaca_(placaConsultada),
+      resultado: "ERROR",
+      mensaje: "Acción no reconocida.",
+      cantidadSanciones: 0,
+      placasDevueltas: "",
+      parametros: e && e.parameter ? e.parameter : {}
+    });
+
     return jsonOutput_({ ok: false, error: 'Acción no reconocida.' });
+
   } catch (error) {
     Logger.log('ERROR doGet: ' + (error.message || String(error)));
+
+    registrarConsultaSanciones_({
+      action: action,
+      aptoInput: aptoConsultado,
+      placaInput: placaConsultada,
+      aptoNorm: normalizeText_(aptoConsultado),
+      placaNorm: normalizePlaca_(placaConsultada),
+      resultado: "ERROR",
+      mensaje: error.message || String(error),
+      cantidadSanciones: 0,
+      placasDevueltas: "",
+      parametros: e && e.parameter ? e.parameter : {}
+    });
+
     return jsonOutput_({ ok: false, error: error.message || String(error) });
   }
 }
@@ -88,8 +114,21 @@ function doGet(e) {
  * Si no existe dicha columna, se usa "residente o visitante"
  * como campo de respaldo (debe contener el número del apto).
  ***************************************/
-function consultarSanciones_(aptoInput, placaInput) {
+function consultarSanciones_(aptoInput, placaInput, e) {
   if (!aptoInput || !placaInput) {
+    registrarConsultaSanciones_({
+      action: "consultar",
+      aptoInput: aptoInput,
+      placaInput: placaInput,
+      aptoNorm: normalizeText_(aptoInput),
+      placaNorm: normalizePlaca_(placaInput),
+      resultado: "ERROR",
+      mensaje: "Parámetros requeridos: apto y placa.",
+      cantidadSanciones: 0,
+      placasDevueltas: "",
+      parametros: e && e.parameter ? e.parameter : {}
+    });
+
     return jsonOutput_({ ok: false, error: 'Parámetros requeridos: apto y placa.' });
   }
 
@@ -101,13 +140,42 @@ function consultarSanciones_(aptoInput, placaInput) {
     const sheet = ss.getSheetByName(SHEET_PLANILLA);
 
     if (!sheet) {
-      return jsonOutput_({ ok: false, error: 'No se encontró la hoja "PLANILLA" en el archivo de sanciones.' });
+      registrarConsultaSanciones_({
+        action: "consultar",
+        aptoInput: aptoInput,
+        placaInput: placaInput,
+        aptoNorm: normalizeText_(aptoInput),
+        placaNorm: normalizePlaca_(placaInput),
+        resultado: "ERROR",
+        mensaje: 'No se encontró la hoja "PLANILLA".',
+        cantidadSanciones: 0,
+        placasDevueltas: "",
+        parametros: e && e.parameter ? e.parameter : {}
+      });
+
+      return jsonOutput_({
+        ok: false,
+        error: 'No se encontró la hoja "PLANILLA" en el archivo de sanciones.'
+      });
     }
 
     const lastRow = sheet.getLastRow();
     const lastCol = sheet.getLastColumn();
 
     if (lastRow < 2 || lastCol < 1) {
+      registrarConsultaSanciones_({
+        action: "consultar",
+        aptoInput: aptoInput,
+        placaInput: placaInput,
+        aptoNorm: normalizeText_(aptoInput),
+        placaNorm: normalizePlaca_(placaInput),
+        resultado: "OK",
+        mensaje: "Consulta sin datos. La hoja PLANILLA está vacía.",
+        cantidadSanciones: 0,
+        placasDevueltas: "",
+        parametros: e && e.parameter ? e.parameter : {}
+      });
+
       return jsonOutput_({ ok: true, apto: apto, sanciones: [] });
     }
 
@@ -140,7 +208,23 @@ function consultarSanciones_(aptoInput, placaInput) {
   Logger.log('IDX: ' + JSON.stringify(IDX));
 
     if (IDX.placa === -1) {
-      return jsonOutput_({ ok: false, error: 'No se encontró la columna "placa" en la hoja PLANILLA.' });
+      registrarConsultaSanciones_({
+        action: "consultar",
+        aptoInput: aptoInput,
+        placaInput: placaInput,
+        aptoNorm: normalizeText_(aptoInput),
+        placaNorm: normalizePlaca_(placaInput),
+        resultado: "ERROR",
+        mensaje: 'No se encontró la columna "placa" en la hoja PLANILLA.',
+        cantidadSanciones: 0,
+        placasDevueltas: "",
+        parametros: e && e.parameter ? e.parameter : {}
+      });
+
+      return jsonOutput_({
+        ok: false,
+        error: 'No se encontró la columna "placa" en la hoja PLANILLA.'
+      });
     }
 
     var rows = allData.slice(1); // excluir encabezado
@@ -166,6 +250,20 @@ function consultarSanciones_(aptoInput, placaInput) {
     Logger.log('APTO NORMALIZADO: ' + aptoNorm);
 
     if (placaRows.length === 0) {
+
+      registrarConsultaSanciones_({
+        action: "consultar",
+        aptoInput: aptoInput,
+        placaInput: placaInput,
+        aptoNorm: aptoNorm,
+        placaNorm: placa,
+        resultado: "ERROR",
+        mensaje: 'No se encontró la placa "' + placa + '" en el sistema.',
+        cantidadSanciones: 0,
+        placasDevueltas: "",
+        parametros: e && e.parameter ? e.parameter : {}
+      });
+
       return jsonOutput_({
         ok: false,
         error: 'No se encontró la placa "' + placa + '" en el sistema. Verifique la información ingresada.'
@@ -180,6 +278,20 @@ function consultarSanciones_(aptoInput, placaInput) {
     Logger.log('MATCHES APTO: ' + matchesApto);
 
     if (!matchesApto) {
+
+      registrarConsultaSanciones_({
+        action: "consultar",
+        aptoInput: aptoInput,
+        placaInput: placaInput,
+        aptoNorm: aptoNorm,
+        placaNorm: placa,
+        resultado: "ERROR",
+        mensaje: 'La placa "' + placa + '" no corresponde al apartamento ' + apto + '.',
+        cantidadSanciones: 0,
+        placasDevueltas: "",
+        parametros: e && e.parameter ? e.parameter : {}
+      });
+
       return jsonOutput_({
         ok: false,
         error: 'La placa "' + placa + '" no corresponde al apartamento ' + apto + '. Verifique la información ingresada.'
@@ -242,10 +354,48 @@ function consultarSanciones_(aptoInput, placaInput) {
     Logger.log('TOTAL SANCIONES DEL APTO: ' + sanciones.length);
     Logger.log('SANCIONES DEL APTO:');
     Logger.log(JSON.stringify(sanciones, null, 2));
+
+
+    const placasDevueltas = Object.keys(
+      sanciones.reduce(function(mapa, s) {
+        if (s.placaNorm) mapa[s.placaNorm] = true;
+        return mapa;
+      }, {})
+    ).join(", ");
+
+    registrarConsultaSanciones_({
+      action: "consultar",
+      aptoInput: aptoInput,
+      placaInput: placaInput,
+      aptoNorm: aptoNorm,
+      placaNorm: placa,
+      resultado: "OK",
+      mensaje: "Consulta exitosa.",
+      cantidadSanciones: sanciones.length,
+      placasDevueltas: placasDevueltas,
+      parametros: e && e.parameter ? e.parameter : {}
+    });
+
     return jsonOutput_({ ok: true, apto: apto, sanciones: sanciones });
 
   } catch (error) {
-    return jsonOutput_({ ok: false, error: 'Error al acceder a los datos: ' + error.message });
+    registrarConsultaSanciones_({
+      action: "consultar",
+      aptoInput: aptoInput,
+      placaInput: placaInput,
+      aptoNorm: normalizeText_(aptoInput),
+      placaNorm: normalizePlaca_(placaInput),
+      resultado: "ERROR",
+      mensaje: "Error al acceder a los datos: " + (error.message || String(error)),
+      cantidadSanciones: 0,
+      placasDevueltas: "",
+      parametros: e && e.parameter ? e.parameter : {}
+    });
+
+    return jsonOutput_({
+      ok: false,
+      error: 'Error al acceder a los datos: ' + (error.message || String(error))
+    });
   }
 }
 
@@ -2148,7 +2298,7 @@ function enviarCorreosResumenSanciones() {
     const valorTotal = Number(row[idxValorTotal]) || 0;
     const detalle = safeTrim_(row[idxDetalle]);
 
-    const subject = "NO RESPONDER - Abril y Mayo - Notificación de sanción por uso indebido del parqueadero de visitantes - Apto " + apto;
+    const subject = "NO RESPONDER - Notificación de sanción por uso indebido del parqueadero de visitantes - Apto " + apto;
 
     const htmlBody = construirHtmlCorreoSanciones_({
       apartamento: apto,
@@ -2160,10 +2310,31 @@ function enviarCorreosResumenSanciones() {
 
     Logger.log("Preparando correo para apto " + apto + " -> " + email);
 
+    const ccCorreo = "";
+    const replyToCorreo = "bulevarverdeadmon@gmail.com";
+
+    const destinatariosNecesarios = contarDestinatariosCorreo_(email, ccCorreo, "");
+    const cuotaRestante = MailApp.getRemainingDailyQuota();
+
+    if (cuotaRestante < destinatariosNecesarios) {
+      Logger.log(
+        "CUOTA INSUFICIENTE. Apto: " + apto +
+        " | Cuota restante: " + cuotaRestante +
+        " | Necesarios: " + destinatariosNecesarios
+      );
+
+      sheet.getRange(sheetRow, idxObs + 1).setValue(
+        "PENDIENTE POR CUOTA. Restante: " + cuotaRestante + " - " +
+        Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+      );
+
+      return;
+    }
+
     if (!EMAIL_DRY_RUN) {
       MailApp.sendEmail({
         to: email,
-        cc: "bulevarverdeadmon@gmail.com",
+        replyTo: replyToCorreo,
         subject: subject,
         htmlBody: htmlBody,
         name: "Administración Bulevar Verde"
@@ -3269,4 +3440,75 @@ function obtenerMotivoNoCorreccionPlacaSimilar_(item) {
   }
 
   return "";
+}
+
+function contarDestinatariosCorreo_(to, cc, bcc) {
+  return [to, cc, bcc]
+    .filter(Boolean)
+    .join(",")
+    .split(/[,;]/)
+    .map(function(item) {
+      return safeTrim_(item);
+    })
+    .filter(function(item) {
+      return item;
+    }).length;
+}
+
+function verCuotaEmailActual() {
+  const cuota = MailApp.getRemainingDailyQuota();
+  Logger.log("Cuota restante de destinatarios hoy: " + cuota);
+}
+
+function getOrCreateHojaLogConsultas_(ss) {
+  let sheet = ss.getSheetByName(SHEET_LOG_CONSULTAS_SANCIONES);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_LOG_CONSULTAS_SANCIONES);
+
+    sheet.getRange(1, 1, 1, 11).setValues([[
+      "FechaHora",
+      "Action",
+      "ApartamentoInput",
+      "PlacaInput",
+      "ApartamentoNormalizado",
+      "PlacaNormalizada",
+      "Resultado",
+      "Mensaje",
+      "CantidadSanciones",
+      "PlacasDevueltas",
+      "Parametros"
+    ]]);
+
+    sheet.getRange(1, 1, 1, 11)
+      .setFontWeight("bold")
+      .setBackground("#d9ead3");
+
+    sheet.setFrozenRows(1);
+  }
+
+  return sheet;
+}
+
+function registrarConsultaSanciones_(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+    const sheet = getOrCreateHojaLogConsultas_(ss);
+
+    sheet.appendRow([
+      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
+      data.action || "",
+      data.aptoInput || "",
+      data.placaInput || "",
+      data.aptoNorm || "",
+      data.placaNorm || "",
+      data.resultado || "",
+      data.mensaje || "",
+      data.cantidadSanciones || 0,
+      data.placasDevueltas || "",
+      data.parametros ? JSON.stringify(data.parametros) : ""
+    ]);
+  } catch (error) {
+    Logger.log("ERROR registrando consulta sanciones: " + error.message);
+  }
 }
