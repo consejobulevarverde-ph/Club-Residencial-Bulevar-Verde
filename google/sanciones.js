@@ -70,7 +70,7 @@ function doGet(e) {
       action: action,
       aptoInput: aptoConsultado,
       placaInput: placaConsultada,
-      aptoNorm: normalizeText_(aptoConsultado),
+      aptoNorm: normalizeApto_(aptoConsultado),
       placaNorm: normalizePlaca_(placaConsultada),
       resultado: "ERROR",
       mensaje: "Acción no reconocida.",
@@ -88,7 +88,7 @@ function doGet(e) {
       action: action,
       aptoInput: aptoConsultado,
       placaInput: placaConsultada,
-      aptoNorm: normalizeText_(aptoConsultado),
+      aptoNorm: normalizeApto_(aptoConsultado),
       placaNorm: normalizePlaca_(placaConsultada),
       resultado: "ERROR",
       mensaje: error.message || String(error),
@@ -120,7 +120,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
       action: "consultar",
       aptoInput: aptoInput,
       placaInput: placaInput,
-      aptoNorm: normalizeText_(aptoInput),
+      aptoNorm: normalizeApto_(aptoInput),
       placaNorm: normalizePlaca_(placaInput),
       resultado: "ERROR",
       mensaje: "Parámetros requeridos: apto y placa.",
@@ -144,7 +144,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
         action: "consultar",
         aptoInput: aptoInput,
         placaInput: placaInput,
-        aptoNorm: normalizeText_(aptoInput),
+        aptoNorm: normalizeApto_(aptoInput),
         placaNorm: normalizePlaca_(placaInput),
         resultado: "ERROR",
         mensaje: 'No se encontró la hoja "PLANILLA".',
@@ -167,7 +167,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
         action: "consultar",
         aptoInput: aptoInput,
         placaInput: placaInput,
-        aptoNorm: normalizeText_(aptoInput),
+        aptoNorm: normalizeApto_(aptoInput),
         placaNorm: normalizePlaca_(placaInput),
         resultado: "OK",
         mensaje: "Consulta sin datos. La hoja PLANILLA está vacía.",
@@ -212,7 +212,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
         action: "consultar",
         aptoInput: aptoInput,
         placaInput: placaInput,
-        aptoNorm: normalizeText_(aptoInput),
+        aptoNorm: normalizeApto_(aptoInput),
         placaNorm: normalizePlaca_(placaInput),
         resultado: "ERROR",
         mensaje: 'No se encontró la columna "placa" en la hoja PLANILLA.',
@@ -228,7 +228,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
     }
 
     var rows = allData.slice(1); // excluir encabezado
-    var aptoNorm = normalizeText_(apto);
+    var aptoNorm = normalizeApto_(apto);
     var registrosNormalizados = construirRegistrosNormalizados_(rows, IDX, richData, allData);
 
 
@@ -383,7 +383,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
       action: "consultar",
       aptoInput: aptoInput,
       placaInput: placaInput,
-      aptoNorm: normalizeText_(aptoInput),
+      aptoNorm: normalizeApto_(aptoInput),
       placaNorm: normalizePlaca_(placaInput),
       resultado: "ERROR",
       mensaje: "Error al acceder a los datos: " + (error.message || String(error)),
@@ -446,6 +446,12 @@ function safeTrim_(value) {
 // Normaliza texto para comparación: minúsculas y sin espacios extras
 function normalizeText_(value) {
   return safeTrim_(value).toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Normaliza un número de apartamento: aplica normalizeText_ y elimina ceros a la izquierda.
+// "0226" → "226", "1127" → "1127", "  0430  " → "430"
+function normalizeApto_(value) {
+  return normalizeText_(value).replace(/^0+(\d)/, '$1');
 }
 
 function getCellUrlOrText_(richData, allData, rowIndex, colIndex) {
@@ -530,7 +536,7 @@ function testEnviarCorreoApto1029() {
 
   const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
 
-  const aptoNorm = normalizeText_(APTO_TEST);
+  const aptoNorm = normalizeApto_(APTO_TEST);
 
   const sancionesApto = registros.filter(function(reg) {
     return reg.aptoNorm === aptoNorm;
@@ -674,7 +680,7 @@ function construirRegistrosNormalizados_(rows, IDX, richData, allData) {
       fecha: IDX.fecha !== -1 ? formatFecha_(row[IDX.fecha]) : '',
 
       apto: IDX.apto !== -1 ? safeTrim_(row[IDX.apto]) : '',
-      aptoNorm: IDX.apto !== -1 ? normalizeText_(row[IDX.apto]) : '',
+      aptoNorm: IDX.apto !== -1 ? normalizeApto_(row[IDX.apto]) : '',
 
       placa: IDX.placa !== -1 ? safeTrim_(row[IDX.placa]).toUpperCase() : '',
       placaNorm: IDX.placa !== -1 ? normalizePlaca_(row[IDX.placa]) : '',
@@ -1488,7 +1494,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
               .setBackground("#d9ead3"); //VERDE
 
             reg.apto = aptoCorrectoTexto;
-            reg.aptoNorm = normalizeText_(aptoCorrectoTexto);
+            reg.aptoNorm = normalizeApto_(aptoCorrectoTexto);
           }
         }
       });
@@ -1747,7 +1753,7 @@ function leerMapaVigilanciaPlacas_() {
 
       const placa = normalizePlaca_(placaRaw);
       const apto = safeTrim_(aptoRaw);
-      const aptoNorm = normalizeText_(apto);
+      const aptoNorm = normalizeApto_(apto);
 
       if (!placa || !apto) return;
 
