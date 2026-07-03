@@ -18,9 +18,13 @@ const SHEET_ID_SANCIONES = '1GeJZ4Rd4-ddzE6Vi8kpq9iB2_oxuLW87UiAnbZQ6Iow';
 const SHEET_PLANILLA = 'PLANILLA';
 const SHEET_ID_VIGILANCIA_PLACAS = '1_Lwp2jYRuYjJu_PiXGOibD5TjfPf9jQ_pBO9kio7AZY';
 const SHEET_GID_VIGILANCIA_PLACAS = 1955503575;
+const SHEET_ID_CORREOS_APTOS = '1MjNg_qR134dB-8vdK0NEJyeXlLS848dsOpu-bylkVBQ';
+const SHEET_GID_CORREOS_APTOS = 0;
 const SHEET_LOG_CONSULTAS_SANCIONES = "log_consultas_sanciones";
+const SHEET_RESUMEN_ENVIO_SANCIONES = 'resumen_envio_sanciones';
+const SHEET_RESUMEN_NOTIFICACIONES_DEBIDO_PROCESO = "resumen_notif";
+const SHEET_BITACORA_NOTIFICACIONES_DEBIDO_PROCESO = "bitacora_notif";
 
-const DRY_RUN = false;
 const UMBRAL_MAYORIA = 0.75;
 const MIN_CONFIANZA_PLACA_SIMILAR_AUTO = 0.85;
 const UMBRAL_OUTLIER = 0.15;
@@ -28,17 +32,20 @@ const MIN_REGISTROS_PARA_CORREGIR = 5;
 const MIN_REGISTROS_PLACA_DOMINANTE = 10;
 const MAX_REGISTROS_PLACA_SOSPECHOSA = 2;
 const MAX_DISTANCIA_PLACA_SIMILAR = 100;
-const MOSTRAR_PLACAS_SIMILARES_DESCARTADAS = true;
 const LIMITE_PLACAS_SIMILARES_DESCARTADAS = 50;
 const MAX_DISTANCIA_DESCARTADA_PARA_ANALISIS = 180;
-
-const SHEET_ID_CORREOS_APTOS = '1MjNg_qR134dB-8vdK0NEJyeXlLS848dsOpu-bylkVBQ';
-const SHEET_GID_CORREOS_APTOS = 0;
 const VALOR_UNITARIO_SANCION_MOTO = 1000;
 const VALOR_UNITARIO_SANCION_CARRO = 7000;
-const SHEET_RESUMEN_ENVIO_SANCIONES = 'resumen_envio_sanciones';
+const CONFIANZA_MAX_CONFLICTO_CONSULTA = 0.50;
+const MIN_CONSULTAS_OK_PARA_ALERTA_MAESTRA = 1;
+
+const DRY_RUN = false;
 const EMAIL_DRY_RUN = false; // true = prueba, false = envía correos reales
+const MOSTRAR_PLACAS_SIMILARES_DESCARTADAS = true;
 const URL_CONSULTA_SANCIONES = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/sanciones/';
+const PLANTILLA_NOTIFICACION_DEBIDO_PROCESO = "NOTIFICACION_DEBIDO_PROCESO_PARQUEADERO_VISITANTES_V1";
+const TIPO_NOTIFICACION_DEBIDO_PROCESO = "DEBIDO_PROCESO_PARQUEADERO_VISITANTES";
+const ESTADO_MAESTRA_REQUIERE_VERIFICACION = "REQUIERE_VERIFICACION_CONSULTA_WEB";
 
 const LOG_LEVEL = "RESUMEN"; 
 // Opciones:
@@ -472,8 +479,8 @@ function testConsultarSanciones() {
   var fakeEvent = {
     parameter: {
       action: 'consultar',
-      apto: '724',
-      placa: 'KYL26E'
+      apto: '0226',
+      placa: 'NVJ44H'
     }
   };
 
@@ -512,7 +519,7 @@ function testLeerCorreosApartamentos() {
 function testEnviarCorreoApto1029() {
   const APTO_TEST = "1728";
   const CC_TEST = "bulevarverdeadmon@gmail.com";
-  const ENVIAR_CORREO_REAL_TEST = true; // false = solo log, true = envía correo real
+  const ENVIAR_CORREO_REAL_TEST = false; // false = solo log, true = envía correo real
 
   const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
   const sheet = ss.getSheetByName(SHEET_PLANILLA);
@@ -1304,7 +1311,7 @@ function leerMapaMaestra_(sheet) {
       row: index + 2,
       placa: placa,
       apartamento: safeTrim_(row[1]),
-      apartamentoNorm: normalizeText_(row[1]),
+      apartamentoNorm: normalizeApto_(row[1]),
       tipoVehiculo: normalizarTipoVehiculo_(row[2]),
       confianzaApto: Number(row[3]) || 0,
       totalRegistros: Number(row[4]) || 0,
@@ -1368,6 +1375,9 @@ function analizarYCorregirTodasLasPlacas_(config) {
     logDetalle_("=== ANALIZANDO PLACA: " + placaNorm + " ===");
     logDetalle_("Total registros placa: " + registrosPlaca.length);
 
+
+
+
     const masterInterna = mapaMaestra[placaNorm];
     const masterVigilancia = mapaVigilancia[placaNorm];
 
@@ -1375,7 +1385,34 @@ function analizarYCorregirTodasLasPlacas_(config) {
     // 1. Maestra interna
     // 2. Vigilancia
     // 3. Mayoría histórica
-    const master = masterInterna || masterVigilancia;
+    const masterBase = masterInterna || masterVigilancia;
+
+    if (masterBase && !maestraEsConfiableParaCorreccion_(masterBase)) {
+      marcarInconsistenciaNoReparable_({
+        sheet: sheet,
+        IDX: IDX,
+        registros: registrosPlaca,
+        columna: "apto",
+        motivo:
+          "La placa existe en maestra/vigilancia, pero está marcada como REQUIERE_VERIFICACION o tiene baja confianza. " +
+          "No se usa para corrección automática hasta validación manual.",
+        inconsistenciasNoReparadas: inconsistenciasNoReparadas,
+        aplicarCorrecciones: aplicarCorrecciones
+      });
+
+      totalSinCerteza++;
+      return;
+    }
+
+    const master = masterBase;
+
+
+
+
+
+
+
+
     const regexInfo = getTipoVehiculoEsperadoPorRegexPlaca_(placaNorm);
     const conteoAptos = contarPorCampo_(registrosPlaca, "aptoNorm");
     const mayoriaApto = obtenerMayoria_(conteoAptos, registrosPlaca.length);
@@ -2352,7 +2389,9 @@ function enviarCorreosResumenSanciones() {
       );
     } else {
       sheet.getRange(sheetRow, idxEstado + 1).setValue("SIMULADO");
-      sheet.getRange(sheetRow, idxObs + 1).setValue("EMAIL_DRY_RUN activo. No se envió correo real.");
+      sheet.getRange(sheetRow, idxObs + 1).setValue(
+        "Simulado: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+      );
     }
 
     enviados++;
@@ -2412,6 +2451,14 @@ function construirHtmlCorreoSanciones_(data) {
       </p>
 
       <p>Cordial saludo,</p>
+
+      <p>
+        Para consultar el detalle de sus sanciones, puede ingresar al siguiente enlace:
+        <br>
+        <a href="${URL_CONSULTA_SANCIONES}" target="_blank">
+          ${URL_CONSULTA_SANCIONES}
+        </a>
+      </p>
 
       <p>
         La administración de <strong>Club Residencial Bulevar Verde</strong> se permite informar que,
@@ -2474,11 +2521,6 @@ function construirHtmlCorreoSanciones_(data) {
       <p>
         Los descargos deberán ser remitidos al correo electrónico de la administración:
         <a href="mailto:bulevarverdeadmon@gmail.com">bulevarverdeadmon@gmail.com</a>
-      </p>
-
-      <p>
-        Para ver el detalle de sus sanciones ingrese al siguiente enlace:<br>
-        <a href="${URL_CONSULTA_SANCIONES}" target="_blank">${URL_CONSULTA_SANCIONES}</a>
       </p>
 
       <p>
@@ -3517,4 +3559,1011 @@ function registrarConsultaSanciones_(data) {
   } catch (error) {
     Logger.log("ERROR registrando consulta sanciones: " + error.message);
   }
+}
+
+function getOrCreateHojaResumenNotificacionesDebidoProceso_(ss) {
+  let sheet = ss.getSheetByName(SHEET_RESUMEN_NOTIFICACIONES_DEBIDO_PROCESO);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_RESUMEN_NOTIFICACIONES_DEBIDO_PROCESO);
+  }
+
+  return sheet;
+}
+
+function obtenerPlacasTextoDesdeSanciones_(sanciones) {
+  const mapa = {};
+
+  sanciones.forEach(function(s) {
+    const placa = s.placaNorm || normalizePlaca_(s.placa);
+    if (placa) mapa[placa] = true;
+  });
+
+  return Object.keys(mapa).join(", ");
+}
+
+function convertirDetalleNotificacionDebidoProcesoATexto_(sanciones) {
+  const resumen = agruparSancionesPorPlaca_(sanciones);
+
+  return resumen.map(function(item) {
+    return [
+      item.placa,
+      item.tipoVehiculo,
+      item.cantidad + " registro(s)"
+    ].join(" | ");
+  }).join("\n");
+}
+
+function prepararResumenNotificacionesDebidoProceso() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+  if (!sheet) {
+    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2) {
+    Logger.log("No hay registros para procesar.");
+    return;
+  }
+
+  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
+
+  const IDX = obtenerIdxPlanilla_(allData[0]);
+  const rows = allData.slice(1);
+
+  const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
+  const mapaCorreos = leerMapaCorreosApartamentos_();
+  const resumenPorApto = agruparSancionesPorApartamento_(registros);
+  const mapaNotificados = leerMapaApartamentosYaNotificadosDebidoProceso_(ss);
+
+  const hojaResumen = getOrCreateHojaResumenNotificacionesDebidoProceso_(ss);
+  hojaResumen.clear();
+
+  hojaResumen.getRange(1, 1, 1, 10).setValues([[
+    "Apartamento",
+    "ApartamentoNorm",
+    "Email",
+    "CantidadRegistros",
+    "PlacasDetectadas",
+    "Estado",
+    "FechaPreparacion",
+    "DetalleRegistros",
+    "ClaveNotificacion",
+    "Observaciones"
+  ]]);
+
+  hojaResumen.getRange(1, 1, 1, 10)
+    .setFontWeight("bold")
+    .setBackground("#d9ead3");
+
+  const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+
+  const values = Object.keys(resumenPorApto)
+    .sort(function(a, b) {
+      return Number(a) - Number(b);
+    })
+    .map(function(aptoNorm) {
+      const item = resumenPorApto[aptoNorm];
+      const apto = item.apartamento;
+      const clave = construirClaveNotificacionDebidoProceso_(apto);
+      const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(apto)];
+
+      const yaNotificado = !!mapaNotificados[clave];
+      const placasDetectadas = obtenerPlacasTextoDesdeSanciones_(item.sanciones);
+      const detalle = convertirDetalleNotificacionDebidoProcesoATexto_(item.sanciones);
+
+      let estado = "";
+      let observaciones = "";
+
+      if (yaNotificado) {
+        estado = "YA_NOTIFICADO";
+        observaciones = "No se notifica. Ya existe registro previo de notificación de debido proceso.";
+      } else if (!correoInfo || !correoInfo.email) {
+        estado = "SIN_CORREO";
+        observaciones = "No se encontró correo para este apartamento.";
+      } else {
+        estado = "PENDIENTE";
+        observaciones = "Pendiente por notificar por única vez.";
+      }
+
+      return [
+        apto,
+        normalizeApto_(apto),
+        correoInfo ? correoInfo.email : "",
+        item.sanciones.length,
+        placasDetectadas,
+        estado,
+        now,
+        detalle,
+        clave,
+        observaciones
+      ];
+    });
+
+  if (values.length > 0) {
+    hojaResumen.getRange(2, 1, values.length, 10).setValues(values);
+    hojaResumen.autoResizeColumns(1, 10);
+  }
+
+  Logger.log("Resumen notificaciones debido proceso generado: " + values.length);
+}
+
+function construirHtmlNotificacionDebidoProceso_(data) {
+  const fechaTexto = obtenerFechaComunicacion_();
+
+  const detalleHtml = escapeHtml_(data.detalleRegistros || "")
+    .replace(/\n/g, "<br>");
+
+  return `
+    <div style="font-family: Arial, sans-serif; color: #222; line-height: 1.55; font-size: 14px; max-width: 760px;">
+      <p><strong>Itagüí, ${fechaTexto}</strong></p>
+
+      <p>
+        Señor(a):<br>
+        <strong>Copropietario(a) / Residente</strong><br>
+        Apartamento: <strong>${escapeHtml_(data.apartamento)}</strong>
+      </p>
+
+      <p>
+        <strong>Asunto:</strong> Notificación preventiva por uso indebido del parqueadero de visitantes
+      </p>
+
+      <p>Cordial saludo,</p>
+
+      <p>
+        Para consultar el detalle de los registros asociados a esta notificación, puede ingresar al siguiente enlace:
+        <br>
+        <a href="${URL_CONSULTA_SANCIONES}" target="_blank">
+          ${URL_CONSULTA_SANCIONES}
+        </a>
+      </p>
+
+      <p>
+        La administración del <strong>Club Residencial Bulevar Verde</strong> informa que se ha evidenciado
+        el uso de celdas de parqueadero de visitantes por parte de vehículo(s) asociado(s) al apartamento
+        <strong>${escapeHtml_(data.apartamento)}</strong>.
+      </p>
+
+      <p>
+        Se recuerda que las celdas de visitantes están destinadas exclusivamente para visitantes y no para
+        el uso permanente, habitual o indebido por parte de residentes, propietarios o vehículos asociados
+        al apartamento.
+      </p>
+
+      <p>
+        Esta comunicación constituye una <strong>notificación preventiva y única en garantía del debido proceso</strong>.
+        Con esta notificación se deja constancia de que el apartamento ha sido informado sobre la norma y sobre
+        las consecuencias de continuar con esta conducta.
+      </p>
+
+      <p>
+        Si después de recibida esta notificación continúa el uso indebido del parqueadero de visitantes,
+        los registros posteriores podrán ser tenidos en cuenta para la imposición de la sanción correspondiente
+        al cierre del mes, conforme al reglamento interno y las decisiones válidamente adoptadas por los órganos
+        de administración de la copropiedad.
+      </p>
+
+      <table style="border-collapse: collapse; margin: 16px 0; max-width: 650px;">
+        <tr>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>Placas detectadas</strong></td>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;">${escapeHtml_(data.placasDetectadas)}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>Cantidad de registros observados</strong></td>
+          <td style="padding: 8px 12px; border: 1px solid #ccc;">${data.cantidadRegistros}</td>
+        </tr>
+      </table>
+
+      <p><strong>Detalle de registros observados:</strong></p>
+      <p style="background:#f7f7f7; padding:12px; border:1px solid #ddd;">
+        ${detalleHtml}
+      </p>
+
+      <p>
+        En caso de requerir aclaración, podrá comunicarse con la administración al correo electrónico:
+        <a href="mailto:bulevarverdeadmon@gmail.com">bulevarverdeadmon@gmail.com</a>
+      </p>
+
+      <p>
+        Cordialmente,<br><br>
+        <strong>ADMINISTRACIÓN</strong><br>
+        <strong>CLUB RESIDENCIAL BULEVAR VERDE</strong>
+      </p>
+    </div>
+  `;
+}
+
+function enviarNotificacionesDebidoProceso() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_RESUMEN_NOTIFICACIONES_DEBIDO_PROCESO);
+
+  if (!sheet) {
+    throw new Error('Primero debes ejecutar prepararResumenNotificacionesDebidoProceso().');
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2) {
+    Logger.log("No hay notificaciones pendientes.");
+    return;
+  }
+
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+
+  const headers = data[0].map(function(h) {
+    return normalizeHeader_(h);
+  });
+
+  const colMap = {};
+  headers.forEach(function(h, i) {
+    colMap[h] = i;
+  });
+
+  const idxApto = colMap["apartamento"];
+  const idxAptoNorm = colMap["apartamentonorm"];
+  const idxEmail = colMap["email"];
+  const idxCantidad = colMap["cantidadregistros"];
+  const idxPlacas = colMap["placasdetectadas"];
+  const idxEstado = colMap["estado"];
+  const idxDetalle = colMap["detalleregistros"];
+  const idxClave = colMap["clavenotificacion"];
+  const idxObs = colMap["observaciones"];
+
+  const mapaNotificados = leerMapaApartamentosYaNotificadosDebidoProceso_(ss);
+
+  let enviados = 0;
+  let omitidos = 0;
+
+  data.slice(1).forEach(function(row, index) {
+    const sheetRow = index + 2;
+
+    const apto = safeTrim_(row[idxApto]);
+    const email = safeTrim_(row[idxEmail]);
+    const estado = safeTrim_(row[idxEstado]);
+    const clave = safeTrim_(row[idxClave]) || construirClaveNotificacionDebidoProceso_(apto);
+
+    if (!apto || !email) {
+      omitidos++;
+      return;
+    }
+
+    if (mapaNotificados[clave]) {
+      sheet.getRange(sheetRow, idxEstado + 1).setValue("YA_NOTIFICADO");
+      sheet.getRange(sheetRow, idxObs + 1).setValue(
+        "Omitido. Ya existe notificación enviada el " + mapaNotificados[clave].fechaHora
+      );
+      omitidos++;
+      return;
+    }
+
+    if (estado !== "PENDIENTE") {
+      omitidos++;
+      return;
+    }
+
+    const cantidadRegistros = Number(row[idxCantidad]) || 0;
+    const placasDetectadas = safeTrim_(row[idxPlacas]);
+    const detalleRegistros = safeTrim_(row[idxDetalle]);
+
+    const subject = "NO RESPONDER - Notificación preventiva por uso indebido del parqueadero de visitantes - Apto " + apto;
+
+    const dataCorreo = {
+      apartamento: apto,
+      apartamentoNorm: normalizeApto_(apto),
+      email: email,
+      cantidadRegistros: cantidadRegistros,
+      placasDetectadas: placasDetectadas,
+      detalleRegistros: detalleRegistros
+    };
+
+    const htmlBody = construirHtmlNotificacionDebidoProceso_(dataCorreo);
+
+    const replyToCorreo = "bulevarverdeadmon@gmail.com";
+    const destinatariosNecesarios = contarDestinatariosCorreo_(email, "", "");
+    const cuotaRestante = MailApp.getRemainingDailyQuota();
+
+    if (cuotaRestante < destinatariosNecesarios) {
+      sheet.getRange(sheetRow, idxObs + 1).setValue(
+        "PENDIENTE POR CUOTA. Restante: " + cuotaRestante + " - " +
+        Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+      );
+      omitidos++;
+      return;
+    }
+
+    Logger.log("Preparando notificación debido proceso apto " + apto + " -> " + email);
+
+    if (!EMAIL_DRY_RUN) {
+      MailApp.sendEmail({
+        to: email,
+        replyTo: replyToCorreo,
+        subject: subject,
+        htmlBody: htmlBody,
+        name: "Administración Bulevar Verde"
+      });
+
+      registrarNotificacionDebidoProceso_({
+        apartamento: apto,
+        email: email,
+        placasDetectadas: placasDetectadas,
+        cantidadRegistros: cantidadRegistros,
+        detalleRegistros: detalleRegistros,
+        estado: "ENVIADO",
+        asunto: subject,
+        plantillaNotificacion: PLANTILLA_NOTIFICACION_DEBIDO_PROCESO,
+        observaciones: "Notificación preventiva única enviada correctamente."
+      });
+
+      mapaNotificados[clave] = {
+        clave: clave,
+        aptoNorm: normalizeApto_(apto),
+        fechaHora: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
+        email: email,
+        estado: "ENVIADO"
+      };
+
+      sheet.getRange(sheetRow, idxEstado + 1).setValue("ENVIADO");
+      sheet.getRange(sheetRow, idxObs + 1).setValue(
+        "Notificación enviada: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+      );
+
+    } else {
+      sheet.getRange(sheetRow, idxEstado + 1).setValue("SIMULADO");
+      sheet.getRange(sheetRow, idxObs + 1).setValue("EMAIL_DRY_RUN activo. No se envió correo real.");
+    }
+
+    enviados++;
+  });
+
+  Logger.log("Notificaciones debido proceso enviadas: " + enviados);
+  Logger.log("Omitidas: " + omitidos);
+}
+
+function testEnviarNotificacionDebidoProcesoApto1029() {
+  const APTO_TEST = "1029";
+
+  // PRUEBA SEGURA:
+  // false = envía al consejo, no al residente.
+  // true = envía al correo real del apartamento.
+  const ENVIAR_AL_CORREO_REAL_APTO = false;
+
+  const CORREO_PRUEBA = "consejo.bulevarverde@gmail.com";
+  const REPLY_TO = "bulevarverdeadmon@gmail.com";
+
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+  if (!sheet) {
+    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2) {
+    throw new Error("No hay registros para procesar.");
+  }
+
+  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
+
+  const IDX = obtenerIdxPlanilla_(allData[0]);
+  const rows = allData.slice(1);
+
+  const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
+
+  const aptoNorm = normalizeApto_(APTO_TEST);
+
+  const registrosApto = registros.filter(function(reg) {
+    return reg.aptoNorm === aptoNorm;
+  });
+
+  if (registrosApto.length === 0) {
+    throw new Error("No se encontraron registros para el apartamento " + APTO_TEST);
+  }
+
+  const mapaCorreos = leerMapaCorreosApartamentos_();
+  const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(APTO_TEST)];
+
+  if (!correoInfo || !correoInfo.email) {
+    throw new Error("No se encontró correo para el apartamento " + APTO_TEST);
+  }
+
+  const placasDetectadas = obtenerPlacasTextoDesdeRegistros_(registrosApto);
+  const detalleRegistros = convertirDetalleNotificacionDebidoProcesoATexto_(registrosApto);
+
+  const emailDestino = ENVIAR_AL_CORREO_REAL_APTO
+    ? correoInfo.email
+    : CORREO_PRUEBA;
+
+  const subject = "PRUEBA - Notificación preventiva por uso indebido del parqueadero de visitantes - Apto " + APTO_TEST;
+
+  const dataCorreo = {
+      apartamento: APTO_TEST,
+      apartamentoNorm: normalizeApto_(APTO_TEST),
+      email: emailDestino,
+      cantidadRegistros:  registrosApto.length,
+      placasDetectadas: placasDetectadas,
+      detalleRegistros: detalleRegistros
+    };
+
+    const htmlBody = construirHtmlNotificacionDebidoProceso_(dataCorreo);
+
+  Logger.log("=== TEST NOTIFICACIÓN DEBIDO PROCESO APTO " + APTO_TEST + " ===");
+  Logger.log("Correo real apto: " + correoInfo.email);
+  Logger.log("Correo destino prueba: " + emailDestino);
+  Logger.log("Cantidad registros: " + registrosApto.length);
+  Logger.log("Placas detectadas: " + placasDetectadas);
+
+  MailApp.sendEmail({
+    to: emailDestino,
+    replyTo: REPLY_TO,
+    subject: subject,
+    htmlBody: htmlBody,
+    name: "Administración Bulevar Verde"
+  });
+
+  Logger.log("Correo de prueba enviado correctamente.");
+
+  registrarBitacoraNotificacionDebidoProceso_({
+    apartamento: APTO_TEST,
+    emailDestino: emailDestino,
+    emailRealApto: correoInfo.email,
+    placasDetectadas: placasDetectadas,
+    cantidadRegistros: registrosApto.length,
+    detalleRegistros: detalleRegistros,
+    estado: ENVIAR_AL_CORREO_REAL_APTO ? "ENVIADO" : "PRUEBA_INTERNA",
+    asunto: subject,
+    plantillaNotificacion: PLANTILLA_NOTIFICACION_DEBIDO_PROCESO,
+    observaciones: ENVIAR_AL_CORREO_REAL_APTO
+      ? "Notificación formal enviada al correo real del apartamento."
+      : "Prueba interna enviada al consejo. No debe bloquear notificación formal futura.",
+    dryRun: ENVIAR_AL_CORREO_REAL_APTO ? "NO" : "SI",
+    version: "V1"
+  });
+
+}
+
+function obtenerPlacasTextoDesdeRegistros_(registros) {
+  const mapa = {};
+
+  registros.forEach(function(reg) {
+    const placa = reg.placaNorm || normalizePlaca_(reg.placa);
+    if (placa) mapa[placa] = true;
+  });
+
+  return Object.keys(mapa).join(", ");
+}
+
+function convertirDetalleNotificacionDebidoProcesoATexto_(registros) {
+  const resumen = agruparSancionesPorPlaca_(registros);
+
+  return resumen.map(function(item) {
+    return [
+      item.placa,
+      item.tipoVehiculo,
+      item.cantidad + " registro(s)"
+    ].join(" | ");
+  }).join("\n");
+}
+
+function construirClaveNotificacionDebidoProceso_(apto) {
+  return TIPO_NOTIFICACION_DEBIDO_PROCESO + "|" + normalizeApto_(apto);
+}
+
+function getHeadersBitacoraNotificacionesDebidoProceso_() {
+  return [
+    "ClaveNotificacion",
+    "FechaHoraNotificacion",
+    "TipoNotificacion",
+    "Apartamento",
+    "ApartamentoNorm",
+    "EmailDestino",
+    "EmailRealApto",
+    "PlacasDetectadas",
+    "CantidadRegistros",
+    "DetalleRegistros",
+    "Estado",
+    "Asunto",
+    "PlantillaNotificacion",
+    "Observaciones",
+    "UsuarioEjecucion",
+    "DryRun",
+    "FechaRegistroSistema",
+    "Version"
+  ];
+}
+
+function getOrCreateHojaBitacoraNotificacionesDebidoProceso_(ss) {
+  let sheet = ss.getSheetByName(SHEET_BITACORA_NOTIFICACIONES_DEBIDO_PROCESO);
+  const headers = getHeadersBitacoraNotificacionesDebidoProceso_();
+
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_BITACORA_NOTIFICACIONES_DEBIDO_PROCESO);
+  }
+
+  // Fuerza siempre la plantilla oficial para evitar columnas corridas.
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+  sheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight("bold")
+    .setBackground("#d9ead3");
+
+  sheet.setFrozenRows(1);
+
+  return sheet;
+}
+
+function registrarBitacoraNotificacionDebidoProceso_(data) {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = getOrCreateHojaBitacoraNotificacionesDebidoProceso_(ss);
+
+  const now = Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    "yyyy-MM-dd HH:mm:ss"
+  );
+
+  const clave = construirClaveNotificacionDebidoProceso_(data.apartamento);
+
+  sheet.appendRow([
+    clave,
+    now,
+    TIPO_NOTIFICACION_DEBIDO_PROCESO,
+    data.apartamento || "",
+    normalizeApto_(data.apartamento),
+    data.emailDestino || data.email || "",
+    data.emailRealApto || data.email || "",
+    data.placasDetectadas || "",
+    data.cantidadRegistros || 0,
+    data.detalleRegistros || "",
+    data.estado || "",
+    data.asunto || "",
+    data.plantillaNotificacion || PLANTILLA_NOTIFICACION_DEBIDO_PROCESO,
+    data.observaciones || "",
+    Session.getActiveUser().getEmail() || "",
+    data.dryRun || "",
+    now,
+    data.version || "V1"
+  ]);
+}
+
+// Wrapper para que el envío formal siga funcionando.
+// Usa la misma bitácora oficial.
+function registrarNotificacionDebidoProceso_(data) {
+  registrarBitacoraNotificacionDebidoProceso_({
+    apartamento: data.apartamento,
+    emailDestino: data.email || data.emailDestino || "",
+    emailRealApto: data.email || data.emailRealApto || "",
+    placasDetectadas: data.placasDetectadas,
+    cantidadRegistros: data.cantidadRegistros,
+    detalleRegistros: data.detalleRegistros,
+    estado: data.estado,
+    asunto: data.asunto,
+    plantillaNotificacion: data.plantillaNotificacion || PLANTILLA_NOTIFICACION_DEBIDO_PROCESO,
+    observaciones: data.observaciones,
+    dryRun: EMAIL_DRY_RUN ? "SI" : "NO",
+    version: "V1"
+  });
+}
+
+function leerMapaApartamentosYaNotificadosDebidoProceso_(ss) {
+  const sheet = getOrCreateHojaBitacoraNotificacionesDebidoProceso_(ss);
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  const mapa = {};
+
+  if (lastRow < 2) {
+    return mapa;
+  }
+
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+
+  const headers = data[0].map(function(h) {
+    return normalizeHeader_(h);
+  });
+
+  const colMap = {};
+  headers.forEach(function(h, i) {
+    colMap[h] = i;
+  });
+
+  const idxClave = colMap["clavenotificacion"];
+  const idxAptoNorm = colMap["apartamentonorm"];
+  const idxEstado = colMap["estado"];
+  const idxFecha = colMap["fechahoranotificacion"];
+  const idxEmailDestino = colMap["emaildestino"];
+
+  data.slice(1).forEach(function(row) {
+    const clave = safeTrim_(row[idxClave]);
+    const aptoNorm = safeTrim_(row[idxAptoNorm]);
+    const estado = safeTrim_(row[idxEstado]);
+
+    if (!clave || !aptoNorm) return;
+
+    // Solo ENVIADO bloquea futuras notificaciones.
+    // PRUEBA_INTERNA, SIMULADO o ERROR no bloquean.
+    if (estado === "ENVIADO") {
+      mapa[clave] = {
+        clave: clave,
+        aptoNorm: aptoNorm,
+        fechaHora: row[idxFecha],
+        email: row[idxEmailDestino],
+        estado: estado
+      };
+    }
+  });
+
+  return mapa;
+}
+
+const TRIGGERS_OPERATIVOS_SANCIONES = [
+  {
+    funcion: "enviarCorreosResumenSanciones",
+    descripcion: "1. Enviar notificaciones de sanciones",
+    hora: 6,
+    minuto: 0
+  },
+  {
+    funcion: "prepararResumenNotificacionesDebidoProceso",
+    descripcion: "2. Generar resumen de notificaciones de debido proceso",
+    hora: 10,
+    minuto: 0
+  },
+  {
+    funcion: "enviarNotificacionesDebidoProceso",
+    descripcion: "3. Enviar notificaciones de debido proceso",
+    hora: 11,
+    minuto: 0
+  }
+];
+
+function reinstalarTriggersOperativosSanciones() {
+  const lock = LockService.getScriptLock();
+
+  if (!lock.tryLock(30000)) {
+    throw new Error("No se pudo obtener bloqueo. Intenta nuevamente en unos segundos.");
+  }
+
+  try {
+    Logger.log("=== REINSTALANDO TRIGGERS OPERATIVOS SANCIONES ===");
+
+    const eliminados = borrarTriggersOperativosSanciones_();
+    Logger.log("Triggers eliminados: " + eliminados);
+
+    let creados = 0;
+
+    TRIGGERS_OPERATIVOS_SANCIONES.forEach(function(config) {
+      crearTriggerDiarioOperativo_(config);
+      creados++;
+
+      Logger.log(
+        "Trigger creado: " +
+        config.descripcion +
+        " | Función: " +
+        config.funcion +
+        " | Hora aprox: " +
+        formatoHoraTrigger_(config.hora, config.minuto)
+      );
+    });
+
+    Logger.log("Triggers creados: " + creados);
+    Logger.log("=== FIN REINSTALACIÓN TRIGGERS ===");
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function borrarTriggersOperativosSanciones_() {
+  const funcionesOperativas = TRIGGERS_OPERATIVOS_SANCIONES.map(function(config) {
+    return config.funcion;
+  });
+
+  const triggers = ScriptApp.getProjectTriggers();
+  let eliminados = 0;
+
+  triggers.forEach(function(trigger) {
+    const funcion = trigger.getHandlerFunction();
+
+    if (funcionesOperativas.indexOf(funcion) !== -1) {
+      ScriptApp.deleteTrigger(trigger);
+      eliminados++;
+
+      Logger.log("Trigger eliminado para función: " + funcion);
+    }
+  });
+
+  return eliminados;
+}
+
+function crearTriggerDiarioOperativo_(config) {
+  ScriptApp.newTrigger(config.funcion)
+    .timeBased()
+    .everyDays(1)
+    .atHour(config.hora)
+    .nearMinute(config.minuto)
+    .create();
+}
+
+function listarTriggersOperativosSanciones() {
+  const funcionesOperativas = TRIGGERS_OPERATIVOS_SANCIONES.map(function(config) {
+    return config.funcion;
+  });
+
+  const triggers = ScriptApp.getProjectTriggers();
+
+  Logger.log("=== TRIGGERS OPERATIVOS ACTUALES ===");
+
+  triggers.forEach(function(trigger) {
+    const funcion = trigger.getHandlerFunction();
+
+    if (funcionesOperativas.indexOf(funcion) !== -1) {
+      Logger.log(
+        "Función: " +
+        funcion +
+        " | Tipo evento: " +
+        trigger.getEventType() +
+        " | Fuente: " +
+        trigger.getTriggerSource()
+      );
+    }
+  });
+
+  Logger.log("Total triggers del proyecto: " + triggers.length);
+}
+
+function formatoHoraTrigger_(hora, minuto) {
+  return String(hora).padStart(2, "0") + ":" + String(minuto).padStart(2, "0");
+}
+
+function leerMapaConsultasOkSancionesPorPlaca_(ss) {
+  const sheet = ss.getSheetByName(SHEET_LOG_CONSULTAS_SANCIONES);
+  const mapa = {};
+
+  if (!sheet) {
+    Logger.log("No existe hoja de log de consultas: " + SHEET_LOG_CONSULTAS_SANCIONES);
+    return mapa;
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2) {
+    return mapa;
+  }
+
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+
+  const headers = data[0].map(function(h) {
+    return normalizeHeader_(h);
+  });
+
+  const colMap = {};
+  headers.forEach(function(h, i) {
+    colMap[h] = i;
+  });
+
+  const idxFecha = colMap["fechahora"];
+  const idxAptoNorm = colMap["apartamentonormalizado"];
+  const idxPlacaNorm = colMap["placanormalizada"];
+  const idxResultado = colMap["resultado"];
+
+  if (
+    idxAptoNorm === undefined ||
+    idxPlacaNorm === undefined ||
+    idxResultado === undefined
+  ) {
+    throw new Error("El log de consultas no tiene las columnas requeridas.");
+  }
+
+  data.slice(1).forEach(function(row) {
+    const resultado = safeTrim_(row[idxResultado]).toUpperCase();
+
+    // Solo usamos consultas exitosas.
+    if (resultado !== "OK") return;
+
+    const placa = normalizePlaca_(row[idxPlacaNorm]);
+    const aptoNorm = normalizeApto_(row[idxAptoNorm]);
+
+    if (!placa || !aptoNorm) return;
+
+    if (!mapa[placa]) {
+      mapa[placa] = {
+        placa: placa,
+        totalConsultasOk: 0,
+        aptos: {},
+        aptoMayor: "",
+        cantidadMayor: 0,
+        porcentajeMayor: 0,
+        ultimaFecha: ""
+      };
+    }
+
+    if (!mapa[placa].aptos[aptoNorm]) {
+      mapa[placa].aptos[aptoNorm] = {
+        aptoNorm: aptoNorm,
+        cantidad: 0,
+        ultimaFecha: ""
+      };
+    }
+
+    mapa[placa].totalConsultasOk++;
+    mapa[placa].aptos[aptoNorm].cantidad++;
+
+    const fecha = idxFecha !== undefined ? safeTrim_(row[idxFecha]) : "";
+
+    if (fecha) {
+      mapa[placa].aptos[aptoNorm].ultimaFecha = fecha;
+      mapa[placa].ultimaFecha = fecha;
+    }
+  });
+
+  Object.keys(mapa).forEach(function(placa) {
+    const item = mapa[placa];
+
+    Object.keys(item.aptos).forEach(function(aptoNorm) {
+      const aptoItem = item.aptos[aptoNorm];
+
+      if (aptoItem.cantidad > item.cantidadMayor) {
+        item.aptoMayor = aptoNorm;
+        item.cantidadMayor = aptoItem.cantidad;
+      }
+    });
+
+    item.porcentajeMayor = item.totalConsultasOk > 0
+      ? item.cantidadMayor / item.totalConsultasOk
+      : 0;
+  });
+
+  return mapa;
+}
+
+function revisarMaestraContraLogConsultasSancionesDryRun() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const hojaMaestra = getOrCreateHojaMaestra_(ss);
+
+  revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, false);
+}
+
+function revisarMaestraContraLogConsultasSancionesAplicar() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const hojaMaestra = getOrCreateHojaMaestra_(ss);
+
+  revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, true);
+}
+
+function revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, aplicarCambios) {
+  const lastRow = hojaMaestra.getLastRow();
+
+  if (lastRow < 2) {
+    Logger.log("La hoja maestra no tiene registros.");
+    return {
+      conflictos: 0,
+      revisados: 0
+    };
+  }
+
+  const mapaConsultas = leerMapaConsultasOkSancionesPorPlaca_(ss);
+
+  const range = hojaMaestra.getRange(2, 1, lastRow - 1, 9);
+  const values = range.getValues();
+
+  const now = Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    "yyyy-MM-dd HH:mm"
+  );
+
+  let revisados = 0;
+  let conflictos = 0;
+  const filasConflicto = [];
+
+  values.forEach(function(row, index) {
+    const sheetRow = index + 2;
+
+    const placa = normalizePlaca_(row[0]);
+    const aptoMaestra = safeTrim_(row[1]);
+    const aptoNormMaestra = normalizeApto_(aptoMaestra);
+
+    if (!placa || !aptoNormMaestra) return;
+
+    revisados++;
+
+    const infoConsulta = mapaConsultas[placa];
+
+    if (!infoConsulta) return;
+
+    if (infoConsulta.totalConsultasOk < MIN_CONSULTAS_OK_PARA_ALERTA_MAESTRA) {
+      return;
+    }
+
+    const aptoReportadoConsulta = infoConsulta.aptoMayor;
+
+    if (!aptoReportadoConsulta) return;
+
+    // Si coincide, no se toca la maestra.
+    if (aptoReportadoConsulta === aptoNormMaestra) {
+      return;
+    }
+
+    conflictos++;
+
+    const confianzaAnterior = Number(row[3]) || 1;
+    const nuevaConfianza = Math.min(
+      confianzaAnterior,
+      CONFIANZA_MAX_CONFLICTO_CONSULTA
+    );
+
+    const notaConflicto =
+      "[" + now + "] Conflicto con consulta web. " +
+      "Maestra indica apto " + aptoNormMaestra +
+      ", pero consulta(s) OK del residente reportan apto " + aptoReportadoConsulta +
+      " para la placa " + placa +
+      ". Dato requiere verificación manual antes de corrección automática.";
+
+    Logger.log(
+      "CONFLICTO MAESTRA VS CONSULTA | Placa: " + placa +
+      " | Maestra apto: " + aptoNormMaestra +
+      " | Consulta apto: " + aptoReportadoConsulta +
+      " | Confianza anterior: " + confianzaAnterior +
+      " | Nueva confianza: " + nuevaConfianza +
+      " | Total consultas OK: " + infoConsulta.totalConsultasOk
+    );
+
+    if (aplicarCambios) {
+      row[3] = nuevaConfianza; // ConfianzaApto
+      row[6] = now;            // FechaActualizacion
+      row[7] = ESTADO_MAESTRA_REQUIERE_VERIFICACION; // Estado
+      row[8] = safeTrim_(row[8])
+        ? safeTrim_(row[8]) + " | " + notaConflicto
+        : notaConflicto;
+
+      filasConflicto.push(sheetRow);
+    }
+  });
+
+  if (aplicarCambios) {
+    range.setValues(values);
+
+    filasConflicto.forEach(function(rowNumber) {
+      hojaMaestra
+        .getRange(rowNumber, 1, 1, 9)
+        .setBackground("#fff2cc");
+    });
+  }
+
+  Logger.log("=== REVISIÓN MAESTRA VS CONSULTAS WEB ===");
+  Logger.log("Registros maestra revisados: " + revisados);
+  Logger.log("Conflictos detectados: " + conflictos);
+  Logger.log("Aplicar cambios: " + aplicarCambios);
+
+  return {
+    conflictos: conflictos,
+    revisados: revisados
+  };
+}
+
+function maestraEsConfiableParaCorreccion_(master) {
+  if (!master) return false;
+
+  const estado = safeTrim_(master.estado).toUpperCase();
+  const confianza = Number(master.confianzaApto) || 0;
+
+  if (estado.indexOf("REQUIERE_VERIFICACION") !== -1) {
+    return false;
+  }
+
+  if (confianza < UMBRAL_MAYORIA) {
+    return false;
+  }
+
+  return true;
 }
