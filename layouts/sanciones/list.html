@@ -341,7 +341,7 @@
                 <div class="spinner-border text-success" role="status">
                     <span class="visually-hidden">Cargando...</span>
                 </div>
-                <p class="mt-2 text-muted">Consultando registros...</p>
+                <p id="loading-spinner-text" class="mt-2 text-muted">Esta operacion tarda aproximadamente 1 minuto.</p>
             </div>
 
             <!-- Alerta de error -->
@@ -459,6 +459,7 @@
 
         var currentApto = '';
         var selectedIds = [];
+        var loadingCountdownTimer = null;
 
         document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('input-apto').addEventListener('keydown', handleEnter_);
@@ -494,6 +495,7 @@
             }
 
             currentApto = apto;
+            startLoadingCountdown_();
 
             document.getElementById('loading-spinner').classList.add('show');
             document.getElementById('consulta-error').classList.add('d-none');
@@ -507,6 +509,7 @@
             fetch(url)
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
+                    stopLoadingCountdown_();
                     document.getElementById('loading-spinner').classList.remove('show');
                     if (data.ok) {
                         renderSanciones_(data);
@@ -515,10 +518,49 @@
                     }
                 })
                 .catch(function () {
+                    stopLoadingCountdown_();
                     document.getElementById('loading-spinner').classList.remove('show');
                     showError_('Error de conexión. Verifique su internet e intente de nuevo.');
                 });
         };
+
+        function startLoadingCountdown_() {
+            stopLoadingCountdown_();
+
+            var elapsedSeconds = 0;
+            updateLoadingSpinnerText_(elapsedSeconds);
+
+            loadingCountdownTimer = setInterval(function () {
+                elapsedSeconds += 1;
+                updateLoadingSpinnerText_(elapsedSeconds);
+            }, 1000);
+        }
+
+        function stopLoadingCountdown_() {
+            if (loadingCountdownTimer) {
+                clearInterval(loadingCountdownTimer);
+                loadingCountdownTimer = null;
+            }
+
+            updateLoadingSpinnerText_();
+        }
+
+        function updateLoadingSpinnerText_(elapsedSeconds) {
+            var textEl = document.getElementById('loading-spinner-text');
+            if (!textEl) {
+                return;
+            }
+
+            if (typeof elapsedSeconds !== 'number') {
+                textEl.textContent = 'Esta operacion tarda aproximadamente 1 minuto.';
+                return;
+            }
+
+            textEl.textContent =
+                'Esta operacion tarda aproximadamente 1 minuto. Tiempo transcurrido: ' +
+                elapsedSeconds +
+                ' s.';
+        }
 
         // ========== RENDER DE RESULTADOS ==========
 
