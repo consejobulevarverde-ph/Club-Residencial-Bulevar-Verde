@@ -95,6 +95,14 @@
             background-color: var(--color-secondary);
             border-color: var(--color-secondary);
         }
+        #btn-consultar:disabled,
+        #btn-consultar.disabled {
+            background-color: var(--color-tertiary);
+            border-color: var(--color-tertiary);
+            color: var(--color-white);
+            opacity: 1;
+            cursor: not-allowed;
+        }
 
         footer {
             background-color: var(--color-primary);
@@ -125,6 +133,33 @@
         }
         #loading-spinner.show {
             display: block;
+        }
+        .loading-spinner-ring {
+            width: 3rem;
+            height: 3rem;
+            border: 0.35rem solid rgba(44, 95, 45, 0.2);
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            margin: 0 auto;
+            animation: spinner-rotate 0.8s linear infinite;
+            -webkit-animation: spinner-rotate 0.8s linear infinite;
+            will-change: transform;
+        }
+        @keyframes spinner-rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        @-webkit-keyframes spinner-rotate {
+            from {
+                -webkit-transform: rotate(0deg);
+            }
+            to {
+                -webkit-transform: rotate(360deg);
+            }
         }
 
         .sancion-card {
@@ -331,16 +366,15 @@
             </div>
 
             <div class="text-center mb-4">
-                <button class="btn btn-primary btn-lg" onclick="consultarSanciones()">
+                <button id="btn-consultar" class="btn btn-primary btn-lg" onclick="consultarSanciones()">
                     <i class="bi bi-search"></i> Consultar sanciones
                 </button>
             </div>
 
             <!-- Spinner de carga -->
             <div id="loading-spinner" class="text-center py-4">
-                <div class="spinner-border text-success" role="status">
+                <div class="loading-spinner-ring" role="status" aria-live="polite" aria-label="Cargando"></div>
                     <span class="visually-hidden">Cargando...</span>
-                </div>
                 <p id="loading-spinner-text" class="mt-2 text-muted">Esta operacion tarda aproximadamente 1 minuto.</p>
             </div>
 
@@ -495,6 +529,10 @@
             }
 
             currentApto = apto;
+            var consultButton = document.getElementById('btn-consultar');
+            if (consultButton) {
+                consultButton.disabled = true;
+            }
             startLoadingCountdown_();
 
             document.getElementById('loading-spinner').classList.add('show');
@@ -511,6 +549,9 @@
                 .then(function (data) {
                     stopLoadingCountdown_();
                     document.getElementById('loading-spinner').classList.remove('show');
+                    if (consultButton) {
+                        consultButton.disabled = false;
+                    }
                     if (data.ok) {
                         renderSanciones_(data);
                     } else {
@@ -520,6 +561,9 @@
                 .catch(function () {
                     stopLoadingCountdown_();
                     document.getElementById('loading-spinner').classList.remove('show');
+                    if (consultButton) {
+                        consultButton.disabled = false;
+                    }
                     showError_('Error de conexión. Verifique su internet e intente de nuevo.');
                 });
         };
