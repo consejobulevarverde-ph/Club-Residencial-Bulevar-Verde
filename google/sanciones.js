@@ -1,18 +1,19 @@
 /***************************************
- * CONFIGURACIÓN
+ * SISTEMA DE GESTIÓN DE SANCIONES - PARQUEADERO VISITANTES
+ * Club Residencial Bulevar Verde
  *
- * Para obtener el ID del Spreadsheet:
- * 1. Abre el archivo "sanciones" en Google Sheets
- * 2. Copia el ID de la URL:
- *    https://docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit
- * 3. Pégalo abajo en SHEET_ID_SANCIONES
+ * INSTRUCCIONES DE EJECUCIÓN:
+ * 1. Ejecutar la función: normalizarTodoElArchivoSanciones()
+ *    - Esta función normaliza placas, corrige inconsistencias y crea/actualiza la hoja maestra
+ *    - Presta atención al log y realiza las correcciones manuales necesarias
+ * 2. Ejecutar las veces necesarias la normalización hasta estar conforme con los resultados
+ * 3. Preparar el resumen de notificaciones de debido proceso:
+ *    Ejecutar: prepararResumenNotificacionesDebidoProceso()
+ * 4. Enviar notificaciones de debido proceso:
+ *    Ejecutar: enviarNotificacionesDebidoProcesoDesdeResumen()
  *
- * Para desplegar como Web App:
- * 1. En el editor de Apps Script: Implementar → Nueva implementación
- * 2. Tipo: Aplicación web
- * 3. Ejecutar como: Yo
- * 4. Quién tiene acceso: Cualquier persona
- * 5. Copiar la URL y pegarla en layouts/sanciones/list.html (constante WEBAPP_URL)
+ * ═══════════════════════════════════════════════════════════
+ *
  ***************************************/
 const SHEET_ID_SANCIONES = '1GeJZ4Rd4-ddzE6Vi8kpq9iB2_oxuLW87UiAnbZQ6Iow';
 const SHEET_PLANILLA = 'PLANILLA';
@@ -26,18 +27,16 @@ const SHEET_RESUMEN_NOTIFICACIONES_DEBIDO_PROCESO = "resumen_notif";
 const SHEET_BITACORA_NOTIFICACIONES_DEBIDO_PROCESO = "bitacora_notif";
 
 const UMBRAL_MAYORIA = 0.75;
-const MIN_CONFIANZA_PLACA_SIMILAR_AUTO = 0.85;
 const UMBRAL_OUTLIER = 0.15;
+const CONFIANZA_MAX_CONFLICTO_CONSULTA = 0.50;
 const MIN_REGISTROS_PARA_CORREGIR = 5;
-const MIN_REGISTROS_PLACA_DOMINANTE = 10;
+const MIN_CONSULTAS_OK_PARA_ALERTA_MAESTRA = 1;
 const MAX_REGISTROS_PLACA_SOSPECHOSA = 2;
 const MAX_DISTANCIA_PLACA_SIMILAR = 100;
 const LIMITE_PLACAS_SIMILARES_DESCARTADAS = 50;
 const MAX_DISTANCIA_DESCARTADA_PARA_ANALISIS = 180;
 const VALOR_UNITARIO_SANCION_MOTO = 1000;
 const VALOR_UNITARIO_SANCION_CARRO = 7000;
-const CONFIANZA_MAX_CONFLICTO_CONSULTA = 0.50;
-const MIN_CONSULTAS_OK_PARA_ALERTA_MAESTRA = 1;
 
 const DRY_RUN = false;
 const EMAIL_DRY_RUN = false; // true = prueba, false = envía correos reales
@@ -143,8 +142,12 @@ function consultarSanciones_(aptoInput, placaInput, e) {
   const placa = normalizePlaca_(placaInput);
 
   try {
-    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-    const sheet = ss.getSheetByName(SHEET_PLANILLA);
+    const contextoPlanilla = leerPlanillaSanciones_({
+      includeRichText: true,
+      allowMissingSheet: true
+    });
+
+    const sheet = contextoPlanilla.sheet;
 
     if (!sheet) {
       registrarConsultaSanciones_({
@@ -166,8 +169,8 @@ function consultarSanciones_(aptoInput, placaInput, e) {
       });
     }
 
-    const lastRow = sheet.getLastRow();
-    const lastCol = sheet.getLastColumn();
+    const lastRow = contextoPlanilla.lastRow;
+    const lastCol = contextoPlanilla.lastCol;
 
     if (lastRow < 2 || lastCol < 1) {
       registrarConsultaSanciones_({
@@ -186,30 +189,12 @@ function consultarSanciones_(aptoInput, placaInput, e) {
       return jsonOutput_({ ok: true, apto: apto, sanciones: [] });
     }
 
-    const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-    const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
-    const rawHeaders = allData[0];
-    const headers = rawHeaders.map(function (h) { 
-      return normalizeHeader_(h); 
+    const allData = contextoPlanilla.allData;
+    const richData = contextoPlanilla.richData;
+    const headers = allData[0].map(function(h) {
+      return normalizeHeader_(h);
     });
-
-    // Mapa de nombre de columna → índice
-    var colMap = {};
-    headers.forEach(function (h, i) { colMap[h] = i; });
-
-    // Índices de columnas clave
-   var IDX = {
-    id: findColIdx_(colMap, ['id']),
-    fecha: findColIdx_(colMap, ['fecha']),
-    vigilante: findColIdx_(colMap, ['vigilante que toma el registro', 'vigilante', 'agente']),
-    tipoVehiculo: findColIdx_(colMap, ['tipo de vehiculo', 'tipo vehiculo', 'vehiculo']),
-    placa: findColIdx_(colMap, ['placa']),
-    apto: findColIdx_(colMap, ['apto', 'apartamento', 'apt', 'numero de apto', 'no. apto', 'nro apto']),
-    residenteVisitante: findColIdx_(colMap, ['residente o visitante', 'residente', 'tipo residente', 'residente/visitante']),
-    observaciones: findColIdx_(colMap, ['observaciones', 'observacion']),
-    foto: findColIdx_(colMap, ['foto', 'imagen', 'fotografia']),
-    firma: findColIdx_(colMap, ['firma'])
-  };
+    var IDX = contextoPlanilla.IDX;
 
   Logger.log('HEADERS NORMALIZADOS: ' + JSON.stringify(headers));
   Logger.log('IDX: ' + JSON.stringify(IDX));
@@ -234,7 +219,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
       });
     }
 
-    var rows = allData.slice(1); // excluir encabezado
+    var rows = contextoPlanilla.rows; // excluir encabezado
     var aptoNorm = normalizeApto_(apto);
     var registrosNormalizados = construirRegistrosNormalizados_(rows, IDX, richData, allData);
 
@@ -344,6 +329,17 @@ function consultarSanciones_(aptoInput, placaInput, e) {
       };
     });
 
+    sanciones.sort(function(a, b) {
+      var fechaA = parseFechaParaOrdenDesc_(a.fecha);
+      var fechaB = parseFechaParaOrdenDesc_(b.fecha);
+
+      if (fechaA !== fechaB) {
+        return fechaB - fechaA;
+      }
+
+      return (b.sheetRow || 0) - (a.sheetRow || 0);
+    });
+
 
     const correccionesInteligentes = analizarInconsistenciasSancionesDesdeResultado_(
       sheet,
@@ -430,6 +426,26 @@ function formatFecha_(value) {
   return safeTrim_(String(value));
 }
 
+function parseFechaParaOrdenDesc_(value) {
+  var texto = safeTrim_(value);
+
+  if (!texto) return 0;
+
+  var partes = texto.split('/');
+  if (partes.length === 3) {
+    var dia = Number(partes[0]);
+    var mes = Number(partes[1]) - 1;
+    var anio = Number(partes[2]);
+
+    if (!isNaN(dia) && !isNaN(mes) && !isNaN(anio)) {
+      return new Date(anio, mes, dia).getTime();
+    }
+  }
+
+  var timestamp = Date.parse(texto);
+  return isNaN(timestamp) ? 0 : timestamp;
+}
+
 /***************************************
  * HELPERS GENERALES
  ***************************************/
@@ -472,135 +488,56 @@ function getCellUrlOrText_(richData, allData, rowIndex, colIndex) {
   return safeTrim_(allData[rowIndex][colIndex]);
 }
 
-/***************************************
- * TEST - Ejecutar manualmente para verificar
- ***************************************/
-function testConsultarSanciones() {
-  var fakeEvent = {
-    parameter: {
-      action: 'consultar',
-      apto: '0226',
-      placa: 'NVJ44H'
-    }
-  };
-
-  var result = doGet(fakeEvent);
-  Logger.log(result.getContent());
-}
-
-function testLeerVigilanciaPlacas() {
-  const mapa = leerMapaVigilanciaPlacas_();
-
-  Logger.log('Total registros vigilancia: ' + Object.keys(mapa).length);
-
-  Logger.log(JSON.stringify(
-    Object.keys(mapa).slice(0, 20).map(function(placa) {
-      return mapa[placa];
-    }),
-    null,
-    2
-  ));
-}
-
-function testLeerCorreosApartamentos() {
-  const mapa = leerMapaCorreosApartamentos_();
-
-  Logger.log("Total apartamentos con correo: " + Object.keys(mapa).length);
-
-  Logger.log(JSON.stringify(
-    Object.keys(mapa).slice(0, 20).map(function(apto) {
-      return mapa[apto];
-    }),
-    null,
-    2
-  ));
-}
-
-function testEnviarCorreoApto1029() {
-  const APTO_TEST = "1728";
-  const CC_TEST = "bulevarverdeadmon@gmail.com";
-  const ENVIAR_CORREO_REAL_TEST = false; // false = solo log, true = envía correo real
+function leerPlanillaSanciones_(options) {
+  const opts = options || {};
+  const includeRichText = opts.includeRichText === true;
+  const allowMissingSheet = opts.allowMissingSheet === true;
 
   const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
   const sheet = ss.getSheetByName(SHEET_PLANILLA);
 
   if (!sheet) {
+    if (allowMissingSheet) {
+      return {
+        ss: ss,
+        sheet: null,
+        lastRow: 0,
+        lastCol: 0,
+        allData: [],
+        richData: [],
+        rows: [],
+        IDX: null
+      };
+    }
+
     throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
   }
 
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
+  const hasGrid = lastRow >= 1 && lastCol >= 1;
 
-  if (lastRow < 2) {
-    throw new Error("No hay sanciones para procesar.");
-  }
+  const allData = hasGrid
+    ? sheet.getRange(1, 1, lastRow, lastCol).getValues()
+    : [];
 
-  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
+  const richData = includeRichText && hasGrid
+    ? sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues()
+    : [];
 
-  const IDX = obtenerIdxPlanilla_(allData[0]);
-  const rows = allData.slice(1);
+  const rows = allData.length > 1 ? allData.slice(1) : [];
+  const IDX = allData.length > 0 ? obtenerIdxPlanilla_(allData[0]) : null;
 
-  const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
-
-  const aptoNorm = normalizeApto_(APTO_TEST);
-
-  const sancionesApto = registros.filter(function(reg) {
-    return reg.aptoNorm === aptoNorm;
-  });
-
-  if (sancionesApto.length === 0) {
-    throw new Error("No se encontraron sanciones para el apartamento " + APTO_TEST);
-  }
-
-  const mapaCorreos = leerMapaCorreosApartamentos_();
-  const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(APTO_TEST)];
-
-  if (!correoInfo || !correoInfo.email) {
-    throw new Error("No se encontró correo para el apartamento " + APTO_TEST);
-  }
-
-
-
-
-  const resumenPlacas = agruparSancionesPorPlaca_(sancionesApto);
-
-  const valorTotal = resumenPlacas.reduce(function(total, item) {
-    return total + item.valorTotal;
-  }, 0);
-
-
-
-
-  const subject = "Notificación de sanción por uso indebido del parqueadero de visitantes - Apto " + APTO_TEST;
-
-  const htmlBody = construirHtmlCorreoSancionesTest_({
-    apartamento: APTO_TEST,
-    cantidad: sancionesApto.length,
-    valorTotal: valorTotal,
-    resumenPlacas: resumenPlacas
-  });
-
-  Logger.log("=== TEST ENVÍO CORREO APTO " + APTO_TEST + " ===");
-  Logger.log("Para: " + correoInfo.email);
-  Logger.log("CC: " + CC_TEST);
-  Logger.log("Cantidad sanciones: " + sancionesApto.length);
-  Logger.log("Valor total: " + formatCOP_(valorTotal));
-
-  if (ENVIAR_CORREO_REAL_TEST) {
-    MailApp.sendEmail({
-      //to: correoInfo.email,
-      to: "consejo.bulevarverde@gmail.com",
-      cc: CC_TEST,
-      subject: subject,
-      htmlBody: correoInfo.email+ " "+htmlBody,
-      name: "Administración Bulevar Verde"
-    });
-
-    Logger.log("Correo TEST enviado correctamente.");
-  } else {
-    Logger.log("ENVIAR_CORREO_REAL_TEST está en false. No se envió correo real.");
-  }
+  return {
+    ss: ss,
+    sheet: sheet,
+    lastRow: lastRow,
+    lastCol: lastCol,
+    allData: allData,
+    richData: richData,
+    rows: rows,
+    IDX: IDX
+  };
 }
 
 function normalizeHeader_(value) {
@@ -934,46 +871,20 @@ function normalizarTodoElArchivoSanciones() {
   Logger.log("=== INICIO NORMALIZACION GENERAL DE SANCIONES ===");
   Logger.log("DRY_RUN: " + DRY_RUN);
 
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const sheet = ss.getSheetByName(SHEET_PLANILLA);
-
-  if (!sheet) {
-    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
-  }
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
+  const contextoPlanilla = leerPlanillaSanciones_({ includeRichText: true });
+  const ss = contextoPlanilla.ss;
+  const sheet = contextoPlanilla.sheet;
+  const lastRow = contextoPlanilla.lastRow;
+  const lastCol = contextoPlanilla.lastCol;
 
   if (lastRow < 2 || lastCol < 1) {
     Logger.log("No hay datos para normalizar.");
     return;
   }
 
-  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
-
-  const rawHeaders = allData[0];
-  const headers = rawHeaders.map(function(h) {
-    return normalizeHeader_(h);
-  });
-
-  const colMap = {};
-  headers.forEach(function(h, i) {
-    colMap[h] = i;
-  });
-
-  const IDX = {
-    id: findColIdx_(colMap, ["id"]),
-    fecha: findColIdx_(colMap, ["fecha"]),
-    vigilante: findColIdx_(colMap, ["vigilante que toma el registro", "vigilante", "agente"]),
-    tipoVehiculo: findColIdx_(colMap, ["tipo de vehiculo", "tipo vehiculo", "vehiculo"]),
-    placa: findColIdx_(colMap, ["placa"]),
-    apto: findColIdx_(colMap, ["apto", "apartamento", "apt", "numero de apto", "no. apto", "nro apto"]),
-    residenteVisitante: findColIdx_(colMap, ["residente o visitante", "residente", "tipo residente", "residente/visitante"]),
-    observaciones: findColIdx_(colMap, ["observaciones", "observacion"]),
-    foto: findColIdx_(colMap, ["foto", "imagen", "fotografia"]),
-    firma: findColIdx_(colMap, ["firma"])
-  };
+  const allData = contextoPlanilla.allData;
+  const richData = contextoPlanilla.richData;
+  const IDX = contextoPlanilla.IDX;
 
   Logger.log("IDX: " + JSON.stringify(IDX));
 
@@ -989,7 +900,7 @@ function normalizarTodoElArchivoSanciones() {
     throw new Error('No se encontró la columna "tipo de vehiculo".');
   }
 
-  const rows = allData.slice(1);
+  const rows = contextoPlanilla.rows;
 
   // 1. Normalizar placas físicamente en la hoja.
   const resultadoPlacas = normalizarPlacasEnMemoriaYHoja_(
@@ -1074,32 +985,18 @@ function normalizarTodoElArchivoSanciones() {
  * Solo borra espacios y convierte a mayúsculas
  ***************************************/
 function normalizarTodasLasPlacas_() {
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const sheet = ss.getSheetByName(SHEET_PLANILLA);
-
-  if (!sheet) {
-    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
-  }
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
+  const contextoPlanilla = leerPlanillaSanciones_();
+  const sheet = contextoPlanilla.sheet;
+  const lastRow = contextoPlanilla.lastRow;
+  const lastCol = contextoPlanilla.lastCol;
 
   if (lastRow < 2 || lastCol < 1) {
     Logger.log("No hay datos para normalizar.");
     return;
   }
 
-  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const headers = allData[0].map(function(h) {
-    return normalizeHeader_(h);
-  });
-
-  const colMap = {};
-  headers.forEach(function(h, i) {
-    colMap[h] = i;
-  });
-
-  const placaColIndex = findColIdx_(colMap, ["placa"]);
+  const IDX = contextoPlanilla.IDX;
+  const placaColIndex = IDX ? IDX.placa : -1;
 
   if (placaColIndex === -1) {
     throw new Error('No se encontró la columna "placa".');
@@ -1997,27 +1894,19 @@ function sincronizarVigilanciaConMaestra_(hojaMaestra, mapaMaestra, mapaVigilanc
 }
 
 function prepararResumenSancionesPorApartamento() {
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const sheet = ss.getSheetByName(SHEET_PLANILLA);
-
-  if (!sheet) {
-    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
-  }
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
+  const contextoPlanilla = leerPlanillaSanciones_({ includeRichText: true });
+  const ss = contextoPlanilla.ss;
+  const lastRow = contextoPlanilla.lastRow;
 
   if (lastRow < 2) {
     Logger.log("No hay sanciones para procesar.");
     return;
   }
 
-  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
-
-  const IDX = obtenerIdxPlanilla_(allData[0]);
-
-  const rows = allData.slice(1);
+  const allData = contextoPlanilla.allData;
+  const richData = contextoPlanilla.richData;
+  const IDX = contextoPlanilla.IDX;
+  const rows = contextoPlanilla.rows;
   const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
 
   const mapaCorreos = leerMapaCorreosApartamentos_();
@@ -2659,147 +2548,6 @@ function getValorSancionPorTipo_(tipoVehiculo) {
   return 0;
 }
 
-function construirHtmlCorreoSancionesTest_(data) {
-  const fechaTexto = obtenerFechaComunicacion_();
-
-  let resumenPlacasHtml = `
-    <table style="border-collapse: collapse; width: 100%; max-width: 650px; font-size: 14px; margin: 16px 0;">
-      <tr>
-        <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Placa</th>
-        <th style="border: 1px solid #ccc; padding: 8px; text-align: left;">Tipo</th>
-        <th style="border: 1px solid #ccc; padding: 8px; text-align: center;">Días / registros</th>
-        <th style="border: 1px solid #ccc; padding: 8px; text-align: right;">Valor sanción</th>
-      </tr>
-  `;
-
-  data.resumenPlacas.forEach(function(item) {
-    resumenPlacasHtml += `
-      <tr>
-        <td style="border: 1px solid #ccc; padding: 8px;">${escapeHtml_(item.placa)}</td>
-        <td style="border: 1px solid #ccc; padding: 8px;">${escapeHtml_(item.tipoVehiculo)}</td>
-        <td style="border: 1px solid #ccc; padding: 8px; text-align: center;">${item.cantidad}</td>
-        <td style="border: 1px solid #ccc; padding: 8px; text-align: right;"><strong>${formatCOP_(item.valorTotal)}</strong></td>
-      </tr>
-    `;
-  });
-
-  resumenPlacasHtml += "</table>";
-
-  const placasTexto = data.resumenPlacas.map(function(item) {
-    return item.placa;
-  }).join(", ");
-
-  const diasTexto = data.cantidad;
-
-  return `
-    <div style="font-family: Arial, sans-serif; color: #222; line-height: 1.55; font-size: 14px; max-width: 760px;">
-      <p><strong>Itagüí, ${fechaTexto}</strong></p>
-
-      <p>
-        Señor(a):<br>
-        <strong>Copropietario(a) / Residente</strong><br>
-        Apartamento: <strong>${escapeHtml_(data.apartamento)}</strong>
-      </p>
-
-      <p>
-        <strong>Asunto:</strong> Notificación de sanción por uso indebido del parqueadero de visitantes
-      </p>
-
-      <p>Cordial saludo,</p>
-
-      <p>
-        La administración de <strong>Club Residencial Bulevar Verde</strong> se permite informar que,
-        de acuerdo con la verificación realizada por el personal de seguridad y los registros de control
-        de la copropiedad, se evidenció que el/los vehículo(s) identificado(s) con placa(s)
-        <strong>${escapeHtml_(placasTexto)}</strong> permaneció/permanecieron estacionado(s) en el
-        parqueadero de visitantes durante <strong>${escapeHtml_(diasTexto)}</strong> días/registros,
-        incumpliendo la reglamentación establecida para el uso de dichas zonas comunes.
-      </p>
-
-      <p>
-        La anterior conducta constituye un incumplimiento de las disposiciones internas de la copropiedad,
-        en especial de lo establecido en el <strong>Artículo 40 – Obligaciones de los propietarios o residentes,
-        numeral 20</strong>, el cual dispone:
-      </p>
-
-      <blockquote style="border-left: 4px solid #ccc; margin: 12px 0; padding: 8px 14px; color: #444;">
-        "En general, someterse a las normas del presente reglamento y a las decisiones válidamente adoptadas
-        por la Asamblea General de Propietarios, el Consejo de Administración y el Administrador."
-      </blockquote>
-
-      <p>
-        Teniendo en cuenta que el reglamento de uso de parqueaderos de visitantes fue debidamente aprobado
-        y comunicado por los órganos de administración de la copropiedad, su incumplimiento genera la aplicación
-        de las medidas correctivas y sancionatorias correspondientes.
-      </p>
-
-      <p>
-        En consecuencia, se impone una sanción pecuniaria conforme al siguiente resumen:
-      </p>
-
-      <table style="border-collapse: collapse; margin: 16px 0; max-width: 650px;">
-        <tr>
-          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>Total sanciones</strong></td>
-          <td style="padding: 8px 12px; border: 1px solid #ccc;">${data.cantidad}</td>
-        </tr>
-      </table>
-
-      ${resumenPlacasHtml}
-
-      <table style="border-collapse: collapse; margin: 16px 0; max-width: 650px;">
-        <tr>
-          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>Valor total a pagar</strong></td>
-          <td style="padding: 8px 12px; border: 1px solid #ccc;"><strong>${formatCOP_(data.valorTotal)}</strong></td>
-        </tr>
-      </table>
-
-      <p>
-        Esta sanción será cargada y reflejada en la factura de administración correspondiente al siguiente
-        período de facturación.
-      </p>
-
-      <p>
-        No obstante, en garantía del derecho constitucional al debido proceso, se concede un término de
-        <strong>cinco (5) días hábiles</strong> contados a partir de la recepción de la presente comunicación
-        para que presente por escrito los respectivos descargos, aporte las pruebas que considere pertinentes
-        y ejerza su derecho de defensa y contradicción.
-      </p>
-
-      <p>
-        Los descargos deberán ser remitidos al correo electrónico de la administración:
-        <a href="mailto:bulevarverdeadmon@gmail.com">bulevarverdeadmon@gmail.com</a>
-      </p>
-
-      <p>
-        Para ver el detalle de sus sanciones ingrese al siguiente enlace:<br>
-        <a href="${URL_CONSULTA_SANCIONES}" target="_blank">${URL_CONSULTA_SANCIONES}</a>
-      </p>
-
-      <p>
-        En caso de no presentar descargos dentro del término establecido, se entenderá que acepta los hechos
-        aquí expuestos y la sanción impuesta quedará en firme, procediéndose a su aplicación en la facturación
-        correspondiente.
-      </p>
-
-      <p>
-        La copropiedad es el hogar de más de 880 familias y el cumplimiento de las normas contribuye al orden,
-        la convivencia, la adecuada utilización de las zonas comunes, la seguridad y la valorización de nuestro
-        conjunto residencial.
-      </p>
-
-      <p>
-        Sin otro particular, agradecemos su atención y colaboración.
-      </p>
-
-      <p>
-        Cordialmente,<br><br>
-        <strong>ADMINISTRACIÓN</strong><br>
-        <strong>CLUB RESIDENCIAL BULEVAR VERDE</strong>
-      </p>
-    </div>
-  `;
-}
-
 function agruparSancionesPorPlaca_(sanciones) {
   const mapa = {};
 
@@ -3152,7 +2900,7 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
     });
 
     const dominantes = placas.filter(function(item) {
-      return item.cantidad >= MIN_REGISTROS_PLACA_DOMINANTE;
+      return item.cantidad >= MIN_REGISTROS_PARA_CORREGIR;
     });
 
     const sospechosas = placas.filter(function(item) {
@@ -3252,8 +3000,8 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
 
         const puedeCorregirAuto =
           !motivoNoCorreccion &&
-          mejorCandidato.confianza >= MIN_CONFIANZA_PLACA_SIMILAR_AUTO &&
-          mejorCandidato.registrosPlacaSugerida >= MIN_REGISTROS_PLACA_DOMINANTE &&
+          mejorCandidato.confianza >= UMBRAL_MAYORIA &&
+          mejorCandidato.registrosPlacaSugerida >= MIN_REGISTROS_PARA_CORREGIR &&
           (
             mejorCandidato.tipoSimilitud === "TRANSPOSICION_SIMPLE" ||
             mejorCandidato.tipoSimilitud === "DIFERENCIA_BAJA"
@@ -3471,12 +3219,12 @@ function esTransposicionSimple_(a, b) {
 }
 
 function obtenerMotivoNoCorreccionPlacaSimilar_(item) {
-  if (item.confianza < MIN_CONFIANZA_PLACA_SIMILAR_AUTO) {
+  if (item.confianza < UMBRAL_MAYORIA) {
     return "Confianza menor al mínimo requerido: " +
       Math.round(item.confianza * 10000) / 100 + "%";
   }
 
-  if (item.registrosPlacaSugerida < MIN_REGISTROS_PLACA_DOMINANTE) {
+  if (item.registrosPlacaSugerida < MIN_REGISTROS_PARA_CORREGIR) {
     return "La placa dominante no tiene suficientes registros.";
   }
 
@@ -3595,26 +3343,19 @@ function convertirDetalleNotificacionDebidoProcesoATexto_(sanciones) {
 }
 
 function prepararResumenNotificacionesDebidoProceso() {
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const sheet = ss.getSheetByName(SHEET_PLANILLA);
-
-  if (!sheet) {
-    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
-  }
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
+  const contextoPlanilla = leerPlanillaSanciones_({ includeRichText: true });
+  const ss = contextoPlanilla.ss;
+  const lastRow = contextoPlanilla.lastRow;
 
   if (lastRow < 2) {
     Logger.log("No hay registros para procesar.");
     return;
   }
 
-  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
-
-  const IDX = obtenerIdxPlanilla_(allData[0]);
-  const rows = allData.slice(1);
+  const allData = contextoPlanilla.allData;
+  const richData = contextoPlanilla.richData;
+  const IDX = contextoPlanilla.IDX;
+  const rows = contextoPlanilla.rows;
 
   const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
   const mapaCorreos = leerMapaCorreosApartamentos_();
@@ -3654,16 +3395,18 @@ function prepararResumenNotificacionesDebidoProceso() {
       const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(apto)];
 
       const yaNotificado = !!mapaNotificados[clave];
+
+      if (yaNotificado) {
+        return null;
+      }
+
       const placasDetectadas = obtenerPlacasTextoDesdeSanciones_(item.sanciones);
       const detalle = convertirDetalleNotificacionDebidoProcesoATexto_(item.sanciones);
 
       let estado = "";
       let observaciones = "";
 
-      if (yaNotificado) {
-        estado = "YA_NOTIFICADO";
-        observaciones = "No se notifica. Ya existe registro previo de notificación de debido proceso.";
-      } else if (!correoInfo || !correoInfo.email) {
+      if (!correoInfo || !correoInfo.email) {
         estado = "SIN_CORREO";
         observaciones = "No se encontró correo para este apartamento.";
       } else {
@@ -3683,6 +3426,9 @@ function prepararResumenNotificacionesDebidoProceso() {
         clave,
         observaciones
       ];
+    })
+    .filter(function(row) {
+      return !!row;
     });
 
   if (values.length > 0) {
@@ -3923,134 +3669,6 @@ function enviarNotificacionesDebidoProceso() {
 
   Logger.log("Notificaciones debido proceso enviadas: " + enviados);
   Logger.log("Omitidas: " + omitidos);
-}
-
-function testEnviarNotificacionDebidoProcesoApto1029() {
-  const APTO_TEST = "1029";
-
-  // PRUEBA SEGURA:
-  // false = envía al consejo, no al residente.
-  // true = envía al correo real del apartamento.
-  const ENVIAR_AL_CORREO_REAL_APTO = false;
-
-  const CORREO_PRUEBA = "consejo.bulevarverde@gmail.com";
-  const REPLY_TO = "bulevarverdeadmon@gmail.com";
-
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const sheet = ss.getSheetByName(SHEET_PLANILLA);
-
-  if (!sheet) {
-    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
-  }
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-
-  if (lastRow < 2) {
-    throw new Error("No hay registros para procesar.");
-  }
-
-  const allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const richData = sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues();
-
-  const IDX = obtenerIdxPlanilla_(allData[0]);
-  const rows = allData.slice(1);
-
-  const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
-
-  const aptoNorm = normalizeApto_(APTO_TEST);
-
-  const registrosApto = registros.filter(function(reg) {
-    return reg.aptoNorm === aptoNorm;
-  });
-
-  if (registrosApto.length === 0) {
-    throw new Error("No se encontraron registros para el apartamento " + APTO_TEST);
-  }
-
-  const mapaCorreos = leerMapaCorreosApartamentos_();
-  const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(APTO_TEST)];
-
-  if (!correoInfo || !correoInfo.email) {
-    throw new Error("No se encontró correo para el apartamento " + APTO_TEST);
-  }
-
-  const placasDetectadas = obtenerPlacasTextoDesdeRegistros_(registrosApto);
-  const detalleRegistros = convertirDetalleNotificacionDebidoProcesoATexto_(registrosApto);
-
-  const emailDestino = ENVIAR_AL_CORREO_REAL_APTO
-    ? correoInfo.email
-    : CORREO_PRUEBA;
-
-  const subject = "PRUEBA - Notificación preventiva por uso indebido del parqueadero de visitantes - Apto " + APTO_TEST;
-
-  const dataCorreo = {
-      apartamento: APTO_TEST,
-      apartamentoNorm: normalizeApto_(APTO_TEST),
-      email: emailDestino,
-      cantidadRegistros:  registrosApto.length,
-      placasDetectadas: placasDetectadas,
-      detalleRegistros: detalleRegistros
-    };
-
-    const htmlBody = construirHtmlNotificacionDebidoProceso_(dataCorreo);
-
-  Logger.log("=== TEST NOTIFICACIÓN DEBIDO PROCESO APTO " + APTO_TEST + " ===");
-  Logger.log("Correo real apto: " + correoInfo.email);
-  Logger.log("Correo destino prueba: " + emailDestino);
-  Logger.log("Cantidad registros: " + registrosApto.length);
-  Logger.log("Placas detectadas: " + placasDetectadas);
-
-  MailApp.sendEmail({
-    to: emailDestino,
-    replyTo: REPLY_TO,
-    subject: subject,
-    htmlBody: htmlBody,
-    name: "Administración Bulevar Verde"
-  });
-
-  Logger.log("Correo de prueba enviado correctamente.");
-
-  registrarBitacoraNotificacionDebidoProceso_({
-    apartamento: APTO_TEST,
-    emailDestino: emailDestino,
-    emailRealApto: correoInfo.email,
-    placasDetectadas: placasDetectadas,
-    cantidadRegistros: registrosApto.length,
-    detalleRegistros: detalleRegistros,
-    estado: ENVIAR_AL_CORREO_REAL_APTO ? "ENVIADO" : "PRUEBA_INTERNA",
-    asunto: subject,
-    plantillaNotificacion: PLANTILLA_NOTIFICACION_DEBIDO_PROCESO,
-    observaciones: ENVIAR_AL_CORREO_REAL_APTO
-      ? "Notificación formal enviada al correo real del apartamento."
-      : "Prueba interna enviada al consejo. No debe bloquear notificación formal futura.",
-    dryRun: ENVIAR_AL_CORREO_REAL_APTO ? "NO" : "SI",
-    version: "V1"
-  });
-
-}
-
-function obtenerPlacasTextoDesdeRegistros_(registros) {
-  const mapa = {};
-
-  registros.forEach(function(reg) {
-    const placa = reg.placaNorm || normalizePlaca_(reg.placa);
-    if (placa) mapa[placa] = true;
-  });
-
-  return Object.keys(mapa).join(", ");
-}
-
-function convertirDetalleNotificacionDebidoProcesoATexto_(registros) {
-  const resumen = agruparSancionesPorPlaca_(registros);
-
-  return resumen.map(function(item) {
-    return [
-      item.placa,
-      item.tipoVehiculo,
-      item.cantidad + " registro(s)"
-    ].join(" | ");
-  }).join("\n");
 }
 
 function construirClaveNotificacionDebidoProceso_(apto) {
