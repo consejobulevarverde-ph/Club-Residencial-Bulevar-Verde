@@ -547,6 +547,7 @@ function buildAvailabilitySlots_(bien, fecha, config) {
   }
 
   const reservations = getBlockingReservationsForBienAndDate_(bien.BienID, fecha);
+  logBlockingReservations_(bien.BienID, fecha, reservations);
 
   const slots = [];
   for (let duration = minDuration; duration <= maxDuration; duration++) {
@@ -709,8 +710,14 @@ function getBlockingReservationsForBienAndDate_(bienId, fechaReserva) {
       const horario = safeTrim_(row['Horario']);
 
       if (!rowFecha) return null;
-      // Solo excluir reservas canceladas; todas las demás bloquean
-      if (safeTrim_(row['Estado']) === ESTADO_CANCELADA) return null;
+      
+      // LÓGICA DE BLOQUEO DE DISPONIBILIDAD:
+      // - Estado "Cancelada" → NO bloquea (disponible)
+      // - Estado "Pendiente" → SÍ bloquea (no disponible)
+      // - Estado "Confirmado" → SÍ bloquea (no disponible)
+      // - Cualquier otro estado → SÍ bloquea
+      if (estado === ESTADO_CANCELADA) return null;
+      
       if (formatDateYMD_(rowFecha) !== targetDate) return null;
 
       // Match by BienID or Descripcion (case-insensitive)
@@ -744,6 +751,16 @@ function getBlockingReservationsForBienAndDate_(bienId, fechaReserva) {
       };
     })
     .filter(Boolean);
+}
+
+// DEBUG: Función auxiliar para logging de disponibilidad
+function logBlockingReservations_(bienId, fecha, reservations) {
+  if (reservations.length > 0) {
+    Logger.log('Reservas bloqueantes para ' + bienId + ' en ' + formatDateYMD_(fecha) + ':');
+    reservations.forEach(function(r) {
+      Logger.log('  - Fila ' + r.rowIndex + ': Estado=' + r.estado + ', Horario=' + r.horario);
+    });
+  }
 }
 
 /***************************************
@@ -820,6 +837,7 @@ function handleAvailabilityQuery_(e) {
 
       if (tipo === 'SALON') {
         const reservations = getBlockingReservationsForBienAndDate_(bienId, fecha);
+        logBlockingReservations_(bienId, fecha, reservations);
         const openMin = parseTimeToMinutes_(row['HoraApertura'] || config.hora_apertura);
         const closeMin = parseTimeToMinutes_(row['HoraCierre'] || config.hora_cierre);
         
