@@ -440,14 +440,14 @@
                 </div>
 
                 <div class="text-center">
-                    <button class="btn btn-primary btn-lg" onclick="consultarDisponibilidad()">
+                    <button id="btn-consultar-disponibilidad" class="btn btn-primary btn-lg" onclick="consultarDisponibilidad()">
                         <i class="bi bi-search"></i> Consultar disponibilidad
                     </button>
                 </div>
 
                 <div id="loading-spinner" class="text-center py-4">
                     <div class="spinner-border text-success" role="status"></div>
-                    <p class="mt-2 text-muted">Consultando disponibilidad...</p>
+                    <p id="loading-spinner-text" class="mt-2 text-muted">Esta operación tarda aproximadamente 30 segundos.</p>
                 </div>
 
                 <div id="availability-error" class="alert alert-danger d-none mt-3" role="alert">
@@ -521,38 +521,94 @@
 
                 <div class="info-card">
                     <h5><i class="bi bi-info-circle"></i> Información importante</h5>
+                    <ul class="mb-3">
+                        <li>Completa todos los campos requeridos con tu información.</li>
+                        <li>La reserva queda sujeta a aprobación de la administración.</li>
+                        <li>Debes estar al día con las expensas de administración.</li>
+                        <li>Recibirás confirmación por correo electrónico.</li>
+                    </ul>
+                    
+                    <h6><i class="bi bi-credit-card"></i> Aporte de sostenimiento</h6>
+                    <p class="mb-1"><strong>Salones Sociales:</strong> $95.000</p>
                     <ul class="mb-0">
-                        <li>Completa el formulario con los datos de tu reserva.</li>
-                        <li>El campo <strong>Inmueble</strong> debe coincidir con el espacio seleccionado: <strong><span id="info-bien-id"></span></strong></li>
-                        <li>El campo <strong>FechaReserva</strong> debe ser: <strong><span id="info-fecha"></span></strong></li>
-                        <li>El campo <strong>Horario</strong> debe ser: <strong><span id="info-horario"></span></strong></li>
-                        <li>La administración revisará tu solicitud y recibirás confirmación.</li>
+                        <li>Consignar a cuenta Bancolombia 294-000257-81</li>
+                        <li>Enviar comprobante a WhatsApp <a href="https://wa.me/573222289066" target="_blank">+57 322 228 9066</a></li>
+                        <li>Debe realizarse 3 días hábiles antes del evento</li>
                     </ul>
                 </div>
 
-                <div class="text-center mb-4">
-                    <a id="form-external-link" 
-                       href="https://docs.google.com/forms/d/e/1FAIpQLSdQ7tcZMn09g6s3Xzta-nm4q_w43xJJIsFSADb4PkpDbo6YzQ/viewform" 
-                       target="_blank" 
-                       class="btn btn-primary btn-lg">
-                        <i class="bi bi-box-arrow-up-right"></i> Abrir formulario en ventana externa
-                    </a>
-                    <p class="text-muted mt-2"><small>o completa el formulario aquí abajo ↓</small></p>
-                </div>
+                <!-- Formulario de reserva -->
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <form id="reservation-form" class="needs-validation" novalidate>
+                            <div class="mb-3">
+                                <label for="input-nombre" class="form-label">Nombre completo <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="input-nombre" required>
+                                <div class="invalid-feedback">Por favor ingresa tu nombre completo</div>
+                            </div>
 
-                <div class="form-container">
-                    <iframe id="form-iframe"
-                            src="https://docs.google.com/forms/d/e/1FAIpQLSdQ7tcZMn09g6s3Xzta-nm4q_w43xJJIsFSADb4PkpDbo6YzQ/viewform?embedded=true" 
-                            allowfullscreen 
-                            loading="lazy"
-                            title="Formulario de Reserva Club Residencial Bulevar Verde">
-                    </iframe>
-                </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="input-torre" class="form-label">Torre <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="input-torre" required>
+                                        <option value="">Seleccione...</option>
+                                        <option value="T1">Torre 1</option>
+                                        <option value="T2">Torre 2</option>
+                                        <option value="T3">Torre 3</option>
+                                        <option value="T4">Torre 4</option>
+                                        <option value="T8">Torre 8</option>
+                                    </select>
+                                    <div class="invalid-feedback">Por favor selecciona tu torre</div>
+                                </div>
 
-                <div class="text-center mt-4">
-                    <button class="btn btn-outline-secondary" onclick="goToStep(2)">
-                        <i class="bi bi-arrow-left"></i> Volver a seleccionar horario
-                    </button>
+                                <div class="col-md-6 mb-3">
+                                    <label for="input-apto" class="form-label">Apartamento <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="input-apto" placeholder="Ej: 0229, 101, 502" required pattern="[0-9]{3,4}">
+                                    <div class="invalid-feedback">Ingresa el número de apartamento (3 o 4 dígitos)</div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="input-email" class="form-label">Correo electrónico <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="input-email" placeholder="correo@ejemplo.com" required>
+                                <div class="invalid-feedback">Por favor ingresa un correo electrónico válido</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="input-asunto" class="form-label">Motivo / Asunto de la reserva <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="input-asunto" rows="3" placeholder="Describe brevemente el motivo de tu reserva" required maxlength="300"></textarea>
+                                <div class="invalid-feedback">Por favor describe el motivo de tu reserva</div>
+                                <small class="text-muted">Máximo 300 caracteres</small>
+                            </div>
+
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="check-reglamento" required>
+                                <label class="form-check-label" for="check-reglamento">
+                                    Acepto el reglamento de uso de zonas comunes <span class="text-danger">*</span>
+                                </label>
+                                <div class="invalid-feedback">Debes aceptar el reglamento</div>
+                            </div>
+
+                            <div class="form-check mb-4">
+                                <input class="form-check-input" type="checkbox" id="check-habeas-data" required>
+                                <label class="form-check-label" for="check-habeas-data">
+                                    Autorizo el tratamiento de mis datos personales conforme a la Ley 1581 de 2012 <span class="text-danger">*</span>
+                                </label>
+                                <div class="invalid-feedback">Debes autorizar el tratamiento de datos</div>
+                            </div>
+
+                            <div id="form-alerts"></div>
+
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary" onclick="goToStep(2)">
+                                    <i class="bi bi-arrow-left"></i> Volver
+                                </button>
+                                <button type="submit" class="btn btn-primary btn-lg" id="btn-enviar-reserva">
+                                    <i class="bi bi-send"></i> Enviar Reserva
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -585,7 +641,13 @@
 
         // V4 Reservas https://script.google.com/macros/s/AKfycbyxVfCqeZGYH4W59WV1BgwVPxluNKrYVofDM-l_fHBRfcrfVoj_rYYZqlQGjR0OYbou/exec
         // V5 reservas https://script.google.com/macros/s/AKfycbybRiHAhOZaedxLMlcD6UfdcNkSX61NKEsK2GzK1bk8qrTk337A_UtzjPhYrTIH0cnP/exec
-        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbybRiHAhOZaedxLMlcD6UfdcNkSX61NKEsK2GzK1bk8qrTk337A_UtzjPhYrTIH0cnP/exec';
+        // V6 reservas https://script.google.com/macros/s/AKfycbyPQxs4FhxS1hfhaNgKrpK8GztuLIBmKovrTQZHKg3oqGSVKKxSTPDDoKHLPg3sTj9o/exec
+        // V7 reservas https://script.google.com/macros/s/AKfycbwAlRD_t21pA177n_Pglul_pqFuKz3VTCFHxkNpmRK5-PpqRYqSJ1id-ngH4_i74Vn1/exec
+        // V8 reservas https://script.google.com/macros/s/AKfycbyz1Pg9SBVxlf1Q3JXDrY4MCDWgsJ-Ii8tnG24PgMUxOryW1RzfWwuKfYQmaSTpZ4s-/exec
+        // V9 reservas https://script.google.com/macros/s/AKfycbx1rji5U_gehhvv8P0My-EHbA0uvbdqrPL0IkPlM47U30eo8n2E-LOPMRFmbj9Bq7in/exec
+        // V10 reservas https://script.google.com/macros/s/AKfycby9rVHVn99iFccRb_SGZwDJZPhsG4mHvlwln23hYNcNY_kmHq5yyYlDwY2Rn17ufcE0/exec
+        // V11 reservas https://script.google.com/macros/s/AKfycbzAlz5pHzVKibNk3TAa1tVLW_KD61CSxTi2Iia_tmJKMSlb8BEl7W8SCMNfMIslcr4Y/exec
+        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzAlz5pHzVKibNk3TAa1tVLW_KD61CSxTi2Iia_tmJKMSlb8BEl7W8SCMNfMIslcr4Y/exec';
 
         let state = {
             selectedDate: null,
@@ -593,6 +655,8 @@
             selectedBien: null,
             selectedSlot: null
         };
+
+        var loadingCountdownTimer = null;
 
         // ========== INICIALIZACIÓN ==========
 
@@ -627,6 +691,15 @@
         function loadAvailability() {
             var spinner = document.getElementById('loading-spinner');
             var errorEl = document.getElementById('availability-error');
+            var consultButton = document.getElementById('btn-consultar-disponibilidad');
+
+            // Deshabilitar botón
+            if (consultButton) {
+                consultButton.disabled = true;
+            }
+
+            // Iniciar contador
+            startLoadingCountdown_();
 
             spinner.classList.add('show');
             errorEl.classList.add('d-none');
@@ -636,7 +709,11 @@
             fetch(url)
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
+                    stopLoadingCountdown_();
                     spinner.classList.remove('show');
+                    if (consultButton) {
+                        consultButton.disabled = false;
+                    }
                     if (data.ok) {
                         state.availability = data;
 
@@ -653,7 +730,11 @@
                     }
                 })
                 .catch(function() {
+                    stopLoadingCountdown_();
                     spinner.classList.remove('show');
+                    if (consultButton) {
+                        consultButton.disabled = false;
+                    }
                     document.getElementById('availability-error-msg').textContent =
                         'Error de conexión. Intenta de nuevo.';
                     errorEl.classList.remove('d-none');
@@ -859,18 +940,21 @@
 
             if (bien.Tipo === 'SALON') {
                 horarioDisplay = 'Día completo';
+                // Usar el horario del bien (respeta horario de apertura/cierre)
+                // Fallback seguro: día completo estándar (salones NO tienen límite de duración)
                 horarioValue = bien.horario || '08:00-23:59';
             } else {
                 horarioDisplay = state.selectedSlot.label;
                 horarioValue = state.selectedSlot.inicio + '-' + state.selectedSlot.fin;
             }
 
+            // Actualizar resumen
             document.getElementById('summary-bien').textContent = bien.Descripcion || bien.BienID;
             document.getElementById('summary-fecha').textContent = fechaDisplay;
             document.getElementById('summary-horario').textContent = horarioDisplay;
-            document.getElementById('info-bien-id').textContent = bien.BienID;
-            document.getElementById('info-fecha').textContent = state.selectedDate;
-            document.getElementById('info-horario').textContent = horarioValue;
+
+            // Guardar horario para el envío del formulario
+            state.horarioValue = horarioValue;
 
             goToStep(3);
         }
@@ -892,6 +976,242 @@
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
+
+        // ========== ENVÍO DE RESERVA ==========
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var form = document.getElementById('reservation-form');
+            if (form) {
+                form.addEventListener('submit', handleFormSubmit);
+            }
+        });
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            var form = event.target;
+            
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+
+            submitReservation(form);
+        }
+
+        function submitReservation(form) {
+            var btnSubmit = document.getElementById('btn-enviar-reserva');
+            var alertsDiv = document.getElementById('form-alerts');
+            
+            // Deshabilitar botón
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
+            alertsDiv.innerHTML = '';
+
+            // Obtener horario
+            var horarioValue;
+            var bien = state.selectedBien;
+            
+            if (bien.Tipo === 'SALON') {
+                // Salones: usar horario del bien o fallback de día completo
+                // NO hay restricción de duración para salones
+                horarioValue = bien.horario || '08:00-23:59';
+            } else {
+                horarioValue = state.selectedSlot.inicio + '-' + state.selectedSlot.fin;
+            }
+
+            // Construir payload
+            var payload = {
+                requestId: generateRequestId(),
+                bienId: bien.BienID,
+                fecha: state.selectedDate,
+                horario: horarioValue,
+                torre: document.getElementById('input-torre').value,
+                apto: document.getElementById('input-apto').value,
+                nombre: document.getElementById('input-nombre').value,
+                email: document.getElementById('input-email').value,
+                asunto: document.getElementById('input-asunto').value,
+                aceptaReglamento: document.getElementById('check-reglamento').checked,
+                aceptaTratamientoDatos: document.getElementById('check-habeas-data').checked
+            };
+
+            // Enviar POST con no-cors (evita preflight OPTIONS que falla en Google Apps Script)
+            // Luego verificamos si se creó consultando por requestId
+            console.log('Enviando reserva con requestId:', payload.requestId);
+            
+            fetch(WEBAPP_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(function() {
+                // Con no-cors no podemos leer la respuesta directamente
+                // Esperamos 4 segundos y verificamos si se creó
+                console.log('POST enviado, esperando para verificar...');
+                
+                alertsDiv.innerHTML = 
+                    '<div class="alert alert-info" role="alert">' +
+                    '<div class="spinner-border spinner-border-sm me-2" role="status"></div>' +
+                    'Procesando tu reserva, por favor espera...' +
+                    '</div>';
+                
+                return new Promise(function(resolve) {
+                    setTimeout(resolve, 4000);
+                });
+            })
+            .then(function() {
+                // Verificar si la reserva se creó consultando por requestId
+                console.log('Verificando creación de reserva...');
+                return fetch(WEBAPP_URL + '?action=verifyReservation&requestId=' + encodeURIComponent(payload.requestId));
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                console.log('Verificación:', data);
+                
+                if (data && data.ok && data.exists) {
+                    // Reserva creada exitosamente
+                    alertsDiv.innerHTML = 
+                        '<div class="alert alert-success" role="alert">' +
+                        '<i class="bi bi-check-circle-fill me-2"></i>' +
+                        '<strong>¡Solicitud de reserva recibida exitosamente!</strong><br>' +
+                        'ID de reserva: <strong>' + (data.idReserva || payload.requestId) + '</strong><br>' +
+                        'Estado: <strong>' + (data.estado || 'Pendiente') + '</strong><br><br>' +
+                        'Recibirás un correo de confirmación con los detalles.<br><br>' +
+                        '<strong>Próximos pasos:</strong><br>' +
+                        '1️⃣ Realiza el pago correspondiente a la cuenta bancaria del conjunto<br>' +
+                        '2️⃣ La administración verificará tu pago<br>' +
+                        '3️⃣ Te notificaremos cuando tu reserva sea <strong>Confirmada</strong>' +
+                        '</div>';
+                    
+                    // Deshabilitar formulario pero mantener los datos
+                    // NO hacer form.reset() para que el usuario vea los datos enviados
+                    form.querySelectorAll('input, select, textarea, button').forEach(function(el) {
+                        el.disabled = true;
+                    });
+                    
+                    // Ocultar botón de "Enviar Reserva"
+                    btnSubmit.style.display = 'none';
+                    
+                    // Crear botón "Crear Otra Reserva"
+                    var btnOtraReserva = document.createElement('button');
+                    btnOtraReserva.type = 'button';
+                    btnOtraReserva.className = 'btn btn-primary btn-lg';
+                    btnOtraReserva.innerHTML = '<i class="bi bi-plus-circle"></i> Crear Otra Reserva';
+                    btnOtraReserva.onclick = function() {
+                        window.location.reload();
+                    };
+                    
+                    // Insertar el nuevo botón donde estaba el botón de enviar
+                    btnSubmit.parentNode.appendChild(btnOtraReserva);
+                } else if (data && data.ok && !data.exists) {
+                    // Reserva NO creada - probablemente error de validación
+                    var errorMsg = data.error || 'La reserva no pudo ser procesada';
+                    
+                    alertsDiv.innerHTML = 
+                        '<div class="alert alert-danger" role="alert">' +
+                        '<i class="bi bi-x-circle-fill me-2"></i>' +
+                        '<strong>Error en la reserva</strong><br>' +
+                        errorMsg + '<br><br>' +
+                        '<small>Si el problema persiste, contacta a la administración.</small>' +
+                        '</div>';
+                    
+                    // Re-habilitar botón para que pueda corregir
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar Reserva';
+                } else {
+                    // No se pudo verificar la creación (error de red o similar)
+                    alertsDiv.innerHTML = 
+                        '<div class="alert alert-warning" role="alert">' +
+                        '<i class="bi bi-exclamation-triangle-fill me-2"></i>' +
+                        '<strong>Solicitud enviada</strong><br>' +
+                        'Tu solicitud fue enviada (ID: ' + payload.requestId + ').<br>' +
+                        'No pudimos confirmar inmediatamente su recepción, pero el sistema la ha procesado.<br>' +
+                        'Recibirás un correo de confirmación si la reserva fue exitosa.<br>' +
+                        'Si no recibes confirmación en 24 horas, contacta a la administración.' +
+                        '</div>';
+                    
+                    // Re-habilitar botón por si quiere reenviar
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar Reserva';
+                }
+                
+                // Scroll al mensaje
+                alertsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            })
+            .catch(function(error) {
+                console.error('Error en el proceso de reserva:', error);
+                
+                alertsDiv.innerHTML = 
+                    '<div class="alert alert-warning" role="alert">' +
+                    '<i class="bi bi-exclamation-triangle-fill me-2"></i>' +
+                    '<strong>Solicitud enviada</strong><br>' +
+                    'Tu solicitud fue enviada (ID: ' + payload.requestId + ').<br>' +
+                    'Hubo un problema verificando su estado, pero el sistema la ha procesado.<br>' +
+                    'Recibirás un correo de confirmación si la reserva fue exitosa.<br>' +
+                    'Si no recibes confirmación en 24 horas, contacta a la administración.' +
+                    '</div>';
+                
+                // Re-habilitar botón
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar Reserva';
+                
+                // Scroll al mensaje
+                alertsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        }
+
+        function generateRequestId() {
+            // Generar UUID v4 simplificado
+            var timestamp = Date.now().toString(36);
+            var randomPart = Math.random().toString(36).substring(2, 15);
+            return 'REQ-' + timestamp + '-' + randomPart;
+        }
+
+        // ========== CONTADOR DE CARGA ==========
+
+        function startLoadingCountdown_() {
+            stopLoadingCountdown_();
+
+            var elapsedSeconds = 0;
+            updateLoadingSpinnerText_(elapsedSeconds);
+
+            loadingCountdownTimer = setInterval(function () {
+                elapsedSeconds += 1;
+                updateLoadingSpinnerText_(elapsedSeconds);
+            }, 1000);
+        }
+
+        function stopLoadingCountdown_() {
+            if (loadingCountdownTimer) {
+                clearInterval(loadingCountdownTimer);
+                loadingCountdownTimer = null;
+            }
+
+            updateLoadingSpinnerText_();
+        }
+
+        function updateLoadingSpinnerText_(elapsedSeconds) {
+            var textEl = document.getElementById('loading-spinner-text');
+            if (!textEl) {
+                return;
+            }
+
+            if (typeof elapsedSeconds !== 'number') {
+                textEl.textContent = 'Esta operación tarda aproximadamente 30 segundos.';
+                return;
+            }
+
+            textEl.textContent =
+                'Esta operación tarda aproximadamente 30 segundos. Tiempo transcurrido: ' +
+                elapsedSeconds +
+                ' s.';
+        }
 
         // ========== UTILIDADES ==========
 

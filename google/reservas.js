@@ -5,16 +5,23 @@ const SHEET_RESPUESTAS = 'Respuestas de formulario 1';
 const SHEET_BIENES = 'Bienes';
 const SHEET_CONFIG = 'Config';
 
-// Estados
-const ESTADO_PENDIENTE = 'Pendiente';
-const ESTADO_APROBADA = 'Aprobada';
-const ESTADO_CONFIRMADA = 'Confirmado';
+// Estados válidos del sistema
+const ESTADO_PENDIENTE = 'Pendiente';        // Estado inicial - requiere verificación de pago
+// const ESTADO_APROBADA = 'Aprobada';        // DEPRECADO - Ya no se usa en el flujo
+const ESTADO_CONFIRMADA = 'Confirmado';       // Después de verificar pago manualmente
 const ESTADO_RECHAZADA_REGLA = 'Rechazada por regla';
 const ESTADO_RECHAZADA_CONFLICTO = 'Rechazada por conflicto';
 const ESTADO_CANCELADA = 'Cancelada';
 
 // Estado que NO bloquea disponibilidad (solo Cancelada)
 const ESTADO_NO_BLOQUEANTE = ESTADO_CANCELADA;
+
+// Origenes de reserva
+const ORIGEN_GOOGLE_FORM = 'GOOGLE_FORM';
+const ORIGEN_WEB_POST = 'WEB_POST';
+
+// Control de migraciones
+const RESERVATION_MIGRATION_DRY_RUN = false; // Cambiar a true para modo diagnóstico
 
 /***************************************
  * WEB APP - CONSULTA DISPONIBILIDAD
@@ -44,6 +51,34 @@ function doGet(e) {
     // Disponibilidad de todos los bienes para una fecha
     if (action === 'availability') {
       return handleAvailabilityQuery_(e);
+    }
+
+    // Verificar si una reserva existe por requestId
+    if (action === 'verifyReservation') {
+      const requestId = getParam_(e, 'requestId');
+      if (!requestId) {
+        return jsonOutput_({
+          ok: false,
+          error: 'requestId es requerido'
+        });
+      }
+
+      const reservation = findReservationByRequestId_(requestId);
+      if (reservation) {
+        return jsonOutput_({
+          ok: true,
+          exists: true,
+          idReserva: reservation.idReserva,
+          estado: reservation.estado,
+          rowIndex: reservation.rowIndex
+        });
+      } else {
+        return jsonOutput_({
+          ok: true,
+          exists: false,
+          message: 'No se encontró reserva con ese requestId'
+        });
+      }
     }
 
     const bienId = getParam_(e, 'bienId');
@@ -107,6 +142,123 @@ function doGet(e) {
 }
 
 /***************************************
+ * WEB APP - CREAR RESERVA (POST)
+ * POST con payload JSON
+ ***************************************/
+function doPost(e) {
+  const ADMIN_EMAIL = 'bulevarverdeadmon@gmail.com';
+  const CC_EMAIL = 'consejo.bulevarverde@gmail.com';
+
+  try {
+    Logger.log('=== doPost INICIO ===');
+    Logger.log('postData: ' + (e.postData ? e.postData.contents : 'null'));
+
+    // Parsear payload
+    let payload;
+    try {
+      payload = JSON.parse(e.postData.contents);
+    } catch (parseError) {
+      return jsonOutput_({
+        ok: false,
+        error: 'Payload JSON inválido: ' + parseError.message
+      });
+    }
+
+    Logger.log('Payload parseado: ' + JSON.stringify(payload));
+
+    // Validar campos obligatorios
+    const requiredFields = ['requestId', 'bienId', 'fecha', 'horario', 'torre', 'apto', 'nombre', 'email', 'asunto'];
+    const missingFields = requiredFields.filter(field => !payload[field]);
+    
+    if (missingFields.length > 0) {
+      return jsonOutput_({
+        ok: false,
+        error: 'Campos obligatorios faltantes: ' + missingFields.join(', ')
+      });
+    }
+
+    // Verificar duplicados por requestId
+    const existingReservation = findReservationByRequestId_(payload.requestId);
+    if (existingReservation) {
+      Logger.log('Reserva duplicada detectada por requestId: ' + payload.requestId);
+      return jsonOutput_({
+        ok: true,
+        idReserva: existingReservation.idReserva,
+        mensaje: 'Reserva ya existe (duplicado evitado)',
+        rowIndex: existingReservation.rowIndex
+      });
+    }
+
+    // Asegurar columnas técnicas
+    ensureReservationTechnicalColumns_();
+
+    // Crear la reserva
+    const result = createReservation_(payload);
+
+    if (!result.ok) {
+      return jsonOutput_(result);
+    }
+
+    // Enviar notificación por correo
+    try {
+      const bien = getBienById_(payload.bienId);
+      const descripcionBien = bien ? bien.Descripcion : payload.bienId;
+
+      const asuntoEmail = '[Bulevar Verde] Nueva Reserva Web - ' + result.idReserva;
+      const cuerpo =
+        'Se ha recibido una nueva solicitud de reserva desde el portal web.\n\n' +
+        'ID de reserva: ' + result.idReserva + '\n' +
+        'Request ID: ' + payload.requestId + '\n\n' +
+        'Datos del solicitante:\n' +
+        'Nombre: ' + payload.nombre + '\n' +
+        'Torre: ' + payload.torre + '\n' +
+        'Apartamento: ' + payload.apto + '\n' +
+        'Correo electrónico: ' + payload.email + '\n\n' +
+        'Detalle de la reserva:\n' +
+        'Inmueble: ' + descripcionBien + '\n' +
+        'Asunto: ' + payload.asunto + '\n' +
+        'Fecha: ' + payload.fecha + '\n' +
+        'Horario: ' + payload.horario + '\n\n' +
+        'Estado: ' + result.estado + '\n' +
+        'Observaciones: ' + result.observaciones + '\n\n' +
+        'Acepta Reglamento: ' + (payload.aceptaReglamento ? 'SI' : 'NO') + '\n' +
+        'Acepta Tratamiento de Datos: ' + (payload.aceptaTratamientoDatos ? 'SI' : 'NO') + '\n\n' +
+        'Fecha de registro: ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + '\n\n' +
+        'Este correo fue generado automáticamente desde el sistema de reservas de Bulevar Verde.';
+
+      MailApp.sendEmail({
+        to: ADMIN_EMAIL,
+        //cc: CC_EMAIL,
+        subject: asuntoEmail,
+        body: cuerpo
+      });
+
+      Logger.log('Correo de notificación enviado');
+    } catch (emailError) {
+      Logger.log('Error enviando correo: ' + emailError.message);
+      // No fallar la reserva por error de correo
+    }
+
+    return jsonOutput_({
+      ok: true,
+      idReserva: result.idReserva,
+      estado: result.estado,
+      observaciones: result.observaciones,
+      rowIndex: result.rowIndex,
+      mensaje: 'Reserva creada exitosamente'
+    });
+
+  } catch (error) {
+    Logger.log('Error en doPost: ' + error.message);
+    Logger.log('Stack: ' + error.stack);
+    return jsonOutput_({
+      ok: false,
+      error: error.message || String(error)
+    });
+  }
+}
+
+/***************************************
  * TRIGGER DEL FORM
  * Ejecutar con disparador "Al enviar formulario"
  ***************************************/
@@ -159,7 +311,7 @@ function onFormSubmit(e) {
 
     // Escribir observaciones con ID
     const observacionesCol = getColumnIndex_(headers, 'Observaciones');
-    sheet.getRange(rowIndex, observacionesCol).setValue(idReserva + ' - Pendiente de aprobación');
+    sheet.getRange(rowIndex, observacionesCol).setValue(idReserva + ' - Pendiente de confirmación de pago');
 
     // Enviar correo
     const asuntoEmail = '[Bulevar Verde] Nueva Reserva - ' + idReserva;
@@ -176,7 +328,7 @@ function onFormSubmit(e) {
       'Asunto: ' + asunto + '\n' +
       'Fecha: ' + fechaStr + '\n' +
       'Horario: ' + horarioStr + '\n\n' +
-      'Estado: Pendiente de aprobación\n\n' +
+      'Estado: Pendiente de confirmación de pago\n\n' +
       'Fecha de recepción: ' + Utilities.formatDate(fecha, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + '\n\n' +
       'Este correo fue generado automáticamente desde el sistema de reservas de Bulevar Verde.';
 
@@ -360,14 +512,16 @@ function validateReservation_(reservation, config, currentRowIndex) {
     return {
       ok: true,
       estado: ESTADO_PENDIENTE,
-      observaciones: 'Reserva válida. Pendiente de aprobación administrativa.'
+      observaciones: 'Reserva válida. Pendiente de confirmación de pago.'
     };
   }
 
+  // TODAS las reservas web quedan en estado Pendiente
+  // La confirmación es manual después de verificar el pago
   return {
     ok: true,
-    estado: ESTADO_APROBADA,
-    observaciones: 'Reserva válida y aprobada automáticamente.'
+    estado: ESTADO_PENDIENTE,
+    observaciones: 'Reserva válida. Pendiente de confirmación de pago.'
   };
 }
 
@@ -457,6 +611,14 @@ function validateReservationAgainstBienRules_(slot, durationHours, bien, config)
     };
   }
 
+  // CRÍTICO: Los salones se reservan por día completo, NO requieren validación de duración
+  // Solo validar duración para canchas (reservas por horas)
+  const tipo = safeTrim_(bien.Tipo) || 'CANCHA';
+  if (tipo === 'SALON') {
+    return { ok: true };
+  }
+
+  // Validación de duración solo para CANCHAS
   let minDuration = toNumber_(bien.DuracionMin);
   let maxDuration = toNumber_(bien.DuracionMax);
 
@@ -660,12 +822,23 @@ function handleAvailabilityQuery_(e) {
         const reservations = getBlockingReservationsForBienAndDate_(bienId, fecha);
         const openMin = parseTimeToMinutes_(row['HoraApertura'] || config.hora_apertura);
         const closeMin = parseTimeToMinutes_(row['HoraCierre'] || config.hora_cierre);
+        
+        // Validar que los horarios sean válidos
+        let horarioFinal;
+        if (openMin !== null && closeMin !== null && closeMin > openMin) {
+          horarioFinal = minutesToHHmm_(openMin) + '-' + minutesToHHmm_(closeMin);
+        } else {
+          // Fallback seguro: 6 horas (máximo común para salones)
+          Logger.log('ADVERTENCIA: ' + bienId + ' no tiene horarios válidos, usando fallback 08:00-14:00');
+          horarioFinal = '08:00-14:00';
+        }
+        
         return {
           BienID: bienId,
           Descripcion: descripcion,
           Tipo: tipo,
           disponible: reservations.length === 0,
-          horario: minutesToHHmm_(openMin) + '-' + minutesToHHmm_(closeMin),
+          horario: horarioFinal,
           reservadoPor: reservations.length > 0 ? 'Reservado' : null
         };
       } else {
@@ -762,9 +935,13 @@ function getParam_(e, key) {
 }
 
 function jsonOutput_(obj) {
-  return ContentService
+  const output = ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+  
+  // Nota: CORS es manejado automáticamente por Google Apps Script Web Apps
+  // pero el método OPTIONS no es soportado, por eso usamos no-cors + verificación posterior
+  return output;
 }
 
 /***************************************
@@ -886,6 +1063,11 @@ function parseTimeToMinutes_(value) {
 }
 
 function minutesToHHmm_(minutes) {
+  // Validar entrada
+  if (minutes === null || minutes === undefined || isNaN(minutes)) {
+    return null;
+  }
+  
   const hh = Math.floor(minutes / 60);
   const mm = minutes % 60;
   return pad2_(hh) + ':' + pad2_(mm);
@@ -1177,4 +1359,456 @@ function getInmuebleCorto_(inmueble) {
   }
 
   return inmueble;
+}
+
+/***************************************
+ * FUNCIONES POST - CREACIÓN DE RESERVAS
+ ***************************************/
+
+/**
+ * Crea una reserva desde payload POST
+ * Mantiene compatibilidad total con estructura histórica A:K
+ * Agrega columnas técnicas L:Q
+ */
+function createReservation_(payload) {
+  const sheet = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+  const headers = getHeaders_(sheet);
+  const config = getConfigMap_();
+
+  // Resolver bien por BienID
+  const bien = getBienById_(payload.bienId);
+  if (!bien) {
+    return {
+      ok: false,
+      error: `No existe el bien ${payload.bienId}`
+    };
+  }
+
+  if (!toBoolean_(bien.Activo)) {
+    return {
+      ok: false,
+      error: `El bien ${payload.bienId} no está activo`
+    };
+  }
+
+  // Normalizar fecha
+  const fechaReserva = parseDateInput_(payload.fecha);
+  if (!fechaReserva) {
+    return {
+      ok: false,
+      error: 'Fecha inválida. Usa formato YYYY-MM-DD'
+    };
+  }
+
+  // Validar anticipación
+  const advanceCheck = validateAdvanceDays_(fechaReserva, config);
+  if (!advanceCheck.ok) {
+    return {
+      ok: false,
+      error: advanceCheck.message
+    };
+  }
+
+  // Normalizar torre (T1, T2, T3, T4, T8)
+  const torre = normalizeTorre_(payload.torre);
+
+  // IMPORTANTE: Apartamento como texto para preservar ceros iniciales (0229)
+  const apto = safeTrim_(payload.apto);
+
+  // Parsear horario
+  const slotParsed = parseHorario_(payload.horario);
+  if (!slotParsed.ok) {
+    return {
+      ok: false,
+      error: slotParsed.message
+    };
+  }
+
+  const durationHours = (slotParsed.endMinutes - slotParsed.startMinutes) / 60;
+
+  // Validar reglas del bien
+  const ruleCheck = validateReservationAgainstBienRules_(slotParsed, durationHours, bien, config);
+  if (!ruleCheck.ok) {
+    return {
+      ok: false,
+      error: ruleCheck.message
+    };
+  }
+
+  // Validar máximo de reservas activas por apartamento
+  const aptoCheck = validateMaxActiveReservationsPerApto_(apto, null, config);
+  if (!aptoCheck.ok) {
+    return {
+      ok: false,
+      error: aptoCheck.message
+    };
+  }
+
+  // Verificar conflictos de horario
+  const conflict = hasConflict_(payload.bienId, fechaReserva, slotParsed, null);
+  if (conflict.hasConflict) {
+    return {
+      ok: false,
+      error: `Ya existe una reserva en ese horario para ${bien.Descripcion}. Conflicto en fila ${conflict.conflict.rowIndex}.`,
+      estado: ESTADO_RECHAZADA_CONFLICTO
+    };
+  }
+
+  // Generar IDs
+  const idReserva = generateReservationId_();
+  const ahora = new Date();
+
+  // Determinar estado final
+  // TODAS las reservas web quedan en estado Pendiente
+  // La confirmación se realiza manualmente después de verificar el pago bancario
+  const estadoFinal = ESTADO_PENDIENTE;
+  const observacionesFinal = idReserva + ' - Pendiente de confirmación de pago';
+
+  // ESCRITURA DE NUEVA FILA - Compatibilidad con columnas A:K existentes
+  const newRowData = [];
+
+  // A: Marca temporal (fecha/hora actual)
+  newRowData.push(ahora);
+
+  // B: Dirección de correo electrónico
+  newRowData.push(safeTrim_(payload.email));
+
+  // C: Inmueble - IMPORTANTE: Usar Descripcion para compatibilidad histórica
+  newRowData.push(bien.Descripcion);
+
+  // D: Asunto
+  newRowData.push(safeTrim_(payload.asunto));
+
+  // E: FechaReserva (Date object real)
+  newRowData.push(fechaReserva);
+
+  // F: Horario (rango HH:mm-HH:mm)
+  newRowData.push(payload.horario);
+
+  // G: Torre (normalizada: T1, T2, T3, T4, T8)
+  newRowData.push(torre);
+
+  // H: Apto (texto para preservar ceros iniciales)
+  newRowData.push(apto);
+
+  // I: Nombre
+  newRowData.push(safeTrim_(payload.nombre));
+
+  // J: Estado
+  newRowData.push(estadoFinal);
+
+  // K: Observaciones
+  newRowData.push(observacionesFinal);
+
+  // Columnas técnicas L:Q (si existen)
+  const colIdReserva = headers.indexOf('IdReserva');
+  const colRequestId = headers.indexOf('RequestId');
+  const colOrigen = headers.indexOf('OrigenReserva');
+  const colFechaRegistro = headers.indexOf('FechaRegistroSistema');
+  const colAceptaReglamento = headers.indexOf('AceptaReglamento');
+  const colAceptaTratamiento = headers.indexOf('AceptaTratamientoDatos');
+
+  if (colIdReserva >= 0) newRowData[colIdReserva] = idReserva;
+  if (colRequestId >= 0) newRowData[colRequestId] = safeTrim_(payload.requestId);
+  if (colOrigen >= 0) newRowData[colOrigen] = ORIGEN_WEB_POST;
+  if (colFechaRegistro >= 0) newRowData[colFechaRegistro] = ahora;
+  if (colAceptaReglamento >= 0) newRowData[colAceptaReglamento] = payload.aceptaReglamento ? 'SI' : 'NO';
+  if (colAceptaTratamiento >= 0) newRowData[colAceptaTratamiento] = payload.aceptaTratamientoDatos ? 'SI' : 'NO';
+
+  // Escribir fila nueva
+  const lastRow = sheet.getLastRow();
+  const newRowIndex = lastRow + 1;
+  
+  // Escribir solo las columnas necesarias
+  const numCols = Math.max(11, headers.length); // Mínimo A:K (11 columnas)
+  sheet.getRange(newRowIndex, 1, 1, numCols).setValues([newRowData]);
+
+  Logger.log('Reserva creada: ' + idReserva + ' en fila ' + newRowIndex);
+
+  return {
+    ok: true,
+    idReserva: idReserva,
+    estado: estadoFinal,
+    observaciones: observacionesFinal,
+    rowIndex: newRowIndex
+  };
+}
+
+/**
+ * Genera ID único de reserva
+ * Formato: RES-YYYYMMDD-HHmmss
+ */
+function generateReservationId_() {
+  const ahora = new Date();
+  const timestamp = Utilities.formatDate(ahora, Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
+  return 'RES-' + timestamp;
+}
+
+/**
+ * Busca reserva existente por RequestId para evitar duplicados
+ * Retorna { idReserva, rowIndex } o null
+ */
+function findReservationByRequestId_(requestId) {
+  if (!requestId) return null;
+
+  const sheet = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+  const headers = getHeaders_(sheet);
+  
+  const colRequestId = headers.indexOf('RequestId');
+  if (colRequestId === -1) return null; // Columna no existe aún
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+
+  const requestIdColLetter = String.fromCharCode(65 + colRequestId);
+  const requestIdValues = sheet.getRange(requestIdColLetter + '2:' + requestIdColLetter + lastRow).getValues();
+
+  for (let i = 0; i < requestIdValues.length; i++) {
+    if (safeTrim_(requestIdValues[i][0]) === requestId) {
+      const rowIndex = i + 2;
+      
+      // Obtener IdReserva y Estado de esa fila
+      const colIdReserva = headers.indexOf('IdReserva');
+      const colEstado = headers.indexOf('Estado');
+      
+      let idReserva = 'UNKNOWN';
+      let estado = 'UNKNOWN';
+      
+      if (colIdReserva >= 0) {
+        const idReservaValue = sheet.getRange(rowIndex, colIdReserva + 1).getValue();
+        idReserva = safeTrim_(idReservaValue);
+      }
+      
+      if (colEstado >= 0) {
+        const estadoValue = sheet.getRange(rowIndex, colEstado + 1).getValue();
+        estado = safeTrim_(estadoValue);
+      }
+
+      return {
+        idReserva: idReserva,
+        estado: estado,
+        rowIndex: rowIndex
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Asegura que existan las columnas técnicas L:Q
+ * Solo agrega las que faltan, sin modificar datos históricos
+ * Respeta el modo dry-run
+ */
+function ensureReservationTechnicalColumns_() {
+  const sheet = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+  const headers = getHeaders_(sheet);
+
+  const requiredTechnicalColumns = [
+    'IdReserva',
+    'RequestId',
+    'OrigenReserva',
+    'FechaRegistroSistema',
+    'AceptaReglamento',
+    'AceptaTratamientoDatos'
+  ];
+
+  const missingColumns = requiredTechnicalColumns.filter(col => !headers.includes(col));
+
+  if (missingColumns.length === 0) {
+    Logger.log('Todas las columnas técnicas ya existen');
+    return;
+  }
+
+  if (RESERVATION_MIGRATION_DRY_RUN) {
+    Logger.log('[DRY RUN] Se agregarían estas columnas: ' + missingColumns.join(', '));
+    return;
+  }
+
+  // Agregar columnas faltantes al final
+  const lastCol = sheet.getLastColumn();
+  let nextCol = lastCol + 1;
+
+  missingColumns.forEach(colName => {
+    sheet.getRange(1, nextCol).setValue(colName);
+    Logger.log('Columna técnica agregada: ' + colName + ' en columna ' + nextCol);
+    nextCol++;
+  });
+}
+
+/**
+ * Resuelve bien desde valor histórico (puede ser BienID o Descripcion)
+ * Retorna el objeto bien completo o null
+ */
+function resolveBienFromReservationValue_(value) {
+  if (!value) return null;
+
+  const valueNormalized = safeTrim_(value).toUpperCase();
+  
+  // Primero intentar por BienID exacto
+  let bien = getBienById_(value);
+  if (bien) return bien;
+
+  // Luego buscar por descripción
+  const sheet = getSheetByNameOrThrow_(SHEET_BIENES);
+  const headers = getHeaders_(sheet);
+  const data = getDataObjects_(sheet, headers);
+
+  return data.find(row => {
+    const descripcion = safeTrim_(row['Descripcion']).toUpperCase();
+    return descripcion === valueNormalized || descripcion.includes(valueNormalized);
+  }) || null;
+}
+
+/**
+ * Obtiene la descripción de un bien por su BienID
+ * Retorna la descripción o el BienID si no existe
+ */
+function resolveBienDescriptionById_(bienId) {
+  const bien = getBienById_(bienId);
+  return bien ? safeTrim_(bien.Descripcion) : bienId;
+}
+
+/**
+ * Normaliza formato de torre: T1, T2, T3, T4, T8
+ */
+function normalizeTorre_(torre) {
+  if (!torre) return '';
+  
+  const torreStr = safeTrim_(torre).toUpperCase();
+  
+  // Si ya tiene formato correcto
+  if (/^T\d+$/.test(torreStr)) {
+    return torreStr;
+  }
+
+  // Extraer número
+  const match = torreStr.match(/(\d+)/);
+  if (match) {
+    return 'T' + match[1];
+  }
+
+  // Retornar como está si no se puede normalizar
+  return torreStr;
+}
+
+/***************************************
+ * DIAGNÓSTICO - NO MODIFICA DATOS
+ ***************************************/
+
+/**
+ * Función de diagnóstico que muestra la estructura actual
+ * NO modifica ningún dato
+ */
+function diagnosticarEstructuraReservas() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  Logger.log('=== DIAGNÓSTICO ESTRUCTURA RESERVAS ===');
+  Logger.log('Nombre del Spreadsheet: ' + ss.getName());
+  Logger.log('ID: ' + ss.getId());
+  Logger.log('');
+
+  // Listar hojas
+  const sheets = ss.getSheets();
+  Logger.log('Hojas encontradas (' + sheets.length + '):');
+  sheets.forEach(s => {
+    Logger.log('  - ' + s.getName() + ' (Filas: ' + s.getLastRow() + ', Columnas: ' + s.getLastColumn() + ')');
+  });
+  Logger.log('');
+
+  // Analizar hoja de respuestas
+  try {
+    const respuestasSheet = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+    const headers = getHeaders_(respuestasSheet);
+    
+    Logger.log('Hoja: ' + SHEET_RESPUESTAS);
+    Logger.log('Última fila: ' + respuestasSheet.getLastRow());
+    Logger.log('Última columna: ' + respuestasSheet.getLastColumn());
+    Logger.log('Encabezados (' + headers.length + '):');
+    headers.forEach((h, idx) => {
+      const letra = String.fromCharCode(65 + idx);
+      Logger.log('  ' + letra + ': ' + h);
+    });
+    Logger.log('');
+
+    // Contar reservas
+    const totalReservas = respuestasSheet.getLastRow() - 1;
+    Logger.log('Total de reservas: ' + totalReservas);
+
+    // Verificar columnas técnicas
+    const technicalCols = ['IdReserva', 'RequestId', 'OrigenReserva', 'FechaRegistroSistema', 'AceptaReglamento', 'AceptaTratamientoDatos'];
+    Logger.log('Columnas técnicas:');
+    technicalCols.forEach(col => {
+      const exists = headers.includes(col);
+      Logger.log('  - ' + col + ': ' + (exists ? 'EXISTE' : 'NO EXISTE'));
+    });
+    Logger.log('');
+
+    // Contar filas con IdReserva
+    const colIdReserva = headers.indexOf('IdReserva');
+    if (colIdReserva >= 0) {
+      const idReservaValues = respuestasSheet.getRange(2, colIdReserva + 1, totalReservas, 1).getValues();
+      const countWithId = idReservaValues.filter(row => safeTrim_(row[0]) !== '').length;
+      Logger.log('Filas con IdReserva: ' + countWithId + ' de ' + totalReservas);
+    }
+
+    // Contar filas con RequestId
+    const colRequestId = headers.indexOf('RequestId');
+    if (colRequestId >= 0) {
+      const requestIdValues = respuestasSheet.getRange(2, colRequestId + 1, totalReservas, 1).getValues();
+      const countWithReqId = requestIdValues.filter(row => safeTrim_(row[0]) !== '').length;
+      Logger.log('Filas con RequestId: ' + countWithReqId + ' de ' + totalReservas);
+    }
+    Logger.log('');
+
+  } catch (e) {
+    Logger.log('Error analizando ' + SHEET_RESPUESTAS + ': ' + e.message);
+  }
+
+  // Analizar hoja de bienes
+  try {
+    const bienesSheet = getSheetByNameOrThrow_(SHEET_BIENES);
+    const bienesHeaders = getHeaders_(bienesSheet);
+    
+    Logger.log('Hoja: ' + SHEET_BIENES);
+    Logger.log('Encabezados: ' + bienesHeaders.join(', '));
+    
+    const bienesData = getDataObjects_(bienesSheet, bienesHeaders);
+    Logger.log('Total de bienes: ' + bienesData.length);
+    Logger.log('Bienes:');
+    bienesData.forEach(bien => {
+      Logger.log('  - ' + bien.BienID + ': ' + bien.Descripcion + ' (Tipo: ' + bien.Tipo + ', Activo: ' + bien.Activo + ')');
+    });
+    Logger.log('');
+
+  } catch (e) {
+    Logger.log('Error analizando ' + SHEET_BIENES + ': ' + e.message);
+  }
+
+  // Analizar configuración
+  try {
+    const configSheet = getSheetByNameOrThrow_(SHEET_CONFIG);
+    const configValues = configSheet.getDataRange().getValues();
+    
+    Logger.log('Hoja: ' + SHEET_CONFIG);
+    Logger.log('Claves de configuración:');
+    for (let i = 1; i < configValues.length; i++) {
+      const clave = safeTrim_(configValues[i][0]);
+      const valor = configValues[i][1];
+      if (clave) {
+        Logger.log('  - ' + clave + ': ' + valor);
+      }
+    }
+    Logger.log('');
+
+    // Mostrar config parseada
+    const config = getConfigMap_();
+    Logger.log('Config parseada:');
+    Logger.log(JSON.stringify(config, null, 2));
+
+  } catch (e) {
+    Logger.log('Error analizando ' + SHEET_CONFIG + ': ' + e.message);
+  }
+
+  Logger.log('=== FIN DIAGNÓSTICO ===');
 }

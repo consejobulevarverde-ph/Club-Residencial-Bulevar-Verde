@@ -40,13 +40,14 @@ const VALOR_UNITARIO_SANCION_CARRO = 7000;
 
 const DRY_RUN = false;
 const EMAIL_DRY_RUN = false; // true = prueba, false = envía correos reales
+const SANCIONES_CUOTA_RESERVA = 3; // correos que siempre se dejan sin usar de la cuota diaria
 const MOSTRAR_PLACAS_SIMILARES_DESCARTADAS = true;
 const URL_CONSULTA_SANCIONES = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/sanciones/';
 const PLANTILLA_NOTIFICACION_DEBIDO_PROCESO = "NOTIFICACION_DEBIDO_PROCESO_PARQUEADERO_VISITANTES_V1";
 const TIPO_NOTIFICACION_DEBIDO_PROCESO = "DEBIDO_PROCESO_PARQUEADERO_VISITANTES";
 const ESTADO_MAESTRA_REQUIERE_VERIFICACION = "REQUIERE_VERIFICACION_CONSULTA_WEB";
 
-const LOG_LEVEL = "RESUMEN"; 
+const LOG_LEVEL = "RESUMEN";
 // Opciones:
 // "SILENCIO"  = casi nada
 // "RESUMEN"   = recomendado
@@ -191,13 +192,13 @@ function consultarSanciones_(aptoInput, placaInput, e) {
 
     const allData = contextoPlanilla.allData;
     const richData = contextoPlanilla.richData;
-    const headers = allData[0].map(function(h) {
+    const headers = allData[0].map(function (h) {
       return normalizeHeader_(h);
     });
     var IDX = contextoPlanilla.IDX;
 
-  Logger.log('HEADERS NORMALIZADOS: ' + JSON.stringify(headers));
-  Logger.log('IDX: ' + JSON.stringify(IDX));
+    Logger.log('HEADERS NORMALIZADOS: ' + JSON.stringify(headers));
+    Logger.log('IDX: ' + JSON.stringify(IDX));
 
     if (IDX.placa === -1) {
       registrarConsultaSanciones_({
@@ -234,7 +235,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
     Logger.log('EXISTE PLACA: ' + (placaRows.length > 0));
 
     Logger.log('FILAS CON ESA PLACA: ' + placaRows.length);
-    Logger.log('APTOS DE ESA PLACA: ' + JSON.stringify(placaRows.map(function(reg) {
+    Logger.log('APTOS DE ESA PLACA: ' + JSON.stringify(placaRows.map(function (reg) {
       return reg.apto;
     })));
 
@@ -300,7 +301,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
 
     // Evitar duplicados por ID
     var idsVistos = {};
-    registrosFinales = registrosFinales.filter(function(reg) {
+    registrosFinales = registrosFinales.filter(function (reg) {
       var id = reg.id || '';
 
       if (!id) return true;
@@ -329,7 +330,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
       };
     });
 
-    sanciones.sort(function(a, b) {
+    sanciones.sort(function (a, b) {
       var fechaA = parseFechaParaOrdenDesc_(a.fecha);
       var fechaB = parseFechaParaOrdenDesc_(b.fecha);
 
@@ -360,7 +361,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
 
 
     const placasDevueltas = Object.keys(
-      sanciones.reduce(function(mapa, s) {
+      sanciones.reduce(function (mapa, s) {
         if (s.placaNorm) mapa[s.placaNorm] = true;
         return mapa;
       }, {})
@@ -562,7 +563,7 @@ function normalizePlaca_(value) {
 function contarPorCampo_(registros, campo) {
   const conteo = {};
 
-  registros.forEach(function(reg) {
+  registros.forEach(function (reg) {
     const valor = reg[campo] || "";
     if (!valor) return;
 
@@ -582,7 +583,7 @@ function obtenerMayoria_(conteo, total) {
   let valorMayor = "";
   let cantidadMayor = 0;
 
-  Object.keys(conteo).forEach(function(valor) {
+  Object.keys(conteo).forEach(function (valor) {
     if (conteo[valor] > cantidadMayor) {
       valorMayor = valor;
       cantidadMayor = conteo[valor];
@@ -600,7 +601,7 @@ function obtenerMayoria_(conteo, total) {
 }
 
 function obtenerTextoAptoPorNorm_(registros, aptoNorm) {
-  const match = registros.find(function(reg) {
+  const match = registros.find(function (reg) {
     return reg.aptoNorm === aptoNorm;
   });
 
@@ -611,7 +612,7 @@ function obtenerTextoAptoPorNorm_(registros, aptoNorm) {
  * CONSTRUIR REGISTROS NORMALIZADOS
  ***************************************/
 function construirRegistrosNormalizados_(rows, IDX, richData, allData) {
-  return rows.map(function(row, index) {
+  return rows.map(function (row, index) {
     var realRowIndex = index + 1;
     var sheetRow = index + 2;
 
@@ -639,7 +640,7 @@ function construirRegistrosNormalizados_(rows, IDX, richData, allData) {
       foto: IDX.foto !== -1 ? getCellUrlOrText_(richData, allData, realRowIndex, IDX.foto) : '',
       firma: IDX.firma !== -1 ? getCellUrlOrText_(richData, allData, realRowIndex, IDX.firma) : ''
     };
-  }).filter(function(reg) {
+  }).filter(function (reg) {
     return reg.placaNorm || reg.aptoNorm;
   });
 }
@@ -670,7 +671,7 @@ function analizarInconsistenciasSancionesDesdeResultado_(
    * CASO 1:
    * Placa consultada asociada mayoritariamente a un apto.
    ****************************************/
-  const historicoPlacaConsultada = registrosNormalizados.filter(function(reg) {
+  const historicoPlacaConsultada = registrosNormalizados.filter(function (reg) {
     return reg.placaNorm === placaNormConsultada;
   });
 
@@ -691,7 +692,7 @@ function analizarInconsistenciasSancionesDesdeResultado_(
       const aptoCorrectoNorm = mayoriaApto.valor;
       const aptoCorrectoTexto = obtenerTextoAptoPorNorm_(historicoPlacaConsultada, aptoCorrectoNorm);
 
-      historicoPlacaConsultada.forEach(function(reg) {
+      historicoPlacaConsultada.forEach(function (reg) {
         if (reg.aptoNorm !== aptoCorrectoNorm) {
           Logger.log("OUTLIER POR PLACA DETECTADO");
           Logger.log("Fila: " + reg.sheetRow);
@@ -725,7 +726,7 @@ function analizarInconsistenciasSancionesDesdeResultado_(
    ****************************************/
   Logger.log("=== CASO 2: PLACAS MINORITARIAS DENTRO DEL RESULTADO ===");
 
-  const sancionesDelAptoConsultado = sanciones.filter(function(s) {
+  const sancionesDelAptoConsultado = sanciones.filter(function (s) {
     return s.apartamentoNorm === aptoNormConsultado;
   });
 
@@ -737,7 +738,7 @@ function analizarInconsistenciasSancionesDesdeResultado_(
     Logger.log("Distribución placas en sanciones del apto consultado:");
     Logger.log(JSON.stringify(conteoPlacasResultado, null, 2));
 
-    Object.keys(conteoPlacasResultado).forEach(function(placaNorm) {
+    Object.keys(conteoPlacasResultado).forEach(function (placaNorm) {
       const cantidad = conteoPlacasResultado[placaNorm];
       const porcentaje = cantidad / sancionesDelAptoConsultado.length;
 
@@ -749,7 +750,7 @@ function analizarInconsistenciasSancionesDesdeResultado_(
       if (porcentaje <= UMBRAL_OUTLIER) {
         Logger.log("Placa candidata a error por baja frecuencia: " + placaNorm);
 
-        const historicoPlaca = registrosNormalizados.filter(function(reg) {
+        const historicoPlaca = registrosNormalizados.filter(function (reg) {
           return reg.placaNorm === placaNorm;
         });
 
@@ -772,10 +773,10 @@ function analizarInconsistenciasSancionesDesdeResultado_(
             const aptoCorrectoTexto = obtenerTextoAptoPorNorm_(historicoPlaca, mayoriaHistorica.valor);
 
             sancionesDelAptoConsultado
-              .filter(function(s) {
+              .filter(function (s) {
                 return s.placaNorm === placaNorm;
               })
-              .forEach(function(s) {
+              .forEach(function (s) {
                 Logger.log("OUTLIER POR APTO DETECTADO");
                 Logger.log("Fila: " + s.sheetRow);
                 Logger.log("Placa: " + s.placaNorm);
@@ -812,7 +813,7 @@ function analizarInconsistenciasSancionesDesdeResultado_(
   Logger.log("=== CASO 3: TIPO VEHICULO POR PLACA ===");
 
   if (IDX.tipoVehiculo !== -1 && historicoPlacaConsultada.length >= MIN_REGISTROS_PARA_CORREGIR) {
-    const historicoConTipo = historicoPlacaConsultada.filter(function(reg) {
+    const historicoConTipo = historicoPlacaConsultada.filter(function (reg) {
       return reg.tipoVehiculoNorm;
     });
 
@@ -825,7 +826,7 @@ function analizarInconsistenciasSancionesDesdeResultado_(
     Logger.log(JSON.stringify(mayoriaTipo, null, 2));
 
     if (mayoriaTipo && mayoriaTipo.porcentaje >= UMBRAL_MAYORIA) {
-      historicoConTipo.forEach(function(reg) {
+      historicoConTipo.forEach(function (reg) {
         if (reg.tipoVehiculoNorm !== mayoriaTipo.valor) {
           Logger.log("OUTLIER TIPO VEHICULO DETECTADO");
           Logger.log("Fila: " + reg.sheetRow);
@@ -1009,7 +1010,7 @@ function normalizarTodasLasPlacas_() {
   let totalCorregidas = 0;
   const cambios = [];
 
-  const nuevasPlacas = placaValues.map(function(row, index) {
+  const nuevasPlacas = placaValues.map(function (row, index) {
     const valorOriginal = row[0];
     const placaOriginal = safeTrim_(valorOriginal);
     const placaNormalizada = normalizarPlacaSoloEspaciosYMayusculas_(placaOriginal);
@@ -1070,7 +1071,7 @@ function normalizarPlacasEnMemoriaYHoja_(sheet, rows, IDX, aplicarCorrecciones) 
 
   const placaValues = [];
 
-  rows.forEach(function(row, index) {
+  rows.forEach(function (row, index) {
     const valorOriginal = row[IDX.placa];
     const placaOriginal = safeTrim_(valorOriginal);
     const placaNormalizada = normalizarPlacaSoloEspaciosYMayusculas_(placaOriginal);
@@ -1199,7 +1200,7 @@ function leerMapaMaestra_(sheet) {
 
   const values = sheet.getRange(2, 1, lastRow - 1, 9).getValues();
 
-  values.forEach(function(row, index) {
+  values.forEach(function (row, index) {
     const placa = normalizePlaca_(row[0]);
 
     if (!placa) return;
@@ -1264,7 +1265,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
   let totalSinCerteza = 0;
   let totalRegexInvalida = 0;
 
-  Object.keys(gruposPorPlaca).forEach(function(placaNorm) {
+  Object.keys(gruposPorPlaca).forEach(function (placaNorm) {
     const registrosPlaca = gruposPorPlaca[placaNorm];
 
     if (!placaNorm) return;
@@ -1314,7 +1315,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
     const conteoAptos = contarPorCampo_(registrosPlaca, "aptoNorm");
     const mayoriaApto = obtenerMayoria_(conteoAptos, registrosPlaca.length);
 
-    const registrosConTipo = registrosPlaca.filter(function(reg) {
+    const registrosConTipo = registrosPlaca.filter(function (reg) {
       return reg.tipoVehiculoNorm;
     });
 
@@ -1411,7 +1412,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
      * 3. Corregir apartamento si hay certeza.
      ***************************************/
     if (aptoCorrectoNorm) {
-      registrosPlaca.forEach(function(reg) {
+      registrosPlaca.forEach(function (reg) {
         if (reg.aptoNorm && reg.aptoNorm !== aptoCorrectoNorm) {
           correccionesApto.push({
             sheetRow: reg.sheetRow,
@@ -1450,7 +1451,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
      * 4. Corregir tipo vehículo por regex.
      ***************************************/
     if (regexInfo.ok) {
-      registrosPlaca.forEach(function(reg) {
+      registrosPlaca.forEach(function (reg) {
         const tipoActual = normalizarTipoVehiculo_(reg.tipoVehiculoNorm);
 
         if (tipoActual && tipoActual !== regexInfo.tipo) {
@@ -1484,7 +1485,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
         mayoriaTipo.porcentaje >= umbralAltaCerteza &&
         registrosConTipo.length >= minRegistrosPlaca
       ) {
-        registrosPlaca.forEach(function(reg) {
+        registrosPlaca.forEach(function (reg) {
           const tipoActual = normalizarTipoVehiculo_(reg.tipoVehiculoNorm);
 
           if (tipoActual && tipoActual !== mayoriaTipo.valor) {
@@ -1547,7 +1548,7 @@ function analizarYCorregirTodasLasPlacas_(config) {
 function agruparPorCampo_(registros, campo) {
   const grupos = {};
 
-  registros.forEach(function(reg) {
+  registros.forEach(function (reg) {
     const key = reg[campo] || "";
 
     if (!key) return;
@@ -1630,7 +1631,7 @@ function marcarInconsistenciaNoReparable_(params) {
     );
   }
 
-  registros.forEach(function(reg) {
+  registros.forEach(function (reg) {
     if (aplicarCorrecciones) {
       sheet.getRange(reg.sheetRow, colIndex + 1)
         .setBackground("#f4cccc"); //ROJO
@@ -1680,8 +1681,8 @@ function leerMapaVigilanciaPlacas_() {
   // Col A-B, D-E, G-H, etc.
   const paresColumnas = generarParesColumnasVigilancia_(lastCol);
 
-  data.forEach(function(row, rowIndex) {
-    paresColumnas.forEach(function(par) {
+  data.forEach(function (row, rowIndex) {
+    paresColumnas.forEach(function (par) {
       const placaRaw = row[par.placaCol];
       const aptoRaw = row[par.aptoCol];
 
@@ -1764,7 +1765,7 @@ function generarParesColumnasVigilancia_(lastCol) {
 
   logDetalle_("Pares de columnas vigilancia detectados:");
   logDetalle_(JSON.stringify(
-    pares.map(function(p) {
+    pares.map(function (p) {
       return {
         placaCol: p.placaCol + 1,
         aptoCol: p.aptoCol + 1,
@@ -1796,7 +1797,7 @@ function sincronizarVigilanciaConMaestra_(hojaMaestra, mapaMaestra, mapaVigilanc
   const nuevos = [];
   const omitidos = [];
 
-  Object.keys(mapaVigilancia).forEach(function(placa) {
+  Object.keys(mapaVigilancia).forEach(function (placa) {
     const registroVigilancia = mapaVigilancia[placa];
 
     if (!registroVigilancia || !registroVigilancia.apartamentoNorm) {
@@ -1849,7 +1850,7 @@ function sincronizarVigilanciaConMaestra_(hojaMaestra, mapaMaestra, mapaVigilanc
       "yyyy-MM-dd HH:mm"
     );
 
-    const values = nuevos.map(function(item) {
+    const values = nuevos.map(function (item) {
       return [
         item.placa,
         item.apartamento,
@@ -1873,7 +1874,7 @@ function sincronizarVigilanciaConMaestra_(hojaMaestra, mapaMaestra, mapaVigilanc
   }
 
   // Actualizar mapaMaestra en memoria para que el análisis posterior ya los respete.
-  nuevos.forEach(function(item) {
+  nuevos.forEach(function (item) {
     mapaMaestra[item.placa] = {
       placa: item.placa,
       apartamento: item.apartamento,
@@ -1934,32 +1935,24 @@ function prepararResumenSancionesPorApartamento() {
   const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
 
   const values = Object.keys(resumenPorApto)
-    .sort(function(a, b) {
-      return Number(a) - Number(b);
-    })
-    .map(function(aptoNorm) {
+    .map(function (aptoNorm) {
       const item = resumenPorApto[aptoNorm];
       const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(item.apartamento)];
-
-
 
       const cantidad = item.sanciones.length;
 
       const resumenPlacas = agruparSancionesPorPlaca_(item.sanciones);
 
-      const valorTotal = resumenPlacas.reduce(function(total, placaItem) {
+      const valorTotal = resumenPlacas.reduce(function (total, placaItem) {
         return total + placaItem.valorTotal;
       }, 0);
 
       const detalle = convertirResumenPlacasATexto_(resumenPlacas);
 
-      const cantidadSinTipo = item.sanciones.filter(function(s) {
+      const cantidadSinTipo = item.sanciones.filter(function (s) {
         const tipoNorm = normalizarTipoVehiculo_(s.tipoVehiculo);
         return tipoNorm !== "MOTO" && tipoNorm !== "CARRO";
       }).length;
-
-
-
 
       let observaciones = "";
 
@@ -1971,17 +1964,26 @@ function prepararResumenSancionesPorApartamento() {
         observaciones += " Hay " + cantidadSinTipo + " sanciones sin tipo de vehículo reconocido.";
       }
 
-      return [
-        item.apartamento,
-        correoInfo ? correoInfo.email : "",
-        cantidad,
-        "Moto: " + formatCOP_(VALOR_UNITARIO_SANCION_MOTO) + " / Carro: " + formatCOP_(VALOR_UNITARIO_SANCION_CARRO),
-        valorTotal,
-        correoInfo ? "PENDIENTE" : "SIN_CORREO",
-        now,
-        detalle,
-        observaciones
-      ];
+      return {
+        valorTotal: valorTotal,
+        fila: [
+          item.apartamento,
+          correoInfo ? correoInfo.email : "",
+          cantidad,
+          "Moto: " + formatCOP_(VALOR_UNITARIO_SANCION_MOTO) + " / Carro: " + formatCOP_(VALOR_UNITARIO_SANCION_CARRO),
+          valorTotal,
+          correoInfo ? "PENDIENTE" : "SIN_CORREO",
+          now,
+          detalle,
+          observaciones
+        ]
+      };
+    })
+    .sort(function (a, b) {
+      return b.valorTotal - a.valorTotal;
+    })
+    .map(function (entry) {
+      return entry.fila;
     });
 
   if (values.length > 0) {
@@ -2008,7 +2010,7 @@ function leerMapaCorreosApartamentos_() {
   }
 
   const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const headers = data[0].map(function(h) {
+  const headers = data[0].map(function (h) {
     return normalizeHeader_(h);
   });
 
@@ -2050,7 +2052,7 @@ function leerMapaCorreosApartamentos_() {
   const mapa = {};
   const duplicados = [];
 
-  data.slice(1).forEach(function(row, index) {
+  data.slice(1).forEach(function (row, index) {
     const aptoRaw = safeTrim_(row[idxApto]);
     const aptoKey = normalizarApartamentoDesdeCorreo_(aptoRaw);
 
@@ -2084,7 +2086,7 @@ function leerMapaCorreosApartamentos_() {
       });
 
       // Une correos si el apartamento aparece repetido.
-      correos.forEach(function(correo) {
+      correos.forEach(function (correo) {
         if (mapa[aptoKey].correos.indexOf(correo) === -1) {
           mapa[aptoKey].correos.push(correo);
         }
@@ -2119,7 +2121,7 @@ function leerMapaCorreosApartamentos_() {
 function agruparSancionesPorApartamento_(registros) {
   const mapa = {};
 
-  registros.forEach(function(reg) {
+  registros.forEach(function (reg) {
     if (!reg.aptoNorm) return;
 
     if (!mapa[reg.aptoNorm]) {
@@ -2146,12 +2148,12 @@ function getOrCreateHojaResumenEnvio_(ss) {
 }
 
 function obtenerIdxPlanilla_(rawHeaders) {
-  const headers = rawHeaders.map(function(h) {
+  const headers = rawHeaders.map(function (h) {
     return normalizeHeader_(h);
   });
 
   const colMap = {};
-  headers.forEach(function(h, i) {
+  headers.forEach(function (h, i) {
     colMap[h] = i;
   });
 
@@ -2187,12 +2189,12 @@ function enviarCorreosResumenSanciones() {
 
   const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
 
-  const headers = data[0].map(function(h) {
+  const headers = data[0].map(function (h) {
     return normalizeHeader_(h);
   });
 
   const colMap = {};
-  headers.forEach(function(h, i) {
+  headers.forEach(function (h, i) {
     colMap[h] = i;
   });
 
@@ -2208,7 +2210,7 @@ function enviarCorreosResumenSanciones() {
   let enviados = 0;
   let omitidos = 0;
 
-  data.slice(1).forEach(function(row, index) {
+  data.slice(1).forEach(function (row, index) {
     const sheetRow = index + 2;
 
     const apto = safeTrim_(row[idxApto]);
@@ -2247,11 +2249,13 @@ function enviarCorreosResumenSanciones() {
 
     const destinatariosNecesarios = contarDestinatariosCorreo_(email, ccCorreo, "");
     const cuotaRestante = MailApp.getRemainingDailyQuota();
+    const cuotaDisponible = cuotaRestante - SANCIONES_CUOTA_RESERVA;
 
-    if (cuotaRestante < destinatariosNecesarios) {
+    if (cuotaDisponible < destinatariosNecesarios) {
       Logger.log(
         "CUOTA INSUFICIENTE. Apto: " + apto +
         " | Cuota restante: " + cuotaRestante +
+        " | Disponible (con reserva de " + SANCIONES_CUOTA_RESERVA + "): " + cuotaDisponible +
         " | Necesarios: " + destinatariosNecesarios
       );
 
@@ -2308,7 +2312,7 @@ function construirHtmlCorreoSanciones_(data) {
       </tr>
   `;
 
-  resumenPlacas.forEach(function(item) {
+  resumenPlacas.forEach(function (item) {
     resumenPlacasHtml += `
       <tr>
         <td style="border: 1px solid #ccc; padding: 8px;">${escapeHtml_(item.placa)}</td>
@@ -2321,7 +2325,7 @@ function construirHtmlCorreoSanciones_(data) {
 
   resumenPlacasHtml += "</table>";
 
-  const placasTexto = resumenPlacas.map(function(item) {
+  const placasTexto = resumenPlacas.map(function (item) {
     return item.placa;
   }).join(", ");
 
@@ -2456,8 +2460,8 @@ function convertirDetalleATablaHtml_(detalle) {
       </tr>
   `;
 
-  filas.forEach(function(linea) {
-    const partes = linea.split("|").map(function(p) {
+  filas.forEach(function (linea) {
+    const partes = linea.split("|").map(function (p) {
       return safeTrim_(p);
     });
 
@@ -2551,7 +2555,7 @@ function getValorSancionPorTipo_(tipoVehiculo) {
 function agruparSancionesPorPlaca_(sanciones) {
   const mapa = {};
 
-  sanciones.forEach(function(s) {
+  sanciones.forEach(function (s) {
     const placa = s.placaNorm || normalizePlaca_(s.placa) || "SIN_PLACA";
     const tipo = normalizarTipoVehiculo_(s.tipoVehiculo) || "SIN_TIPO";
     const key = placa + "|" + tipo;
@@ -2569,7 +2573,7 @@ function agruparSancionesPorPlaca_(sanciones) {
     mapa[key].valorTotal += getValorSancionPorTipo_(tipo);
   });
 
-  return Object.keys(mapa).map(function(key) {
+  return Object.keys(mapa).map(function (key) {
     return mapa[key];
   });
 }
@@ -2609,7 +2613,7 @@ function crearResumenInconsistenciaPlaca_(placaNorm, registrosPlaca, columna, mo
   const conteoAptos = contarPorCampo_(registrosPlaca, "aptoNorm");
   const mayoriaApto = obtenerMayoria_(conteoAptos, registrosPlaca.length);
 
-  const registrosConTipo = registrosPlaca.filter(function(reg) {
+  const registrosConTipo = registrosPlaca.filter(function (reg) {
     return reg.tipoVehiculoNorm;
   });
 
@@ -2617,24 +2621,24 @@ function crearResumenInconsistenciaPlaca_(placaNorm, registrosPlaca, columna, mo
   const mayoriaTipo = obtenerMayoria_(conteoTipos, registrosConTipo.length);
 
   const aptosDetalle = Object.keys(conteoAptos)
-    .sort(function(a, b) {
+    .sort(function (a, b) {
       return conteoAptos[b] - conteoAptos[a];
     })
-    .map(function(apto) {
+    .map(function (apto) {
       return apto + "=" + conteoAptos[apto];
     })
     .join(", ");
 
   const tiposDetalle = Object.keys(conteoTipos)
-    .sort(function(a, b) {
+    .sort(function (a, b) {
       return conteoTipos[b] - conteoTipos[a];
     })
-    .map(function(tipo) {
+    .map(function (tipo) {
       return tipo + "=" + conteoTipos[tipo];
     })
     .join(", ");
 
-  const filas = registrosPlaca.map(function(reg) {
+  const filas = registrosPlaca.map(function (reg) {
     return reg.sheetRow;
   });
 
@@ -2697,14 +2701,14 @@ function logResumenInconsistencias_(inconsistencias) {
     "BAJA": 1
   };
 
-  const ordenadas = inconsistencias.slice().sort(function(a, b) {
+  const ordenadas = inconsistencias.slice().sort(function (a, b) {
     const prioridadDiff = (pesoPrioridad[b.prioridad] || 0) - (pesoPrioridad[a.prioridad] || 0);
     if (prioridadDiff !== 0) return prioridadDiff;
 
     return b.totalRegistros - a.totalRegistros;
   });
 
-  ordenadas.slice(0, 50).forEach(function(item, index) {
+  ordenadas.slice(0, 50).forEach(function (item, index) {
     Logger.log(
       [
         index + 1,
@@ -2749,8 +2753,8 @@ function obtenerResumenPlacasDesdeDetalle_(detalle) {
 
   const filas = detalle.split("\n");
 
-  filas.forEach(function(linea) {
-    const partes = linea.split("|").map(function(p) {
+  filas.forEach(function (linea) {
+    const partes = linea.split("|").map(function (p) {
       return safeTrim_(p);
     });
 
@@ -2799,14 +2803,14 @@ function obtenerResumenPlacasDesdeDetalle_(detalle) {
     mapa[key].valorTotal += valorTotal;
   });
 
-  return Object.keys(mapa).map(function(key) {
+  return Object.keys(mapa).map(function (key) {
     return mapa[key];
   });
 }
 
 
 function convertirResumenPlacasATexto_(resumenPlacas) {
-  return resumenPlacas.map(function(item) {
+  return resumenPlacas.map(function (item) {
     return [
       item.placa,
       item.tipoVehiculo,
@@ -2863,7 +2867,7 @@ function distanciaCaracterPlaca_(charA, charB) {
 function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecciones) {
   const grupos = {};
 
-  registros.forEach(function(reg) {
+  registros.forEach(function (reg) {
     if (!reg.aptoNorm || !reg.tipoVehiculoNorm || !reg.placaNorm) return;
 
     const key = reg.aptoNorm + "|" + reg.tipoVehiculoNorm;
@@ -2878,11 +2882,11 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
   const candidatos = [];
   const descartados = [];
 
-  Object.keys(grupos).forEach(function(key) {
+  Object.keys(grupos).forEach(function (key) {
     const registrosGrupo = grupos[key];
     const conteoPlacas = {};
 
-    registrosGrupo.forEach(function(reg) {
+    registrosGrupo.forEach(function (reg) {
       if (!conteoPlacas[reg.placaNorm]) {
         conteoPlacas[reg.placaNorm] = {
           placa: reg.placaNorm,
@@ -2895,22 +2899,22 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
       conteoPlacas[reg.placaNorm].registros.push(reg);
     });
 
-    const placas = Object.keys(conteoPlacas).map(function(placa) {
+    const placas = Object.keys(conteoPlacas).map(function (placa) {
       return conteoPlacas[placa];
     });
 
-    const dominantes = placas.filter(function(item) {
+    const dominantes = placas.filter(function (item) {
       return item.cantidad >= MIN_REGISTROS_PARA_CORREGIR;
     });
 
-    const sospechosas = placas.filter(function(item) {
+    const sospechosas = placas.filter(function (item) {
       return item.cantidad <= MAX_REGISTROS_PLACA_SOSPECHOSA;
     });
 
-    sospechosas.forEach(function(sospechosa) {
+    sospechosas.forEach(function (sospechosa) {
       let mejorCandidato = null;
 
-      dominantes.forEach(function(dominante) {
+      dominantes.forEach(function (dominante) {
         if (sospechosa.placa === dominante.placa) return;
 
         const distancia = distanciaPlacas_(sospechosa.placa, dominante.placa);
@@ -2925,7 +2929,7 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
           registrosPlacaComparada: dominante.cantidad,
           distancia: distancia,
           tipoSimilitud: tipoSimilitud,
-          filas: sospechosa.registros.map(function(reg) {
+          filas: sospechosa.registros.map(function (reg) {
             return reg.sheetRow;
           }).join(", ")
         };
@@ -2980,7 +2984,7 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
           distancia: distancia,
           tipoSimilitud: tipoSimilitud,
           confianza: confianza,
-          filas: sospechosa.registros.map(function(reg) {
+          filas: sospechosa.registros.map(function (reg) {
             return reg.sheetRow;
           }),
           motivo: "Placa poco frecuente muy similar a placa dominante del mismo apartamento y tipo."
@@ -3021,7 +3025,7 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
         candidatos.push(mejorCandidato);
 
         if (aplicarCorrecciones && puedeCorregirAuto) {
-          sospechosa.registros.forEach(function(reg) {
+          sospechosa.registros.forEach(function (reg) {
             sheet.getRange(reg.sheetRow, IDX.placa + 1)
               .setValue(mejorCandidato.placaSugerida)
               .setBackground("#fff2cc");
@@ -3039,7 +3043,7 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
   Logger.log("=== REVISION PLACAS SIMILARES ===");
   Logger.log("Candidatos encontrados: " + candidatos.length);
 
-  candidatos.slice(0, 50).forEach(function(item, index) {
+  candidatos.slice(0, 50).forEach(function (item, index) {
     Logger.log(
       [
         index + 1,
@@ -3059,14 +3063,14 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
     );
   });
 
-  const noCorregidas = candidatos.filter(function(item) {
+  const noCorregidas = candidatos.filter(function (item) {
     return item.decisionAuto !== "CORREGIR_AUTO";
   });
 
   Logger.log("=== CANDIDATOS NO CORREGIDOS AUTOMATICAMENTE ===");
   Logger.log("Total candidatos solo revisión: " + noCorregidas.length);
 
-  noCorregidas.slice(0, 30).forEach(function(item, index) {
+  noCorregidas.slice(0, 30).forEach(function (item, index) {
     Logger.log(
       [
         index + 1,
@@ -3086,7 +3090,7 @@ function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecc
     Logger.log("=== POSIBLES PLACAS SIMILARES DESCARTADAS ===");
     Logger.log("Total descartadas para análisis: " + descartados.length);
 
-    descartados.slice(0, LIMITE_PLACAS_SIMILARES_DESCARTADAS).forEach(function(item, index) {
+    descartados.slice(0, LIMITE_PLACAS_SIMILARES_DESCARTADAS).forEach(function (item, index) {
       Logger.log(
         [
           index + 1,
@@ -3148,7 +3152,7 @@ function escribirRevisionPlacasSimilares_(candidatos) {
     return;
   }
 
-  const values = candidatos.map(function(item) {
+  const values = candidatos.map(function (item) {
     return [
       item.apartamento,
       item.tipoVehiculo,
@@ -3243,10 +3247,10 @@ function contarDestinatariosCorreo_(to, cc, bcc) {
     .filter(Boolean)
     .join(",")
     .split(/[,;]/)
-    .map(function(item) {
+    .map(function (item) {
       return safeTrim_(item);
     })
-    .filter(function(item) {
+    .filter(function (item) {
       return item;
     }).length;
 }
@@ -3322,7 +3326,7 @@ function getOrCreateHojaResumenNotificacionesDebidoProceso_(ss) {
 function obtenerPlacasTextoDesdeSanciones_(sanciones) {
   const mapa = {};
 
-  sanciones.forEach(function(s) {
+  sanciones.forEach(function (s) {
     const placa = s.placaNorm || normalizePlaca_(s.placa);
     if (placa) mapa[placa] = true;
   });
@@ -3333,7 +3337,7 @@ function obtenerPlacasTextoDesdeSanciones_(sanciones) {
 function convertirDetalleNotificacionDebidoProcesoATexto_(sanciones) {
   const resumen = agruparSancionesPorPlaca_(sanciones);
 
-  return resumen.map(function(item) {
+  return resumen.map(function (item) {
     return [
       item.placa,
       item.tipoVehiculo,
@@ -3385,10 +3389,10 @@ function prepararResumenNotificacionesDebidoProceso() {
   const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
 
   const values = Object.keys(resumenPorApto)
-    .sort(function(a, b) {
+    .sort(function (a, b) {
       return Number(a) - Number(b);
     })
-    .map(function(aptoNorm) {
+    .map(function (aptoNorm) {
       const item = resumenPorApto[aptoNorm];
       const apto = item.apartamento;
       const clave = construirClaveNotificacionDebidoProceso_(apto);
@@ -3427,7 +3431,7 @@ function prepararResumenNotificacionesDebidoProceso() {
         observaciones
       ];
     })
-    .filter(function(row) {
+    .filter(function (row) {
       return !!row;
     });
 
@@ -3542,12 +3546,12 @@ function enviarNotificacionesDebidoProceso() {
 
   const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
 
-  const headers = data[0].map(function(h) {
+  const headers = data[0].map(function (h) {
     return normalizeHeader_(h);
   });
 
   const colMap = {};
-  headers.forEach(function(h, i) {
+  headers.forEach(function (h, i) {
     colMap[h] = i;
   });
 
@@ -3566,7 +3570,7 @@ function enviarNotificacionesDebidoProceso() {
   let enviados = 0;
   let omitidos = 0;
 
-  data.slice(1).forEach(function(row, index) {
+  data.slice(1).forEach(function (row, index) {
     const sheetRow = index + 2;
 
     const apto = safeTrim_(row[idxApto]);
@@ -3784,12 +3788,12 @@ function leerMapaApartamentosYaNotificadosDebidoProceso_(ss) {
 
   const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
 
-  const headers = data[0].map(function(h) {
+  const headers = data[0].map(function (h) {
     return normalizeHeader_(h);
   });
 
   const colMap = {};
-  headers.forEach(function(h, i) {
+  headers.forEach(function (h, i) {
     colMap[h] = i;
   });
 
@@ -3799,7 +3803,7 @@ function leerMapaApartamentosYaNotificadosDebidoProceso_(ss) {
   const idxFecha = colMap["fechahoranotificacion"];
   const idxEmailDestino = colMap["emaildestino"];
 
-  data.slice(1).forEach(function(row) {
+  data.slice(1).forEach(function (row) {
     const clave = safeTrim_(row[idxClave]);
     const aptoNorm = safeTrim_(row[idxAptoNorm]);
     const estado = safeTrim_(row[idxEstado]);
@@ -3858,7 +3862,7 @@ function reinstalarTriggersOperativosSanciones() {
 
     let creados = 0;
 
-    TRIGGERS_OPERATIVOS_SANCIONES.forEach(function(config) {
+    TRIGGERS_OPERATIVOS_SANCIONES.forEach(function (config) {
       crearTriggerDiarioOperativo_(config);
       creados++;
 
@@ -3881,14 +3885,14 @@ function reinstalarTriggersOperativosSanciones() {
 }
 
 function borrarTriggersOperativosSanciones_() {
-  const funcionesOperativas = TRIGGERS_OPERATIVOS_SANCIONES.map(function(config) {
+  const funcionesOperativas = TRIGGERS_OPERATIVOS_SANCIONES.map(function (config) {
     return config.funcion;
   });
 
   const triggers = ScriptApp.getProjectTriggers();
   let eliminados = 0;
 
-  triggers.forEach(function(trigger) {
+  triggers.forEach(function (trigger) {
     const funcion = trigger.getHandlerFunction();
 
     if (funcionesOperativas.indexOf(funcion) !== -1) {
@@ -3912,7 +3916,7 @@ function crearTriggerDiarioOperativo_(config) {
 }
 
 function listarTriggersOperativosSanciones() {
-  const funcionesOperativas = TRIGGERS_OPERATIVOS_SANCIONES.map(function(config) {
+  const funcionesOperativas = TRIGGERS_OPERATIVOS_SANCIONES.map(function (config) {
     return config.funcion;
   });
 
@@ -3920,7 +3924,7 @@ function listarTriggersOperativosSanciones() {
 
   Logger.log("=== TRIGGERS OPERATIVOS ACTUALES ===");
 
-  triggers.forEach(function(trigger) {
+  triggers.forEach(function (trigger) {
     const funcion = trigger.getHandlerFunction();
 
     if (funcionesOperativas.indexOf(funcion) !== -1) {
@@ -3960,12 +3964,12 @@ function leerMapaConsultasOkSancionesPorPlaca_(ss) {
 
   const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
 
-  const headers = data[0].map(function(h) {
+  const headers = data[0].map(function (h) {
     return normalizeHeader_(h);
   });
 
   const colMap = {};
-  headers.forEach(function(h, i) {
+  headers.forEach(function (h, i) {
     colMap[h] = i;
   });
 
@@ -3982,7 +3986,7 @@ function leerMapaConsultasOkSancionesPorPlaca_(ss) {
     throw new Error("El log de consultas no tiene las columnas requeridas.");
   }
 
-  data.slice(1).forEach(function(row) {
+  data.slice(1).forEach(function (row) {
     const resultado = safeTrim_(row[idxResultado]).toUpperCase();
 
     // Solo usamos consultas exitosas.
@@ -4024,10 +4028,10 @@ function leerMapaConsultasOkSancionesPorPlaca_(ss) {
     }
   });
 
-  Object.keys(mapa).forEach(function(placa) {
+  Object.keys(mapa).forEach(function (placa) {
     const item = mapa[placa];
 
-    Object.keys(item.aptos).forEach(function(aptoNorm) {
+    Object.keys(item.aptos).forEach(function (aptoNorm) {
       const aptoItem = item.aptos[aptoNorm];
 
       if (aptoItem.cantidad > item.cantidadMayor) {
@@ -4084,7 +4088,7 @@ function revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, aplicarCamb
   let conflictos = 0;
   const filasConflicto = [];
 
-  values.forEach(function(row, index) {
+  values.forEach(function (row, index) {
     const sheetRow = index + 2;
 
     const placa = normalizePlaca_(row[0]);
@@ -4151,7 +4155,7 @@ function revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, aplicarCamb
   if (aplicarCambios) {
     range.setValues(values);
 
-    filasConflicto.forEach(function(rowNumber) {
+    filasConflicto.forEach(function (rowNumber) {
       hojaMaestra
         .getRange(rowNumber, 1, 1, 9)
         .setBackground("#fff2cc");
