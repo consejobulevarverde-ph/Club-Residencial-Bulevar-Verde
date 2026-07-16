@@ -339,6 +339,149 @@
             background: var(--color-primary);
             color: var(--color-white);
         }
+
+
+        /* === Mejoras de experiencia por pasos === */
+        .step-indicator {
+            align-items: flex-start;
+            gap: clamp(12px, 4vw, 36px);
+        }
+        .step-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 90px;
+            color: #6c757d;
+            font-size: 0.78rem;
+            font-weight: var(--font-weight-semibold);
+            text-align: center;
+        }
+        .step-item:has(.step-badge.active),
+        .step-item:has(.step-badge.done) {
+            color: var(--color-primary);
+        }
+        .step-label {
+            margin-top: 8px;
+        }
+        .step-help-card {
+            background: #f7fbf7;
+            border: 1px solid #d8ead9;
+            border-left: 4px solid var(--color-primary);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 28px;
+        }
+        .step-help-card h5 {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: 8px;
+        }
+        .step-help-card p:last-child,
+        .step-help-card ul:last-child {
+            margin-bottom: 0;
+        }
+        .price-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--color-primary);
+            color: var(--color-white);
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 0.82rem;
+            font-weight: var(--font-weight-bold);
+        }
+        .asset-detail {
+            color: #5f6b63;
+            font-size: 0.88rem;
+            line-height: 1.45;
+            min-height: 42px;
+            margin: 10px 0 14px;
+        }
+        .section-heading {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e4eee5;
+        }
+        .bank-card {
+            background: #fff;
+            border: 1px solid #d8ead9;
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+        }
+        .bank-card img {
+            display: block;
+            width: 100%;
+            max-width: 720px;
+            height: auto;
+            margin: 0 auto;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .security-note {
+            background: #fff8e1;
+            border-left: 4px solid #f0ad4e;
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 0.88rem;
+        }
+        .terms-box {
+            border: 1px solid #d8ead9;
+            border-radius: 10px;
+            padding: 0 16px;
+            background: #fff;
+        }
+        .terms-box + .terms-box {
+            margin-top: 12px;
+        }
+        .terms-box summary {
+            cursor: pointer;
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            padding: 14px 0;
+        }
+        .terms-box .terms-content {
+            padding: 0 0 14px;
+            color: #4f5952;
+            font-size: 0.92rem;
+        }
+        .form-section-title {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: 18px;
+        }
+        .date-requirement {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+
+        @media (max-width: 767.98px) {
+            .page-header {
+                padding: 38px 0 28px;
+                margin-bottom: 24px;
+            }
+            .page-header h1 {
+                font-size: 1.8rem;
+            }
+            .content-section {
+                padding: 22px 16px;
+            }
+            .step-item {
+                min-width: 72px;
+                font-size: 0.7rem;
+            }
+            .selection-summary .row > div {
+                margin-bottom: 12px;
+            }
+            .selection-summary .row > div:last-child {
+                margin-bottom: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -376,57 +519,20 @@
         <div class="content-section">
             {{ .Content }}
 
-            <!-- Información importante -->
-            <div class="info-card mb-4">
-                <h5><i class="bi bi-journal-text"></i> Reserva de zonas comunes</h5>
-                <p class="mb-2">Este formulario permite solicitar la reserva de salones sociales y canchas del Club Residencial Bulevar Verde.</p>
-                <ul class="mb-3">
-                    <li>La disponibilidad consultada es <strong>informativa</strong>.</li>
-                    <li>El envío del formulario <strong>no garantiza</strong> la reserva.</li>
-                    <li>Todas las solicitudes están sujetas a <strong>validación y aprobación</strong> por la administración.</li>
-                </ul>
-
-                <h6><i class="bi bi-building"></i> Salones Sociales</h6>
-                <p class="mb-1">La copropiedad cuenta con 3 salones sociales:</p>
-                <ul class="mb-1">
-                    <li><strong>Salón 1 – Sky Club</strong> (piso 8, torre parqueaderos) — Vista a la ciudad | 23 sillas – 6 mesas</li>
-                    <li><strong>Salón 2 – Sky Club</strong> (piso 8, torre parqueaderos) — Vista a la copropiedad | 23 sillas – 6 mesas</li>
-                    <li><strong>Salón 3 – Portería</strong> (2.º piso) — 18 sillas – 4 mesas – 1 Nevera</li>
-                </ul>
-                <p class="mb-3"><small class="text-muted"><i class="bi bi-calendar3"></i> Reservas: mínimo 3 días hábiles de anticipación, sujetas a disponibilidad y verificación de estar al día con las expensas de administración.</small></p>
-
-                <h6><i class="bi bi-credit-card"></i> Pago obligatorio</h6>
-                <p class="mb-1"><strong>Aporte de sostenimiento:</strong></p>
-                <ul class="mb-1">
-                    <li><strong>Salones Sociales:</strong> $95.000</li>
-                    <li><strong>Canchas Sintéticas:</strong> $126.000</li>
-                </ul>
-                <p class="mb-1"><strong>Datos de pago:</strong></p>
-                <ul class="mb-1">
-                    <li><strong>Cuenta Ahorros Davivienda</strong> N.° 398300144910</li>
-                    <li>NIT 901.845.246-1 – Club Residencial Bulevar Verde</li>
-                </ul>
-                <p class="mb-1">
-                    <i class="bi bi-envelope"></i> Enviar soporte de pago a: 
-                    <a href="mailto:bulevarverdeadmon@gmail.com"><strong>bulevarverdeadmon@gmail.com</strong></a> (indicando apartamento).
-                </p>
-                <p class="mb-3">
-                    <i class="bi bi-cash-stack"></i> <strong>Depósito de garantía:</strong> $150.000 en efectivo el día del evento 
-                    <small class="text-muted">(se devuelve al finalizar, previa revisión de aseo y estado del salón).</small>
-                </p>
-
-                <h6><i class="bi bi-shield-lock"></i> Tratamiento de datos (Habeas Data)</h6>
-                <p class="mb-2">Al enviar este formulario, autoriza el tratamiento de sus datos personales conforme a la <strong>Ley 1581 de 2012</strong>, para la gestión de su reserva y contacto por parte de la administración.</p>
-
-                <h6><i class="bi bi-check2-square"></i> Aceptación</h6>
-                <p class="mb-0">Al enviar la solicitud, acepta las condiciones aquí descritas y declara que la información es veraz.</p>
-            </div>
-
             <!-- Step Indicator -->
-            <div class="step-indicator">
-                <div class="step-badge active" id="step-badge-1">1</div>
-                <div class="step-badge" id="step-badge-2">2</div>
-                <div class="step-badge" id="step-badge-3">3</div>
+            <div class="step-indicator" aria-label="Progreso de la reserva">
+                <div class="step-item">
+                    <div class="step-badge active" id="step-badge-1">1</div>
+                    <span class="step-label">Fecha</span>
+                </div>
+                <div class="step-item">
+                    <div class="step-badge" id="step-badge-2">2</div>
+                    <span class="step-label">Espacio</span>
+                </div>
+                <div class="step-item">
+                    <div class="step-badge" id="step-badge-3">3</div>
+                    <span class="step-label">Datos y pago</span>
+                </div>
             </div>
 
             <!-- ========== PASO 1: Seleccionar fecha ========== -->
@@ -434,6 +540,12 @@
                 <h3 class="text-center mb-4" style="color: var(--color-primary);">
                     <i class="bi bi-calendar3"></i> Paso 1: Selecciona la fecha
                 </h3>
+
+                <div class="step-help-card">
+                    <h5><i class="bi bi-calendar-check"></i> Consulta la fecha del evento</h5>
+                    <p>Selecciona una fecha para consultar los salones y horarios disponibles. La consulta es informativa y la solicitud deberá ser validada por la administración.</p>
+                    <p class="date-requirement mb-0"><i class="bi bi-clock-history"></i> Debes solicitar la reserva con mínimo 3 días hábiles de anticipación y máximo 93 días calendario.</p>
+                </div>
 
                 <div class="row justify-content-center mb-4">
                     <div class="col-md-5">
@@ -476,18 +588,29 @@
                     </div>
                 </div>
 
+                <div class="step-help-card">
+                    <h5><i class="bi bi-hand-index-thumb"></i> Selecciona un bien disponible</h5>
+                    <p>Los salones se reservan por día completo. Las canchas se reservan por franjas horarias. El valor se muestra dentro de cada categoría y tarjeta.</p>
+                </div>
+
                 <!-- Salones Sociales -->
-                <h4 class="mb-3" style="color: var(--color-primary);">
-                    <i class="bi bi-building"></i> Salones Sociales
-                    <small class="text-muted fw-normal" style="font-size: 0.8rem;">— Reserva por día completo</small>
-                </h4>
+                <div class="section-heading mb-3">
+                    <h4 class="mb-0" style="color: var(--color-primary);">
+                        <i class="bi bi-building"></i> Salones Sociales
+                        <small class="text-muted fw-normal d-block d-sm-inline" style="font-size: 0.8rem;">— Día completo</small>
+                    </h4>
+                    <span class="price-chip"><i class="bi bi-cash-coin"></i> $95.000</span>
+                </div>
                 <div class="row g-3 mb-4" id="salones-grid"></div>
 
                 <!-- Canchas -->
-                <h4 class="mb-3" style="color: var(--color-primary);">
-                    <i class="bi bi-dribbble"></i> Canchas Sintéticas
-                    <small class="text-muted fw-normal" style="font-size: 0.8rem;">— Reserva por horas</small>
-                </h4>
+                <div class="section-heading mb-3">
+                    <h4 class="mb-0" style="color: var(--color-primary);">
+                        <i class="bi bi-dribbble"></i> Canchas Sintéticas
+                        <small class="text-muted fw-normal d-block d-sm-inline" style="font-size: 0.8rem;">— Por horas</small>
+                    </h4>
+                    <span class="price-chip"><i class="bi bi-cash-coin"></i> $126.000</span>
+                </div>
                 <div id="canchas-grid"></div>
 
                 <div class="text-center mt-4">
@@ -524,32 +647,75 @@
                     </div>
                 </div>
 
-                <div class="info-card">
-                    <h5><i class="bi bi-info-circle"></i> Información importante</h5>
-                    <ul class="mb-3">
-                        <li>Completa todos los campos requeridos con tu información.</li>
-                        <li>La reserva queda sujeta a aprobación de la administración.</li>
-                        <li>Debes estar al día con las expensas de administración.</li>
-                        <li>Recibirás confirmación por correo electrónico.</li>
-                    </ul>
-                    
-                    <h6><i class="bi bi-credit-card"></i> Aporte de sostenimiento</h6>
-                    <ul class="mb-2">
-                        <li><strong>Salones Sociales:</strong> $95.000</li>
-                        <li><strong>Canchas Sintéticas:</strong> $126.000</li>
-                    </ul>
-                    <p class="mb-1"><strong>Datos de pago:</strong></p>
+                <div class="step-help-card">
+                    <h5><i class="bi bi-info-circle"></i> Antes de enviar la solicitud</h5>
                     <ul class="mb-0">
-                        <li>Cuenta Ahorros Davivienda N.° 398300144910</li>
-                        <li>NIT 901.845.246-1 – Club Residencial Bulevar Verde</li>
-                        <li>Enviar comprobante a WhatsApp <a href="https://wa.me/573222289066" target="_blank">+57 322 228 9066</a></li>
-                        <li>Debe realizarse 3 días hábiles antes del evento</li>
+                        <li>Verifica que el espacio, la fecha y el horario sean correctos.</li>
+                        <li>La solicitud queda pendiente hasta la validación de la administración.</li>
+                        <li>Debes estar al día con las expensas de administración.</li>
+                        <li>Recibirás la respuesta en el correo registrado.</li>
                     </ul>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-7">
+                        <div class="bank-card h-100">
+                            <h5 class="mb-3" style="color: var(--color-primary);">
+                                <i class="bi bi-bank"></i> Información para el pago
+                            </h5>
+                            <p class="mb-2">Valor de la reserva: <strong id="summary-price">—</strong></p>
+                            <img src="{{ "images/bancario.jpeg" | relURL }}"
+                                 alt="Datos bancarios oficiales del Club Residencial Bulevar Verde"
+                                 loading="lazy">
+                            <div class="security-note mt-3 text-start">
+                                <i class="bi bi-shield-check"></i>
+                                Verifica que la imagen corresponda a los datos bancarios oficiales antes de realizar el pago. La administración nunca solicitará consignaciones a cuentas personales.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="info-card h-100 mb-0">
+                            <h5><i class="bi bi-receipt"></i> Envío del comprobante</h5>
+                            <p>Envía el soporte indicando <strong>nombre, torre, apartamento, fecha y espacio reservado</strong>.</p>
+                            <p class="mb-2">
+                                <i class="bi bi-whatsapp"></i>
+                                <a href="https://wa.me/573222289066" target="_blank" rel="noopener noreferrer">WhatsApp +57 322 228 9066</a>
+                            </p>
+                            <p class="mb-2">
+                                <i class="bi bi-envelope"></i>
+                                <a href="mailto:bulevarverdeadmon@gmail.com">bulevarverdeadmon@gmail.com</a>
+                            </p>
+                            <p class="mb-0"><i class="bi bi-calendar-check"></i> Realiza el pago y envía el soporte mínimo 3 días hábiles antes del evento.</p>
+                            <div id="deposit-note" class="alert alert-secondary mt-3 mb-0 d-none" role="note"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h5 class="form-section-title"><i class="bi bi-file-earmark-check"></i> Términos y autorizaciones</h5>
+                    <details class="terms-box">
+                        <summary>Condiciones de la reserva y uso del espacio</summary>
+                        <div class="terms-content">
+                            <ul class="mb-0">
+                                <li>El envío del formulario no garantiza la reserva; esta queda sujeta a disponibilidad, validación y aprobación.</li>
+                                <li>El solicitante responde por sus invitados, por el uso adecuado del espacio y por los daños o faltantes ocasionados.</li>
+                                <li>El espacio debe entregarse limpio, ordenado y dentro del horario autorizado.</li>
+                                <li>No se permiten actividades que perturben la tranquilidad, afecten la convivencia o contradigan el reglamento de la copropiedad.</li>
+                            </ul>
+                        </div>
+                    </details>
+                    <details class="terms-box">
+                        <summary>Autorización de tratamiento de datos personales</summary>
+                        <div class="terms-content">
+                            Los datos serán utilizados para gestionar la solicitud, verificar requisitos, contactar al solicitante y conservar el registro administrativo de la reserva, conforme a la Ley 1581 de 2012 y las políticas de la copropiedad.
+                        </div>
+                    </details>
                 </div>
 
                 <!-- Formulario de reserva -->
                 <div class="row justify-content-center">
                     <div class="col-lg-8">
+                        <h5 class="form-section-title"><i class="bi bi-person-vcard"></i> Datos del solicitante</h5>
                         <form id="reservation-form" class="needs-validation" novalidate>
                             <div class="mb-3">
                                 <label for="input-nombre" class="form-label">Nombre completo <span class="text-danger">*</span></label>
@@ -594,7 +760,7 @@
                             <div class="form-check mb-2">
                                 <input class="form-check-input" type="checkbox" id="check-reglamento" required>
                                 <label class="form-check-label" for="check-reglamento">
-                                    Acepto el reglamento de uso de zonas comunes <span class="text-danger">*</span>
+                                    He leído y acepto las condiciones de la reserva y el reglamento aplicable <span class="text-danger">*</span>
                                 </label>
                                 <div class="invalid-feedback">Debes aceptar el reglamento</div>
                             </div>
@@ -602,7 +768,7 @@
                             <div class="form-check mb-4">
                                 <input class="form-check-input" type="checkbox" id="check-habeas-data" required>
                                 <label class="form-check-label" for="check-habeas-data">
-                                    Autorizo el tratamiento de mis datos personales conforme a la Ley 1581 de 2012 <span class="text-danger">*</span>
+                                    Autorizo el tratamiento de mis datos personales para gestionar esta reserva, conforme a la Ley 1581 de 2012 <span class="text-danger">*</span>
                                 </label>
                                 <div class="invalid-feedback">Debes autorizar el tratamiento de datos</div>
                             </div>
@@ -614,7 +780,7 @@
                                     <i class="bi bi-arrow-left"></i> Volver
                                 </button>
                                 <button type="submit" class="btn btn-primary btn-lg" id="btn-enviar-reserva">
-                                    <i class="bi bi-send"></i> Enviar Reserva
+                                    <i class="bi bi-send"></i> Enviar solicitud
                                 </button>
                             </div>
                         </form>
@@ -678,7 +844,8 @@
         function setupDateInput() {
             var dateInput = document.getElementById('fecha-reserva');
             var today = new Date();
-            dateInput.setAttribute('min', formatDateISO(today));
+            var minDate = addBusinessDays(today, 3);
+            dateInput.setAttribute('min', formatDateISO(minDate));
 
             var maxDate = new Date(today);
             maxDate.setDate(maxDate.getDate() + 93);
@@ -772,9 +939,12 @@
                 var card = document.createElement('div');
                 card.className = 'salon-card ' + (salon.disponible ? 'available' : 'occupied');
                 card.setAttribute('data-bien-id', salon.BienID);
+                var detail = getSalonDetail(salon, salones.indexOf(salon));
                 card.innerHTML =
                     '<i class="bi bi-building" style="font-size:2.5rem; color: var(--color-primary);"></i>' +
                     '<h5 style="color: var(--color-primary); margin-top: 10px;">' + escapeHtml(salon.Descripcion) + '</h5>' +
+                    '<div class="asset-detail">' + escapeHtml(detail) + '</div>' +
+                    '<div class="mb-3"><span class="price-chip"><i class="bi bi-cash-coin"></i> $95.000</span></div>' +
                     '<span class="badge ' + (salon.disponible ? 'bg-success' : 'bg-danger') + ' fs-6">' +
                     (salon.disponible ? '<i class="bi bi-check-circle"></i> Disponible' : '<i class="bi bi-x-circle"></i> Ocupado') +
                     '</span>';
@@ -808,7 +978,8 @@
                     '<i class="bi bi-dribbble" style="font-size:2rem; color: var(--color-primary);"></i>' +
                     '<div>' +
                         '<h5 style="color: var(--color-primary);">' + escapeHtml(cancha.Descripcion) + '</h5>' +
-                        '<small class="text-muted">' + availableCount + ' de ' + totalCount + ' horarios disponibles</small>' +
+                        '<small class="text-muted d-block">' + availableCount + ' de ' + totalCount + ' horarios disponibles</small>' +
+                        '<span class="price-chip mt-2"><i class="bi bi-cash-coin"></i> $126.000</span>' +
                     '</div>' +
                     '<i class="bi bi-chevron-down chevron-icon" id="chevron-' + cancha.BienID + '"></i>';
 
@@ -963,6 +1134,16 @@
             document.getElementById('summary-bien').textContent = bien.Descripcion || bien.BienID;
             document.getElementById('summary-fecha').textContent = fechaDisplay;
             document.getElementById('summary-horario').textContent = horarioDisplay;
+            document.getElementById('summary-price').textContent = bien.Tipo === 'SALON' ? '$95.000' : '$126.000';
+
+            var depositNote = document.getElementById('deposit-note');
+            if (bien.Tipo === 'SALON') {
+                depositNote.classList.remove('d-none');
+                depositNote.innerHTML = '<strong>Depósito de garantía:</strong> $150.000 en efectivo el día del evento, sujeto a devolución después de revisar el estado y aseo del salón.';
+            } else {
+                depositNote.classList.add('d-none');
+                depositNote.innerHTML = '';
+            }
 
             // Guardar horario para el envío del formulario
             state.horarioValue = horarioValue;
@@ -1134,7 +1315,7 @@
                     
                     // Re-habilitar botón para que pueda corregir
                     btnSubmit.disabled = false;
-                    btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar Reserva';
+                    btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar solicitud';
                 } else {
                     // No se pudo verificar la creación (error de red o similar)
                     alertsDiv.innerHTML = 
@@ -1149,7 +1330,7 @@
                     
                     // Re-habilitar botón por si quiere reenviar
                     btnSubmit.disabled = false;
-                    btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar Reserva';
+                    btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar solicitud';
                 }
                 
                 // Scroll al mensaje
@@ -1170,7 +1351,7 @@
                 
                 // Re-habilitar botón
                 btnSubmit.disabled = false;
-                btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar Reserva';
+                btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar solicitud';
                 
                 // Scroll al mensaje
                 alertsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1225,6 +1406,31 @@
         }
 
         // ========== UTILIDADES ==========
+
+        function addBusinessDays(startDate, businessDays) {
+            var result = new Date(startDate);
+            var added = 0;
+            while (added < businessDays) {
+                result.setDate(result.getDate() + 1);
+                var day = result.getDay();
+                if (day !== 0 && day !== 6) added += 1;
+            }
+            return result;
+        }
+
+        function getSalonDetail(salon, index) {
+            var description = String(salon.Descripcion || '').toLowerCase();
+            if (description.indexOf('porter') !== -1 || description.indexOf('salón 3') !== -1 || description.indexOf('salon 3') !== -1) {
+                return 'Segundo piso de portería · 18 sillas · 4 mesas · nevera';
+            }
+            if (description.indexOf('ciudad') !== -1 || description.indexOf('salón 1') !== -1 || description.indexOf('salon 1') !== -1 || index === 0) {
+                return 'Sky Club, piso 8 · vista a la ciudad · 23 sillas · 6 mesas';
+            }
+            if (description.indexOf('copropiedad') !== -1 || description.indexOf('salón 2') !== -1 || description.indexOf('salon 2') !== -1 || index === 1) {
+                return 'Sky Club, piso 8 · vista a la copropiedad · 23 sillas · 6 mesas';
+            }
+            return 'Reserva por día completo, sujeta a disponibilidad y aprobación';
+        }
 
         function formatDateISO(d) {
             var y = d.getFullYear();
