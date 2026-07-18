@@ -17,7 +17,7 @@
  * Requiere estar en el MISMO proyecto que datos_maestros_info_aptos_v3.gs.
  */
 
-const PORTAL_VERSION = '1.3.3-resident-privacy';
+const PORTAL_VERSION = '1.4.1-admin-edicion-unidad-propietarios';
 const PORTAL_TIMEZONE = 'America/Bogota';
 
 const PORTAL_SHEETS = Object.freeze({
@@ -63,6 +63,7 @@ const PORTAL_ROLE = Object.freeze({
 
 const PORTAL_IDENTITY_TYPE = Object.freeze({
   PROPIETARIO: 'PROPIETARIO',
+  RESIDENTE_PRINCIPAL: 'RESIDENTE_PRINCIPAL',
   RESIDENTE: 'RESIDENTE'
 });
 
@@ -450,11 +451,13 @@ function portalBuildBridgeHtml_(allowedOrigins) {
         dashboardAdmin: 'portalObtenerDashboardAdmin',
         buscarAdmin: 'portalBuscarAdministracion',
         perfilAdmin: 'portalObtenerPerfilAdministracion',
+        actualizarApartamentoAdmin: 'portalActualizarApartamentoAdministracion',
         listarSolicitudes: 'portalListarSolicitudes',
         resolverSolicitud: 'portalResolverSolicitud',
         listarVehiculosSinIdentificar: 'portalListarVehiculosSinIdentificar',
         gestionarVehiculoSinIdentificar: 'portalGestionarVehiculoSinIdentificar',
-        buscarVigilancia: 'portalBuscarVigilancia'
+        buscarVigilancia: 'portalBuscarVigilancia',
+        registrarResidenteVigilancia: 'portalRegistrarResidenteVigilancia'
       };
 
       function originAllowed(origin) {
@@ -553,6 +556,9 @@ function portalBuildBridgeHtml_(allowedOrigins) {
           case 'portalObtenerPerfilAdministracion':
             runner.portalObtenerPerfilAdministracion(payload, event.origin);
             break;
+          case 'portalActualizarApartamentoAdministracion':
+            runner.portalActualizarApartamentoAdministracion(payload, event.origin);
+            break;
           case 'portalListarSolicitudes':
             runner.portalListarSolicitudes(payload, event.origin);
             break;
@@ -567,6 +573,9 @@ function portalBuildBridgeHtml_(allowedOrigins) {
             break;
           case 'portalBuscarVigilancia':
             runner.portalBuscarVigilancia(payload, event.origin);
+            break;
+          case 'portalRegistrarResidenteVigilancia':
+            runner.portalRegistrarResidenteVigilancia(payload, event.origin);
             break;
           default:
             reply(
@@ -1267,6 +1276,47 @@ function portalEnviarSolicitudActualizacion(payload, origin) {
     session.personId
   );
 
+  // El residente principal puede administrar convivientes, pero no puede
+  // eliminarse ni degradar su propio vínculo desde el autoservicio.
+  if (
+    session.identityType ===
+      PORTAL_IDENTITY_TYPE.RESIDENTE_PRINCIPAL &&
+    Array.isArray(proposed.RESIDENTES)
+  ) {
+    const currentSelf =
+      (current.RESIDENTES || [])
+        .find(function (row) {
+          return (
+            portalSafeTrim_(row.personaId) ===
+            portalSafeTrim_(session.personId)
+          );
+        });
+
+    if (currentSelf) {
+      let proposedSelf =
+        proposed.RESIDENTES.find(function (row) {
+          return (
+            portalSafeTrim_(row.personaId) ===
+            portalSafeTrim_(session.personId)
+          );
+        });
+
+      if (!proposedSelf) {
+        proposedSelf = {};
+        proposed.RESIDENTES.unshift(proposedSelf);
+      }
+
+      proposedSelf.personaId =
+        currentSelf.personaId;
+      proposedSelf.numeroDocumento =
+        currentSelf.numeroDocumento;
+      proposedSelf.nombre =
+        currentSelf.nombre;
+      proposedSelf.rol =
+        currentSelf.rol;
+    }
+  }
+
   // Los campos identificadores mostrados como bloqueados nunca se aceptan
   // desde el navegador, aunque alguien altere el HTML o el payload.
   if (proposed.CONTACTO && current.CONTACTO) {
@@ -1704,32 +1754,106 @@ function portalBuildEditableSnapshot_(
 }
 
 
-function portalEnrichResidentsWithIdentity_(approvedRows, baseRows) {
+function portalEnrichResidentsWithIdentity_(
+  approvedRows,
+  baseRows
+) {
   const byId = {};
   const byName = {};
+  const result = [];
+  const included = {};
 
   (baseRows || []).forEach(function (row) {
-    const personId = portalSafeTrim_(row.personaId);
-    const nameKey = portalNormalizePersonName_(row.nombre);
+    const personId =
+      portalSafeTrim_(row.personaId);
+    const nameKey =
+      portalNormalizePersonName_(row.nombre);
+
     if (personId) byId[personId] = row;
+
     if (nameKey) {
-      if (!byName[nameKey]) byName[nameKey] = [];
+      if (!byName[nameKey]) {
+        byName[nameKey] = [];
+      }
       byName[nameKey].push(row);
     }
   });
 
-  return (approvedRows || []).map(function (row) {
-    const direct = byId[portalSafeTrim_(row.personaId)];
-    const nameMatches = byName[portalNormalizePersonName_(row.nombre)] || [];
-    const matched = direct || (nameMatches.length === 1 ? nameMatches[0] : null);
-    return {
-      personaId: portalSafeTrim_(row.personaId) || (matched ? matched.personaId : ''),
-      numeroDocumento: portalNormalizeDocument_(row.numeroDocumento) ||
-        (matched ? matched.numeroDocumento : ''),
-      nombre: portalLimitText_(row.nombre, 150),
-      rol: portalNormalizeResidentRole_(row.rol)
-    };
+  // Solo conserva registros aprobados que todavía tienen un vínculo activo
+  // en el maestro. Así una salida registrada por vigilancia no reaparece.
+  (approvedRows || []).forEach(function (row) {
+    const direct =
+      byId[portalSafeTrim_(row.personaId)];
+    const nameMatches =
+      byName[
+        portalNormalizePersonName_(row.nombre)
+      ] || [];
+    const matched =
+      direct ||
+      (
+        nameMatches.length === 1
+          ? nameMatches[0]
+          : null
+      );
+
+    if (!matched) return;
+
+    const personId =
+      portalSafeTrim_(matched.personaId);
+
+    if (personId && included[personId]) {
+      return;
+    }
+
+    result.push({
+      personaId: personId,
+      numeroDocumento:
+        portalNormalizeDocument_(
+          matched.numeroDocumento ||
+          row.numeroDocumento
+        ),
+      nombre:
+        portalLimitText_(
+          matched.nombre || row.nombre,
+          150
+        ),
+      rol:
+        portalNormalizeResidentRole_(
+          matched.rol || row.rol
+        )
+    });
+
+    if (personId) included[personId] = true;
   });
+
+  // Agrega altas directas de vigilancia que aún no existan en el snapshot
+  // aprobado del portal.
+  (baseRows || []).forEach(function (row) {
+    const personId =
+      portalSafeTrim_(row.personaId);
+
+    if (personId && included[personId]) {
+      return;
+    }
+
+    result.push({
+      personaId: personId,
+      numeroDocumento:
+        portalNormalizeDocument_(
+          row.numeroDocumento
+        ),
+      nombre:
+        portalLimitText_(row.nombre, 150),
+      rol:
+        portalNormalizeResidentRole_(
+          row.rol
+        )
+    });
+
+    if (personId) included[personId] = true;
+  });
+
+  return result;
 }
 
 /***************************************
@@ -1825,15 +1949,55 @@ function portalBuildAdminProfile_(unitId, adminEmail) {
     );
   }
 
+  const people = portalGetAdminPeople_(unitId);
+  const owners = people.filter(function (person) {
+    return portalIsOwnerRole_(person.rol);
+  });
+  const otherPeople = people.filter(function (person) {
+    return !portalIsOwnerRole_(person.rol);
+  });
+
   const profile = {
     unidad: unit,
-    personas: portalGetAdminPeople_(unitId),
+    camposUnidadEditables: {
+      estadoUnidad:
+        portalSafeTrim_(unit.EstadoUnidad),
+      fechaEntregaApartamento:
+        portalDateInputValue_(
+          unit.FechaEntregaApartamento
+        ),
+      estadoEntregaApartamento:
+        portalSafeTrim_(
+          unit.EstadoEntregaApartamento
+        )
+    },
+    camposUnidadProtegidos: {
+      unidadId: unit.UnidadID,
+      torre: unit.Torre,
+      apartamento: unit.Apartamento,
+      codigoOficial: unit.CodigoOficial,
+      areaPrivadaConstruidaM2:
+        unit.AreaPrivadaConstruidaM2,
+      coeficienteCopropiedad:
+        unit.CoeficienteCopropiedad,
+      valorPresupuesto2026:
+        unit.ValorPresupuesto2026
+    },
+    propietarios: owners,
+    otrasPersonas: otherPeople,
+    personas: people,
     vehiculos: dmObtenerVehiculosActuales(unitId),
     parqueaderos: dmObtenerParqueaderosUnidad(unitId),
     estadoCuenta: dmObtenerEstadoCuenta(unitId, ''),
-    datosPortal: portalBuildEditableSnapshot_(unitId, adminEmail || ''),
-    seccionesAprobadas: portalGetApprovedSections_(unitId),
-    solicitudes: portalGetAllRequestsForUnit_(unitId)
+    datosPortal:
+      portalBuildEditableSnapshot_(
+        unitId,
+        adminEmail || ''
+      ),
+    seccionesAprobadas:
+      portalGetApprovedSections_(unitId),
+    solicitudes:
+      portalGetAllRequestsForUnit_(unitId)
   };
 
   const safeProfile = portalToClientSafe_(profile);
@@ -1878,6 +2042,1381 @@ function portalDiagnosticarPerfilAdministracion(unidadId) {
   console.log(JSON.stringify(result));
   return result;
 }
+
+
+/**
+ * Actualización directa y auditada de la información operativa de una
+ * unidad y de sus propietarios.
+ *
+ * Los campos estructurales del reglamento y la cartera permanecen
+ * protegidos: UnidadID, torre, apartamento, área, coeficiente,
+ * presupuesto, parqueaderos y estado de cuenta.
+ */
+function portalActualizarApartamentoAdministracion(
+  payload,
+  origin
+) {
+  payload = payload || {};
+
+  const session = portalRequireSession_(
+    payload.token,
+    origin,
+    [PORTAL_ROLE.ADMIN]
+  );
+  const unitId =
+    portalNormalizeUnitInput_(
+      '',
+      '',
+      payload.unidadId
+    );
+  const reason =
+    portalLimitText_(
+      payload.motivo,
+      1000
+    );
+
+  if (!unitId || !dmObtenerUnidad(unitId)) {
+    throw new Error(
+      'La unidad indicada no existe.'
+    );
+  }
+
+  if (reason.length < 5) {
+    throw new Error(
+      'Explica brevemente el motivo de la actualización.'
+    );
+  }
+
+  if (
+    payload.confirmarCambios !== true &&
+    !portalYes_(payload.confirmarCambios)
+  ) {
+    throw new Error(
+      'Debes confirmar la actualización administrativa.'
+    );
+  }
+
+  const ownersPayload =
+    Array.isArray(payload.propietarios)
+      ? payload.propietarios
+      : [];
+
+  if (!ownersPayload.length) {
+    throw new Error(
+      'Debe existir al menos un propietario en la actualización.'
+    );
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    // Primero prepara y valida todo el plan. No se escribe ninguna fila
+    // hasta que documentos, personas, vínculos y propietarios activos
+    // sean consistentes.
+    const ownerPlan =
+      portalPrepareAdminOwnerPlan_(
+        unitId,
+        ownersPayload
+      );
+    const unitPlan =
+      portalPrepareAdminUnitPlan_(
+        unitId,
+        payload.unidad || {}
+      );
+
+    const unitResult =
+      portalApplyAdminUnitPlan_(unitPlan);
+    const ownerResult =
+      portalApplyAdminOwnerPlan_(
+        ownerPlan,
+        session,
+        reason
+      );
+
+    SpreadsheetApp.flush();
+
+    portalAudit_({
+      action:
+        'ACTUALIZAR_APARTAMENTO_ADMIN',
+      role: session.role,
+      email: session.email,
+      unitId: unitId,
+      result: 'OK',
+      detail:
+        'Motivo=' + reason +
+        ' | Unidad=' +
+          unitResult.camposActualizados.join(',') +
+        ' | PropietariosActivos=' +
+          ownerResult.propietariosActivos +
+        ' | Creados=' +
+          ownerResult.personasCreadas +
+        ' | Actualizados=' +
+          ownerResult.personasActualizadas +
+        ' | Retirados=' +
+          ownerResult.vinculosRetirados
+    });
+
+    return portalToClientSafe_({
+      ok: true,
+      message:
+        'La información del apartamento y sus propietarios fue actualizada.',
+      unidadId: unitId,
+      resumen: {
+        camposUnidadActualizados:
+          unitResult.camposActualizados,
+        propietariosActivos:
+          ownerResult.propietariosActivos,
+        personasCreadas:
+          ownerResult.personasCreadas,
+        personasActualizadas:
+          ownerResult.personasActualizadas,
+        vinculosRetirados:
+          ownerResult.vinculosRetirados,
+        contactosAprobadosInvalidados:
+          ownerResult.contactosInvalidados
+      },
+      perfil:
+        portalBuildAdminProfile_(
+          unitId,
+          session.email
+        )
+    });
+  } catch (error) {
+    portalAudit_({
+      action:
+        'ACTUALIZAR_APARTAMENTO_ADMIN',
+      role: session.role,
+      email: session.email,
+      unitId: unitId,
+      result: 'ERROR',
+      detail:
+        'Motivo=' + reason +
+        ' | Error=' +
+        (
+          error && error.message
+            ? error.message
+            : String(error)
+        )
+    });
+
+    throw error;
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
+  }
+}
+
+function portalPrepareAdminUnitPlan_(
+  unitId,
+  proposed
+) {
+  const ss = portalGetSpreadsheet_();
+  const sheetName =
+    typeof DM_SHEETS !== 'undefined'
+      ? DM_SHEETS.UNIDADES
+      : 'Unidades';
+  const sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    throw new Error(
+      'No existe la hoja Unidades.'
+    );
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const headers =
+    data[0].map(portalSafeTrim_);
+  const map = portalHeaderMap_(headers);
+
+  portalRequireHeaders_(
+    map,
+    [
+      'UnidadID',
+      'EstadoUnidad',
+      'FechaEntregaApartamento',
+      'EstadoEntregaApartamento',
+      'FuentePrincipal',
+      'FechaActualizacion'
+    ],
+    sheetName
+  );
+
+  let rowNumber = 0;
+  let current = null;
+
+  for (let index = 1; index < data.length; index++) {
+    if (
+      portalSafeTrim_(
+        data[index][map.UnidadID]
+      ).toUpperCase() === unitId
+    ) {
+      rowNumber = index + 1;
+      current = data[index];
+      break;
+    }
+  }
+
+  if (!rowNumber) {
+    throw new Error(
+      'La unidad no existe en la hoja Unidades.'
+    );
+  }
+
+  const state =
+    portalNormalizeAdminUnitState_(
+      proposed.estadoUnidad ||
+      current[map.EstadoUnidad]
+    );
+  const deliveryState =
+    portalNormalizeAdminDeliveryState_(
+      proposed.estadoEntregaApartamento ||
+      current[
+        map.EstadoEntregaApartamento
+      ]
+    );
+  const deliveryDate =
+    portalNormalizeAdminDate_(
+      proposed.fechaEntregaApartamento
+    );
+
+  return {
+    sheet: sheet,
+    map: map,
+    rowNumber: rowNumber,
+    current: current,
+    values: {
+      EstadoUnidad: state,
+      FechaEntregaApartamento:
+        deliveryDate,
+      EstadoEntregaApartamento:
+        deliveryState,
+      FuentePrincipal:
+        portalAppendDelimitedValue_(
+          current[map.FuentePrincipal],
+          'ADMIN_PORTAL'
+        ),
+      FechaActualizacion:
+        portalNow_()
+    }
+  };
+}
+
+function portalApplyAdminUnitPlan_(plan) {
+  const changed = [];
+
+  Object.keys(plan.values).forEach(
+    function (header) {
+      const columnIndex = plan.map[header];
+      const currentValue =
+        plan.current[columnIndex];
+      const newValue =
+        plan.values[header];
+
+      const comparableCurrent =
+        portalComparableValue_(currentValue);
+      const comparableNew =
+        portalComparableValue_(newValue);
+
+      if (
+        comparableCurrent !== comparableNew
+      ) {
+        plan.sheet.getRange(
+          plan.rowNumber,
+          columnIndex + 1
+        ).setValue(newValue);
+
+        if (
+          [
+            'EstadoUnidad',
+            'FechaEntregaApartamento',
+            'EstadoEntregaApartamento'
+          ].indexOf(header) !== -1
+        ) {
+          changed.push(header);
+        }
+      }
+    }
+  );
+
+  return {
+    camposActualizados: changed
+  };
+}
+
+function portalPrepareAdminOwnerPlan_(
+  unitId,
+  proposedOwners
+) {
+  const ss = portalGetSpreadsheet_();
+  const peopleSheetName =
+    typeof DM_SHEETS !== 'undefined'
+      ? DM_SHEETS.PERSONAS
+      : 'Personas';
+  const linksSheetName =
+    typeof DM_SHEETS !== 'undefined'
+      ? DM_SHEETS.VINCULOS_UNIDAD
+      : 'Vinculos_Unidad';
+  const peopleSheet =
+    ss.getSheetByName(peopleSheetName);
+  const linksSheet =
+    ss.getSheetByName(linksSheetName);
+
+  if (!peopleSheet || !linksSheet) {
+    throw new Error(
+      'No existen las hojas Personas y Vinculos_Unidad.'
+    );
+  }
+
+  const peopleData =
+    peopleSheet.getDataRange().getValues();
+  const linksData =
+    linksSheet.getDataRange().getValues();
+  const peopleHeaders =
+    peopleData[0].map(portalSafeTrim_);
+  const linksHeaders =
+    linksData[0].map(portalSafeTrim_);
+  const pm =
+    portalHeaderMap_(peopleHeaders);
+  const lm =
+    portalHeaderMap_(linksHeaders);
+
+  portalRequireHeaders_(
+    pm,
+    [
+      'PersonaID',
+      'TipoPersona',
+      'TipoDocumento',
+      'NumeroDocumento',
+      'NombreCompleto',
+      'CorreoPrincipal',
+      'CorreosAlternos',
+      'CelularPrincipal',
+      'TelefonosAlternos',
+      'EstadoPersona',
+      'Fuentes',
+      'FechaFuente',
+      'FechaActualizacion'
+    ],
+    peopleSheetName
+  );
+
+  portalRequireHeaders_(
+    lm,
+    [
+      'VinculoID',
+      'UnidadID',
+      'PersonaID',
+      'Rol',
+      'EsContactoPrincipal',
+      'RecibeNotificaciones',
+      'EstadoVinculo',
+      'FechaInicio',
+      'FechaFin',
+      'Fuente',
+      'RegistroFuenteID',
+      'FilaFuente',
+      'FechaActualizacion'
+    ],
+    linksSheetName
+  );
+
+  const peopleById = {};
+  const peopleByDocument = {};
+
+  for (
+    let index = 1;
+    index < peopleData.length;
+    index++
+  ) {
+    const row = peopleData[index];
+    const personId =
+      portalSafeTrim_(
+        row[pm.PersonaID]
+      );
+    const documentNumber =
+      portalNormalizeDocument_(
+        row[pm.NumeroDocumento]
+      );
+
+    if (personId) {
+      peopleById[personId] = {
+        rowNumber: index + 1,
+        values: row
+      };
+    }
+
+    if (documentNumber) {
+      if (!peopleByDocument[documentNumber]) {
+        peopleByDocument[documentNumber] = [];
+      }
+
+      peopleByDocument[documentNumber]
+        .push({
+          personId: personId,
+          rowNumber: index + 1,
+          values: row
+        });
+    }
+  }
+
+  const links = [];
+
+  for (
+    let index = 1;
+    index < linksData.length;
+    index++
+  ) {
+    const row = linksData[index];
+
+    links.push({
+      rowNumber: index + 1,
+      values: row,
+      linkId:
+        portalSafeTrim_(
+          row[lm.VinculoID]
+        ),
+      unitId:
+        portalSafeTrim_(
+          row[lm.UnidadID]
+        ).toUpperCase(),
+      personId:
+        portalSafeTrim_(
+          row[lm.PersonaID]
+        ),
+      role:
+        portalSafeTrim_(
+          row[lm.Rol]
+        ).toUpperCase(),
+      active:
+        portalSafeTrim_(
+          row[lm.EstadoVinculo]
+        ).toUpperCase() === 'ACTIVO'
+    });
+  }
+
+  const currentOwners =
+    links.filter(function (link) {
+      return (
+        link.unitId === unitId &&
+        link.active &&
+        portalIsOwnerRole_(link.role)
+      );
+    });
+
+  const normalized = [];
+  const seenPersonIds = {};
+  const seenDocuments = {};
+
+  proposedOwners.forEach(
+    function (rawOwner, index) {
+      rawOwner = rawOwner || {};
+
+      const active =
+        rawOwner.activo !== false &&
+        !(
+          portalSafeTrim_(
+            rawOwner.activo
+          ).toUpperCase() === 'NO'
+        );
+      let personId =
+        portalSafeTrim_(
+          rawOwner.personaId
+        );
+      const documentNumber =
+        portalNormalizeDocument_(
+          rawOwner.numeroDocumento
+        );
+      const name =
+        portalLimitText_(
+          rawOwner.nombreCompleto,
+          180
+        );
+      const email =
+        rawOwner.correoPrincipal
+          ? portalNormalizeEmail_(
+              rawOwner.correoPrincipal
+            )
+          : '';
+      const alternateEmails =
+        portalExtractEmails_(
+          rawOwner.correosAlternos
+        ).join(', ');
+      const phone =
+        portalNormalizePhone_(
+          rawOwner.celularPrincipal
+        );
+      const alternatePhones =
+        portalNormalizePhoneList_(
+          rawOwner.telefonosAlternos
+        );
+      const personType =
+        portalNormalizeAdminPersonType_(
+          rawOwner.tipoPersona
+        );
+      const documentType =
+        portalNormalizeAdminDocumentType_(
+          rawOwner.tipoDocumento,
+          personType
+        );
+      const role =
+        portalNormalizeAdminOwnerRole_(
+          rawOwner.rol
+        );
+      const primary =
+        rawOwner.esContactoPrincipal === true ||
+        portalYes_(
+          rawOwner.esContactoPrincipal
+        );
+      const notifications =
+        rawOwner.recibeNotificaciones !== false &&
+        !(
+          portalSafeTrim_(
+            rawOwner.recibeNotificaciones
+          ).toUpperCase() === 'NO'
+        );
+
+      if (!name || name.length < 3) {
+        throw new Error(
+          'El propietario ' +
+          (index + 1) +
+          ' no tiene un nombre válido.'
+        );
+      }
+
+      if (
+        !documentNumber ||
+        documentNumber.length < 5
+      ) {
+        throw new Error(
+          'El propietario ' +
+          (index + 1) +
+          ' no tiene un documento válido.'
+        );
+      }
+
+      if (
+        rawOwner.correoPrincipal &&
+        !email
+      ) {
+        throw new Error(
+          'El correo principal del propietario ' +
+          name +
+          ' no es válido.'
+        );
+      }
+
+      if (
+        rawOwner.celularPrincipal &&
+        phone.length < 7
+      ) {
+        throw new Error(
+          'El celular del propietario ' +
+          name +
+          ' no es válido.'
+        );
+      }
+
+      if (personId) {
+        if (!peopleById[personId]) {
+          throw new Error(
+            'La PersonaID ' +
+            personId +
+            ' no existe.'
+          );
+        }
+
+        const duplicateDocument =
+          (
+            peopleByDocument[
+              documentNumber
+            ] || []
+          ).filter(function (person) {
+            return (
+              person.personId !== personId
+            );
+          });
+
+        if (duplicateDocument.length) {
+          throw new Error(
+            'El documento ' +
+            documentNumber +
+            ' ya pertenece a otra persona.'
+          );
+        }
+      } else {
+        const matches =
+          peopleByDocument[
+            documentNumber
+          ] || [];
+
+        const uniqueIds =
+          portalUnique_(
+            matches.map(function (person) {
+              return person.personId;
+            }).filter(Boolean)
+          );
+
+        if (uniqueIds.length > 1) {
+          throw new Error(
+            'El documento ' +
+            documentNumber +
+            ' aparece en más de una persona. ' +
+            'Resuelve el conflicto antes de continuar.'
+          );
+        }
+
+        if (uniqueIds.length === 1) {
+          personId = uniqueIds[0];
+        }
+      }
+
+      if (
+        personId &&
+        seenPersonIds[personId]
+      ) {
+        throw new Error(
+          'La misma persona fue incluida dos veces.'
+        );
+      }
+
+      if (
+        seenDocuments[documentNumber]
+      ) {
+        throw new Error(
+          'El documento ' +
+          documentNumber +
+          ' fue incluido dos veces.'
+        );
+      }
+
+      if (personId) {
+        seenPersonIds[personId] = true;
+      }
+      seenDocuments[documentNumber] = true;
+
+      normalized.push({
+        sourceIndex: index,
+        personId: personId,
+        active: active,
+        personType: personType,
+        documentType: documentType,
+        documentNumber:
+          documentNumber,
+        name: name,
+        email: email,
+        alternateEmails:
+          alternateEmails,
+        phone: phone,
+        alternatePhones:
+          alternatePhones,
+        role: role,
+        primary: primary,
+        notifications: notifications
+      });
+    }
+  );
+
+  const activeProposals =
+    normalized.filter(function (owner) {
+      return owner.active;
+    });
+
+  if (!activeProposals.length) {
+    throw new Error(
+      'El apartamento debe conservar al menos un propietario activo.'
+    );
+  }
+
+  const primaryOwners =
+    activeProposals.filter(function (owner) {
+      return owner.primary;
+    });
+
+  if (primaryOwners.length > 1) {
+    throw new Error(
+      'Solo un propietario puede quedar como contacto principal.'
+    );
+  }
+
+  if (!primaryOwners.length) {
+    activeProposals[0].primary = true;
+  }
+
+  return {
+    unitId: unitId,
+    peopleSheet: peopleSheet,
+    linksSheet: linksSheet,
+    peopleHeaders: peopleHeaders,
+    linksHeaders: linksHeaders,
+    peopleData: peopleData,
+    linksData: linksData,
+    peopleMap: pm,
+    linksMap: lm,
+    peopleById: peopleById,
+    links: links,
+    currentOwners: currentOwners,
+    owners: normalized
+  };
+}
+
+function portalApplyAdminOwnerPlan_(
+  plan,
+  session,
+  reason
+) {
+  const now = portalNow_();
+  const registrationId =
+    'ADM-OWN-' +
+    Utilities.formatDate(
+      new Date(),
+      PORTAL_TIMEZONE,
+      'yyyyMMdd-HHmmss'
+    ) +
+    '-' +
+    portalRandomSuffix_();
+  let peopleCreated = 0;
+  let peopleUpdated = 0;
+  let linksRetired = 0;
+  const affectedPersonIds = [];
+  const activePersonIds = [];
+
+  plan.owners.forEach(function (owner) {
+    let personId = owner.personId;
+    let personRow =
+      personId
+        ? plan.peopleById[personId]
+        : null;
+
+    if (!personRow) {
+      personId =
+        portalGenerateAdminPersonId_(
+          owner.documentNumber,
+          plan.peopleById
+        );
+
+      const personObject = {
+        PersonaID: personId,
+        TipoPersona: owner.personType,
+        TipoDocumento:
+          owner.documentType,
+        NumeroDocumento:
+          owner.documentNumber,
+        NombreCompleto: owner.name,
+        CorreoPrincipal: owner.email,
+        CorreosAlternos:
+          owner.alternateEmails,
+        CelularPrincipal:
+          owner.phone,
+        TelefonosAlternos:
+          owner.alternatePhones,
+        EstadoPersona: 'ACTIVA',
+        Fuentes: 'ADMIN_PORTAL',
+        FechaFuente: now,
+        FechaActualizacion: now
+      };
+
+      const rowValues =
+        plan.peopleHeaders.map(
+          function (header) {
+            return (
+              personObject[header] !==
+                undefined
+                ? personObject[header]
+                : ''
+            );
+          }
+        );
+
+      plan.peopleSheet.appendRow(
+        rowValues
+      );
+
+      personRow = {
+        rowNumber:
+          plan.peopleSheet.getLastRow(),
+        values: rowValues
+      };
+      plan.peopleById[personId] =
+        personRow;
+      peopleCreated += 1;
+    } else {
+      const updates = {
+        TipoPersona: owner.personType,
+        TipoDocumento:
+          owner.documentType,
+        NumeroDocumento:
+          owner.documentNumber,
+        NombreCompleto: owner.name,
+        CorreoPrincipal: owner.email,
+        CorreosAlternos:
+          owner.alternateEmails,
+        CelularPrincipal: owner.phone,
+        TelefonosAlternos:
+          owner.alternatePhones,
+        EstadoPersona: 'ACTIVA',
+        Fuentes:
+          portalAppendDelimitedValue_(
+            personRow.values[
+              plan.peopleMap.Fuentes
+            ],
+            'ADMIN_PORTAL'
+          ),
+        FechaFuente: now,
+        FechaActualizacion: now
+      };
+
+      Object.keys(updates).forEach(
+        function (header) {
+          plan.peopleSheet.getRange(
+            personRow.rowNumber,
+            plan.peopleMap[header] + 1
+          ).setValue(updates[header]);
+
+          personRow.values[
+            plan.peopleMap[header]
+          ] = updates[header];
+        }
+      );
+
+      peopleUpdated += 1;
+    }
+
+    owner.personId = personId;
+    affectedPersonIds.push(personId);
+
+    const sameOwnerLinks =
+      plan.links.filter(function (link) {
+        return (
+          link.unitId === plan.unitId &&
+          link.personId === personId &&
+          link.active &&
+          portalIsOwnerRole_(link.role)
+        );
+      });
+
+    if (!owner.active) {
+      sameOwnerLinks.forEach(
+        function (link) {
+          portalCloseAdminOwnerLink_(
+            plan.linksSheet,
+            plan.linksMap,
+            link.rowNumber,
+            now
+          );
+          link.active = false;
+          linksRetired += 1;
+        }
+      );
+      return;
+    }
+
+    activePersonIds.push(personId);
+
+    let canonicalLink =
+      sameOwnerLinks.length
+        ? sameOwnerLinks[0]
+        : null;
+
+    if (!canonicalLink) {
+      const linkId =
+        'VIN-' +
+        portalHash_(
+          plan.unitId +
+          '|' +
+          personId +
+          '|' +
+          registrationId
+        ).slice(0, 16).toUpperCase();
+
+      const linkObject = {
+        VinculoID: linkId,
+        UnidadID: plan.unitId,
+        PersonaID: personId,
+        Rol: owner.role,
+        EsContactoPrincipal:
+          owner.primary ? 'SI' : 'NO',
+        RecibeNotificaciones:
+          owner.notifications ? 'SI' : 'NO',
+        EstadoVinculo: 'ACTIVO',
+        FechaInicio: now,
+        FechaFin: '',
+        Fuente: 'ADMIN_PORTAL',
+        RegistroFuenteID:
+          registrationId,
+        FilaFuente: '',
+        FechaActualizacion: now
+      };
+
+      plan.linksSheet.appendRow(
+        plan.linksHeaders.map(
+          function (header) {
+            return (
+              linkObject[header] !==
+                undefined
+                ? linkObject[header]
+                : ''
+            );
+          }
+        )
+      );
+    } else {
+      const updates = {
+        Rol: owner.role,
+        EsContactoPrincipal:
+          owner.primary ? 'SI' : 'NO',
+        RecibeNotificaciones:
+          owner.notifications ? 'SI' : 'NO',
+        EstadoVinculo: 'ACTIVO',
+        FechaFin: '',
+        Fuente:
+          portalAppendDelimitedValue_(
+            canonicalLink.values[
+              plan.linksMap.Fuente
+            ],
+            'ADMIN_PORTAL'
+          ),
+        RegistroFuenteID:
+          registrationId,
+        FechaActualizacion: now
+      };
+
+      Object.keys(updates).forEach(
+        function (header) {
+          plan.linksSheet.getRange(
+            canonicalLink.rowNumber,
+            plan.linksMap[header] + 1
+          ).setValue(updates[header]);
+        }
+      );
+
+      sameOwnerLinks.slice(1).forEach(
+        function (duplicate) {
+          portalCloseAdminOwnerLink_(
+            plan.linksSheet,
+            plan.linksMap,
+            duplicate.rowNumber,
+            now
+          );
+          duplicate.active = false;
+          linksRetired += 1;
+        }
+      );
+    }
+  });
+
+  // Los propietarios activos que el formulario envía explícitamente como
+  // retirados ya fueron cerrados. Los propietarios existentes no incluidos
+  // por una interfaz antigua se conservan para evitar retiros accidentales.
+  const activeOwnersAfter =
+    portalGetAdminPeople_(
+      plan.unitId
+    ).filter(function (person) {
+      return portalIsOwnerRole_(
+        person.rol
+      );
+    });
+
+  if (!activeOwnersAfter.length) {
+    throw new Error(
+      'La actualización no puede dejar la unidad sin propietario activo.'
+    );
+  }
+
+  const invalidated =
+    portalInvalidateApprovedOwnerContacts_(
+      plan.unitId,
+      affectedPersonIds,
+      session.email,
+      reason
+    );
+
+  return {
+    propietariosActivos:
+      activeOwnersAfter.length,
+    personasCreadas: peopleCreated,
+    personasActualizadas:
+      peopleUpdated,
+    vinculosRetirados:
+      linksRetired,
+    contactosInvalidados:
+      invalidated
+  };
+}
+
+function portalCloseAdminOwnerLink_(
+  sheet,
+  map,
+  rowNumber,
+  now
+) {
+  sheet.getRange(
+    rowNumber,
+    map.EstadoVinculo + 1
+  ).setValue('HISTORICO');
+  sheet.getRange(
+    rowNumber,
+    map.FechaFin + 1
+  ).setValue(now);
+  sheet.getRange(
+    rowNumber,
+    map.FechaActualizacion + 1
+  ).setValue(now);
+}
+
+function portalInvalidateApprovedOwnerContacts_(
+  unitId,
+  personIds,
+  adminEmail,
+  reason
+) {
+  const sheet =
+    portalGetRequiredSheet_('APPROVED');
+  const data =
+    sheet.getDataRange().getValues();
+  const headers =
+    data[0].map(portalSafeTrim_);
+  const map = portalHeaderMap_(headers);
+  const ids = {};
+
+  personIds.forEach(function (personId) {
+    if (personId) ids[personId] = true;
+  });
+
+  let count = 0;
+
+  for (
+    let index = 1;
+    index < data.length;
+    index++
+  ) {
+    if (
+      portalSafeTrim_(
+        data[index][map.UnidadID]
+      ).toUpperCase() !== unitId ||
+      portalSafeTrim_(
+        data[index][map.Seccion]
+      ).toUpperCase() !== 'CONTACTO' ||
+      portalSafeTrim_(
+        data[index][map.Estado]
+      ).toUpperCase() !== 'VIGENTE'
+    ) {
+      continue;
+    }
+
+    let contact = {};
+
+    try {
+      contact = JSON.parse(
+        data[index][map.DatosJSON] ||
+        '{}'
+      );
+    } catch (error) {
+      contact = {};
+    }
+
+    if (
+      contact.personaId &&
+      ids[
+        portalSafeTrim_(
+          contact.personaId
+        )
+      ]
+    ) {
+      sheet.getRange(
+        index + 1,
+        map.Estado + 1
+      ).setValue('HISTORICO');
+      sheet.getRange(
+        index + 1,
+        map.FechaActualizacion + 1
+      ).setValue(portalNow_());
+      count += 1;
+    }
+  }
+
+  if (count) {
+    portalAudit_({
+      action:
+        'INVALIDAR_CONTACTO_APROBADO_ADMIN',
+      role: PORTAL_ROLE.ADMIN,
+      email: adminEmail,
+      unitId: unitId,
+      result: 'OK',
+      detail:
+        'Registros invalidados=' +
+        count +
+        ' | Motivo=' + reason
+    });
+  }
+
+  return count;
+}
+
+function portalGenerateAdminPersonId_(
+  documentNumber,
+  existingById
+) {
+  let attempt = 0;
+  let personId = '';
+
+  do {
+    personId =
+      'PER-' +
+      portalHash_(
+        'ADMIN|' +
+        documentNumber +
+        '|' +
+        attempt
+      ).slice(0, 16).toUpperCase();
+    attempt += 1;
+  } while (existingById[personId]);
+
+  return personId;
+}
+
+function portalNormalizeAdminPersonType_(value) {
+  const type =
+    portalSafeTrim_(value).toUpperCase();
+
+  return (
+    type.indexOf('JURID') !== -1 ||
+    type === 'EMPRESA'
+  )
+    ? 'PERSONA_JURIDICA'
+    : 'PERSONA_NATURAL';
+}
+
+function portalNormalizeAdminDocumentType_(
+  value,
+  personType
+) {
+  const type =
+    portalSafeTrim_(value)
+      .toUpperCase()
+      .replace(/\s+/g, '_');
+
+  if (
+    personType === 'PERSONA_JURIDICA'
+  ) {
+    return 'NIT';
+  }
+
+  if (
+    [
+      'CC',
+      'CEDULA',
+      'CEDULA_CIUDADANIA'
+    ].indexOf(type) !== -1
+  ) {
+    return 'CEDULA';
+  }
+
+  if (
+    [
+      'CE',
+      'CEDULA_EXTRANJERIA'
+    ].indexOf(type) !== -1
+  ) {
+    return 'CEDULA_EXTRANJERIA';
+  }
+
+  if (type === 'PASAPORTE') {
+    return 'PASAPORTE';
+  }
+
+  if (type === 'NIT') {
+    return 'NIT';
+  }
+
+  return 'OTRO';
+}
+
+function portalNormalizeAdminOwnerRole_(value) {
+  const role =
+    portalSafeTrim_(value).toUpperCase();
+
+  return role.indexOf('COPROPIET') !== -1
+    ? 'COPROPIETARIO'
+    : 'PROPIETARIO';
+}
+
+function portalNormalizeAdminUnitState_(value) {
+  const state =
+    portalSafeTrim_(value).toUpperCase();
+
+  if (
+    [
+      'ACTIVA',
+      'PENDIENTE_ENTREGA',
+      'INACTIVA'
+    ].indexOf(state) !== -1
+  ) {
+    return state;
+  }
+
+  return state || 'ACTIVA';
+}
+
+function portalNormalizeAdminDeliveryState_(
+  value
+) {
+  const state =
+    portalSafeTrim_(value).toUpperCase();
+
+  if (
+    [
+      'ENTREGADO',
+      'PENDIENTE',
+      'NO_REGISTRADO'
+    ].indexOf(state) !== -1
+  ) {
+    return state;
+  }
+
+  return state || 'NO_REGISTRADO';
+}
+
+function portalNormalizeAdminDate_(value) {
+  const text =
+    portalSafeTrim_(value);
+
+  if (!text) return '';
+
+  const match =
+    text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (!match) {
+    throw new Error(
+      'La fecha de entrega debe usar el formato AAAA-MM-DD.'
+    );
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date =
+    new Date(year, month - 1, day, 12, 0, 0);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    throw new Error(
+      'La fecha de entrega no es válida.'
+    );
+  }
+
+  return date;
+}
+
+function portalDateInputValue_(value) {
+  if (!value) return '';
+
+  if (
+    value instanceof Date &&
+    !isNaN(value.getTime())
+  ) {
+    return Utilities.formatDate(
+      value,
+      PORTAL_TIMEZONE,
+      'yyyy-MM-dd'
+    );
+  }
+
+  const text =
+    portalSafeTrim_(value);
+  const match =
+    text.match(/^(\d{4}-\d{2}-\d{2})/);
+
+  return match ? match[1] : '';
+}
+
+function portalComparableValue_(value) {
+  if (
+    value instanceof Date &&
+    !isNaN(value.getTime())
+  ) {
+    return Utilities.formatDate(
+      value,
+      PORTAL_TIMEZONE,
+      'yyyy-MM-dd'
+    );
+  }
+
+  return portalSafeTrim_(value);
+}
+
+function portalNormalizePhoneList_(value) {
+  const raw =
+    portalSafeTrim_(value);
+
+  if (!raw) return '';
+
+  return portalUnique_(
+    raw.split(/[;,|\n]+/)
+      .map(function (phone) {
+        return portalNormalizePhone_(
+          phone
+        );
+      })
+      .filter(function (phone) {
+        return phone.length >= 7;
+      })
+  ).join(', ');
+}
+
+/**
+ * Diagnóstico sin escritura para confirmar la información editable.
+ */
+function portalDiagnosticarEdicionApartamentoAdmin(
+  unidadId
+) {
+  const id =
+    portalNormalizeUnitInput_(
+      '',
+      '',
+      unidadId
+    );
+
+  if (!id || !dmObtenerUnidad(id)) {
+    return {
+      ok: false,
+      unidadId: id,
+      motivo:
+        'UNIDAD_NO_ENCONTRADA'
+    };
+  }
+
+  const profile =
+    portalBuildAdminProfile_(
+      id,
+      'diagnostico-admin@bulevarverde.local'
+    );
+
+  return {
+    ok: true,
+    version: PORTAL_VERSION,
+    unidadId: id,
+    propietariosActivos:
+      (profile.propietarios || []).length,
+    otrasPersonas:
+      (profile.otrasPersonas || []).length,
+    camposUnidadEditables:
+      Object.keys(
+        profile.camposUnidadEditables || {}
+      ),
+    camposProtegidos:
+      Object.keys(
+        profile.camposUnidadProtegidos || {}
+      ),
+    accionPublicada:
+      'actualizarApartamentoAdmin'
+  };
+}
+
 
 function portalListarSolicitudes(payload, origin) {
   payload = payload || {};
@@ -2450,11 +3989,32 @@ function portalNormalizePersonName_(value) {
 
 function portalNormalizeResidentRole_(value) {
   const role = portalSafeTrim_(value).toUpperCase();
-  if (role.indexOf('COPROPIET') !== -1) return 'COPROPIETARIO';
-  if (role.indexOf('PROPIET') !== -1) return 'PROPIETARIO';
-  if (role.indexOf('ARREND') !== -1) return 'ARRENDATARIO';
-  if (role.indexOf('OCUPANTE') !== -1) return 'OCUPANTE AUTORIZADO';
-  return 'RESIDENTE';
+  const principal =
+    role.indexOf('PRINCIPAL') !== -1;
+
+  if (role.indexOf('COPROPIET') !== -1) {
+    return 'COPROPIETARIO';
+  }
+
+  if (role.indexOf('PROPIET') !== -1) {
+    return 'PROPIETARIO';
+  }
+
+  if (role.indexOf('ARREND') !== -1) {
+    return principal
+      ? 'ARRENDATARIO PRINCIPAL'
+      : 'ARRENDATARIO';
+  }
+
+  if (role.indexOf('OCUPANTE') !== -1) {
+    return principal
+      ? 'RESIDENTE PRINCIPAL'
+      : 'OCUPANTE AUTORIZADO';
+  }
+
+  return principal
+    ? 'RESIDENTE PRINCIPAL'
+    : 'RESIDENTE';
 }
 
 function portalIsOwnerRole_(value) {
@@ -3189,16 +4749,42 @@ function portalBuscarVigilancia(payload, origin) {
 
 function portalBuildVigilanceProfile_(unitId) {
   const unit = dmObtenerUnidad(unitId);
-  const editable = portalBuildEditableSnapshot_(unitId, '');
-  const approved = portalGetApprovedSections_(unitId);
-  const parkings = dmObtenerParqueaderosUnidad(unitId);
-  const operationalResidents = approved.RESIDENTES || dmObtenerPersonasActivas(unitId)
-    .filter(function (person) {
-      return portalSafeTrim_(person.rol).toUpperCase().indexOf('INMOBILIARIA') === -1;
-    })
-    .map(function (person) {
-      return { nombre: person.nombreCompleto, rol: person.rol };
-    });
+  const editable =
+    portalBuildEditableSnapshot_(unitId, '');
+  const approved =
+    portalGetApprovedSections_(unitId);
+  const parkings =
+    dmObtenerParqueaderosUnidad(unitId);
+
+  const baseResidents =
+    dmObtenerPersonasActivas(unitId)
+      .filter(function (person) {
+        return (
+          portalSafeTrim_(person.rol)
+            .toUpperCase()
+            .indexOf('INMOBILIARIA') === -1
+        );
+      })
+      .map(function (person) {
+        return {
+          personaId:
+            person.personaId || '',
+          numeroDocumento:
+            person.numeroDocumento || '',
+          nombre:
+            person.nombreCompleto,
+          rol:
+            person.rol
+        };
+      });
+
+  const operationalResidents =
+    approved.RESIDENTES
+      ? portalEnrichResidentsWithIdentity_(
+          approved.RESIDENTES,
+          baseResidents
+        )
+      : baseResidents;
 
   return {
     unidad: {
@@ -3207,18 +4793,809 @@ function portalBuildVigilanceProfile_(unitId) {
       apartamento: unit.Apartamento,
       estadoUnidad: unit.EstadoUnidad
     },
-    residentes: operationalResidents.map(function (p) {
-      return { nombre: p.nombre, rol: p.rol };
-    }),
-    vehiculos: (editable.VEHICULOS || []).map(function (v) {
-      return { placa: v.placa, tipo: v.tipo };
-    }),
-    parqueaderos: parkings.map(function (p) {
-      return { codigoOficial: p.codigoOficial, subtipo: p.subtipo };
-    }),
-    emergencia: editable.EMERGENCIA || { nombre: '', celular: '', parentesco: '' }
+    residentes:
+      operationalResidents.map(function (person) {
+        return {
+          nombre: person.nombre,
+          rol: person.rol
+        };
+      }),
+    vehiculos:
+      (editable.VEHICULOS || [])
+        .map(function (vehicle) {
+          return {
+            placa: vehicle.placa,
+            tipo: vehicle.tipo
+          };
+        }),
+    parqueaderos:
+      parkings.map(function (parking) {
+        return {
+          codigoOficial:
+            parking.codigoOficial,
+          subtipo: parking.subtipo
+        };
+      }),
+    emergencia:
+      editable.EMERGENCIA || {
+        nombre: '',
+        celular: '',
+        parentesco: ''
+      }
   };
 }
+
+
+/**
+ * Registra directamente a la persona principal que llega a ocupar una unidad.
+ *
+ * La operación:
+ * - no altera propietarios;
+ * - crea o actualiza Personas;
+ * - crea un único vínculo principal activo;
+ * - permite retirar residentes anteriores solo con confirmación explícita;
+ * - habilita el acceso al módulo de datos personales mediante apartamento,
+ *   documento y reconocimiento del correo;
+ * - deja la actualización posterior de convivientes y vehículos sujeta al
+ *   flujo normal de solicitud y aprobación administrativa.
+ */
+function portalRegistrarResidenteVigilancia(
+  payload,
+  origin
+) {
+  payload = payload || {};
+
+  const session = portalRequireSession_(
+    payload.token,
+    origin,
+    [
+      PORTAL_ROLE.VIGILANCIA,
+      PORTAL_ROLE.ADMIN
+    ]
+  );
+
+  const unitId =
+    portalNormalizeUnitInput_(
+      '',
+      payload.apartamento,
+      payload.unidadId
+    );
+  const name =
+    portalLimitText_(
+      payload.nombreCompleto,
+      150
+    );
+  const documentType =
+    portalNormalizeDocumentType_(
+      payload.tipoDocumento
+    );
+  const documentNumber =
+    portalNormalizeDocument_(
+      payload.numeroDocumento
+    );
+  const email =
+    portalNormalizeEmail_(payload.email);
+  const phone =
+    portalNormalizePhone_(payload.celular);
+  const role =
+    portalNormalizePrincipalResidentRole_(
+      payload.rol
+    );
+  const retirePrevious =
+    payload.retirarResidentesAnteriores === true ||
+    portalYes_(
+      payload.retirarResidentesAnteriores
+    );
+  const notes =
+    portalLimitText_(
+      payload.observaciones,
+      800
+    );
+
+  if (
+    !unitId ||
+    unitId === PORTAL_UNIDENTIFIED_UNIT_ID ||
+    !dmObtenerUnidad(unitId)
+  ) {
+    throw new Error(
+      'El apartamento no existe en la base oficial.'
+    );
+  }
+
+  if (!name || name.length < 5) {
+    throw new Error(
+      'Ingresa el nombre completo del nuevo residente.'
+    );
+  }
+
+  if (
+    !documentNumber ||
+    documentNumber.length < 5
+  ) {
+    throw new Error(
+      'Ingresa un número de documento válido.'
+    );
+  }
+
+  if (!email) {
+    throw new Error(
+      'Ingresa un correo electrónico válido. ' +
+      'Este correo será utilizado en la pregunta de seguridad.'
+    );
+  }
+
+  if (payload.celular && phone.length < 7) {
+    throw new Error(
+      'El número de celular no tiene un formato válido.'
+    );
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const result =
+      portalUpsertPrincipalResident_({
+        unitId: unitId,
+        name: name,
+        documentType: documentType,
+        documentNumber: documentNumber,
+        email: email,
+        phone: phone,
+        role: role,
+        retirePrevious: retirePrevious,
+        notes: notes,
+        actorEmail: session.email,
+        actorRole: session.role
+      });
+
+    portalAudit_({
+      action: 'ALTA_RESIDENTE_VIGILANCIA',
+      role: session.role,
+      email: session.email,
+      unitId: unitId,
+      result: 'OK',
+      detail:
+        'PersonaID=' + result.personaId +
+        ' | Rol=' + result.rol +
+        ' | Creada=' +
+          (result.personaCreada ? 'SI' : 'NO') +
+        ' | ResidentesRetirados=' +
+          result.residentesRetirados +
+        ' | OtrasUnidades=' +
+          result.otrasUnidadesActivas.join(',') +
+        (
+          notes
+            ? ' | Observaciones=' + notes
+            : ''
+        )
+    });
+
+    return portalToClientSafe_({
+      ok: true,
+      unidadId: unitId,
+      personaId: result.personaId,
+      nombre: result.nombre,
+      correo: result.correo,
+      rol: result.rol,
+      personaCreada: result.personaCreada,
+      residentesRetirados:
+        result.residentesRetirados,
+      otrasUnidadesActivas:
+        result.otrasUnidadesActivas,
+      tipoAcceso:
+        PORTAL_IDENTITY_TYPE
+          .RESIDENTE_PRINCIPAL,
+      permisos:
+        portalAllowedSectionsForIdentity_(
+          PORTAL_IDENTITY_TYPE
+            .RESIDENTE_PRINCIPAL
+        ),
+      message:
+        'El residente principal quedó registrado. ' +
+        'Ya puede ingresar al módulo de datos personales con el apartamento y su documento.'
+    });
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
+  }
+}
+
+function portalUpsertPrincipalResident_(data) {
+  const ss = portalGetSpreadsheet_();
+  const peopleSheetName =
+    typeof DM_SHEETS !== 'undefined'
+      ? DM_SHEETS.PERSONAS
+      : 'Personas';
+  const linksSheetName =
+    typeof DM_SHEETS !== 'undefined'
+      ? DM_SHEETS.VINCULOS_UNIDAD
+      : 'Vinculos_Unidad';
+  const peopleSheet =
+    ss.getSheetByName(peopleSheetName);
+  const linksSheet =
+    ss.getSheetByName(linksSheetName);
+
+  if (!peopleSheet || !linksSheet) {
+    throw new Error(
+      'No existen las hojas Personas y Vinculos_Unidad.'
+    );
+  }
+
+  const peopleData =
+    peopleSheet.getDataRange().getValues();
+  const linksData =
+    linksSheet.getDataRange().getValues();
+  const peopleHeaders =
+    peopleData[0].map(portalSafeTrim_);
+  const linksHeaders =
+    linksData[0].map(portalSafeTrim_);
+  const pm =
+    portalHeaderMap_(peopleHeaders);
+  const lm =
+    portalHeaderMap_(linksHeaders);
+
+  portalRequireHeaders_(pm, [
+    'PersonaID',
+    'TipoPersona',
+    'TipoDocumento',
+    'NumeroDocumento',
+    'NombreCompleto',
+    'CorreoPrincipal',
+    'CorreosAlternos',
+    'CelularPrincipal',
+    'TelefonosAlternos',
+    'EstadoPersona',
+    'Fuentes',
+    'FechaFuente',
+    'FechaActualizacion'
+  ], peopleSheetName);
+
+  portalRequireHeaders_(lm, [
+    'VinculoID',
+    'UnidadID',
+    'PersonaID',
+    'Rol',
+    'EsContactoPrincipal',
+    'RecibeNotificaciones',
+    'EstadoVinculo',
+    'FechaInicio',
+    'FechaFin',
+    'Fuente',
+    'RegistroFuenteID',
+    'FilaFuente',
+    'FechaActualizacion'
+  ], linksSheetName);
+
+  const now = portalNow_();
+  const registrationId =
+    'ALT-VIG-' +
+    Utilities.formatDate(
+      new Date(),
+      PORTAL_TIMEZONE,
+      'yyyyMMdd-HHmmss'
+    ) +
+    '-' +
+    portalRandomSuffix_();
+
+  const personMatches = [];
+
+  for (
+    let index = 1;
+    index < peopleData.length;
+    index++
+  ) {
+    if (
+      portalNormalizeDocument_(
+        peopleData[index][
+          pm.NumeroDocumento
+        ]
+      ) === data.documentNumber
+    ) {
+      personMatches.push({
+        rowNumber: index + 1,
+        values: peopleData[index],
+        personaId:
+          portalSafeTrim_(
+            peopleData[index][pm.PersonaID]
+          )
+      });
+    }
+  }
+
+  const uniquePersonIds = portalUnique_(
+    personMatches.map(function (person) {
+      return person.personaId;
+    }).filter(Boolean)
+  );
+
+  if (uniquePersonIds.length > 1) {
+    throw new Error(
+      'El documento aparece asociado a más de una persona. ' +
+      'La administración debe resolver el conflicto antes de continuar.'
+    );
+  }
+
+  let person =
+    personMatches.length
+      ? personMatches[0]
+      : null;
+
+  // Revisa el vínculo de propietario antes de modificar datos.
+  if (person) {
+    const ownerInUnit =
+      linksData.slice(1).some(function (row) {
+        return (
+          portalSafeTrim_(
+            row[lm.UnidadID]
+          ).toUpperCase() === data.unitId &&
+          portalSafeTrim_(
+            row[lm.PersonaID]
+          ) === person.personaId &&
+          portalSafeTrim_(
+            row[lm.EstadoVinculo]
+          ).toUpperCase() === 'ACTIVO' &&
+          portalIsOwnerRole_(
+            row[lm.Rol]
+          )
+        );
+      });
+
+    if (ownerInUnit) {
+      throw new Error(
+        'El documento ya corresponde a un propietario activo de la unidad. ' +
+        'No requiere alta como residente principal.'
+      );
+    }
+  }
+
+  let personCreated = false;
+
+  if (!person) {
+    let personId =
+      'PER-' +
+      portalHash_(
+        'VIGILANCIA|' +
+        data.documentNumber
+      ).slice(0, 16).toUpperCase();
+    let suffix = 0;
+
+    while (
+      peopleData.slice(1).some(function (row) {
+        return (
+          portalSafeTrim_(
+            row[pm.PersonaID]
+          ) === personId
+        );
+      })
+    ) {
+      suffix += 1;
+      personId =
+        'PER-' +
+        portalHash_(
+          'VIGILANCIA|' +
+          data.documentNumber +
+          '|' +
+          suffix
+        ).slice(0, 16).toUpperCase();
+    }
+
+    const personObject = {
+      PersonaID: personId,
+      TipoPersona: 'PERSONA_NATURAL',
+      TipoDocumento: data.documentType,
+      NumeroDocumento:
+        data.documentNumber,
+      NombreCompleto: data.name,
+      CorreoPrincipal: data.email,
+      CorreosAlternos: '',
+      CelularPrincipal: data.phone,
+      TelefonosAlternos: '',
+      EstadoPersona: 'ACTIVA',
+      Fuentes: 'VIGILANCIA_ALTA',
+      FechaFuente: now,
+      FechaActualizacion: now
+    };
+
+    const personValues =
+      peopleHeaders.map(function (header) {
+        return (
+          personObject[header] !== undefined
+            ? personObject[header]
+            : ''
+        );
+      });
+
+    peopleSheet.appendRow(personValues);
+
+    person = {
+      rowNumber: peopleSheet.getLastRow(),
+      values: personValues,
+      personaId: personId
+    };
+    personCreated = true;
+  } else {
+    const updates = {
+      TipoPersona: 'PERSONA_NATURAL',
+      TipoDocumento: data.documentType,
+      NumeroDocumento:
+        data.documentNumber,
+      NombreCompleto: data.name,
+      CorreoPrincipal: data.email,
+      CelularPrincipal:
+        data.phone ||
+        portalSafeTrim_(
+          person.values[pm.CelularPrincipal]
+        ),
+      EstadoPersona: 'ACTIVA',
+      Fuentes:
+        portalAppendDelimitedValue_(
+          person.values[pm.Fuentes],
+          'VIGILANCIA_ALTA'
+        ),
+      FechaFuente: now,
+      FechaActualizacion: now
+    };
+
+    Object.keys(updates).forEach(
+      function (header) {
+        peopleSheet.getRange(
+          person.rowNumber,
+          pm[header] + 1
+        ).setValue(updates[header]);
+
+        person.values[pm[header]] =
+          updates[header];
+      }
+    );
+  }
+
+  const links = [];
+
+  for (
+    let index = 1;
+    index < linksData.length;
+    index++
+  ) {
+    links.push({
+      rowNumber: index + 1,
+      values: linksData[index],
+      vinculoId:
+        portalSafeTrim_(
+          linksData[index][lm.VinculoID]
+        ),
+      unitId:
+        portalSafeTrim_(
+          linksData[index][lm.UnidadID]
+        ).toUpperCase(),
+      personId:
+        portalSafeTrim_(
+          linksData[index][lm.PersonaID]
+        ),
+      role:
+        portalSafeTrim_(
+          linksData[index][lm.Rol]
+        ).toUpperCase(),
+      active:
+        portalSafeTrim_(
+          linksData[index][lm.EstadoVinculo]
+        ).toUpperCase() === 'ACTIVO'
+    });
+  }
+
+  function closeLink(link) {
+    if (!link.active) return;
+
+    linksSheet.getRange(
+      link.rowNumber,
+      lm.EstadoVinculo + 1
+    ).setValue('HISTORICO');
+    linksSheet.getRange(
+      link.rowNumber,
+      lm.FechaFin + 1
+    ).setValue(now);
+    linksSheet.getRange(
+      link.rowNumber,
+      lm.FechaActualizacion + 1
+    ).setValue(now);
+
+    link.active = false;
+  }
+
+  const samePersonUnitLinks =
+    links.filter(function (link) {
+      return (
+        link.unitId === data.unitId &&
+        link.personId === person.personaId &&
+        link.active
+      );
+    });
+
+  let canonicalLink =
+    samePersonUnitLinks.length
+      ? samePersonUnitLinks[0]
+      : null;
+
+  if (!canonicalLink) {
+    const linkId =
+      'VIN-' +
+      portalHash_(
+        data.unitId +
+        '|' +
+        person.personaId +
+        '|' +
+        registrationId
+      ).slice(0, 16).toUpperCase();
+
+    const linkObject = {
+      VinculoID: linkId,
+      UnidadID: data.unitId,
+      PersonaID: person.personaId,
+      Rol: data.role,
+      EsContactoPrincipal: 'SI',
+      RecibeNotificaciones: 'SI',
+      EstadoVinculo: 'ACTIVO',
+      FechaInicio: now,
+      FechaFin: '',
+      Fuente: 'VIGILANCIA_ALTA',
+      RegistroFuenteID:
+        registrationId,
+      FilaFuente: '',
+      FechaActualizacion: now
+    };
+
+    linksSheet.appendRow(
+      linksHeaders.map(function (header) {
+        return (
+          linkObject[header] !== undefined
+            ? linkObject[header]
+            : ''
+        );
+      })
+    );
+
+    canonicalLink = {
+      rowNumber: linksSheet.getLastRow(),
+      vinculoId: linkId,
+      unitId: data.unitId,
+      personId: person.personaId,
+      role: data.role,
+      active: true
+    };
+  } else {
+    const updates = {
+      Rol: data.role,
+      EsContactoPrincipal: 'SI',
+      RecibeNotificaciones: 'SI',
+      EstadoVinculo: 'ACTIVO',
+      FechaFin: '',
+      Fuente:
+        portalAppendDelimitedValue_(
+          canonicalLink.values[lm.Fuente],
+          'VIGILANCIA_ALTA'
+        ),
+      RegistroFuenteID:
+        registrationId,
+      FechaActualizacion: now
+    };
+
+    Object.keys(updates).forEach(
+      function (header) {
+        linksSheet.getRange(
+          canonicalLink.rowNumber,
+          lm[header] + 1
+        ).setValue(updates[header]);
+      }
+    );
+
+    canonicalLink.role = data.role;
+  }
+
+  // Cierra vínculos duplicados de la misma persona en la misma unidad.
+  samePersonUnitLinks.forEach(function (link) {
+    if (
+      link.rowNumber !==
+      canonicalLink.rowNumber
+    ) {
+      closeLink(link);
+    }
+  });
+
+  let retiredResidents = 0;
+
+  links.forEach(function (link) {
+    if (
+      !link.active ||
+      link.unitId !== data.unitId ||
+      link.personId === person.personaId ||
+      portalIsOwnerRole_(link.role)
+    ) {
+      return;
+    }
+
+    if (data.retirePrevious) {
+      closeLink(link);
+      retiredResidents += 1;
+      return;
+    }
+
+    // Solo puede existir un residente principal. Los residentes anteriores
+    // se conservan, pero dejan de administrar la composición de la unidad.
+    if (
+      link.role.indexOf('PRINCIPAL') !== -1
+    ) {
+      const demotedRole =
+        link.role.indexOf('ARREND') !== -1
+          ? 'ARRENDATARIO'
+          : 'RESIDENTE';
+
+      linksSheet.getRange(
+        link.rowNumber,
+        lm.Rol + 1
+      ).setValue(demotedRole);
+      linksSheet.getRange(
+        link.rowNumber,
+        lm.EsContactoPrincipal + 1
+      ).setValue('NO');
+      linksSheet.getRange(
+        link.rowNumber,
+        lm.FechaActualizacion + 1
+      ).setValue(now);
+      link.role = demotedRole;
+    }
+  });
+
+  const otherUnits =
+    portalUnique_(
+      links.filter(function (link) {
+        return (
+          link.active &&
+          link.personId === person.personaId &&
+          link.unitId !== data.unitId
+        );
+      }).map(function (link) {
+        return link.unitId;
+      })
+    );
+
+  SpreadsheetApp.flush();
+
+  return {
+    personaId: person.personaId,
+    nombre: data.name,
+    correo: data.email,
+    rol: data.role,
+    personaCreada: personCreated,
+    residentesRetirados:
+      retiredResidents,
+    otrasUnidadesActivas: otherUnits
+  };
+}
+
+function portalNormalizePrincipalResidentRole_(value) {
+  const role =
+    portalSafeTrim_(value).toUpperCase();
+
+  return role.indexOf('ARREND') !== -1
+    ? 'ARRENDATARIO PRINCIPAL'
+    : 'RESIDENTE PRINCIPAL';
+}
+
+function portalNormalizeDocumentType_(value) {
+  const type =
+    portalSafeTrim_(value)
+      .toUpperCase()
+      .replace(/\s+/g, '_');
+
+  if (
+    [
+      'CEDULA',
+      'CEDULA_CIUDADANIA',
+      'CC'
+    ].indexOf(type) !== -1
+  ) {
+    return 'CEDULA';
+  }
+
+  if (
+    [
+      'CEDULA_EXTRANJERIA',
+      'CE'
+    ].indexOf(type) !== -1
+  ) {
+    return 'CEDULA_EXTRANJERIA';
+  }
+
+  if (type === 'PASAPORTE') {
+    return 'PASAPORTE';
+  }
+
+  return 'OTRO';
+}
+
+/**
+ * Diagnóstico seguro. No crea personas ni devuelve información personal.
+ */
+function portalDiagnosticarAltaResidenteVigilancia(
+  unidadId
+) {
+  const id =
+    portalNormalizeUnitInput_(
+      '',
+      '',
+      unidadId
+    );
+
+  if (!id || !dmObtenerUnidad(id)) {
+    return {
+      ok: false,
+      unidadId: id,
+      motivo: 'UNIDAD_NO_ENCONTRADA'
+    };
+  }
+
+  const people =
+    portalGetAdminPeople_(id);
+  const owners =
+    people.filter(function (person) {
+      return portalIsOwnerRole_(
+        person.rol
+      );
+    }).length;
+  const residents =
+    people.filter(function (person) {
+      return portalIsResidentRole_(
+        person.rol
+      );
+    }).length;
+  const principals =
+    people.filter(function (person) {
+      return (
+        portalSafeTrim_(person.rol)
+          .toUpperCase()
+          .indexOf('PRINCIPAL') !== -1
+      );
+    }).length;
+
+  return {
+    ok: true,
+    unidadId: id,
+    propietariosActivos: owners,
+    residentesActivos: residents,
+    residentesPrincipales:
+      principals,
+    puedeRegistrar: true
+  };
+}
+
+function portalProbarPermisosResidentePrincipal() {
+  const identity =
+    portalIdentityTypeFromRoles_([
+      'ARRENDATARIO PRINCIPAL'
+    ]);
+  const permissions =
+    portalAllowedSectionsForIdentity_(
+      identity
+    );
+
+  return {
+    ok:
+      identity ===
+        PORTAL_IDENTITY_TYPE
+          .RESIDENTE_PRINCIPAL &&
+      permissions.indexOf(
+        PORTAL_SECTIONS.RESIDENTES
+      ) !== -1 &&
+      permissions.indexOf(
+        PORTAL_SECTIONS.VEHICULOS
+      ) !== -1,
+    tipoIdentidad: identity,
+    permisos: permissions,
+    puedeVerResumenPropietario: false
+  };
+}
+
 
 /***************************************
  * BÚSQUEDA Y FUSIÓN DE DATOS
@@ -3336,13 +5713,26 @@ function portalIdentityTypeFromRoles_(roles) {
     return PORTAL_IDENTITY_TYPE.PROPIETARIO;
   }
 
+  if (
+    text.indexOf('PRINCIPAL') !== -1 &&
+    (
+      text.indexOf('RESIDENT') !== -1 ||
+      text.indexOf('ARREND') !== -1 ||
+      text.indexOf('OCUPANTE') !== -1
+    )
+  ) {
+    return PORTAL_IDENTITY_TYPE.RESIDENTE_PRINCIPAL;
+  }
+
   return PORTAL_IDENTITY_TYPE.RESIDENTE;
 }
 
 function portalAllowedSectionsForIdentity_(identityType) {
   if (
     identityType ===
-    PORTAL_IDENTITY_TYPE.PROPIETARIO
+      PORTAL_IDENTITY_TYPE.PROPIETARIO ||
+    identityType ===
+      PORTAL_IDENTITY_TYPE.RESIDENTE_PRINCIPAL
   ) {
     return PORTAL_ALLOWED_SECTIONS.slice();
   }
@@ -3767,31 +6157,73 @@ function portalInternalUserAuthorized_(email, role) {
 
 
 function portalGetAdminPeople_(unitId) {
-  const id = portalSafeTrim_(unitId).toUpperCase();
+  const id =
+    portalSafeTrim_(unitId).toUpperCase();
   const people = {};
-  portalReadMasterObjectsSafe_(typeof DM_SHEETS !== 'undefined' ? DM_SHEETS.PERSONAS : 'Personas')
-    .forEach(function (person) { people[portalSafeTrim_(person.PersonaID)] = person; });
 
-  return portalReadMasterObjectsSafe_(typeof DM_SHEETS !== 'undefined' ? DM_SHEETS.VINCULOS_UNIDAD : 'Vinculos_Unidad')
+  portalReadMasterObjectsSafe_(
+    typeof DM_SHEETS !== 'undefined'
+      ? DM_SHEETS.PERSONAS
+      : 'Personas'
+  ).forEach(function (person) {
+    people[
+      portalSafeTrim_(person.PersonaID)
+    ] = person;
+  });
+
+  return portalReadMasterObjectsSafe_(
+    typeof DM_SHEETS !== 'undefined'
+      ? DM_SHEETS.VINCULOS_UNIDAD
+      : 'Vinculos_Unidad'
+  )
     .filter(function (link) {
-      return portalSafeTrim_(link.UnidadID).toUpperCase() === id &&
-        portalSafeTrim_(link.EstadoVinculo).toUpperCase() === 'ACTIVO';
+      return (
+        portalSafeTrim_(link.UnidadID)
+          .toUpperCase() === id &&
+        portalSafeTrim_(link.EstadoVinculo)
+          .toUpperCase() === 'ACTIVO'
+      );
     })
     .map(function (link) {
-      const person = people[portalSafeTrim_(link.PersonaID)];
+      const person =
+        people[
+          portalSafeTrim_(link.PersonaID)
+        ];
+
       if (!person) return null;
+
       return {
         personaId: person.PersonaID,
-        nombreCompleto: person.NombreCompleto,
-        tipoPersona: person.TipoPersona,
-        tipoDocumento: person.TipoDocumento,
-        numeroDocumento: person.NumeroDocumento,
-        correoPrincipal: person.CorreoPrincipal,
-        correosAlternos: person.CorreosAlternos,
-        celularPrincipal: person.CelularPrincipal,
-        telefonosAlternos: person.TelefonosAlternos,
+        vinculoId: link.VinculoID,
+        nombreCompleto:
+          person.NombreCompleto,
+        tipoPersona:
+          person.TipoPersona,
+        tipoDocumento:
+          person.TipoDocumento,
+        numeroDocumento:
+          person.NumeroDocumento,
+        correoPrincipal:
+          person.CorreoPrincipal,
+        correosAlternos:
+          person.CorreosAlternos,
+        celularPrincipal:
+          person.CelularPrincipal,
+        telefonosAlternos:
+          person.TelefonosAlternos,
+        estadoPersona:
+          person.EstadoPersona,
         rol: link.Rol,
-        recibeNotificaciones: link.RecibeNotificaciones,
+        esContactoPrincipal:
+          link.EsContactoPrincipal,
+        recibeNotificaciones:
+          link.RecibeNotificaciones,
+        estadoVinculo:
+          link.EstadoVinculo,
+        fechaInicio:
+          link.FechaInicio,
+        fechaFin:
+          link.FechaFin,
         fuente: link.Fuente
       };
     })

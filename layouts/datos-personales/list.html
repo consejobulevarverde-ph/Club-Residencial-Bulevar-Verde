@@ -671,7 +671,11 @@
     function applyPermissions() {
       const permissions = profile.permisos || [];
       const authentication = profile.autenticacion || {};
-      const isOwner = authentication.tipo === 'PROPIETARIO';
+      const isOwner =
+        authentication.tipo === 'PROPIETARIO';
+      const isPrincipalResident =
+        authentication.tipo ===
+        'RESIDENTE_PRINCIPAL';
 
       document.querySelectorAll('[data-permission]').forEach(element => {
         element.classList.toggle(
@@ -704,7 +708,14 @@
         element.classList.toggle('hidden', !isOwner);
       });
 
-      $('authTypeBadge').textContent = isOwner ? 'Acceso de propietario' : 'Acceso de residente';
+      $('authTypeBadge').textContent =
+        isOwner
+          ? 'Acceso de propietario'
+          : (
+              isPrincipalResident
+                ? 'Acceso de residente principal'
+                : 'Acceso de residente'
+            );
       $('authSummary').textContent = [
         authentication.nombre || '',
         authentication.correoEnmascarado || ''
@@ -712,7 +723,11 @@
 
       $('permissionNotice').innerHTML = isOwner
         ? '<i class="bi bi-person-check me-2"></i>Como propietario puedes solicitar cambios de contacto, residentes, vehículos, mascotas y contacto de emergencia.'
-        : '<i class="bi bi-person-check me-2"></i>Como residente puedes actualizar tus datos de contacto y solicitar cambios de vehículos, mascotas y contacto de emergencia. La composición de residentes solo puede modificarla un propietario autenticado.';
+        : (
+            isPrincipalResident
+              ? '<i class="bi bi-person-check me-2"></i>Como residente principal puedes solicitar cambios de las personas que viven en el apartamento, vehículos autorizados, mascotas, contacto y emergencia. Los cambios serán revisados por la administración.'
+              : '<i class="bi bi-person-check me-2"></i>Como residente puedes actualizar tus datos de contacto y solicitar cambios de vehículos, mascotas y contacto de emergencia. La composición de residentes solo puede modificarla el propietario o el residente principal autenticado.'
+          );
     }
 
 
@@ -827,15 +842,34 @@
 
     function addResidentRow(item = {}) {
       const div = document.createElement('div');
+      const authentication = profile && profile.autenticacion
+        ? profile.autenticacion
+        : {};
+      const isAuthenticatedPrincipal =
+        authentication.tipo === 'RESIDENTE_PRINCIPAL' &&
+        String(item.personaId || '') ===
+          String(authentication.personaId || '');
+
       div.className = 'repeat-row resident-row';
       div.dataset.personaId = item.personaId || '';
       div.dataset.numeroDocumento = item.numeroDocumento || '';
       div.innerHTML =
         '<div class="row g-2">' +
-        '<div class="col-md-7"><label class="form-label">Nombre completo</label><input class="form-control resident-name" value="' + escapeHtml(item.nombre || '') + '"></div>' +
-        '<div class="col-md-4"><label class="form-label">Rol</label><select class="form-select resident-role"><option>RESIDENTE</option><option>ARRENDATARIO</option><option>OCUPANTE AUTORIZADO</option></select></div>' +
-        '<div class="col-md-1 d-flex align-items-end">' + makeRemoveButton() + '</div>' +
-        '</div>';
+        '<div class="col-md-7"><label class="form-label">Nombre completo</label><input class="form-control resident-name" value="' + escapeHtml(item.nombre || '') + '"' + (isAuthenticatedPrincipal ? ' readonly' : '') + '></div>' +
+        '<div class="col-md-4"><label class="form-label">Rol</label><select class="form-select resident-role"' + (isAuthenticatedPrincipal ? ' disabled' : '') + '><option>RESIDENTE</option><option>RESIDENTE PRINCIPAL</option><option>ARRENDATARIO</option><option>ARRENDATARIO PRINCIPAL</option><option>OCUPANTE AUTORIZADO</option></select></div>' +
+        '<div class="col-md-1 d-flex align-items-end">' +
+        (
+          isAuthenticatedPrincipal
+            ? '<span class="small-note" title="Tu registro principal no puede eliminarse desde el autoservicio."><i class="bi bi-shield-lock"></i></span>'
+            : makeRemoveButton()
+        ) +
+        '</div>' +
+        '</div>' +
+        (
+          isAuthenticatedPrincipal
+            ? '<div class="small-note mt-2"><i class="bi bi-info-circle me-1"></i>Tu vínculo como residente principal está protegido.</div>'
+            : ''
+        );
       $('residentsEditor').appendChild(div);
       div.querySelector('.resident-role').value = item.rol || 'RESIDENTE';
     }
