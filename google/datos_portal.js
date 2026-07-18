@@ -17,7 +17,7 @@
  * Requiere estar en el MISMO proyecto que datos_maestros_info_aptos_v3.gs.
  */
 
-const PORTAL_VERSION = '1.4.1-admin-edicion-unidad-propietarios';
+const PORTAL_VERSION = '1.4.2-vigilancia-codigo-fijo-pruebas';
 const PORTAL_TIMEZONE = 'America/Bogota';
 
 const PORTAL_SHEETS = Object.freeze({
@@ -108,8 +108,8 @@ const PORTAL_CONFIG_DEFAULTS = Object.freeze([
   ['PORTAL_MAX_SECURITY_CHALLENGES_PER_HOUR', '8', 'Máximo de retos de seguridad por apartamento y documento cada hora.', 'SI'],
   ['PORTAL_MAX_OTP_ATTEMPTS', '5', 'Intentos máximos por código.', 'SI'],
   ['PORTAL_MAX_OTP_SENDS_PER_HOUR', '4', 'Máximo de envíos de código por hora por identidad.', 'SI'],
-  ['PORTAL_ADMIN_TEST_FIXED_CODE_ENABLED', 'SI', 'Modo de pruebas: administración usa código fijo y no recibe correo OTP.', 'SI'],
-  ['PORTAL_ADMIN_TEST_FIXED_CODE', '841244', 'Código fijo de seis dígitos para administración durante pruebas.', 'SI'],
+  ['PORTAL_ADMIN_TEST_FIXED_CODE_ENABLED', 'SI', 'Modo de pruebas: administración y vigilancia usan código fijo y no reciben correo OTP.', 'SI'],
+  ['PORTAL_ADMIN_TEST_FIXED_CODE', '841244', 'Código fijo de seis dígitos para administración y vigilancia durante pruebas.', 'SI'],
   ['PORTAL_REPLY_TO', 'bulevarverdeadmon@gmail.com', 'Correo de respuesta del portal.', 'SI'],
   ['PORTAL_FROM_NAME', 'Administración Bulevar Verde', 'Nombre del remitente.', 'SI'],
   ['PORTAL_SEED_ADMIN_EMAIL', 'bulevarverdeadmon@gmail.com', 'Usuario administrador inicial.', 'SI']
@@ -338,12 +338,12 @@ function portalSeedAdmin_(ss) {
   }
 }
 
-/** Activa explícitamente el código fijo de administración para pruebas. */
+/** Activa el código fijo compartido para ADMIN y VIGILANCIA durante pruebas. */
 function portalActivarCodigoFijoAdminPruebas() {
   return portalGuardarConfigCodigoFijoAdminPruebas_(true, '841244');
 }
 
-/** Desactiva el código fijo y restaura el envío normal de OTP a administración. */
+/** Desactiva el código fijo y restaura el envío normal de OTP para ADMIN y VIGILANCIA. */
 function portalDesactivarCodigoFijoAdminPruebas() {
   return portalGuardarConfigCodigoFijoAdminPruebas_(false, null);
 }
@@ -390,8 +390,8 @@ function portalGuardarConfigCodigoFijoAdminPruebas_(enabled, code) {
         key,
         updates[key],
         key === 'PORTAL_ADMIN_TEST_FIXED_CODE_ENABLED'
-          ? 'Modo de pruebas: administración usa código fijo y no recibe correo OTP.'
-          : 'Código fijo de seis dígitos para administración durante pruebas.',
+          ? 'Modo de pruebas: administración y vigilancia usan código fijo y no reciben correo OTP.'
+          : 'Código fijo de seis dígitos para administración y vigilancia durante pruebas.',
         'SI'
       ]);
     }
@@ -406,8 +406,8 @@ function portalGuardarConfigCodigoFijoAdminPruebas_(enabled, code) {
       ? portalGetAdminFixedOtpTestCode_(portalGetConfig_())
       : '',
     message: enabled
-      ? 'Código fijo de administración activado para pruebas. No se enviarán correos OTP al rol ADMIN.'
-      : 'Código fijo desactivado. La administración volverá a recibir OTP por correo.'
+      ? 'Código fijo activado para pruebas. No se enviarán correos OTP a los roles ADMIN y VIGILANCIA.'
+      : 'Código fijo desactivado. Administración y vigilancia volverán a recibir OTP por correo.'
   };
 }
 
@@ -626,43 +626,84 @@ function portalSolicitarCodigo(payload, origin) {
   let authorized = false;
 
   if (!email || !role) {
-    throw new Error('Datos de autenticación incompletos.');
+    throw new Error(
+      'Datos de autenticación incompletos.'
+    );
   }
 
   if (role === PORTAL_ROLE.RESIDENTE) {
-    unitId = portalNormalizeUnitInput_(payload.torre, payload.apartamento, payload.unidadId);
-    authorized = !!unitId && portalResidentEmailAuthorized_(unitId, email);
+    unitId = portalNormalizeUnitInput_(
+      payload.torre,
+      payload.apartamento,
+      payload.unidadId
+    );
+    authorized =
+      !!unitId &&
+      portalResidentEmailAuthorized_(
+        unitId,
+        email
+      );
   } else {
-    authorized = portalInternalUserAuthorized_(email, role);
+    authorized =
+      portalInternalUserAuthorized_(
+        email,
+        role
+      );
   }
 
   const config = portalGetConfig_();
-  const adminTestMode = role === PORTAL_ROLE.ADMIN &&
-    portalAdminFixedOtpTestEnabled_(config);
-  const identity = [role, unitId, email].join('|');
+  const fixedCodeTestMode =
+    portalInternalFixedOtpTestEnabled_(
+      role,
+      config
+    );
+  const identity =
+    [role, unitId, email].join('|');
 
-  // Durante las pruebas de administración no se envían correos y tampoco se
-  // consume la cuota de envíos. Residentes y vigilancia mantienen el flujo normal.
-  if (!(authorized && adminTestMode)) {
+  // Durante pruebas ADMIN y VIGILANCIA usan el mismo código fijo.
+  // No se envía correo ni se consume cuota de MailApp.
+  if (
+    !(
+      authorized &&
+      fixedCodeTestMode
+    )
+  ) {
     portalAssertSendRate_(identity);
   }
 
-  // La respuesta sigue siendo genérica para identidades no autorizadas.
   if (authorized) {
-    const code = adminTestMode
-      ? portalGetAdminFixedOtpTestCode_(config)
-      : portalGenerateOtp_();
-    const minutes = portalPositiveInt_(config.PORTAL_OTP_MINUTES, 10);
-    const maxAttempts = portalPositiveInt_(config.PORTAL_MAX_OTP_ATTEMPTS, 5);
+    const code =
+      fixedCodeTestMode
+        ? portalGetInternalFixedOtpTestCode_(
+            config
+          )
+        : portalGenerateOtp_();
+    const minutes =
+      portalPositiveInt_(
+        config.PORTAL_OTP_MINUTES,
+        10
+      );
+    const maxAttempts =
+      portalPositiveInt_(
+        config.PORTAL_MAX_OTP_ATTEMPTS,
+        5
+      );
     const record = {
       role: role,
       email: email,
       unitId: unitId,
-      codeHash: portalHash_(code + '|' + portalGetSecret_()),
+      codeHash:
+        portalHash_(
+          code +
+          '|' +
+          portalGetSecret_()
+        ),
       attempts: 0,
       maxAttempts: maxAttempts,
-      expiresAt: Date.now() + minutes * 60000,
-      testMode: adminTestMode
+      expiresAt:
+        Date.now() +
+        minutes * 60000,
+      testMode: fixedCodeTestMode
     };
 
     CacheService.getScriptCache().put(
@@ -671,33 +712,70 @@ function portalSolicitarCodigo(payload, origin) {
       Math.min(minutes * 60, 21600)
     );
 
-    if (adminTestMode) {
+    if (fixedCodeTestMode) {
       portalAudit_({
-        action: 'OTP_SOLICITADO', role: role, email: email, unitId: unitId,
-        result: 'CODIGO_FIJO_PRUEBAS',
-        detail: 'Modo de pruebas activo: no se envió correo OTP a administración.'
+        action: 'OTP_SOLICITADO',
+        role: role,
+        email: email,
+        unitId: unitId,
+        result:
+          'CODIGO_FIJO_PRUEBAS',
+        detail:
+          'Modo de pruebas activo: no se envió correo OTP. ' +
+          'El rol ' +
+          role +
+          ' usa el código fijo configurado.'
       });
     } else {
-      portalSendOtpEmail_(email, code, role, unitId, minutes);
+      portalSendOtpEmail_(
+        email,
+        code,
+        role,
+        unitId,
+        minutes
+      );
       portalAudit_({
-        action: 'OTP_SOLICITADO', role: role, email: email, unitId: unitId,
-        result: 'ENVIADO', detail: 'Código enviado a identidad autorizada.'
+        action: 'OTP_SOLICITADO',
+        role: role,
+        email: email,
+        unitId: unitId,
+        result: 'ENVIADO',
+        detail:
+          'Código enviado a identidad autorizada.'
       });
     }
   } else {
     portalAudit_({
-      action: 'OTP_SOLICITADO', role: role, email: email, unitId: unitId,
-      result: 'NO_AUTORIZADO', detail: 'No se envió código.'
+      action: 'OTP_SOLICITADO',
+      role: role,
+      email: email,
+      unitId: unitId,
+      result: 'NO_AUTORIZADO',
+      detail: 'No se envió código.'
     });
   }
 
   return {
     ok: true,
-    message: authorized && adminTestMode
-      ? 'Modo de pruebas activo para administración. Usa el código fijo configurado.'
-      : 'Si los datos coinciden con nuestros registros, recibirás un código de verificación.',
-    expiresMinutes: portalPositiveInt_(config.PORTAL_OTP_MINUTES, 10),
-    testMode: authorized && adminTestMode
+    message:
+      authorized &&
+      fixedCodeTestMode
+        ? 'Modo de pruebas activo para ' +
+          (
+            role === PORTAL_ROLE.ADMIN
+              ? 'administración'
+              : 'vigilancia'
+          ) +
+          '. Usa el código fijo configurado.'
+        : 'Si los datos coinciden con nuestros registros, recibirás un código de verificación.',
+    expiresMinutes:
+      portalPositiveInt_(
+        config.PORTAL_OTP_MINUTES,
+        10
+      ),
+    testMode:
+      authorized &&
+      fixedCodeTestMode
   };
 }
 
@@ -6437,17 +6515,106 @@ function portalPickSections_(data, sections) {
  * Si las claves todavía no existen en Config, se activa por defecto con 841244.
  * Para volver al flujo normal, establece PORTAL_ADMIN_TEST_FIXED_CODE_ENABLED = NO.
  */
-function portalAdminFixedOtpTestEnabled_(config) {
+function portalInternalFixedOtpTestEnabled_(
+  role,
+  config
+) {
+  if (
+    [
+      PORTAL_ROLE.ADMIN,
+      PORTAL_ROLE.VIGILANCIA
+    ].indexOf(role) === -1
+  ) {
+    return false;
+  }
+
   config = config || {};
-  const raw = portalSafeTrim_(config.PORTAL_ADMIN_TEST_FIXED_CODE_ENABLED);
-  return raw ? portalYes_(raw) : true;
+
+  const raw =
+    portalSafeTrim_(
+      config
+        .PORTAL_ADMIN_TEST_FIXED_CODE_ENABLED
+    );
+
+  return raw
+    ? portalYes_(raw)
+    : true;
 }
 
-function portalGetAdminFixedOtpTestCode_(config) {
+function portalAdminFixedOtpTestEnabled_(
+  config
+) {
+  return portalInternalFixedOtpTestEnabled_(
+    PORTAL_ROLE.ADMIN,
+    config
+  );
+}
+
+function portalGetInternalFixedOtpTestCode_(
+  config
+) {
   config = config || {};
-  const configured = portalSafeTrim_(config.PORTAL_ADMIN_TEST_FIXED_CODE)
-    .replace(/\D/g, '');
-  return /^\d{6}$/.test(configured) ? configured : '841244';
+
+  const configured =
+    portalSafeTrim_(
+      config.PORTAL_ADMIN_TEST_FIXED_CODE
+    ).replace(/\D/g, '');
+
+  return /^\d{6}$/.test(configured)
+    ? configured
+    : '841244';
+}
+
+function portalGetAdminFixedOtpTestCode_(
+  config
+) {
+  return portalGetInternalFixedOtpTestCode_(
+    config
+  );
+}
+
+
+/**
+ * Verifica sin enviar correo que ADMIN y VIGILANCIA comparten
+ * el mismo código fijo de pruebas.
+ */
+function portalProbarCodigoFijoAdminVigilancia() {
+  const config = portalGetConfig_();
+  const code =
+    portalGetInternalFixedOtpTestCode_(
+      config
+    );
+  const adminEnabled =
+    portalInternalFixedOtpTestEnabled_(
+      PORTAL_ROLE.ADMIN,
+      config
+    );
+  const vigilanceEnabled =
+    portalInternalFixedOtpTestEnabled_(
+      PORTAL_ROLE.VIGILANCIA,
+      config
+    );
+
+  return {
+    ok:
+      adminEnabled &&
+      vigilanceEnabled &&
+      /^\d{6}$/.test(code),
+    version: PORTAL_VERSION,
+    codigo: code,
+    administracion:
+      adminEnabled
+        ? 'CODIGO_FIJO'
+        : 'OTP_CORREO',
+    vigilancia:
+      vigilanceEnabled
+        ? 'CODIGO_FIJO'
+        : 'OTP_CORREO',
+    claveHabilitacion:
+      'PORTAL_ADMIN_TEST_FIXED_CODE_ENABLED',
+    claveCodigo:
+      'PORTAL_ADMIN_TEST_FIXED_CODE'
+  };
 }
 
 /***************************************
