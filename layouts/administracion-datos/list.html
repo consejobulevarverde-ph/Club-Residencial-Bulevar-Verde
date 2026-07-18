@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.LanguageCode | default " es" }}">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .Title }} - {{ .Site.Title }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --p: #2c5f2d;
+      --s: #4a8c4b;
+      --l: #e8f5e9;
+      --b: #d8e6d9
+    }
+
+    body {
+      font-family: Montserrat, sans-serif;
+      background: var(--l)
+    }
+
+    .navbar,
+    .btn-primary {
+      background: var(--p) !important;
+      border-color: var(--p) !important
+    }
+
+    .header {
+      background: linear-gradient(135deg, var(--s), var(--p));
+      color: #fff;
+      padding: 2.5rem 0
+    }
+
+    .surface {
+      background: #fff;
+      border: 1px solid var(--b);
+      border-radius: 1rem;
+      box-shadow: 0 5px 18px rgba(44, 95, 45, .08)
+    }
+
+    .section-title {
+      color: var(--p);
+      font-weight: 700
+    }
+
+    .metric {
+      border-left: 5px solid var(--p)
+    }
+
+    .small-note {
+      font-size: .86rem;
+      color: #667268
+    }
+
+    .hidden {
+      display: none !important
+    }
+
+    .request-card {
+      border: 1px solid var(--b);
+      border-radius: .8rem;
+      padding: 1rem
+    }
+
+    .json-box {
+      white-space: pre-wrap;
+      font-family: ui-monospace, monospace;
+      font-size: .8rem;
+      background: #f5f7f5;
+      border-radius: .6rem;
+      padding: .8rem;
+      max-height: 280px;
+      overflow: auto
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-dark">
+    <div class="container"><a class="navbar-brand fw-bold" href="{{ "/" | relURL }}"><i
+          class="bi bi-tree-fill me-2"></i>{{ .Site.Title }}</a><span
+        class="navbar-text text-white">Administración</span></div>
+  </nav>
+  <header class="header">
+    <div class="container">
+      <h1 class="fw-bold"><i class="bi bi-database-lock me-2"></i>Gestión de datos maestros</h1>
+      <p class="mb-0">Consulta integral, revisión de solicitudes y control de actualizaciones.</p>
+    </div>
+  </header>
+  <main class="container py-4" style="max-width:1200px">
+    <div id="alert" class="alert hidden" aria-live="polite"></div>
+    <section id="login" class="surface p-4 p-lg-5 mx-auto" style="max-width:720px">
+      <h2 class="section-title h4">Acceso administrativo</h2>
+      <p>El correo debe estar activo con rol <strong>ADMIN</strong> en <code>Usuarios_Portal</code>.</p>
+      <form id="loginForm" class="row g-3">
+        <div class="col-12"><label class="form-label" for="email">Correo autorizado</label><input id="email"
+            type="email" class="form-control" required></div>
+        <div class="col-12 d-grid"><button id="sendBtn" class="btn btn-primary btn-lg">Enviar código</button></div>
+      </form>
+    </section>
+    <section id="otp" class="surface p-4 mx-auto hidden" style="max-width:720px">
+      <h2 class="section-title h4">Código de verificación</h2>
+      <p id="otpText"></p>
+      <form id="otpForm" class="row g-3">
+        <div class="col-md-7"><input id="code" class="form-control form-control-lg text-center" maxlength="6"
+            inputmode="numeric" required></div>
+        <div class="col-md-5 d-grid"><button id="verifyBtn" class="btn btn-primary btn-lg">Ingresar</button></div>
+      </form>
+    </section>
+    <section id="app" class="hidden">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h2 class="section-title h3 mb-0">Panel administrativo</h2>
+          <div id="userText" class="small-note"></div>
+        </div><button id="logout" class="btn btn-outline-secondary">Salir</button>
+      </div>
+      <div id="metrics" class="row g-3 mb-4"></div>
+      <div class="row g-4">
+        <div class="col-lg-5">
+          <div class="surface p-4 mb-4">
+            <h3 class="section-title h5">Buscar unidad o persona</h3>
+            <form id="searchForm" class="input-group"><input id="query" class="form-control"
+                placeholder="T4-1127, placa, parqueadero, correo o nombre"><button
+                class="btn btn-primary">Buscar</button></form>
+            <div id="searchResults" class="mt-3"></div>
+          </div>
+          <div class="surface p-4">
+            <div class="d-flex justify-content-between align-items-center">
+              <h3 class="section-title h5 mb-0">Solicitudes pendientes</h3><button id="refreshRequests"
+                class="btn btn-outline-success btn-sm">Actualizar</button>
+            </div>
+            <div id="requests" class="mt-3"></div>
+          </div>
+          <div class="surface p-4 mt-4">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h3 class="section-title h5 mb-0">Bien 9999</h3>
+                <div class="small-note">Placas pendientes de identificación.</div>
+              </div>
+              <button id="refreshUnidentified" class="btn btn-outline-success btn-sm">Actualizar</button>
+            </div>
+            <div id="unidentifiedVehicles" class="mt-3"></div>
+          </div>
+        </div>
+        <div class="col-lg-7">
+          <div class="surface p-4 sticky-lg-top" style="top:1rem">
+            <h3 class="section-title h5">Detalle de unidad</h3>
+            <div id="profile">
+              <p class="text-muted">Selecciona un resultado para consultar el perfil.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="/js/portal-bv-client.js?v=20260718-4"></script>
+  <script>
+    (function () { 'use strict'; const URL = {{ .Site.Params.portalWebAppUrl | default "" | jsonify | safeJS }}; const client = new PortalBVClient(URL); let token = ''; let email = ''; const $ = id => document.getElementById(id); const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c])); function msg(t, type = 'danger') { const a = $('alert'); a.className = 'alert alert-' + type; a.textContent = t; a.classList.remove('hidden'); scrollTo({ top: 0, behavior: 'smooth' }) } function hideMsg() { $('alert').classList.add('hidden') } function panel(id) { ['login', 'otp', 'app'].forEach(x => $(x).classList.toggle('hidden', x !== id)) } function busy(btn, on, text) { if (on) { btn.dataset.old = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + text } else { btn.disabled = false; btn.innerHTML = btn.dataset.old || text } }
+    $('loginForm').addEventListener('submit', async e => { e.preventDefault(); hideMsg(); email = $('email').value.trim(); busy($('sendBtn'), true, 'Enviando…'); try { const r = await client.call('solicitarCodigo', { role: 'ADMIN', email }); $('otpText').textContent = r.message; panel('otp') } catch (err) { msg(err.message) } finally { busy($('sendBtn'), false, 'Enviar código') } });
+    $('otpForm').addEventListener('submit', async e => { e.preventDefault(); busy($('verifyBtn'), true, 'Ingresando…'); try { const r = await client.call('validarCodigo', { role: 'ADMIN', email, code: $('code').value }); token = r.token; sessionStorage.setItem('bvAdminToken', token); await loadDashboard(); panel('app') } catch (err) { msg(err.message) } finally { busy($('verifyBtn'), false, 'Ingresar') } });
+    $('logout').addEventListener('click', async () => { try { await client.call('cerrarSesion', { token }) } catch (e) { } token = ''; sessionStorage.removeItem('bvAdminToken'); panel('login') });
+    async function loadDashboard() { const d = await client.call('dashboardAdmin', { token }); $('userText').textContent = d.usuario.email; const m = d.metricas; $('metrics').innerHTML = [['Unidades', m.unidades, 'bi-buildings'], ['Personas', m.personas, 'bi-people'], ['Vehículos', m.vehiculos, 'bi-car-front'], ['Bien 9999', m.vehiculosSinIdentificar, 'bi-question-circle'], ['Parqueaderos', m.parqueaderos, 'bi-p-square'], ['Solicitudes pendientes', m.solicitudesPendientes, 'bi-inbox'], ['Conflictos abiertos', m.conflictosAbiertos, 'bi-exclamation-triangle']].map(x => '<div class="col-6 col-lg-2"><div class="surface metric p-3 h-100"><i class="bi ' + x[2] + '"></i><div class="fs-4 fw-bold">' + esc(x[1]) + '</div><div class="small-note">' + esc(x[0]) + '</div></div></div>').join(''); await Promise.all([loadRequests(), loadUnidentifiedVehicles()]) }
+    $('searchForm').addEventListener('submit', async e => { e.preventDefault(); hideMsg(); try { const r = await client.call('buscarAdmin', { token, query: $('query').value }); $('searchResults').innerHTML = r.resultados.length ? r.resultados.map(x => '<button type="button" class="btn btn-outline-success w-100 text-start mb-2 unit-result" data-unit="' + esc(x.unidadId) + '"><strong>' + esc(x.unidadId) + '</strong><div class="small-note">' + esc((x.coincidencias || []).map(c => c.tipo + ': ' + c.detalle).join(' · ')) + '</div></button>').join('') : '<p class="text-muted">Sin resultados.</p>' } catch (err) { msg(err.message) } });
+    $('searchResults').addEventListener('click', e => { const b = e.target.closest('.unit-result'); if (b) loadProfile(b.dataset.unit) });
+    async function loadProfile(unitId) { $('profile').innerHTML = '<p>Cargando…</p>'; try { const p = await client.call('perfilAdmin', { token, unidadId: unitId }); if (!p || !p.unidad) { throw new Error('El servicio no devolvió el perfil de la unidad. Verifica la versión publicada de Apps Script.') } const u = p.unidad, ac = p.estadoCuenta || {}; $('profile').innerHTML = '<h4>' + esc(u.UnidadID) + '</h4><div class="row g-2 mb-3"><div class="col-6"><div class="border rounded p-2"><span class="small-note">Área</span><br><strong>' + esc(u.AreaPrivadaConstruidaM2) + ' m²</strong></div></div><div class="col-6"><div class="border rounded p-2"><span class="small-note">Coeficiente</span><br><strong>' + esc(u.CoeficienteCopropiedad) + '</strong></div></div></div><h5>Personas</h5>' + list(p.personas, x => '<strong>' + esc(x.nombreCompleto) + '</strong><div class="small-note">' + esc(x.rol) + ' · ' + esc(x.tipoDocumento || '') + ' ' + esc(x.numeroDocumento || '') + '<br>' + esc(x.correoPrincipal) + ' · ' + esc(x.celularPrincipal) + '</div>') + '<h5 class="mt-3">Vehículos</h5>' + list(p.vehiculos, x => '<strong>' + esc(x.placa) + '</strong> · ' + esc(x.tipoVehiculo)) + '<h5 class="mt-3">Parqueaderos</h5>' + list(p.parqueaderos, x => '<strong>' + esc(x.codigoOficial) + '</strong> · ' + esc(x.subtipo) + ' · ' + esc(x.areaPrivadaConstruidaM2) + ' m²') + '<h5 class="mt-3">Estado de cuenta</h5><div class="border rounded p-2">' + esc(ac.EstadoCuenta || 'Sin información') + ' · Saldo: ' + esc(ac.SaldoActual || '') + ' · Reservas: ' + esc(ac.ElegibleReservas || '') + '</div><h5 class="mt-3">Datos aprobados del portal</h5><div class="json-box">' + esc(JSON.stringify(p.seccionesAprobadas || {}, null, 2)) + '</div>' } catch (err) { msg(err.message) } }
+    function list(items, fn) { return items && items.length ? items.map(x => '<div class="border rounded p-2 mb-2">' + fn(x) + '</div>').join('') : '<p class="small-note">Sin registros.</p>' }
+    async function loadRequests() { try { const r = await client.call('listarSolicitudes', { token, estado: 'PENDIENTE' }); $('requests').innerHTML = r.solicitudes.length ? r.solicitudes.map(renderRequest).join('') : '<p class="text-muted">No hay solicitudes pendientes.</p>' } catch (err) { msg(err.message) } }
+    function renderRequest(x) { return '<div class="request-card mb-3"><div class="d-flex justify-content-between"><strong>' + esc(x.unidadId) + '</strong><span class="badge text-bg-warning">' + esc(x.estado) + '</span></div><div class="small-note">' + esc(x.solicitudId) + ' · ' + esc(x.fechaSolicitud) + '<br>' + esc(x.emailAutenticado) + ' · ' + esc(x.secciones) + '</div><details class="mt-2"><summary>Ver cambios</summary><div class="small-note mt-2">Anterior</div><div class="json-box">' + esc(JSON.stringify(x.datosAnteriores, null, 2)) + '</div><div class="small-note mt-2">Propuesto</div><div class="json-box">' + esc(JSON.stringify(x.datosPropuestos, null, 2)) + '</div></details><textarea class="form-control mt-2 decision-note" rows="2" placeholder="Observaciones de la decisión"></textarea><div class="d-flex gap-2 mt-2"><button class="btn btn-success btn-sm decision" data-id="' + esc(x.solicitudId) + '" data-decision="APROBADA">Aprobar</button><button class="btn btn-outline-danger btn-sm decision" data-id="' + esc(x.solicitudId) + '" data-decision="RECHAZADA">Rechazar</button><button class="btn btn-outline-secondary btn-sm open-unit" data-unit="' + esc(x.unidadId) + '">Ver unidad</button></div></div>' }
+    $('requests').addEventListener('click', async e => { const open = e.target.closest('.open-unit'); if (open) { loadProfile(open.dataset.unit); return } const b = e.target.closest('.decision'); if (!b) return; const card = b.closest('.request-card'); if (!confirm('¿Confirmas esta decisión?')) return; b.disabled = true; try { await client.call('resolverSolicitud', { token, solicitudId: b.dataset.id, decision: b.dataset.decision, observaciones: card.querySelector('.decision-note').value }); msg('Solicitud ' + b.dataset.decision.toLowerCase() + '.', 'success'); await loadDashboard() } catch (err) { msg(err.message) } finally { b.disabled = false } }); $('refreshRequests').addEventListener('click', loadRequests);
+    async function loadUnidentifiedVehicles() { try { const r = await client.call('listarVehiculosSinIdentificar', { token }); const items = r.vehiculos || []; $('unidentifiedVehicles').innerHTML = items.length ? items.map(renderUnidentifiedVehicle).join('') : '<p class="text-muted">No hay placas pendientes de identificación.</p>' } catch (err) { msg(err.message) } }
+    function renderUnidentifiedVehicle(v) { return '<div class="request-card mb-3 unidentified-card" data-plate="' + esc(v.placa) + '"><div class="d-flex justify-content-between"><strong>' + esc(v.placa) + '</strong><span class="badge text-bg-secondary">9999</span></div><div class="small-note">' + esc(v.tipoVehiculo || '') + ' · ' + esc(v.fuentesRespaldo || v.fuente || '') + '<br>' + esc(v.estadoRevision || 'PENDIENTE_IDENTIFICACION') + '</div><div class="row g-2 mt-2"><div class="col-md-7"><input class="form-control destination-unit" placeholder="Apartamento destino, ej. 1029-T4"></div><div class="col-md-5"><select class="form-select destination-relation"><option value="PROPIO">Propio/residente</option><option value="VISITANTE_AUTORIZADO">Visitante autorizado</option></select></div><div class="col-12"><input class="form-control admin-vehicle-note" placeholder="Motivo u observación"></div></div><div class="d-flex gap-2 mt-2"><button class="btn btn-success btn-sm reassign-vehicle">Reasignar</button><button class="btn btn-outline-danger btn-sm delete-vehicle">Eliminar registro</button></div></div>' }
+    $('unidentifiedVehicles').addEventListener('click', async e => { const card = e.target.closest('.unidentified-card'); if (!card) return; const plate = card.dataset.plate; const reassign = e.target.closest('.reassign-vehicle'); const remove = e.target.closest('.delete-vehicle'); if (!reassign && !remove) return; const action = reassign ? 'REASIGNAR' : 'ELIMINAR'; if (!confirm(action === 'ELIMINAR' ? '¿Eliminar el registro operativo de esta placa? La evidencia histórica se conservará para auditoría.' : '¿Reasignar esta placa al apartamento indicado?')) return; const button = reassign || remove; button.disabled = true; try { await client.call('gestionarVehiculoSinIdentificar', { token, placa: plate, accion: action, unidadDestinoId: card.querySelector('.destination-unit').value, reconocimiento: card.querySelector('.destination-relation').value, motivo: card.querySelector('.admin-vehicle-note').value }); msg(action === 'ELIMINAR' ? 'Registro eliminado del bien 9999.' : 'Placa reasignada.', 'success'); await loadDashboard() } catch (err) { msg(err.message) } finally { button.disabled = false } });
+    $('refreshUnidentified').addEventListener('click', loadUnidentifiedVehicles);
+    const saved = sessionStorage.getItem('bvAdminToken'); if (saved) { token = saved; loadDashboard().then(() => panel('app')).catch(() => { sessionStorage.removeItem('bvAdminToken'); token = '' }) }
+}());
+  </script>
+</body>
+
+</html>

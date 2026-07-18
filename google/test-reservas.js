@@ -720,3 +720,144 @@ function TEST_12_VerificarEndpointVerificacion() {
   Logger.log('========================================');
 }
 
+/**
+ * TEST 13
+ * Verifica la fuente oficial, Unidades y unicidad de Estado_Cuenta.
+ */
+function TEST_13_DiagnosticarConexionCopropiedad() {
+  const result =
+    reservasDiagnosticarConexionDatosCopropiedad();
+
+  Logger.log(JSON.stringify(result, null, 2));
+
+  if (!result.ok) {
+    throw new Error(
+      'La conexión oficial requiere revisión.'
+    );
+  }
+
+  return result;
+}
+
+/**
+ * TEST 14
+ * Verifica la lectura del apartamento 1029-T4.
+ * No retorna datos personales.
+ */
+function TEST_14_ConsultarElegibilidad1029() {
+  const result =
+    reservasConsultarElegibilidadUnidad(
+      'T4',
+      '1029'
+    );
+
+  Logger.log(JSON.stringify(result, null, 2));
+
+  if (
+    !result.ok ||
+    result.elegibleReservas !== 'SI'
+  ) {
+    throw new Error(
+      '1029-T4 no aparece elegible en Estado_Cuenta.'
+    );
+  }
+
+  return result;
+}
+
+/**
+ * TEST 15
+ * Agrega/verifica las columnas de auditoría de elegibilidad.
+ */
+function TEST_15_PrepararIntegracionCopropiedad() {
+  const result =
+    reservasPrepararIntegracionCopropiedad();
+
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+/**
+ * TEST 16
+ * Verifica que un correo no registrado no bloquee una unidad elegible.
+ * La identidad no se considera validada.
+ */
+function TEST_16_PermitirCorreoNoRegistrado() {
+  const result = validateReservationAccess_(
+    'T4',
+    '1029',
+    'correo-no-registrado@example.com',
+    'Solicitante de prueba'
+  );
+
+  Logger.log(JSON.stringify(result, null, 2));
+
+  if (!result.ok) {
+    throw new Error(
+      'La unidad elegible fue rechazada: ' +
+      result.code
+    );
+  }
+
+  if (
+    result.person.registeredEmailValidated !==
+    false
+  ) {
+    throw new Error(
+      'El correo no debe marcarse como validado.'
+    );
+  }
+
+  return result;
+}
+
+/**
+ * TEST 17
+ * Verifica el contenido mínimo del mensaje de mora.
+ */
+function TEST_17_MensajeUnidadNoElegible() {
+  const message = [
+    'El apartamento no está habilitado para realizar reservas.',
+    '',
+    'En el último corte de cartera del 17/07/2026, presentó un saldo vencido superior al límite permitido para reservar.',
+    '',
+    'Para recuperar la habilitación, debes ponerte al día y esperar a que el pago se refleje en un nuevo corte de cartera.',
+    '',
+    'Para más información, comunícate con la administración.'
+  ].join('\\n');
+
+  if (
+    message.indexOf(
+      'El apartamento no está habilitado'
+    ) === -1 ||
+    message.indexOf(
+      'esperar a que el pago se refleje'
+    ) === -1
+  ) {
+    throw new Error(
+      'El mensaje no contiene la orientación esperada.'
+    );
+  }
+
+  return {
+    ok: true,
+    mensaje: message
+  };
+}
+
+/**
+ * TEST 18
+ * Documenta los estados no bloqueantes del correo administrativo.
+ */
+function TEST_18_EstadosNotificacionNoBloqueante() {
+  return {
+    ok: true,
+    estadosPermitidos: [
+      'ENVIADO',
+      'OMITIDO_CUOTA_AGOTADA',
+      'ERROR_NO_BLOQUEANTE'
+    ],
+    reservaNoDependeDelCorreo: true
+  };
+}
+

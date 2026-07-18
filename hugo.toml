@@ -1,4 +1,4 @@
-baseURL = 'https://clubbulevarverde.co/'
+baseURL = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde'
 languageCode = 'es-co'
 title = 'Club Residencial Bulevar Verde'
 
@@ -30,6 +30,9 @@ title = 'Club Residencial Bulevar Verde'
   facebook = ''
   instagram = ''
 
+  portalWebAppUrl = "https://script.google.com/macros/s/AKfycbzJTYc1jjx5-A3tgF9ngeWBfCWeB1OogUEIdBTfEoiC2-9RadEYgdMPNi8Ve-Na2B7byQ/exec"
+  reservasWebAppUrl = "https://script.google.com/macros/s/AKfycbywtGpeya1SKIDKChYU3k5WK_lhPpeqXnuWiCz07cpxCLf4xxR5L_Gzj6NBGOQYOC-l/exec"
+
 [menu]
   [[menu.main]]
     name = 'Inicio'
@@ -50,3 +53,9 @@ title = 'Club Residencial Bulevar Verde'
     name = 'Sanciones'
     url = '/sanciones/'
     weight = 4
+
+  [[menu.main]]
+    name = 'Datos'
+    url = '/datos-personales/'
+    weight = 5
+

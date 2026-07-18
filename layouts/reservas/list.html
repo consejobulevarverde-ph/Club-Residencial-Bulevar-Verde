@@ -652,8 +652,8 @@
                     <ul class="mb-0">
                         <li>Verifica que el espacio, la fecha y el horario sean correctos.</li>
                         <li>La solicitud queda pendiente hasta la validación de la administración.</li>
-                        <li>Debes estar al día con las expensas de administración.</li>
-                        <li>Recibirás la respuesta en el correo registrado.</li>
+                        <li>La unidad debe figurar como <strong>Elegible para reservas</strong> en el estado de cuenta oficial.</li>
+                                                <li>Recibirás la respuesta en el correo que ingreses.</li>
                     </ul>
                 </div>
 
@@ -739,7 +739,7 @@
 
                                 <div class="col-md-6 mb-3">
                                     <label for="input-apto" class="form-label">Apartamento <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" id="input-apto" placeholder="Ej: 0229, 101, 502" required pattern="[0-9]{3,4}">
+                                    <input type="text" class="form-control" id="input-apto" placeholder="Ej: 1029" required pattern="[0-9]{3,4}">
                                     <div class="invalid-feedback">Ingresa el número de apartamento (3 o 4 dígitos)</div>
                                 </div>
                             </div>
@@ -748,6 +748,7 @@
                                 <label for="input-email" class="form-label">Correo electrónico <span class="text-danger">*</span></label>
                                 <input type="email" class="form-control" id="input-email" placeholder="correo@ejemplo.com" required>
                                 <div class="invalid-feedback">Por favor ingresa un correo electrónico válido</div>
+                                <small class="text-muted">Usa el correo donde deseas recibir la respuesta. Por ahora no se valida contra los datos registrados.</small>
                             </div>
 
                             <div class="mb-3">
@@ -815,16 +816,77 @@
     (function() {
         'use strict';
 
-        // V4 Reservas https://script.google.com/macros/s/AKfycbyxVfCqeZGYH4W59WV1BgwVPxluNKrYVofDM-l_fHBRfcrfVoj_rYYZqlQGjR0OYbou/exec
-        // V5 reservas https://script.google.com/macros/s/AKfycbybRiHAhOZaedxLMlcD6UfdcNkSX61NKEsK2GzK1bk8qrTk337A_UtzjPhYrTIH0cnP/exec
-        // V6 reservas https://script.google.com/macros/s/AKfycbyPQxs4FhxS1hfhaNgKrpK8GztuLIBmKovrTQZHKg3oqGSVKKxSTPDDoKHLPg3sTj9o/exec
-        // V7 reservas https://script.google.com/macros/s/AKfycbwAlRD_t21pA177n_Pglul_pqFuKz3VTCFHxkNpmRK5-PpqRYqSJ1id-ngH4_i74Vn1/exec
-        // V8 reservas https://script.google.com/macros/s/AKfycbyz1Pg9SBVxlf1Q3JXDrY4MCDWgsJ-Ii8tnG24PgMUxOryW1RzfWwuKfYQmaSTpZ4s-/exec
-        // V9 reservas https://script.google.com/macros/s/AKfycbx1rji5U_gehhvv8P0My-EHbA0uvbdqrPL0IkPlM47U30eo8n2E-LOPMRFmbj9Bq7in/exec
-        // V10 reservas https://script.google.com/macros/s/AKfycby9rVHVn99iFccRb_SGZwDJZPhsG4mHvlwln23hYNcNY_kmHq5yyYlDwY2Rn17ufcE0/exec
-        // V11 reservas https://script.google.com/macros/s/AKfycbzAlz5pHzVKibNk3TAa1tVLW_KD61CSxTi2Iia_tmJKMSlb8BEl7W8SCMNfMIslcr4Y/exec
-        // V12 reservas https://script.google.com/macros/s/AKfycbx6qA_JulBU97Mttp_VEoNxjVJ92fnfKVj4ShgFfWnk5sfYp8i5JORqClG6Fu5b72pq/exec
-        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbx6qA_JulBU97Mttp_VEoNxjVJ92fnfKVj4ShgFfWnk5sfYp8i5JORqClG6Fu5b72pq/exec';
+        // Las URL se insertan como texto JavaScript normal.
+        // No usar jsonify aquí: podía dejar comillas codificadas
+        // como %22 o %2522 y convertir la URL en una ruta local.
+        const RAW_WEBAPP_URL = "{{ .Site.Params.reservasWebAppUrl }}";
+        const WEBAPP_URL = normalizeConfiguredUrl(
+            RAW_WEBAPP_URL,
+            'Web App de reservas'
+        );
+
+        const DATOS_PERSONALES_URL = normalizeConfiguredUrl(
+            "{{ "datos-personales/" | absURL }}",
+            'Datos personales',
+            false
+        );
+
+        function normalizeConfiguredUrl(
+            rawValue,
+            label,
+            requireAppsScript
+        ) {
+            var value = String(rawValue || '').trim();
+
+            // Corrige entidades HTML de comillas.
+            value = value
+                .replace(/&quot;|&#34;|&#x22;/gi, '"')
+                .trim();
+
+            // Corrige hasta dos niveles de codificación:
+            // %2522https...%2522 -> %22https...%22 -> "https..."
+            for (
+                var attempt = 0;
+                attempt < 2;
+                attempt += 1
+            ) {
+                try {
+                    var decoded = decodeURIComponent(value);
+
+                    if (decoded === value) {
+                        break;
+                    }
+
+                    value = decoded.trim();
+                } catch (error) {
+                    break;
+                }
+            }
+
+            // Elimina comillas envolventes.
+            value = value
+                .replace(/^["']+|["']+$/g, '')
+                .trim();
+
+            if (!/^https?:\/\//i.test(value)) {
+                throw new Error(
+                    'La URL de ' + label +
+                    ' no es absoluta: ' + value
+                );
+            }
+
+            if (
+                requireAppsScript !== false &&
+                !/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec(?:$|[?#])/i.test(value)
+            ) {
+                throw new Error(
+                    'La URL de ' + label +
+                    ' no corresponde a una implementación /exec válida.'
+                );
+            }
+
+            return value;
+        }
 
         let state = {
             selectedDate: null,
@@ -1256,12 +1318,14 @@
                 });
             })
             .then(function() {
-                // Verificar si la reserva se creó consultando por requestId
-                console.log('Verificando creación de reserva...');
-                return fetch(WEBAPP_URL + '?action=verifyReservation&requestId=' + encodeURIComponent(payload.requestId));
-            })
-            .then(function(response) {
-                return response.json();
+                // Verificar creación o rechazo. Se reintenta porque Apps Script
+                // puede tardar algunos segundos en consultar la fuente oficial.
+                console.log('Verificando resultado de la reserva...');
+                return verifyReservationWithRetry(
+                    payload.requestId,
+                    5,
+                    2500
+                );
             })
             .then(function(data) {
                 console.log('Verificación:', data);
@@ -1278,7 +1342,13 @@
                         '<strong>Próximos pasos:</strong><br>' +
                         '1️⃣ Realiza el pago correspondiente a la cuenta bancaria del conjunto<br>' +
                         '2️⃣ La administración verificará tu pago<br>' +
-                        '3️⃣ Te notificaremos cuando tu reserva sea <strong>Confirmada</strong>' +
+                        '3️⃣ Te notificaremos cuando tu reserva sea <strong>Confirmada</strong><br><br>' +
+                        '<hr>' +
+                        '<strong>¿Tus datos están desactualizados?</strong><br>' +
+                        'Te invitamos a revisar o actualizar tus datos personales para futuras gestiones.<br>' +
+                        '<a class="btn btn-outline-success mt-3" href="' +
+                        DATOS_PERSONALES_URL +
+                        '"><i class="bi bi-person-vcard me-1"></i> Actualizar datos personales</a>' +
                         '</div>';
                     
                     // Deshabilitar formulario pero mantener los datos
@@ -1303,14 +1373,19 @@
                     btnSubmit.parentNode.appendChild(btnOtraReserva);
                 } else if (data && data.ok && !data.exists) {
                     // Reserva NO creada - probablemente error de validación
-                    var errorMsg = data.error || 'La reserva no pudo ser procesada';
-                    
+                    var errorMsg = data.error || 'La unidad o el solicitante no cumplen los requisitos para reservar';
+                    var formattedError = escapeHtml(errorMsg)
+                        .replace(/\r?\n/g, '<br>');
+                    var genericFooter = data.code === 'UNIDAD_NO_ELEGIBLE'
+                        ? ''
+                        : '<br><br><small>Si el problema persiste, comunícate con la administración.</small>';
+
                     alertsDiv.innerHTML = 
                         '<div class="alert alert-danger" role="alert">' +
                         '<i class="bi bi-x-circle-fill me-2"></i>' +
-                        '<strong>Error en la reserva</strong><br>' +
-                        errorMsg + '<br><br>' +
-                        '<small>Si el problema persiste, contacta a la administración.</small>' +
+                        '<strong>Error en la reserva</strong><br><br>' +
+                        formattedError +
+                        genericFooter +
                         '</div>';
                     
                     // Re-habilitar botón para que pueda corregir
@@ -1356,6 +1431,41 @@
                 // Scroll al mensaje
                 alertsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             });
+        }
+
+        function verifyReservationWithRetry(
+            requestId,
+            attemptsRemaining,
+            delayMs
+        ) {
+            var url =
+                WEBAPP_URL +
+                '?action=verifyReservation&requestId=' +
+                encodeURIComponent(requestId);
+
+            return fetch(url)
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
+                    if (
+                        data.exists ||
+                        data.rejected ||
+                        attemptsRemaining <= 1
+                    ) {
+                        return data;
+                    }
+
+                    return new Promise(function(resolve) {
+                        setTimeout(resolve, delayMs);
+                    }).then(function() {
+                        return verifyReservationWithRetry(
+                            requestId,
+                            attemptsRemaining - 1,
+                            delayMs
+                        );
+                    });
+                });
         }
 
         function generateRequestId() {

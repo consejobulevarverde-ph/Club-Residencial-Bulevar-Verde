@@ -5,6 +5,24 @@ const SHEET_RESPUESTAS = 'Respuestas de formulario 1';
 const SHEET_BIENES = 'Bienes';
 const SHEET_CONFIG = 'Config';
 
+const RESERVAS_VERSION = '13.1.3-mensaje-mora-correo-no-bloqueante';
+
+// Esta es la única fuente autorizada para datos de unidades, personas,
+// vínculos y estado de cuenta utilizados por el módulo de reservas.
+const COPROPIEDAD_DATA_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/' +
+  '1MjNg_qR134dB-8vdK0NEJyeXlLS848dsOpu-bylkVBQ/edit';
+
+const COPROPIEDAD_DATA_SPREADSHEET_ID =
+  '1MjNg_qR134dB-8vdK0NEJyeXlLS848dsOpu-bylkVBQ';
+
+const COPROPIEDAD_SHEET_UNIDADES = 'Unidades';
+const COPROPIEDAD_SHEET_PERSONAS = 'Personas';
+const COPROPIEDAD_SHEET_VINCULOS = 'Vinculos_Unidad';
+const COPROPIEDAD_SHEET_ESTADO_CUENTA = 'Estado_Cuenta';
+
+const RESERVATION_REQUEST_CACHE_SECONDS = 900;
+
 // Estados válidos del sistema
 const ESTADO_PENDIENTE = 'Pendiente';        // Estado inicial - requiere verificación de pago
 // const ESTADO_APROBADA = 'Aprobada';        // DEPRECADO - Ya no se usa en el flujo
@@ -72,13 +90,33 @@ function doGet(e) {
           estado: reservation.estado,
           rowIndex: reservation.rowIndex
         });
-      } else {
+      }
+
+      const requestStatus =
+        getReservationRequestStatus_(requestId);
+
+      if (
+        requestStatus &&
+        requestStatus.status === 'REJECTED'
+      ) {
         return jsonOutput_({
           ok: true,
           exists: false,
-          message: 'No se encontró reserva con ese requestId'
+          rejected: true,
+          code: requestStatus.code || 'RESERVA_RECHAZADA',
+          error: requestStatus.error ||
+            'La solicitud no cumple los requisitos para reservar.'
         });
       }
+
+      return jsonOutput_({
+        ok: true,
+        exists: false,
+        processing: !!requestStatus,
+        message: requestStatus
+          ? 'La solicitud todavía está siendo procesada.'
+          : 'No se encontró reserva con ese requestId.'
+      });
     }
 
     const bienId = getParam_(e, 'bienId');
@@ -147,97 +185,132 @@ function doGet(e) {
  ***************************************/
 function doPost(e) {
   const ADMIN_EMAIL = 'bulevarverdeadmon@gmail.com';
-  const CC_EMAIL = 'consejo.bulevarverde@gmail.com';
+  let payload = null;
 
   try {
     Logger.log('=== doPost INICIO ===');
-    Logger.log('postData: ' + (e.postData ? e.postData.contents : 'null'));
 
-    // Parsear payload
-    let payload;
     try {
-      payload = JSON.parse(e.postData.contents);
+      payload = JSON.parse(
+        e && e.postData
+          ? e.postData.contents
+          : ''
+      );
     } catch (parseError) {
       return jsonOutput_({
         ok: false,
-        error: 'Payload JSON inválido: ' + parseError.message
+        error: 'Payload JSON inválido: ' +
+          parseError.message
       });
     }
 
-    Logger.log('Payload parseado: ' + JSON.stringify(payload));
+    if (payload && payload.requestId) {
+      saveReservationRequestStatus_(
+        payload.requestId,
+        {
+          status: 'PROCESSING',
+          startedAt: new Date().toISOString()
+        }
+      );
+    }
 
-    // Validar campos obligatorios
-    const requiredFields = ['requestId', 'bienId', 'fecha', 'horario', 'torre', 'apto', 'nombre', 'email', 'asunto'];
-    const missingFields = requiredFields.filter(field => !payload[field]);
-    
+    const requiredFields = [
+      'requestId',
+      'bienId',
+      'fecha',
+      'horario',
+      'torre',
+      'apto',
+      'nombre',
+      'email',
+      'asunto'
+    ];
+
+    const missingFields = requiredFields.filter(
+      function (field) {
+        return !payload[field];
+      }
+    );
+
     if (missingFields.length > 0) {
+      const message =
+        'Campos obligatorios faltantes: ' +
+        missingFields.join(', ');
+
+      saveReservationRequestStatus_(
+        payload.requestId,
+        {
+          status: 'REJECTED',
+          code: 'CAMPOS_FALTANTES',
+          error: message
+        }
+      );
+
       return jsonOutput_({
         ok: false,
-        error: 'Campos obligatorios faltantes: ' + missingFields.join(', ')
+        error: message
       });
     }
 
-    // Verificar duplicados por requestId
-    const existingReservation = findReservationByRequestId_(payload.requestId);
+    const existingReservation =
+      findReservationByRequestId_(
+        payload.requestId
+      );
+
     if (existingReservation) {
-      Logger.log('Reserva duplicada detectada por requestId: ' + payload.requestId);
+      saveReservationRequestStatus_(
+        payload.requestId,
+        {
+          status: 'CREATED',
+          idReserva:
+            existingReservation.idReserva
+        }
+      );
+
       return jsonOutput_({
         ok: true,
-        idReserva: existingReservation.idReserva,
-        mensaje: 'Reserva ya existe (duplicado evitado)',
-        rowIndex: existingReservation.rowIndex
+        idReserva:
+          existingReservation.idReserva,
+        mensaje:
+          'Reserva ya existe (duplicado evitado)',
+        rowIndex:
+          existingReservation.rowIndex
       });
     }
 
-    // Asegurar columnas técnicas
     ensureReservationTechnicalColumns_();
 
-    // Crear la reserva
     const result = createReservation_(payload);
 
     if (!result.ok) {
+      saveReservationRequestStatus_(
+        payload.requestId,
+        {
+          status: 'REJECTED',
+          code: result.code ||
+            'RESERVA_RECHAZADA',
+          error: result.error ||
+            'La solicitud no cumple los requisitos.'
+        }
+      );
+
       return jsonOutput_(result);
     }
 
-    // Enviar notificación por correo
-    try {
-      const bien = getBienById_(payload.bienId);
-      const descripcionBien = bien ? bien.Descripcion : payload.bienId;
+    const notification =
+      notifyAdminReservation_(
+        ADMIN_EMAIL,
+        payload,
+        result
+      );
 
-      const asuntoEmail = '[Bulevar Verde] Nueva Reserva Web - ' + result.idReserva;
-      const cuerpo =
-        'Se ha recibido una nueva solicitud de reserva desde el portal web.\n\n' +
-        'ID de reserva: ' + result.idReserva + '\n' +
-        'Request ID: ' + payload.requestId + '\n\n' +
-        'Datos del solicitante:\n' +
-        'Nombre: ' + payload.nombre + '\n' +
-        'Torre: ' + payload.torre + '\n' +
-        'Apartamento: ' + payload.apto + '\n' +
-        'Correo electrónico: ' + payload.email + '\n\n' +
-        'Detalle de la reserva:\n' +
-        'Inmueble: ' + descripcionBien + '\n' +
-        'Asunto: ' + payload.asunto + '\n' +
-        'Fecha: ' + payload.fecha + '\n' +
-        'Horario: ' + payload.horario + '\n\n' +
-        'Estado: ' + result.estado + '\n' +
-        'Observaciones: ' + result.observaciones + '\n\n' +
-        'Acepta Reglamento: ' + (payload.aceptaReglamento ? 'SI' : 'NO') + '\n' +
-        'Acepta Tratamiento de Datos: ' + (payload.aceptaTratamientoDatos ? 'SI' : 'NO') + '\n\n' +
-        'Fecha de registro: ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + '\n\n' +
-        'Este correo fue generado automáticamente desde el sistema de reservas de Bulevar Verde.';
-
-      MailApp.sendEmail({
-        to: ADMIN_EMAIL,
-        //cc: CC_EMAIL,
-        subject: asuntoEmail,
-        body: cuerpo
-      });
-
-      Logger.log('Correo de notificación enviado');
-    } catch (emailError) {
-      Logger.log('Error enviando correo: ' + emailError.message);
-      // No fallar la reserva por error de correo
-    }
+    saveReservationRequestStatus_(
+      payload.requestId,
+      {
+        status: 'CREATED',
+        idReserva: result.idReserva
+      }
+    );
 
     return jsonOutput_({
       ok: true,
@@ -245,18 +318,215 @@ function doPost(e) {
       estado: result.estado,
       observaciones: result.observaciones,
       rowIndex: result.rowIndex,
+      unidadId: result.unidadId,
+      notificacionAdmin:
+        notification.status,
       mensaje: 'Reserva creada exitosamente'
     });
-
   } catch (error) {
-    Logger.log('Error en doPost: ' + error.message);
-    Logger.log('Stack: ' + error.stack);
+    Logger.log(
+      'Error en doPost: ' +
+      (error && error.message
+        ? error.message
+        : String(error))
+    );
+
+    if (payload && payload.requestId) {
+      saveReservationRequestStatus_(
+        payload.requestId,
+        {
+          status: 'REJECTED',
+          code: 'ERROR_INTERNO',
+          error:
+            'No fue posible procesar la reserva. ' +
+            'Intenta nuevamente o contacta a la administración.'
+        }
+      );
+    }
+
     return jsonOutput_({
       ok: false,
-      error: error.message || String(error)
+      error:
+        'No fue posible procesar la reserva. ' +
+        'Intenta nuevamente o contacta a la administración.'
     });
   }
 }
+
+
+/***************************************
+ * NOTIFICACIÓN ADMINISTRATIVA
+ ***************************************/
+
+/**
+ * La notificación nunca define el resultado de la reserva.
+ *
+ * La reserva ya está registrada cuando esta función se ejecuta.
+ * Si la cuota está agotada o Gmail presenta un error, se registra
+ * el estado y se retorna sin lanzar excepciones.
+ */
+function notifyAdminReservation_(
+  adminEmail,
+  payload,
+  result
+) {
+  const status = {
+    status: 'NO_ENVIADO',
+    detail: '',
+    attemptedAt: new Date()
+  };
+
+  try {
+    const remainingQuota =
+      MailApp.getRemainingDailyQuota();
+
+    if (remainingQuota < 1) {
+      status.status =
+        'OMITIDO_CUOTA_AGOTADA';
+      status.detail =
+        'La reserva fue registrada, pero no se envió el correo porque la cuota diaria estaba agotada.';
+
+      Logger.log(
+        'Notificación omitida por cuota agotada. ' +
+        'Reserva=' + result.idReserva
+      );
+
+      updateAdminNotificationAudit_(
+        result.rowIndex,
+        status
+      );
+
+      return status;
+    }
+
+    const bien = getBienById_(payload.bienId);
+    const descripcionBien = bien
+      ? bien.Descripcion
+      : payload.bienId;
+
+    const asuntoEmail =
+      '[Bulevar Verde] Nueva Reserva Web - ' +
+      result.idReserva;
+
+    const cuerpo =
+      'Se ha recibido una nueva solicitud de reserva desde el portal web.\n\n' +
+      'ID de reserva: ' + result.idReserva + '\n' +
+      'Request ID: ' + payload.requestId + '\n' +
+      'Unidad: ' + result.unidadId + '\n\n' +
+      'Datos declarados por el solicitante:\n' +
+      'Nombre: ' + result.nombreSolicitante + '\n' +
+      'Identidad registrada validada: NO\n' +
+      'Correo electrónico: ' +
+        result.emailSolicitante + '\n\n' +
+      'Detalle de la reserva:\n' +
+      'Inmueble: ' + descripcionBien + '\n' +
+      'Asunto: ' + payload.asunto + '\n' +
+      'Fecha: ' + payload.fecha + '\n' +
+      'Horario: ' + payload.horario + '\n\n' +
+      'Elegibilidad financiera de la unidad verificada: SI\n' +
+      'Estado: ' + result.estado + '\n' +
+      'Observaciones: ' +
+        result.observaciones + '\n\n' +
+      'Acepta Reglamento: ' +
+        (payload.aceptaReglamento
+          ? 'SI'
+          : 'NO') + '\n' +
+      'Acepta Tratamiento de Datos: ' +
+        (payload.aceptaTratamientoDatos
+          ? 'SI'
+          : 'NO') + '\n\n' +
+      'Fecha de registro: ' +
+        Utilities.formatDate(
+          new Date(),
+          Session.getScriptTimeZone(),
+          'yyyy-MM-dd HH:mm'
+        ) + '\n\n' +
+      'Fuente de datos de copropiedad: ' +
+        COPROPIEDAD_DATA_SPREADSHEET_ID;
+
+    MailApp.sendEmail({
+      to: adminEmail,
+      subject: asuntoEmail,
+      body: cuerpo
+    });
+
+    status.status = 'ENVIADO';
+    status.detail =
+      'Correo enviado. Cuota disponible antes del envío: ' +
+      remainingQuota + '.';
+  } catch (emailError) {
+    status.status =
+      'ERROR_NO_BLOQUEANTE';
+    status.detail =
+      emailError && emailError.message
+        ? emailError.message
+        : String(emailError);
+
+    Logger.log(
+      'La reserva quedó registrada, pero el correo administrativo falló. ' +
+      'Reserva=' + result.idReserva +
+      ' | Error=' + status.detail
+    );
+  }
+
+  updateAdminNotificationAudit_(
+    result.rowIndex,
+    status
+  );
+
+  return status;
+}
+
+/**
+ * Guarda el resultado del intento sin afectar la reserva.
+ */
+function updateAdminNotificationAudit_(
+  rowIndex,
+  notification
+) {
+  try {
+    ensureReservationTechnicalColumns_();
+
+    const sheet =
+      getSheetByNameOrThrow_(
+        SHEET_RESPUESTAS
+      );
+    const headers = getHeaders_(sheet);
+
+    const values = {
+      NotificacionAdmin:
+        notification.status || '',
+      FechaIntentoNotificacion:
+        notification.attemptedAt || new Date(),
+      DetalleNotificacionAdmin:
+        notification.detail || ''
+    };
+
+    Object.keys(values).forEach(
+      function (header) {
+        const index = headers.indexOf(header);
+
+        if (index >= 0) {
+          sheet.getRange(
+            rowIndex,
+            index + 1
+          ).setValue(values[header]);
+        }
+      }
+    );
+  } catch (auditError) {
+    Logger.log(
+      'No fue posible registrar el estado de la notificación. ' +
+      'La reserva permanece creada. Error=' +
+      (
+        auditError && auditError.message
+          ? auditError.message
+          : String(auditError)
+      )
+    );
+  }
+}
+
 
 /***************************************
  * TRIGGER DEL FORM
@@ -407,16 +677,22 @@ function testValidateLastRow() {
  * PROCESAMIENTO CENTRAL DE UNA FILA
  ***************************************/
 function processReservationRow_(rowIndex) {
-  const respuestasSheet = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+  const respuestasSheet =
+    getSheetByNameOrThrow_(SHEET_RESPUESTAS);
   const headers = getHeaders_(respuestasSheet);
-  const rowObj = getRowObject_(respuestasSheet, rowIndex, headers);
+  const rowObj = getRowObject_(
+    respuestasSheet,
+    rowIndex,
+    headers
+  );
 
   const config = getConfigMap_();
 
-  // Normalizar datos de entrada
   const reservation = {
     rowIndex: rowIndex,
-    email: safeTrim_(rowObj['Dirección de correo electrónico']),
+    email: safeTrim_(
+      rowObj['Dirección de correo electrónico']
+    ),
     bienId: safeTrim_(rowObj['Inmueble']),
     asunto: safeTrim_(rowObj['Asunto']),
     fechaReservaRaw: rowObj['FechaReserva'],
@@ -425,103 +701,203 @@ function processReservationRow_(rowIndex) {
     apto: safeTrim_(rowObj['Apto']),
     nombre: safeTrim_(rowObj['Nombre']),
     estadoActual: safeTrim_(rowObj['Estado']),
-    observacionesActual: safeTrim_(rowObj['Observaciones'])
+    observacionesActual:
+      safeTrim_(rowObj['Observaciones'])
   };
 
-  const validation = validateReservation_(reservation, config, rowIndex);
+  const validation = validateReservation_(
+    reservation,
+    config,
+    rowIndex
+  );
 
-  updateReservationStatus_(rowIndex, validation.estado, validation.observaciones);
+  updateReservationStatus_(
+    rowIndex,
+    validation.estado,
+    validation.observaciones
+  );
+
+  if (validation.access) {
+    updateReservationEligibilityAudit_(
+      rowIndex,
+      validation.access
+    );
+  }
 
   return {
     ok: validation.ok,
     rowIndex: rowIndex,
     estado: validation.estado,
-    observaciones: validation.observaciones
+    observaciones: validation.observaciones,
+    unidadId: validation.access
+      ? validation.access.unitId
+      : ''
   };
 }
 
 /***************************************
  * VALIDACIÓN DE RESERVA
  ***************************************/
-function validateReservation_(reservation, config, currentRowIndex) {
+function validateReservation_(
+  reservation,
+  config,
+  currentRowIndex
+) {
   if (!reservation.bienId) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, 'El campo Inmueble es obligatorio.');
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      'El campo Inmueble es obligatorio.'
+    );
   }
 
   if (!reservation.fechaReservaRaw) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, 'El campo FechaReserva es obligatorio.');
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      'El campo FechaReserva es obligatorio.'
+    );
   }
 
   if (!reservation.horario) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, 'El campo Horario es obligatorio.');
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      'El campo Horario es obligatorio.'
+    );
   }
 
   if (!reservation.apto) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, 'El campo Apto es obligatorio.');
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      'El campo Apto es obligatorio.'
+    );
+  }
+
+  if (!reservation.email) {
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      'El correo electrónico es obligatorio.'
+    );
+  }
+
+  // Esta validación aplica a cualquier bien o zona común.
+  // Se realiza antes de las reglas particulares del espacio.
+  const access = validateReservationAccess_(
+    reservation.torre,
+    reservation.apto,
+    reservation.email,
+    reservation.nombre
+  );
+
+  if (!access.ok) {
+    return {
+      ok: false,
+      estado: ESTADO_RECHAZADA_REGLA,
+      observaciones: access.publicMessage,
+      access: access
+    };
   }
 
   const bien = getBienById_(reservation.bienId);
   if (!bien) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, `No existe el bien ${reservation.bienId}.`);
-  }
-
-  if (!toBoolean_(bien.Activo)) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, `El bien ${reservation.bienId} no está activo.`);
-  }
-
-  const fechaReserva = normalizeSheetDate_(reservation.fechaReservaRaw);
-  if (!fechaReserva) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, 'FechaReserva inválida.');
-  }
-
-  const advanceCheck = validateAdvanceDays_(fechaReserva, config);
-  if (!advanceCheck.ok) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, advanceCheck.message);
-  }
-
-  const slot = parseHorario_(reservation.horario);
-  if (!slot.ok) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, slot.message);
-  }
-
-  const durationHours = (slot.endMinutes - slot.startMinutes) / 60;
-  const ruleCheck = validateReservationAgainstBienRules_(slot, durationHours, bien, config);
-  if (!ruleCheck.ok) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, ruleCheck.message);
-  }
-
-  const aptoCheck = validateMaxActiveReservationsPerApto_(
-    reservation.apto,
-    currentRowIndex,
-    config
-  );
-  if (!aptoCheck.ok) {
-    return failValidation_(ESTADO_RECHAZADA_REGLA, aptoCheck.message);
-  }
-
-  const conflict = hasConflict_(reservation.bienId, fechaReserva, slot, currentRowIndex);
-  if (conflict.hasConflict) {
     return failValidation_(
-      ESTADO_RECHAZADA_CONFLICTO,
-      `Conflicto: ya existe una reserva activa para ${reservation.bienId} en el horario ${reservation.horario}.`
+      ESTADO_RECHAZADA_REGLA,
+      `No existe el bien ${reservation.bienId}.`
     );
   }
 
-  const requiereAprobacion = normalizeYesNo_(config.requiere_aprobacion) === 'SI';
-  if (requiereAprobacion) {
-    return {
-      ok: true,
-      estado: ESTADO_PENDIENTE,
-      observaciones: 'Reserva válida. Pendiente de confirmación de pago.'
-    };
+  if (!toBoolean_(bien.Activo)) {
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      `El bien ${reservation.bienId} no está activo.`
+    );
   }
 
-  // TODAS las reservas web quedan en estado Pendiente
-  // La confirmación es manual después de verificar el pago
+  const fechaReserva = normalizeSheetDate_(
+    reservation.fechaReservaRaw
+  );
+  if (!fechaReserva) {
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      'FechaReserva inválida.'
+    );
+  }
+
+  const advanceCheck = validateAdvanceDays_(
+    fechaReserva,
+    config
+  );
+  if (!advanceCheck.ok) {
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      advanceCheck.message
+    );
+  }
+
+  const slot = parseHorario_(
+    reservation.horario
+  );
+  if (!slot.ok) {
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      slot.message
+    );
+  }
+
+  const durationHours =
+    (slot.endMinutes - slot.startMinutes) / 60;
+
+  const ruleCheck =
+    validateReservationAgainstBienRules_(
+      slot,
+      durationHours,
+      bien,
+      config
+    );
+
+  if (!ruleCheck.ok) {
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      ruleCheck.message
+    );
+  }
+
+  const aptoCheck =
+    validateMaxActiveReservationsPerApto_(
+      access.apartment,
+      currentRowIndex,
+      config
+    );
+
+  if (!aptoCheck.ok) {
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      aptoCheck.message
+    );
+  }
+
+  const conflict = hasConflict_(
+    reservation.bienId,
+    fechaReserva,
+    slot,
+    currentRowIndex
+  );
+
+  if (conflict.hasConflict) {
+    return failValidation_(
+      ESTADO_RECHAZADA_CONFLICTO,
+      'Conflicto: ya existe una reserva activa ' +
+      'para ' + reservation.bienId +
+      ' en el horario ' +
+      reservation.horario + '.'
+    );
+  }
+
   return {
     ok: true,
     estado: ESTADO_PENDIENTE,
-    observaciones: 'Reserva válida. Pendiente de confirmación de pago.'
+    observaciones:
+      'Reserva válida. Elegibilidad financiera ' +
+      'verificada. Pendiente de confirmación de pago.',
+    access: access
   };
 }
 
@@ -895,6 +1271,654 @@ function getConfigMap_() {
 
   return result;
 }
+
+
+/***************************************
+ * DATOS OFICIALES DE COPROPIEDAD
+ ***************************************/
+
+/**
+ * Guarda la URL autorizada como propiedad del proyecto.
+ * La validación también exige que corresponda al ID oficial.
+ */
+function reservasConfigurarConexionDatosCopropiedad() {
+  PropertiesService
+    .getScriptProperties()
+    .setProperty(
+      'RESERVAS_COPROPIEDAD_DATA_URL',
+      COPROPIEDAD_DATA_SPREADSHEET_URL
+    );
+
+  return reservasDiagnosticarConexionDatosCopropiedad();
+}
+
+/**
+ * Prepara columnas, configura la conexión y ejecuta un diagnóstico.
+ */
+function reservasPrepararIntegracionCopropiedad() {
+  ensureReservationTechnicalColumns_();
+  return reservasConfigurarConexionDatosCopropiedad();
+}
+
+/**
+ * Diagnóstico seguro: no retorna nombres, correos, documentos ni saldos.
+ */
+function reservasDiagnosticarConexionDatosCopropiedad() {
+  const ss = getCopropiedadDataSpreadsheet_();
+
+  const requiredSheets = [
+    COPROPIEDAD_SHEET_UNIDADES,
+    COPROPIEDAD_SHEET_ESTADO_CUENTA
+  ];
+
+  const sheetStatus = requiredSheets.map(
+    function (name) {
+      const sheet = ss.getSheetByName(name);
+      return {
+        hoja: name,
+        existe: !!sheet,
+        filas: sheet
+          ? Math.max(sheet.getLastRow() - 1, 0)
+          : 0
+      };
+    }
+  );
+
+  const missing = sheetStatus.filter(
+    function (item) {
+      return !item.existe;
+    }
+  );
+
+  if (missing.length > 0) {
+    throw new Error(
+      'Faltan hojas en la fuente oficial: ' +
+      missing.map(function (item) {
+        return item.hoja;
+      }).join(', ')
+    );
+  }
+
+  const accountRows = readCopropiedadObjects_(
+    ss,
+    COPROPIEDAD_SHEET_ESTADO_CUENTA
+  );
+
+  const counts = {};
+  accountRows.forEach(function (row) {
+    const unitId = safeTrim_(row.UnidadID);
+    if (!unitId) return;
+    counts[unitId] = (counts[unitId] || 0) + 1;
+  });
+
+  const duplicates = Object.keys(counts)
+    .filter(function (unitId) {
+      return counts[unitId] > 1;
+    })
+    .map(function (unitId) {
+      return {
+        unidadId: unitId,
+        registros: counts[unitId]
+      };
+    });
+
+  return {
+    ok: missing.length === 0 &&
+      duplicates.length === 0,
+    versionReservas: RESERVAS_VERSION,
+    spreadsheetId: ss.getId(),
+    spreadsheetName: ss.getName(),
+    urlAutorizada:
+      COPROPIEDAD_DATA_SPREADSHEET_URL,
+    hojas: sheetStatus,
+    registrosEstadoCuenta:
+      accountRows.length,
+    duplicadosEstadoCuenta: duplicates,
+    unRegistroPorApartamento:
+      duplicates.length === 0
+  };
+}
+
+/**
+ * Consulta administrativa desde el editor.
+ * No se publica como endpoint GET.
+ */
+function reservasConsultarElegibilidadUnidad(
+  torre,
+  apartamento
+) {
+  const unitId = normalizeReservationUnitId_(
+    torre,
+    apartamento
+  );
+
+  if (!unitId) {
+    throw new Error(
+      'Torre o apartamento inválidos.'
+    );
+  }
+
+  const ss = getCopropiedadDataSpreadsheet_();
+  const rows = readCopropiedadObjects_(
+    ss,
+    COPROPIEDAD_SHEET_ESTADO_CUENTA
+  ).filter(function (row) {
+    return safeTrim_(row.UnidadID) === unitId;
+  });
+
+  if (rows.length !== 1) {
+    return {
+      ok: false,
+      unidadId: unitId,
+      registrosEncontrados: rows.length,
+      elegibleReservas:
+        'PENDIENTE_VALIDACION',
+      mensaje: rows.length === 0
+        ? 'No existe Estado_Cuenta para la unidad.'
+        : 'Hay registros duplicados en Estado_Cuenta.'
+    };
+  }
+
+  return {
+    ok: true,
+    unidadId: unitId,
+    elegibleReservas:
+      normalizeYesNo_(rows[0].ElegibleReservas),
+    estadoCuenta:
+      safeTrim_(rows[0].EstadoCuenta),
+    fechaCorte:
+      rows[0].FechaCorte || '',
+    motivoRestriccion:
+      safeTrim_(rows[0].MotivoRestriccion)
+  };
+}
+
+/**
+ * Validación obligatoria para cualquier reserva:
+ * - Unidad existente.
+ * - Correo con formato válido como canal de contacto.
+ * - Exactamente un registro de Estado_Cuenta.
+ * - ElegibleReservas = SI.
+ *
+ * Temporalmente no se valida que el correo esté registrado.
+ */
+function validateReservationAccess_(
+  torre,
+  apartamento,
+  email,
+  nombre
+) {
+  const tower = normalizeTorre_(torre);
+  const apartment =
+    normalizeReservationApartment_(apartamento);
+  const unitId = normalizeReservationUnitId_(
+    tower,
+    apartment
+  );
+  const normalizedEmail = normalizeEmail_(email);
+  const declaredName = safeTrim_(nombre);
+
+  if (!unitId) {
+    return reservationAccessFailure_(
+      'UNIDAD_INVALIDA',
+      'La torre o el apartamento no son válidos.',
+      'No fue posible construir UnidadID.'
+    );
+  }
+
+  // El correo continúa siendo obligatorio como canal de contacto,
+  // pero temporalmente no se compara con Personas ni Vinculos_Unidad.
+  if (!normalizedEmail) {
+    return reservationAccessFailure_(
+      'EMAIL_INVALIDO',
+      'Ingresa un correo electrónico válido.',
+      'Correo vacío o con formato inválido.',
+      unitId
+    );
+  }
+
+  if (!declaredName) {
+    return reservationAccessFailure_(
+      'NOMBRE_INVALIDO',
+      'Ingresa el nombre de la persona que realiza la reserva.',
+      'Nombre vacío.',
+      unitId
+    );
+  }
+
+  let ss;
+  try {
+    ss = getCopropiedadDataSpreadsheet_();
+  } catch (error) {
+    return reservationAccessFailure_(
+      'FUENTE_DATOS_NO_DISPONIBLE',
+      'No fue posible validar los requisitos de la reserva. ' +
+      'Intenta nuevamente más tarde.',
+      error.message || String(error),
+      unitId
+    );
+  }
+
+  const unitRows = readCopropiedadObjects_(
+    ss,
+    COPROPIEDAD_SHEET_UNIDADES
+  ).filter(function (row) {
+    return (
+      safeTrim_(row.UnidadID) === unitId &&
+      safeTrim_(row.EstadoUnidad)
+        .toUpperCase() !== 'BIEN_SIN_IDENTIFICAR'
+    );
+  });
+
+  if (unitRows.length !== 1) {
+    return reservationAccessFailure_(
+      unitRows.length === 0
+        ? 'UNIDAD_NO_REGISTRADA'
+        : 'UNIDAD_DUPLICADA',
+      'La unidad no pudo ser validada. ' +
+      'Consulta con la administración.',
+      'Registros de unidad encontrados: ' +
+        unitRows.length,
+      unitId
+    );
+  }
+
+  const accountRows = readCopropiedadObjects_(
+    ss,
+    COPROPIEDAD_SHEET_ESTADO_CUENTA
+  ).filter(function (row) {
+    return safeTrim_(row.UnidadID) === unitId;
+  });
+
+  if (accountRows.length !== 1) {
+    return reservationAccessFailure_(
+      accountRows.length === 0
+        ? 'ESTADO_CUENTA_NO_DISPONIBLE'
+        : 'ESTADO_CUENTA_DUPLICADO',
+      'No fue posible verificar la elegibilidad de la unidad. ' +
+      'Consulta con la administración.',
+      'Registros de Estado_Cuenta encontrados: ' +
+        accountRows.length,
+      unitId
+    );
+  }
+
+  const account = accountRows[0];
+  const eligibility = normalizeYesNo_(
+    account.ElegibleReservas
+  );
+
+  if (eligibility !== 'SI') {
+    const cutoffText =
+      formatReservationCutoffDate_(
+        account.FechaCorte
+      );
+
+    const publicMessage = eligibility === 'NO'
+      ? [
+          'El apartamento no está habilitado para realizar reservas.',
+          '',
+          'En el último corte de cartera' +
+            (cutoffText
+              ? ' del ' + cutoffText
+              : '') +
+            ', presentó un saldo vencido superior al límite permitido para reservar.',
+          '',
+          'Para recuperar la habilitación, debes ponerte al día y esperar a que el pago se refleje en un nuevo corte de cartera.',
+          '',
+          'Para más información, comunícate con la administración.'
+        ].join('\n')
+      : [
+          'La elegibilidad del apartamento está pendiente de validación.',
+          '',
+          'No fue posible confirmar el estado de cartera necesario para realizar la reserva.',
+          '',
+          'Para más información, comunícate con la administración.'
+        ].join('\n');
+
+    return reservationAccessFailure_(
+      eligibility === 'NO'
+        ? 'UNIDAD_NO_ELEGIBLE'
+        : 'ELEGIBILIDAD_PENDIENTE',
+      publicMessage,
+      [
+        'ElegibleReservas=' + eligibility,
+        'EstadoCuenta=' +
+          safeTrim_(account.EstadoCuenta),
+        'FechaCorte=' +
+          safeTrim_(account.FechaCorte),
+        'Motivo=' +
+          safeTrim_(account.MotivoRestriccion)
+      ].join(' | '),
+      unitId
+    );
+  }
+
+  return {
+    ok: true,
+    code: 'ELIGIBLE',
+    unitId: unitId,
+    tower: tower,
+    apartment: apartment,
+
+    // Datos declarados. No representan una validación de identidad.
+    person: {
+      personId: '',
+      name: declaredName,
+      email: normalizedEmail,
+      primaryEmail: '',
+      role: 'NO_VALIDADO',
+      registeredEmailValidated: false
+    },
+
+    account: {
+      eligible: 'SI',
+      state: safeTrim_(account.EstadoCuenta),
+      checkedAt: new Date(),
+      sourceDate: account.FechaCorte || '',
+      sourceSpreadsheetId:
+        COPROPIEDAD_DATA_SPREADSHEET_ID
+    }
+  };
+}
+
+function formatReservationCutoffDate_(value) {
+  if (!value) return '';
+
+  let date = null;
+
+  if (
+    Object.prototype.toString.call(value) ===
+    '[object Date]' &&
+    !isNaN(value.getTime())
+  ) {
+    date = value;
+  } else {
+    const text = safeTrim_(value);
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+      const parts = text.slice(0, 10).split('-');
+      date = new Date(
+        Number(parts[0]),
+        Number(parts[1]) - 1,
+        Number(parts[2])
+      );
+    } else {
+      const parsed = new Date(text);
+
+      if (!isNaN(parsed.getTime())) {
+        date = parsed;
+      }
+    }
+  }
+
+  if (!date || isNaN(date.getTime())) {
+    return safeTrim_(value);
+  }
+
+  return Utilities.formatDate(
+    date,
+    Session.getScriptTimeZone(),
+    'dd/MM/yyyy'
+  );
+}
+
+function reservationAccessFailure_(
+  code,
+  publicMessage,
+  internalMessage,
+  unitId
+) {
+  return {
+    ok: false,
+    code: code,
+    publicMessage: publicMessage,
+    internalMessage: internalMessage,
+    unitId: unitId || ''
+  };
+}
+
+function getCopropiedadDataSpreadsheet_() {
+  const configuredUrl =
+    PropertiesService
+      .getScriptProperties()
+      .getProperty(
+        'RESERVAS_COPROPIEDAD_DATA_URL'
+      ) ||
+    COPROPIEDAD_DATA_SPREADSHEET_URL;
+
+  const spreadsheetId =
+    extractSpreadsheetId_(configuredUrl);
+
+  if (
+    spreadsheetId !==
+    COPROPIEDAD_DATA_SPREADSHEET_ID
+  ) {
+    throw new Error(
+      'La conexión de datos no apunta a la hoja ' +
+      'oficial de la copropiedad.'
+    );
+  }
+
+  return SpreadsheetApp.openById(spreadsheetId);
+}
+
+function extractSpreadsheetId_(value) {
+  const text = safeTrim_(value);
+  const match = text.match(
+    /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/
+  );
+
+  if (match) return match[1];
+
+  return /^[a-zA-Z0-9-_]{20,}$/.test(text)
+    ? text
+    : '';
+}
+
+function readCopropiedadObjects_(
+  spreadsheet,
+  sheetName
+) {
+  const sheet = spreadsheet.getSheetByName(
+    sheetName
+  );
+
+  if (!sheet) {
+    throw new Error(
+      'No existe la hoja oficial: ' + sheetName
+    );
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+
+  if (lastRow < 1 || lastColumn < 1) {
+    return [];
+  }
+
+  const values = sheet.getRange(
+    1,
+    1,
+    lastRow,
+    lastColumn
+  ).getValues();
+
+  const headers = values[0].map(function (header) {
+    return safeTrim_(header);
+  });
+
+  return values.slice(1).map(function (row) {
+    return rowToObject_(headers, row);
+  });
+}
+
+function normalizeReservationApartment_(value) {
+  const text = safeTrim_(value);
+
+  if (!/^\d{3,4}$/.test(text)) {
+    return '';
+  }
+
+  return text.padStart(4, '0');
+}
+
+function normalizeReservationUnitId_(
+  torre,
+  apartamento
+) {
+  const tower = normalizeTorre_(torre);
+  const apartment =
+    normalizeReservationApartment_(apartamento);
+
+  if (!tower || !apartment) return '';
+
+  return apartment + '-' + tower;
+}
+
+function normalizeEmail_(value) {
+  const email = safeTrim_(value).toLowerCase();
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ? email
+    : '';
+}
+
+function reservationPersonEmails_(person) {
+  const values = [
+    person.CorreoPrincipal,
+    person.CorreosAlternos
+  ];
+
+  const result = [];
+
+  values.forEach(function (value) {
+    safeTrim_(value)
+      .split(/[;,|\n]+/)
+      .map(normalizeEmail_)
+      .filter(Boolean)
+      .forEach(function (email) {
+        if (result.indexOf(email) === -1) {
+          result.push(email);
+        }
+      });
+  });
+
+  return result;
+}
+
+function reservationRolePriority_(role) {
+  const normalized = safeTrim_(role).toUpperCase();
+
+  if (
+    normalized.indexOf('PROPIET') !== -1 ||
+    normalized.indexOf('COMPRADOR') !== -1
+  ) {
+    return 3;
+  }
+
+  if (
+    normalized.indexOf('ARREND') !== -1 ||
+    normalized.indexOf('RESIDENT') !== -1
+  ) {
+    return 2;
+  }
+
+  return 1;
+}
+
+/**
+ * Registra en la fila de la reserva la fuente y el resultado de la
+ * validación. No duplica saldos ni información financiera.
+ */
+function updateReservationEligibilityAudit_(
+  rowIndex,
+  access
+) {
+  if (!access || !access.ok) return;
+
+  ensureReservationTechnicalColumns_();
+
+  const sheet =
+    getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+  const headers = getHeaders_(sheet);
+
+  const values = {
+    UnidadID: access.unitId,
+    PersonaID: access.person.personId,
+    RolSolicitante: access.person.role,
+    ElegibleReservasAlCrear: 'SI',
+    FechaValidacionElegibilidad:
+      access.account.checkedAt || new Date(),
+    FuenteDatosCopropiedad:
+      COPROPIEDAD_DATA_SPREADSHEET_ID,
+    CorreoRegistradoValidado: 'NO',
+    VersionReservas: RESERVAS_VERSION
+  };
+
+  Object.keys(values).forEach(function (header) {
+    const index = headers.indexOf(header);
+
+    if (index >= 0) {
+      sheet.getRange(
+        rowIndex,
+        index + 1
+      ).setValue(values[header]);
+    }
+  });
+}
+
+/***************************************
+ * ESTADO TEMPORAL DE SOLICITUD WEB
+ ***************************************/
+
+function saveReservationRequestStatus_(
+  requestId,
+  status
+) {
+  if (!requestId) return;
+
+  try {
+    CacheService
+      .getScriptCache()
+      .put(
+        reservationRequestCacheKey_(requestId),
+        JSON.stringify(status || {}),
+        RESERVATION_REQUEST_CACHE_SECONDS
+      );
+  } catch (error) {
+    Logger.log(
+      'No fue posible guardar estado temporal: ' +
+      error.message
+    );
+  }
+}
+
+function getReservationRequestStatus_(requestId) {
+  if (!requestId) return null;
+
+  try {
+    const text = CacheService
+      .getScriptCache()
+      .get(
+        reservationRequestCacheKey_(requestId)
+      );
+
+    return text ? JSON.parse(text) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function reservationRequestCacheKey_(requestId) {
+  return (
+    'RESERVA_REQ_' +
+    safeTrim_(requestId)
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .slice(0, 180)
+  );
+}
+
 
 /***************************************
  * HELPERS DE SHEET
@@ -1389,15 +2413,16 @@ function getInmuebleCorto_(inmueble) {
  * Agrega columnas técnicas L:Q
  */
 function createReservation_(payload) {
-  const sheet = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+  const sheet =
+    getSheetByNameOrThrow_(SHEET_RESPUESTAS);
   const headers = getHeaders_(sheet);
   const config = getConfigMap_();
 
-  // Resolver bien por BienID
   const bien = getBienById_(payload.bienId);
   if (!bien) {
     return {
       ok: false,
+      code: 'BIEN_NO_EXISTE',
       error: `No existe el bien ${payload.bienId}`
     };
   }
@@ -1405,150 +2430,227 @@ function createReservation_(payload) {
   if (!toBoolean_(bien.Activo)) {
     return {
       ok: false,
-      error: `El bien ${payload.bienId} no está activo`
+      code: 'BIEN_INACTIVO',
+      error:
+        `El bien ${payload.bienId} no está activo`
     };
   }
 
-  // Normalizar fecha
-  const fechaReserva = parseDateInput_(payload.fecha);
+  const fechaReserva = parseDateInput_(
+    payload.fecha
+  );
   if (!fechaReserva) {
     return {
       ok: false,
-      error: 'Fecha inválida. Usa formato YYYY-MM-DD'
+      code: 'FECHA_INVALIDA',
+      error:
+        'Fecha inválida. Usa formato YYYY-MM-DD'
     };
   }
 
-  // Validar anticipación
-  const advanceCheck = validateAdvanceDays_(fechaReserva, config);
+  const advanceCheck = validateAdvanceDays_(
+    fechaReserva,
+    config
+  );
   if (!advanceCheck.ok) {
     return {
       ok: false,
+      code: 'ANTICIPACION_INVALIDA',
       error: advanceCheck.message
     };
   }
 
-  // Normalizar torre (T1, T2, T3, T4, T8)
   const torre = normalizeTorre_(payload.torre);
+  const apto = normalizeReservationApartment_(
+    payload.apto
+  );
 
-  // IMPORTANTE: Apartamento como texto para preservar ceros iniciales (0229)
-  const apto = safeTrim_(payload.apto);
+  if (!torre || !apto) {
+    return {
+      ok: false,
+      code: 'UNIDAD_INVALIDA',
+      error:
+        'La torre o el apartamento no son válidos.'
+    };
+  }
 
-  // Parsear horario
-  const slotParsed = parseHorario_(payload.horario);
+  // Obligatoria para todos los bienes, salones y canchas.
+  const access = validateReservationAccess_(
+    torre,
+    apto,
+    payload.email,
+    payload.nombre
+  );
+
+  if (!access.ok) {
+    Logger.log(
+      'Reserva rechazada por acceso/elegibilidad. ' +
+      'Código=' + access.code +
+      ' Unidad=' + (access.unitId || '') +
+      ' Detalle=' + (access.internalMessage || '')
+    );
+
+    return {
+      ok: false,
+      code: access.code,
+      error: access.publicMessage
+    };
+  }
+
+  const slotParsed = parseHorario_(
+    payload.horario
+  );
   if (!slotParsed.ok) {
     return {
       ok: false,
+      code: 'HORARIO_INVALIDO',
       error: slotParsed.message
     };
   }
 
-  const durationHours = (slotParsed.endMinutes - slotParsed.startMinutes) / 60;
+  const durationHours =
+    (
+      slotParsed.endMinutes -
+      slotParsed.startMinutes
+    ) / 60;
 
-  // Validar reglas del bien
-  const ruleCheck = validateReservationAgainstBienRules_(slotParsed, durationHours, bien, config);
+  const ruleCheck =
+    validateReservationAgainstBienRules_(
+      slotParsed,
+      durationHours,
+      bien,
+      config
+    );
+
   if (!ruleCheck.ok) {
     return {
       ok: false,
+      code: 'REGLA_BIEN',
       error: ruleCheck.message
     };
   }
 
-  // Validar máximo de reservas activas por apartamento
-  const aptoCheck = validateMaxActiveReservationsPerApto_(apto, null, config);
+  const aptoCheck =
+    validateMaxActiveReservationsPerApto_(
+      access.apartment,
+      null,
+      config
+    );
+
   if (!aptoCheck.ok) {
     return {
       ok: false,
+      code: 'MAXIMO_RESERVAS_ACTIVAS',
       error: aptoCheck.message
     };
   }
 
-  // Verificar conflictos de horario
-  const conflict = hasConflict_(payload.bienId, fechaReserva, slotParsed, null);
+  const conflict = hasConflict_(
+    payload.bienId,
+    fechaReserva,
+    slotParsed,
+    null
+  );
+
   if (conflict.hasConflict) {
     return {
       ok: false,
-      error: `Ya existe una reserva en ese horario para ${bien.Descripcion}. Conflicto en fila ${conflict.conflict.rowIndex}.`,
+      code: 'CONFLICTO_HORARIO',
+      error:
+        `Ya existe una reserva en ese horario para ` +
+        `${bien.Descripcion}.`,
       estado: ESTADO_RECHAZADA_CONFLICTO
     };
   }
 
-  // Generar IDs
   const idReserva = generateReservationId_();
   const ahora = new Date();
-
-  // Determinar estado final
-  // TODAS las reservas web quedan en estado Pendiente
-  // La confirmación se realiza manualmente después de verificar el pago bancario
   const estadoFinal = ESTADO_PENDIENTE;
-  const observacionesFinal = idReserva + ' - Pendiente de confirmación de pago';
+  const observacionesFinal =
+    idReserva +
+    ' - Elegibilidad verificada. ' +
+    'Pendiente de confirmación de pago';
 
-  // ESCRITURA DE NUEVA FILA - Compatibilidad con columnas A:K existentes
   const newRowData = [];
 
-  // A: Marca temporal (fecha/hora actual)
   newRowData.push(ahora);
-
-  // B: Dirección de correo electrónico
-  newRowData.push(safeTrim_(payload.email));
-
-  // C: Inmueble - IMPORTANTE: Usar Descripcion para compatibilidad histórica
+  newRowData.push(access.person.email);
   newRowData.push(bien.Descripcion);
-
-  // D: Asunto
   newRowData.push(safeTrim_(payload.asunto));
-
-  // E: FechaReserva (Date object real)
   newRowData.push(fechaReserva);
-
-  // F: Horario (rango HH:mm-HH:mm)
   newRowData.push(payload.horario);
-
-  // G: Torre (normalizada: T1, T2, T3, T4, T8)
-  newRowData.push(torre);
-
-  // H: Apto (texto para preservar ceros iniciales)
-  newRowData.push(apto);
-
-  // I: Nombre
-  newRowData.push(safeTrim_(payload.nombre));
-
-  // J: Estado
+  newRowData.push(access.tower);
+  newRowData.push(access.apartment);
+  newRowData.push(access.person.name);
   newRowData.push(estadoFinal);
-
-  // K: Observaciones
   newRowData.push(observacionesFinal);
 
-  // Columnas técnicas L:Q (si existen)
-  const colIdReserva = headers.indexOf('IdReserva');
-  const colRequestId = headers.indexOf('RequestId');
-  const colOrigen = headers.indexOf('OrigenReserva');
-  const colFechaRegistro = headers.indexOf('FechaRegistroSistema');
-  const colAceptaReglamento = headers.indexOf('AceptaReglamento');
-  const colAceptaTratamiento = headers.indexOf('AceptaTratamientoDatos');
+  const technicalValues = {
+    IdReserva: idReserva,
+    RequestId: safeTrim_(payload.requestId),
+    OrigenReserva: ORIGEN_WEB_POST,
+    FechaRegistroSistema: ahora,
+    AceptaReglamento:
+      payload.aceptaReglamento ? 'SI' : 'NO',
+    AceptaTratamientoDatos:
+      payload.aceptaTratamientoDatos
+        ? 'SI'
+        : 'NO',
+    UnidadID: access.unitId,
+    PersonaID: access.person.personId,
+    RolSolicitante: access.person.role,
+    ElegibleReservasAlCrear: 'SI',
+    FechaValidacionElegibilidad:
+      access.account.checkedAt,
+    FuenteDatosCopropiedad:
+      COPROPIEDAD_DATA_SPREADSHEET_ID,
+    CorreoRegistradoValidado: 'NO',
+    VersionReservas: RESERVAS_VERSION
+  };
 
-  if (colIdReserva >= 0) newRowData[colIdReserva] = idReserva;
-  if (colRequestId >= 0) newRowData[colRequestId] = safeTrim_(payload.requestId);
-  if (colOrigen >= 0) newRowData[colOrigen] = ORIGEN_WEB_POST;
-  if (colFechaRegistro >= 0) newRowData[colFechaRegistro] = ahora;
-  if (colAceptaReglamento >= 0) newRowData[colAceptaReglamento] = payload.aceptaReglamento ? 'SI' : 'NO';
-  if (colAceptaTratamiento >= 0) newRowData[colAceptaTratamiento] = payload.aceptaTratamientoDatos ? 'SI' : 'NO';
+  Object.keys(technicalValues).forEach(
+    function (header) {
+      const index = headers.indexOf(header);
+      if (index >= 0) {
+        newRowData[index] =
+          technicalValues[header];
+      }
+    }
+  );
 
-  // Escribir fila nueva
-  const lastRow = sheet.getLastRow();
-  const newRowIndex = lastRow + 1;
-  
-  // Escribir solo las columnas necesarias
-  const numCols = Math.max(11, headers.length); // Mínimo A:K (11 columnas)
-  sheet.getRange(newRowIndex, 1, 1, numCols).setValues([newRowData]);
+  const newRowIndex = sheet.getLastRow() + 1;
+  const numCols = Math.max(11, headers.length);
 
-  Logger.log('Reserva creada: ' + idReserva + ' en fila ' + newRowIndex);
+  while (newRowData.length < numCols) {
+    newRowData.push('');
+  }
+
+  sheet.getRange(
+    newRowIndex,
+    1,
+    1,
+    numCols
+  ).setValues([newRowData.slice(0, numCols)]);
+
+  Logger.log(
+    'Reserva creada: ' +
+    idReserva +
+    ' | Unidad=' +
+    access.unitId +
+    ' | Elegible=SI'
+  );
 
   return {
     ok: true,
     idReserva: idReserva,
     estado: estadoFinal,
     observaciones: observacionesFinal,
-    rowIndex: newRowIndex
+    rowIndex: newRowIndex,
+    unidadId: access.unitId,
+    nombreSolicitante: access.person.name,
+    emailSolicitante: access.person.email,
+    rolSolicitante: access.person.role,
+    correoRegistradoValidado: false
   };
 }
 
@@ -1628,7 +2730,18 @@ function ensureReservationTechnicalColumns_() {
     'OrigenReserva',
     'FechaRegistroSistema',
     'AceptaReglamento',
-    'AceptaTratamientoDatos'
+    'AceptaTratamientoDatos',
+    'UnidadID',
+    'PersonaID',
+    'RolSolicitante',
+    'ElegibleReservasAlCrear',
+    'FechaValidacionElegibilidad',
+    'FuenteDatosCopropiedad',
+    'CorreoRegistradoValidado',
+    'NotificacionAdmin',
+    'FechaIntentoNotificacion',
+    'DetalleNotificacionAdmin',
+    'VersionReservas'
   ];
 
   const missingColumns = requiredTechnicalColumns.filter(col => !headers.includes(col));

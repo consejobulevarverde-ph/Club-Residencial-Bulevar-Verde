@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.LanguageCode | default " es" }}">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Consulta y actualización segura de datos de residentes de Bulevar Verde">
+  <title>{{ .Title }} - {{ .Site.Title }}</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ "images/favicon-32x32.png" | relURL }}">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bv-primary: #2c5f2d;
+      --bv-secondary: #4a8c4b;
+      --bv-light: #e8f5e9;
+      --bv-border: #d8e6d9;
+      --bv-muted: #5f6f61
+    }
+
+    body {
+      font-family: Montserrat, sans-serif;
+      background: var(--bv-light);
+      color: #1f2b20;
+      min-height: 100vh
+    }
+
+    .navbar,
+    .btn-primary {
+      background: var(--bv-primary) !important;
+      border-color: var(--bv-primary) !important
+    }
+
+    .page-header {
+      background: linear-gradient(135deg, var(--bv-secondary), var(--bv-primary));
+      color: #fff;
+      padding: 3rem 0 2.5rem
+    }
+
+    .page-header h1 {
+      font-weight: 800
+    }
+
+    .surface {
+      background: #fff;
+      border: 1px solid var(--bv-border);
+      border-radius: 1rem;
+      box-shadow: 0 6px 20px rgba(44, 95, 45, .08)
+    }
+
+    .section-title {
+      color: var(--bv-primary);
+      font-weight: 700
+    }
+
+    .locked {
+      background: #f5f7f5;
+      border: 1px dashed #a8b7aa
+    }
+
+    .badge-soft {
+      background: #e7f3e8;
+      color: var(--bv-primary)
+    }
+
+    .repeat-row {
+      border: 1px solid var(--bv-border);
+      border-radius: .8rem;
+      padding: 1rem;
+      margin-bottom: .75rem;
+      background: #fbfdfb
+    }
+
+    .spinner-border-sm {
+      width: 1rem;
+      height: 1rem
+    }
+
+    .nav-pills .nav-link.active {
+      background: var(--bv-primary)
+    }
+
+    .form-label {
+      font-weight: 600
+    }
+
+    .small-note {
+      color: var(--bv-muted);
+      font-size: .88rem
+    }
+
+    .status-PENDIENTE {
+      background: #fff3cd;
+      color: #664d03
+    }
+
+    .status-APROBADA {
+      background: #d1e7dd;
+      color: #0f5132
+    }
+
+    .status-RECHAZADA {
+      background: #f8d7da;
+      color: #842029
+    }
+
+    .auth-step {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      color: var(--bv-muted);
+      font-size: .9rem
+    }
+
+    .auth-step-number {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bv-primary);
+      color: #fff;
+      font-weight: 700;
+      flex: 0 0 auto
+    }
+
+    .email-option {
+      display: block;
+      border: 1px solid var(--bv-border);
+      border-radius: .8rem;
+      padding: 1rem;
+      cursor: pointer;
+      background: #fff
+    }
+
+    .email-option:hover {
+      border-color: var(--bv-secondary);
+      background: #fbfdfb
+    }
+
+    .email-option:has(input:checked) {
+      border-color: var(--bv-primary);
+      box-shadow: 0 0 0 .15rem rgba(44, 95, 45, .12)
+    }
+
+    footer {
+      background: var(--bv-primary);
+      color: #fff;
+      margin-top: 3rem
+    }
+
+    .hidden {
+      display: none !important
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-dark">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="{{ "/" | relURL }}">
+        <i class="bi bi-tree-fill me-2"></i>{{ .Site.Title }}
+      </a>
+    </div>
+  </nav>
+
+  <header class="page-header">
+    <div class="container">
+      <h1><i class="bi bi-person-vcard me-2"></i>Mis datos personales</h1>
+      <p class="mb-0">Consulta tu información y solicita actualizaciones mediante una validación segura.</p>
+    </div>
+  </header>
+
+  <main class="container py-4" style="max-width:1050px">
+    <div id="globalAlert" class="alert hidden" role="alert" aria-live="polite"></div>
+
+    <section id="unitPanel" class="surface p-4 p-lg-5">
+      <div class="row g-4 align-items-center">
+        <div class="col-lg-5">
+          <div class="auth-step mb-3"><span class="auth-step-number">1</span><strong>Identifica el apartamento</strong>
+          </div>
+          <h2 class="section-title h4">Ingresa tu apartamento</h2>
+          <p>La torre se identifica automáticamente con el número completo del apartamento.</p>
+          <div class="alert alert-light border small mb-0">
+            <i class="bi bi-shield-lock me-2"></i>
+            No enviaremos códigos por correo. La validación utiliza información previamente registrada.
+          </div>
+        </div>
+        <div class="col-lg-7">
+          <form id="unitForm" class="row g-3">
+            <div class="col-12">
+              <label class="form-label" for="apartamento">Número completo del apartamento</label>
+              <input id="apartamento" class="form-control form-control-lg" inputmode="numeric" maxlength="4"
+                autocomplete="off" placeholder="Ejemplo: 1029" required>
+              <div class="small-note mt-1">Puedes ingresar 401 o 0401; el sistema lo normalizará.</div>
+            </div>
+            <div class="col-12 d-grid">
+              <button id="continueUnitBtn" class="btn btn-primary btn-lg" type="submit">
+                Continuar <i class="bi bi-arrow-right ms-2"></i>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="documentPanel" class="surface p-4 p-lg-5 hidden">
+      <div class="auth-step mb-3"><span class="auth-step-number">2</span><strong>Valida tu documento</strong></div>
+      <h2 class="section-title h4">Ingresa el número de documento</h2>
+      <p class="small-note">Apartamento seleccionado: <strong id="selectedApartment"></strong></p>
+      <form id="documentForm" class="row g-3 align-items-end">
+        <div class="col-md-8">
+          <label class="form-label" for="numeroDocumento">Número de documento</label>
+          <input id="numeroDocumento" class="form-control form-control-lg" autocomplete="off" maxlength="30" required>
+          <div class="small-note mt-1">Puede corresponder a un propietario o a un residente activo de la unidad.</div>
+        </div>
+        <div class="col-md-4 d-grid">
+          <button id="continueDocumentBtn" class="btn btn-primary btn-lg" type="submit">Continuar</button>
+        </div>
+        <div class="col-12">
+          <button id="backToUnitBtn" class="btn btn-link px-0" type="button">
+            <i class="bi bi-arrow-left me-1"></i>Cambiar apartamento
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section id="emailPanel" class="surface p-4 p-lg-5 hidden">
+      <div class="auth-step mb-3"><span class="auth-step-number">3</span><strong>Responde la pregunta de
+          seguridad</strong></div>
+      <h2 class="section-title h4">Selecciona el correo que reconoces</h2>
+      <p id="securityHint" class="small-note"></p>
+      <form id="emailSecurityForm">
+        <div id="emailOptions" class="d-grid gap-2 my-4"></div>
+        <div class="row g-2">
+          <div class="col-md-8 d-grid">
+            <button id="verifySecurityBtn" class="btn btn-primary btn-lg" type="submit">
+              Verificar y entrar
+            </button>
+          </div>
+          <div class="col-md-4 d-grid">
+            <button id="backToDocumentBtn" class="btn btn-outline-secondary btn-lg" type="button">
+              Regresar
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section id="profilePanel" class="hidden">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <h2 id="unitHeading" class="section-title h3 mb-1"></h2>
+            <span id="authTypeBadge" class="badge badge-soft"></span>
+          </div>
+          <p id="authSummary" class="small-note mb-0"></p>
+          <p class="small-note mb-0">Los cambios quedan pendientes de revisión por la administración.</p>
+        </div>
+        <button id="logoutBtn" type="button" class="btn btn-outline-secondary">
+          <i class="bi bi-box-arrow-right me-1"></i>Salir
+        </button>
+      </div>
+
+      <div id="permissionNotice" class="alert alert-light border"></div>
+
+      <div class="surface p-3 mb-4">
+        <ul class="nav nav-pills gap-2" id="profileTabs">
+          <li class="nav-item" data-owner-only><button class="nav-link active" data-target="tabOverview"
+              type="button">Resumen</button></li>
+          <li class="nav-item" data-permission="CONTACTO"><button class="nav-link" data-target="tabContact"
+              type="button">Contacto</button></li>
+          <li class="nav-item" data-permission="RESIDENTES"><button class="nav-link" data-target="tabResidents"
+              type="button">Residentes</button></li>
+          <li class="nav-item" data-permission="VEHICULOS"><button class="nav-link" data-target="tabVehicles"
+              type="button">Vehículos</button></li>
+          <li class="nav-item" data-permission-any="MASCOTAS,EMERGENCIA"><button class="nav-link" data-target="tabOther"
+              type="button">Otros datos</button></li>
+          <li class="nav-item"><button class="nav-link" data-target="tabRequests" type="button">Solicitudes</button>
+          </li>
+        </ul>
+      </div>
+
+      <form id="dataForm">
+        <div id="tabOverview" class="tab-pane-content" data-owner-only>
+          <div class="row g-4">
+            <div class="col-lg-7">
+              <div class="surface p-4 h-100">
+                <h3 class="section-title h5">Datos del inmueble <span class="badge badge-soft ms-1">No
+                    modificables</span></h3>
+                <div id="unitSummary" class="row g-3 mt-1"></div>
+              </div>
+            </div>
+            <div class="col-lg-5">
+              <div class="surface p-4 h-100">
+                <h3 class="section-title h5">Estado de cuenta</h3>
+                <div id="accountSummary"></div>
+                <p class="small-note mt-3 mb-0">El estado es informativo y no puede modificarse desde este portal.</p>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="surface p-4">
+                <h3 class="section-title h5">Propietarios registrados <span class="badge badge-soft ms-1">No
+                    modificable</span></h3>
+                <div id="ownersList"></div>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="surface p-4">
+                <h3 class="section-title h5">Parqueaderos oficiales <span class="badge badge-soft ms-1">No
+                    modificables</span></h3>
+                <div id="parkingList" class="row g-3"></div>
+                <p class="small-note mt-3 mb-0">Para reportar una inconsistencia utiliza el campo de observaciones al
+                  final.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tabContact" class="tab-pane-content hidden" data-section="CONTACTO">
+          <div class="surface p-4">
+            <h3 class="section-title h5">Datos de contacto de la persona autenticada</h3>
+            <div class="row g-3 mt-1">
+              <input id="contactPersonId" type="hidden">
+              <div class="col-md-6">
+                <label class="form-label">Nombre asociado</label>
+                <input id="contactName" class="form-control locked" readonly>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Correo principal actual</label>
+                <input id="contactPrimaryEmail" class="form-control locked" readonly>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="notificationEmail">Correo para notificaciones</label>
+                <input id="notificationEmail" type="email" class="form-control">
+                <div class="small-note mt-1">Un cambio de correo requiere aprobación administrativa.</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="contactPhone">Celular</label>
+                <input id="contactPhone" class="form-control" inputmode="tel">
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="alternateEmails">Correos alternos</label>
+                <input id="alternateEmails" class="form-control" placeholder="correo1@ejemplo.com, correo2@ejemplo.com">
+              </div>
+              <div class="col-12 form-check form-switch ms-2">
+                <input id="receiveNotifications" class="form-check-input" type="checkbox">
+                <label class="form-check-label" for="receiveNotifications">Deseo recibir notificaciones de la
+                  copropiedad</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tabResidents" class="tab-pane-content hidden" data-section="RESIDENTES">
+          <div class="surface p-4">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h3 class="section-title h5 mb-1">Residentes actuales</h3>
+                <p class="small-note mb-0">Disponible para propietarios autenticados. No edites aquí los propietarios
+                  oficiales.</p>
+              </div>
+              <button id="addResidentBtn" class="btn btn-outline-success" type="button">
+                <i class="bi bi-plus-lg"></i> Agregar
+              </button>
+            </div>
+            <div id="residentsEditor" class="mt-4"></div>
+          </div>
+        </div>
+
+        <div id="tabVehicles" class="tab-pane-content hidden" data-section="VEHICULOS">
+          <div class="surface p-4">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h3 class="section-title h5 mb-1">Vehículos vinculados</h3>
+                <p class="small-note mb-0">Clasifica cada placa como propia, visitante autorizado o no reconocida. Las
+                  placas no reconocidas solo pasan al bien 9999 después de aprobación administrativa.</p>
+              </div>
+              <button id="addVehicleBtn" class="btn btn-outline-success" type="button">
+                <i class="bi bi-plus-lg"></i> Agregar
+              </button>
+            </div>
+            <div id="vehiclesEditor" class="mt-4"></div>
+          </div>
+        </div>
+
+        <div id="tabOther" class="tab-pane-content hidden">
+          <div class="row g-4">
+            <div class="col-12" data-section-container="MASCOTAS">
+              <div class="surface p-4">
+                <div class="d-flex justify-content-between">
+                  <h3 class="section-title h5">Mascotas</h3>
+                  <button id="addPetBtn" class="btn btn-outline-success btn-sm" type="button">
+                    <i class="bi bi-plus-lg"></i> Agregar
+                  </button>
+                </div>
+                <div id="petsEditor" class="mt-3"></div>
+              </div>
+            </div>
+            <div class="col-12" data-section-container="EMERGENCIA">
+              <div class="surface p-4">
+                <h3 class="section-title h5">Contacto de emergencia</h3>
+                <div class="row g-3 mt-1">
+                  <div class="col-md-5">
+                    <label class="form-label" for="emergencyName">Nombre</label>
+                    <input id="emergencyName" class="form-control">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" for="emergencyPhone">Celular</label>
+                    <input id="emergencyPhone" class="form-control" inputmode="tel">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label" for="emergencyRelation">Parentesco</label>
+                    <input id="emergencyRelation" class="form-control">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tabRequests" class="tab-pane-content hidden">
+          <div class="surface p-4">
+            <h3 class="section-title h5">Historial de solicitudes</h3>
+            <div id="requestsList"></div>
+          </div>
+        </div>
+
+        <div class="surface p-4 mt-4">
+          <label class="form-label" for="residentNotes">Observaciones o correcciones de datos no modificables</label>
+          <textarea id="residentNotes" class="form-control" rows="4" maxlength="1500"
+            placeholder="Ejemplo: el parqueadero relacionado no corresponde, falta un copropietario o existe una inconsistencia en el área."></textarea>
+          <div class="form-check mt-3">
+            <input id="confirmAccuracy" class="form-check-input" type="checkbox" required>
+            <label class="form-check-label" for="confirmAccuracy">Confirmo que la información enviada es correcta y
+              autorizo su revisión.</label>
+          </div>
+          <div class="d-grid d-md-flex justify-content-md-end mt-3">
+            <button id="saveBtn" class="btn btn-primary btn-lg" type="submit">
+              <i class="bi bi-send-check me-2"></i>Enviar solicitud de actualización
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer class="py-4">
+    <div class="container text-center small">Club Residencial Bulevar Verde · Tratamiento seguro de información personal
+    </div>
+  </footer>
+
+  <script src="/js/portal-bv-client.js?v=20260718-5"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      const WEB_APP_URL = {{ .Site.Params.portalWebAppUrl | default "" | jsonify | safeJS
+    }};
+    const client = new PortalBVClient(WEB_APP_URL);
+
+    let token = '';
+    let profile = null;
+    let loginData = {
+      apartamento: '',
+      challengeId: ''
+    };
+
+    const $ = id => document.getElementById(id);
+    const escapeHtml = value => String(value == null ? '' : value).replace(
+      /[&<>"']/g,
+      character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      }[character])
+    );
+
+    function alertMessage(message, type = 'danger') {
+      const box = $('globalAlert');
+      box.className = 'alert alert-' + type;
+      box.textContent = message;
+      box.classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function clearAlert() {
+      $('globalAlert').classList.add('hidden');
+    }
+
+    function loading(button, active, label) {
+      if (!button) return;
+
+      if (active) {
+        button.dataset.label = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + label;
+      } else {
+        button.disabled = false;
+        button.innerHTML = button.dataset.label || label;
+      }
+    }
+
+    function switchPanel(id) {
+      ['unitPanel', 'documentPanel', 'emailPanel', 'profilePanel'].forEach(panelId => {
+        $(panelId).classList.toggle('hidden', panelId !== id);
+      });
+    }
+
+    function showTab(id) {
+      document.querySelectorAll('.tab-pane-content').forEach(element => {
+        element.classList.toggle('hidden', element.id !== id);
+      });
+
+      document.querySelectorAll('#profileTabs .nav-link').forEach(element => {
+        element.classList.toggle('active', element.dataset.target === id);
+      });
+    }
+
+    function hasPermission(section) {
+      return Array.isArray(profile && profile.permisos) &&
+        profile.permisos.indexOf(section) !== -1;
+    }
+
+    function resetAuthentication() {
+      loginData = { apartamento: '', challengeId: '' };
+      $('unitForm').reset();
+      $('documentForm').reset();
+      $('emailOptions').innerHTML = '';
+      clearAlert();
+    }
+
+    $('profileTabs').addEventListener('click', event => {
+      const button = event.target.closest('button[data-target]');
+      if (button && !button.closest('.hidden')) showTab(button.dataset.target);
+    });
+
+    $('unitForm').addEventListener('submit', event => {
+      event.preventDefault();
+      clearAlert();
+
+      const apartment = $('apartamento').value.replace(/\D/g, '');
+
+      if (!/^\d{1,4}$/.test(apartment)) {
+        alertMessage('Ingresa un número de apartamento válido.');
+        return;
+      }
+
+      loginData.apartamento = apartment;
+      $('selectedApartment').textContent = apartment.padStart(4, '0');
+      switchPanel('documentPanel');
+      $('numeroDocumento').focus();
+    });
+
+    $('documentForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      clearAlert();
+
+      const button = $('continueDocumentBtn');
+      loading(button, true, 'Validando…');
+
+      try {
+        const response = await client.call('iniciarAutenticacionDatos', {
+          apartamento: loginData.apartamento,
+          numeroDocumento: $('numeroDocumento').value.trim()
+        });
+
+        loginData.challengeId = response.challengeId;
+        loginData.unidadId = response.unidadId;
+        $('securityHint').textContent = response.message;
+        renderEmailOptions(response.opciones || []);
+        switchPanel('emailPanel');
+      } catch (error) {
+        alertMessage(error.message);
+      } finally {
+        loading(button, false, 'Continuar');
+      }
+    });
+
+    function renderEmailOptions(options) {
+      const container = $('emailOptions');
+
+      container.innerHTML = options.map((option, index) => (
+        '<label class="email-option">' +
+        '<span class="d-flex align-items-center gap-3">' +
+        '<input class="form-check-input mt-0" type="radio" name="securityEmail" value="' +
+        escapeHtml(option.id) +
+        '"' +
+        (index === 0 ? ' autofocus' : '') +
+        '>' +
+        '<span><i class="bi bi-envelope-lock me-2"></i><strong>' +
+        escapeHtml(option.correoEnmascarado) +
+        '</strong></span>' +
+        '</span>' +
+        '</label>'
+      )).join('');
+    }
+
+    $('emailSecurityForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      clearAlert();
+
+      const selected = document.querySelector('input[name="securityEmail"]:checked');
+
+      if (!selected) {
+        alertMessage('Selecciona uno de los correos para continuar.', 'warning');
+        return;
+      }
+
+      const button = $('verifySecurityBtn');
+      loading(button, true, 'Verificando…');
+
+      try {
+        const authentication = await client.call('validarAutenticacionDatos', {
+          challengeId: loginData.challengeId,
+          opcionId: selected.value
+        });
+
+        token = authentication.token;
+        sessionStorage.setItem('bvPortalResidentToken', token);
+        profile = await client.call('perfilResidente', { token });
+
+        if (!profile || !profile.unidad) {
+          throw new Error('El servicio no devolvió un perfil válido.');
+        }
+
+        renderProfile();
+        switchPanel('profilePanel');
+      } catch (error) {
+        alertMessage(error.message);
+      } finally {
+        loading(button, false, 'Verificar y entrar');
+      }
+    });
+
+    $('backToUnitBtn').addEventListener('click', () => {
+      loginData.challengeId = '';
+      switchPanel('unitPanel');
+      $('apartamento').focus();
+    });
+
+    $('backToDocumentBtn').addEventListener('click', () => {
+      loginData.challengeId = '';
+      $('emailOptions').innerHTML = '';
+      switchPanel('documentPanel');
+      $('numeroDocumento').focus();
+    });
+
+    $('logoutBtn').addEventListener('click', async () => {
+      try {
+        if (token) await client.call('cerrarSesion', { token });
+      } catch (error) {
+        // La sesión puede haber vencido; igualmente se limpia el navegador.
+      }
+
+      token = '';
+      profile = null;
+      sessionStorage.removeItem('bvPortalResidentToken');
+      $('dataForm').reset();
+      resetAuthentication();
+      switchPanel('unitPanel');
+    });
+
+    function applyPermissions() {
+      const permissions = profile.permisos || [];
+      const authentication = profile.autenticacion || {};
+      const isOwner = authentication.tipo === 'PROPIETARIO';
+
+      document.querySelectorAll('[data-permission]').forEach(element => {
+        element.classList.toggle(
+          'hidden',
+          permissions.indexOf(element.dataset.permission) === -1
+        );
+      });
+
+      document.querySelectorAll('[data-permission-any]').forEach(element => {
+        const accepted = element.dataset.permissionAny.split(',');
+        const visible = accepted.some(section => permissions.indexOf(section) !== -1);
+        element.classList.toggle('hidden', !visible);
+      });
+
+      document.querySelectorAll('[data-section]').forEach(element => {
+        element.classList.toggle(
+          'hidden',
+          permissions.indexOf(element.dataset.section) === -1
+        );
+      });
+
+      document.querySelectorAll('[data-section-container]').forEach(element => {
+        element.classList.toggle(
+          'hidden',
+          permissions.indexOf(element.dataset.sectionContainer) === -1
+        );
+      });
+
+      document.querySelectorAll('[data-owner-only]').forEach(element => {
+        element.classList.toggle('hidden', !isOwner);
+      });
+
+      $('authTypeBadge').textContent = isOwner ? 'Acceso de propietario' : 'Acceso de residente';
+      $('authSummary').textContent = [
+        authentication.nombre || '',
+        authentication.correoEnmascarado || ''
+      ].filter(Boolean).join(' · ');
+
+      $('permissionNotice').innerHTML = isOwner
+        ? '<i class="bi bi-person-check me-2"></i>Como propietario puedes solicitar cambios de contacto, residentes, vehículos, mascotas y contacto de emergencia.'
+        : '<i class="bi bi-person-check me-2"></i>Como residente puedes actualizar tus datos de contacto y solicitar cambios de vehículos, mascotas y contacto de emergencia. La composición de residentes solo puede modificarla un propietario autenticado.';
+    }
+
+
+    function renderProfile() {
+      const unit = profile.unidad || {};
+      const locked = profile.datosNoModificables || {};
+      const editable = profile.editable || {};
+      const authentication = profile.autenticacion || {};
+      const isOwner =
+        profile.puedeVerResumen === true ||
+        authentication.tipo === 'PROPIETARIO';
+
+      applyPermissions();
+      showTab(isOwner ? 'tabOverview' : 'tabContact');
+
+      $('unitHeading').textContent = isOwner
+        ? 'Unidad ' + (unit.unidadId || '')
+        : 'Mis datos personales';
+
+      if (isOwner) {
+        $('unitSummary').innerHTML = [
+          ['Torre', unit.torre],
+          ['Apartamento', unit.apartamento],
+          ['Área privada', unit.areaPrivadaConstruidaM2 + ' m²'],
+          ['Coeficiente', unit.coeficienteCopropiedad],
+          ['Estado', unit.estadoUnidad || ''],
+          ['Entrega', unit.estadoEntregaApartamento || '']
+        ].map(item => (
+          '<div class="col-sm-6"><div class="locked rounded p-3">' +
+          '<div class="small-note">' + escapeHtml(item[0]) + '</div>' +
+          '<strong>' + escapeHtml(item[1]) + '</strong>' +
+          '</div></div>'
+        )).join('');
+
+        const account = locked.estadoCuenta || {};
+        $('accountSummary').innerHTML =
+          '<div class="locked rounded p-3">' +
+          '<div class="small-note">Estado</div>' +
+          '<strong>' + escapeHtml(account.estado || 'PENDIENTE_VALIDACION') + '</strong>' +
+          '<hr>' +
+          '<div class="small-note">Elegibilidad para reservas</div>' +
+          '<strong>' + escapeHtml(account.elegibleReservas || 'PENDIENTE_VALIDACION') + '</strong>' +
+          (account.fechaCorte
+            ? '<div class="small-note mt-2">Corte: ' + escapeHtml(account.fechaCorte) + '</div>'
+            : '') +
+          '</div>';
+
+        $('ownersList').innerHTML = (locked.propietarios || []).length
+          ? locked.propietarios.map(owner => (
+            '<div class="locked rounded p-3 mb-2">' +
+            '<strong>' + escapeHtml(owner.nombre) + '</strong>' +
+            '<div class="small-note">' + escapeHtml(owner.rol) + '</div>' +
+            '</div>'
+          )).join('')
+          : '<p class="text-muted mb-0">No hay propietarios disponibles para mostrar.</p>';
+
+        $('parkingList').innerHTML = (locked.parqueaderos || []).length
+          ? locked.parqueaderos.map(parking => (
+            '<div class="col-md-6"><div class="locked rounded p-3 h-100">' +
+            '<strong>Parqueadero ' + escapeHtml(parking.codigoOficial) + '</strong>' +
+            '<div class="small-note">' +
+            escapeHtml(parking.subtipo || '') + ' · ' +
+            escapeHtml(parking.areaPrivadaConstruidaM2 || '') + ' m² · Coef. ' +
+            escapeHtml(parking.coeficienteCopropiedad || '') +
+            '</div>' +
+            '</div></div>'
+          )).join('')
+          : '<div class="col-12"><p class="text-muted mb-0">No hay parqueaderos asociados.</p></div>';
+      } else {
+        $('unitSummary').innerHTML = '';
+        $('accountSummary').innerHTML = '';
+        $('ownersList').innerHTML = '';
+        $('parkingList').innerHTML = '';
+      }
+
+      const contact = editable.CONTACTO || {};
+      $('contactPersonId').value = contact.personaId || '';
+      $('contactName').value = contact.nombre || '';
+      $('contactPrimaryEmail').value = contact.correoPrincipal || '';
+      $('notificationEmail').value = contact.correoNotificacion || '';
+      $('alternateEmails').value = contact.correosAlternos || '';
+      $('contactPhone').value = contact.celularPrincipal || '';
+      $('receiveNotifications').checked =
+        String(contact.recibeNotificaciones || 'SI').toUpperCase() === 'SI';
+
+      renderResidents(
+        hasPermission('RESIDENTES')
+          ? (editable.RESIDENTES || [])
+          : []
+      );
+      renderVehicles(editable.VEHICULOS || []);
+      renderPets(editable.MASCOTAS || []);
+
+      const emergency = editable.EMERGENCIA || {};
+      $('emergencyName').value = emergency.nombre || '';
+      $('emergencyPhone').value = emergency.celular || '';
+      $('emergencyRelation').value = emergency.parentesco || '';
+
+      renderRequests(profile.solicitudes || []);
+    }
+
+    function makeRemoveButton() {
+      return '<button type="button" class="btn btn-outline-danger remove-row" aria-label="Eliminar"><i class="bi bi-trash"></i></button>';
+    }
+
+    function renderResidents(items) {
+      const box = $('residentsEditor');
+      box.innerHTML = '';
+      items.forEach(addResidentRow);
+      if (!items.length && hasPermission('RESIDENTES')) addResidentRow({});
+    }
+
+    function addResidentRow(item = {}) {
+      const div = document.createElement('div');
+      div.className = 'repeat-row resident-row';
+      div.dataset.personaId = item.personaId || '';
+      div.dataset.numeroDocumento = item.numeroDocumento || '';
+      div.innerHTML =
+        '<div class="row g-2">' +
+        '<div class="col-md-7"><label class="form-label">Nombre completo</label><input class="form-control resident-name" value="' + escapeHtml(item.nombre || '') + '"></div>' +
+        '<div class="col-md-4"><label class="form-label">Rol</label><select class="form-select resident-role"><option>RESIDENTE</option><option>ARRENDATARIO</option><option>OCUPANTE AUTORIZADO</option></select></div>' +
+        '<div class="col-md-1 d-flex align-items-end">' + makeRemoveButton() + '</div>' +
+        '</div>';
+      $('residentsEditor').appendChild(div);
+      div.querySelector('.resident-role').value = item.rol || 'RESIDENTE';
+    }
+
+    function renderVehicles(items) {
+      const box = $('vehiclesEditor');
+      box.innerHTML = '';
+      items.forEach(addVehicleRow);
+      if (!items.length && hasPermission('VEHICULOS')) addVehicleRow({});
+    }
+
+    function addVehicleRow(item = {}) {
+      const div = document.createElement('div');
+      const existing = !!(item.vehiculoId || item.placa);
+      div.className = 'repeat-row vehicle-row';
+      div.dataset.vehiculoId = item.vehiculoId || '';
+      div.dataset.existing = existing ? 'SI' : 'NO';
+      const sourceDetail = [item.fuente, item.confianza, item.estadoRevision].filter(Boolean).join(' · ');
+      div.innerHTML =
+        '<div class="row g-2">' +
+        '<div class="col-md-3"><label class="form-label">Placa</label><input class="form-control vehicle-plate text-uppercase" maxlength="10" value="' + escapeHtml(item.placa || '') + '"' + (existing ? ' readonly' : '') + '></div>' +
+        '<div class="col-md-3"><label class="form-label">Tipo</label><select class="form-select vehicle-type"><option value="">Selecciona</option><option>CARRO</option><option>MOTO</option><option>OTRO</option></select></div>' +
+        '<div class="col-md-5"><label class="form-label">Relación con el apartamento</label><select class="form-select vehicle-recognition" required><option value="PENDIENTE_CONFIRMAR">Selecciona una opción</option><option value="PROPIO">Vehículo propio o de un residente</option><option value="VISITANTE_AUTORIZADO">Visitante autorizado</option><option value="NO_RECONOCIDO">No reconocemos esta placa</option></select></div>' +
+        '<div class="col-md-1 d-flex align-items-end">' + (existing ? '<span class="small-note" title="Para retirar una placa existente selecciona No reconocemos esta placa."><i class="bi bi-shield-check"></i></span>' : makeRemoveButton()) + '</div>' +
+        '</div>' +
+        (sourceDetail ? '<div class="small-note mt-2">Fuente actual: ' + escapeHtml(sourceDetail) + '</div>' : '');
+      $('vehiclesEditor').appendChild(div);
+      div.querySelector('.vehicle-type').value = item.tipo || '';
+      div.querySelector('.vehicle-recognition').value = item.reconocimiento || 'PENDIENTE_CONFIRMAR';
+    }
+
+    function renderPets(items) {
+      const box = $('petsEditor');
+      box.innerHTML = '';
+      items.forEach(addPetRow);
+      if (!items.length && hasPermission('MASCOTAS')) addPetRow({});
+    }
+
+    function addPetRow(item = {}) {
+      const div = document.createElement('div');
+      div.className = 'repeat-row pet-row';
+      div.innerHTML =
+        '<div class="row g-2">' +
+        '<div class="col-md-4"><label class="form-label">Tipo</label><input class="form-control pet-type" value="' + escapeHtml(item.tipo || '') + '"></div>' +
+        '<div class="col-md-4"><label class="form-label">Raza</label><input class="form-control pet-breed" value="' + escapeHtml(item.raza || '') + '"></div>' +
+        '<div class="col-md-3"><label class="form-label">Cantidad</label><input type="number" min="1" max="10" class="form-control pet-count" value="' + escapeHtml(item.cantidad || 1) + '"></div>' +
+        '<div class="col-md-1 d-flex align-items-end">' + makeRemoveButton() + '</div>' +
+        '</div>';
+      $('petsEditor').appendChild(div);
+    }
+
+    document.addEventListener('click', event => {
+      const remove = event.target.closest('.remove-row');
+      if (remove) remove.closest('.repeat-row').remove();
+    });
+
+    $('addResidentBtn').addEventListener('click', () => {
+      if (hasPermission('RESIDENTES')) addResidentRow({});
+    });
+    $('addVehicleBtn').addEventListener('click', () => {
+      if (hasPermission('VEHICULOS')) addVehicleRow({});
+    });
+    $('addPetBtn').addEventListener('click', () => {
+      if (hasPermission('MASCOTAS')) addPetRow({});
+    });
+
+    function renderRequests(items) {
+      $('requestsList').innerHTML = items.length
+        ? items.map(request => (
+          '<div class="border rounded p-3 mb-2">' +
+          '<div class="d-flex justify-content-between gap-2">' +
+          '<strong>' + escapeHtml(request.solicitudId) + '</strong>' +
+          '<span class="badge status-' + escapeHtml(request.estado) + '">' + escapeHtml(request.estado) + '</span>' +
+          '</div>' +
+          '<div class="small-note">' + escapeHtml(request.fechaSolicitud) + ' · ' + escapeHtml(request.secciones) + '</div>' +
+          (request.observacionesDecision
+            ? '<div class="mt-2">' + escapeHtml(request.observacionesDecision) + '</div>'
+            : '') +
+          '</div>'
+        )).join('')
+        : '<p class="text-muted mb-0">Aún no tienes solicitudes.</p>';
+    }
+
+    function collectProposed() {
+      const proposed = {};
+
+      if (hasPermission('CONTACTO')) {
+        proposed.CONTACTO = {
+          personaId: $('contactPersonId').value,
+          nombre: $('contactName').value,
+          correoPrincipal: $('contactPrimaryEmail').value,
+          correoNotificacion: $('notificationEmail').value,
+          correosAlternos: $('alternateEmails').value,
+          celularPrincipal: $('contactPhone').value,
+          recibeNotificaciones: $('receiveNotifications').checked ? 'SI' : 'NO'
+        };
+      }
+
+      if (hasPermission('RESIDENTES')) {
+        proposed.RESIDENTES = [...document.querySelectorAll('.resident-row')].map(row => ({
+          personaId: row.dataset.personaId || '',
+          numeroDocumento: row.dataset.numeroDocumento || '',
+          nombre: row.querySelector('.resident-name').value,
+          rol: row.querySelector('.resident-role').value
+        }));
+      }
+
+      if (hasPermission('VEHICULOS')) {
+        proposed.VEHICULOS = [...document.querySelectorAll('.vehicle-row')].map(row => ({
+          vehiculoId: row.dataset.vehiculoId || '',
+          placa: row.querySelector('.vehicle-plate').value,
+          tipo: row.querySelector('.vehicle-type').value,
+          reconocimiento: row.querySelector('.vehicle-recognition').value
+        }));
+      }
+
+      if (hasPermission('MASCOTAS')) {
+        proposed.MASCOTAS = [...document.querySelectorAll('.pet-row')].map(row => ({
+          tipo: row.querySelector('.pet-type').value,
+          raza: row.querySelector('.pet-breed').value,
+          cantidad: row.querySelector('.pet-count').value
+        }));
+      }
+
+      if (hasPermission('EMERGENCIA')) {
+        proposed.EMERGENCIA = {
+          nombre: $('emergencyName').value,
+          celular: $('emergencyPhone').value,
+          parentesco: $('emergencyRelation').value
+        };
+      }
+
+      return proposed;
+    }
+
+    $('dataForm').addEventListener('submit', async event => {
+      event.preventDefault();
+      clearAlert();
+
+      if (!$('confirmAccuracy').checked) {
+        alertMessage('Debes confirmar la exactitud de la información.', 'warning');
+        return;
+      }
+
+      const unclassifiedVehicle = [...document.querySelectorAll('.vehicle-row')].find(row =>
+        row.querySelector('.vehicle-plate').value.trim() &&
+        row.querySelector('.vehicle-recognition').value === 'PENDIENTE_CONFIRMAR'
+      );
+      if (unclassifiedVehicle) {
+        alertMessage('Debes clasificar todas las placas antes de enviar la solicitud.', 'warning');
+        unclassifiedVehicle.querySelector('.vehicle-recognition').focus();
+        return;
+      }
+
+      const button = $('saveBtn');
+      loading(button, true, 'Enviando…');
+
+      try {
+        const result = await client.call('enviarSolicitud', {
+          token,
+          proposed: collectProposed(),
+          observaciones: $('residentNotes').value
+        });
+
+        alertMessage(result.message, 'success');
+        profile = await client.call('perfilResidente', { token });
+        renderProfile();
+        showTab('tabRequests');
+        $('residentNotes').value = '';
+        $('confirmAccuracy').checked = false;
+      } catch (error) {
+        alertMessage(error.message);
+      } finally {
+        loading(button, false, 'Enviar solicitud de actualización');
+      }
+    });
+
+    const saved = sessionStorage.getItem('bvPortalResidentToken');
+
+    if (saved) {
+      token = saved;
+      client.call('perfilResidente', { token })
+        .then(result => {
+          if (!result || !result.unidad) throw new Error('Perfil inválido.');
+          profile = result;
+          renderProfile();
+          switchPanel('profilePanel');
+        })
+        .catch(() => {
+          sessionStorage.removeItem('bvPortalResidentToken');
+          token = '';
+          resetAuthentication();
+          switchPanel('unitPanel');
+        });
+    }
+}());
+  </script>
+</body>
+
+</html>
