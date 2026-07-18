@@ -36,26 +36,25 @@ title = 'Club Residencial Bulevar Verde'
 [menu]
   [[menu.main]]
     name = 'Inicio'
-    url = '/'
+    pageRef = '/'
     weight = 1
-    
+
   [[menu.main]]
     name = 'Reservas'
-    url = '/reservas/'
+    pageRef = '/reservas'
     weight = 2
 
   [[menu.main]]
     name = 'PQRS'
-    url = '/pqrs/'
+    pageRef = '/pqrs'
     weight = 3
 
   [[menu.main]]
     name = 'Sanciones'
-    url = '/sanciones/'
+    pageRef = '/sanciones'
     weight = 4
 
   [[menu.main]]
     name = 'Datos'
-    url = '/datos-personales/'
+    pageRef = '/datos-personales'
     weight = 5
-
