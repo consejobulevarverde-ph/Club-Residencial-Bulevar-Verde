@@ -455,7 +455,7 @@
     </div>
   </footer>
 
-  <script src="/js/portal-bv-client.js?v=20260718-5"></script>
+  <script src="{{ "js/portal-bv-client.js" | relURL }}?v={{ default "20260718-7" .Site.Params.portalClientVersion }}"></script>
   <script>
     (function () {
       'use strict';

@@ -156,7 +156,7 @@
       </div>
     </section>
   </main>
-  <script src="/js/portal-bv-client.js?v=20260718-4"></script>
+  <script src="{{ "js/portal-bv-client.js" | relURL }}?v={{ default "20260718-7" .Site.Params.portalClientVersion }}"></script>
   <script>
     (function () { 'use strict'; const URL = {{ .Site.Params.portalWebAppUrl | default "" | jsonify | safeJS }}; const client = new PortalBVClient(URL); let token = ''; let email = ''; const $ = id => document.getElementById(id); const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c])); function msg(t, type = 'danger') { const a = $('alert'); a.className = 'alert alert-' + type; a.textContent = t; a.classList.remove('hidden'); scrollTo({ top: 0, behavior: 'smooth' }) } function hideMsg() { $('alert').classList.add('hidden') } function panel(id) { ['login', 'otp', 'app'].forEach(x => $(x).classList.toggle('hidden', x !== id)) } function busy(btn, on, text) { if (on) { btn.dataset.old = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + text } else { btn.disabled = false; btn.innerHTML = btn.dataset.old || text } }
     $('loginForm').addEventListener('submit', async e => { e.preventDefault(); hideMsg(); email = $('email').value.trim(); busy($('sendBtn'), true, 'Enviando…'); try { const r = await client.call('solicitarCodigo', { role: 'ADMIN', email }); $('otpText').textContent = r.message; panel('otp') } catch (err) { msg(err.message) } finally { busy($('sendBtn'), false, 'Enviar código') } });
