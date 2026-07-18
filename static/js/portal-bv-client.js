@@ -1,8 +1,23 @@
 (function (global) {
   'use strict';
 
+  function normalizeAppsScriptWebAppUrl(webAppUrl) {
+    var value = String(webAppUrl || '')
+      .trim()
+      .replace(/^["']+|["']+$/g, '');
+
+    // A URL copied from a session with several Google accounts can include
+    // /macros/u/2/s/. The public deployment URL must use /macros/s/.
+    value = value.replace(
+      /^https:\/\/script\.google\.com\/macros\/u\/\d+\/s\//i,
+      'https://script.google.com/macros/s/'
+    );
+
+    return value;
+  }
+
   function PortalBVClient(webAppUrl) {
-    this.webAppUrl = String(webAppUrl || '').trim();
+    this.webAppUrl = normalizeAppsScriptWebAppUrl(webAppUrl);
     this.pending = new Map();
     this.ready = false;
     this.readyPromise = null;
@@ -53,7 +68,7 @@
       var readyTimer = window.setTimeout(function () {
         self.readyPromise = null;
         reject(
-          new Error('No fue posible conectar con el servicio de datos.')
+          new Error('No fue posible conectar con el servicio de datos. Verifica que la Web App esté publicada como /macros/s/.../exec, ejecutándose como el propietario y accesible para cualquier usuario.')
         );
       }, 30000);
 

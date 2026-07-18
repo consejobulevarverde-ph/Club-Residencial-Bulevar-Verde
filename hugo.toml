@@ -1,4 +1,4 @@
-baseURL = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde'
+baseURL = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/'
 languageCode = 'es-co'
 title = 'Club Residencial Bulevar Verde'
 
@@ -29,7 +29,7 @@ title = 'Club Residencial Bulevar Verde'
   # Redes sociales
   facebook = ''
   instagram = ''
-
+  portalClientVersion = "20260718-8"
   portalWebAppUrl = "https://script.google.com/macros/s/AKfycbzJTYc1jjx5-A3tgF9ngeWBfCWeB1OogUEIdBTfEoiC2-9RadEYgdMPNi8Ve-Na2B7byQ/exec"
   reservasWebAppUrl = "https://script.google.com/macros/s/AKfycbywtGpeya1SKIDKChYU3k5WK_lhPpeqXnuWiCz07cpxCLf4xxR5L_Gzj6NBGOQYOC-l/exec"
 
