@@ -1,0 +1,21 @@
+mutation ImportarUnidades(
+  $datos: [Unidad_Data!]!
+    @allow(
+      fields: """
+        torre
+        apartamento
+        codigoOficial
+        areaPrivada
+        coeficiente
+        presupuestoAnual
+        fechaEntrega
+        estadoUnidad
+        activo
+      """
+      maxCount: 50
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  unidad_insertMany(data: $datos)
+}

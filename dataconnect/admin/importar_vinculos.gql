@@ -1,0 +1,22 @@
+# Reemplaza dataconnect/admin/importar_vinculos.gql
+# por este contenido.
+
+mutation ImportarVinculosUnidad(
+  $datos: [VinculoUnidadPersona_Data!]!
+    @allow(
+      fields: """
+        id
+        personaId
+        unidadId
+        tipoRelacion
+        fechaInicio
+        fechaFin
+        activo
+      """
+      maxCount: 50
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  vinculo_unidad_persona_upsertMany(data: $datos)
+}

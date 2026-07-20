@@ -1,0 +1,20 @@
+# Inserta o actualiza personas usando UUID determinísticos.
+mutation ImportarPersonas(
+  $datos: [Persona_Data!]!
+    @allow(
+      fields: """
+        id
+        tipoDocumento
+        numeroDocumento
+        nombreCompleto
+        correo
+        telefono
+        activo
+      """
+      maxCount: 50
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  persona_upsertMany(data: $datos)
+}

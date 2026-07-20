@@ -1,0 +1,17 @@
+mutation ImportarMascotas(
+  $datos: [Mascota_Data!]!
+    @allow(
+      fields: """
+        id
+        unidadId
+        especie
+        raza
+        activo
+      """
+      maxCount: 50
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  mascota_upsertMany(data: $datos)
+}

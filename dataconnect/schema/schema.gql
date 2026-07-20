@@ -1,0 +1,235 @@
+type Unidad @table(name: "unidades", singular: "unidad", plural: "unidades", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  torre: Int!
+  apartamento: String!
+  codigoOficial: String @unique
+  areaPrivada: Float @col(dataType: "numeric(12,2)")
+  coeficiente: Float @col(dataType: "numeric(14,8)")
+  presupuestoAnual: Float @col(dataType: "numeric(16,2)")
+  fechaEntrega: Date
+  estadoUnidad: String! @default(value: "NO_ENTREGADA")
+  activo: Boolean! @default(value: true)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type Persona @table(name: "personas", singular: "persona", plural: "personas", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  tipoDocumento: String!
+  numeroDocumento: String!
+  nombreCompleto: String!
+  correo: String
+  telefono: String
+  activo: Boolean! @default(value: true)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type VinculoUnidadPersona
+  @table(
+    name: "vinculo_unidad_persona"
+    singular: "vinculo_unidad_persona"
+    plural: "vinculos_unidad_persona"
+    key: ["persona", "unidad", "tipoRelacion", "fechaInicio"]
+  ) {
+  id: UUID! @default(expr: "uuidV4()") @unique
+  persona: Persona!
+  unidad: Unidad!
+  tipoRelacion: String!
+  fechaInicio: Date!
+  fechaFin: Date
+  activo: Boolean! @default(value: true)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type Vehiculo
+  @table(
+    name: "vehiculos"
+    singular: "vehiculo"
+    plural: "vehiculos"
+    key: "id"
+  ) {
+  id: UUID! @default(expr: "uuidV4()")
+  placa: String! @unique
+  tipoVehiculo: String
+  marca: String
+  modelo: String
+  color: String
+  estadoVehiculo: String! @default(value: "ACTIVO")
+  fuentes: String
+  activo: Boolean! @default(value: true)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type VinculoVehiculoUnidad
+  @table(
+    name: "vinculos_vehiculo_unidad"
+    singular: "vinculo_vehiculo_unidad"
+    plural: "vinculos_vehiculo_unidad"
+    key: ["vehiculo", "unidad", "tipoVinculo", "vigenteDesde"]
+  ) {
+  id: UUID! @default(expr: "uuidV4()") @unique
+  vehiculo: Vehiculo!
+  unidad: Unidad!
+  tipoVinculo: String!
+  estadoVinculo: String! @default(value: "ACTIVO")
+  esActual: Boolean! @default(value: true)
+  vigenteDesde: Timestamp!
+  vigenteHasta: Timestamp
+  protegidoHasta: Timestamp
+  origenRegistro: String!
+  fuente: String
+  fuentesRespaldo: String
+  confianza: String
+  estadoRevision: String
+  registradoPorUid: String
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+
+type Parqueadero @table(name: "parqueaderos", singular: "parqueadero", plural: "parqueaderos", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  codigo: String! @unique
+  tipoParqueadero: String
+  torre: Int
+  unidad: Unidad
+  activo: Boolean! @default(value: true)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type Mascota @table(name: "mascotas", singular: "mascota", plural: "mascotas", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  unidad: Unidad!
+  personaResponsable: Persona
+  nombre: String
+  especie: String
+  raza: String
+  color: String
+  activo: Boolean! @default(value: true)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type ContactoEmergencia
+  @table(
+    name: "contactos_emergencia"
+    singular: "contacto_emergencia"
+    plural: "contactos_emergencia"
+    key: "id"
+  ) {
+  id: UUID! @default(expr: "uuidV4()")
+  unidad: Unidad!
+  nombre: String
+  parentesco: String
+  telefono: String
+  telefonoAlterno: String
+  activo: Boolean! @default(value: true)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+
+type EstadoCuenta @table(name: "estados_cuenta", singular: "estado_cuenta", plural: "estados_cuenta", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  unidad: Unidad! @unique
+  fechaCorte: Date
+  saldoAnterior: Float @col(dataType: "numeric(16,2)")
+  saldoActual: Float @col(dataType: "numeric(16,2)")
+  estadoCuenta: String
+  elegibleReservas: Boolean
+  presupuestoUnidad: Float @col(dataType: "numeric(16,2)")
+  porcentajeMaximoMora: Float @col(dataType: "numeric(8,4)")
+  maximoMoraElegible: Float @col(dataType: "numeric(16,2)")
+  excesoMora: Float @col(dataType: "numeric(16,2)")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type HistorialCartera @table(name: "historial_cartera", singular: "historial_cartera", plural: "historial_carteras", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  unidad: Unidad!
+  periodo: String!
+  fechaCorte: Date
+  saldoAnterior: Float @col(dataType: "numeric(16,2)")
+  saldoActual: Float @col(dataType: "numeric(16,2)")
+  estadoCuenta: String
+  elegibleReservas: Boolean
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+}
+
+type Reserva @table(name: "reservas", singular: "reserva", plural: "reservas", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  unidad: Unidad!
+  personaSolicitante: Persona!
+  zonaComun: String
+  fechaHoraInicio: Timestamp
+  fechaHoraFin: Timestamp
+  estado: String
+  observaciones: String
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type UsuarioPortal
+  @table(
+    name: "usuarios_portal"
+    singular: "usuarioPortal"
+    plural: "usuariosPortal"
+    key: "id"
+  ) {
+
+  id: UUID! @default(expr: "uuidV4()")
+
+  # Identificador único suministrado por Firebase Authentication.
+  # Es la identidad principal usada para autorización.
+  firebaseUid: String! @unique
+
+  # Se conserva para visualización, búsqueda y comunicaciones.
+  # Debe normalizarse en minúsculas.
+  correo: String! @unique
+
+  # Opcional porque administración o vigilancia podrían no estar
+  # registradas como personas vinculadas a una unidad.
+  persona: Persona
+
+  # Permite bloquear el acceso al portal sin eliminar la cuenta
+  # de Firebase Authentication ni su historial.
+  activo: Boolean! @default(value: true)
+
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type EventoAuditoria @table(name: "eventos_auditoria", singular: "evento_auditoria", plural: "eventos_auditoria", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  usuarioPortal: UsuarioPortal
+  accion: String
+  tipoEntidad: String
+  entidadId: UUID
+  datosAnteriores: Any
+  datosNuevos: Any
+  motivo: String
+  direccionIp: String
+  agenteUsuario: String
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+}
+
+type Sancion @table(name: "sanciones", singular: "sancion", plural: "sanciones", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  unidad: Unidad!
+  personaResponsable: Persona
+  tipoSancion: String
+  descripcion: String
+  fechaImposicion: Date
+  valor: Float @col(dataType: "numeric(16,2)")
+  estado: String
+  fechaNotificacion: Date
+  fechaPago: Date
+  fechaCierre: Date
+  observaciones: String
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}

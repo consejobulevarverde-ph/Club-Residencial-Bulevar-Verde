@@ -1,0 +1,22 @@
+# Importación administrativa de vehículos.
+mutation ImportarVehiculos(
+  $datos: [Vehiculo_Data!]!
+    @allow(
+      fields: """
+        id
+        placa
+        tipoVehiculo
+        marca
+        modelo
+        color
+        estadoVehiculo
+        fuentes
+        activo
+      """
+      maxCount: 50
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  vehiculo_upsertMany(data: $datos)
+}

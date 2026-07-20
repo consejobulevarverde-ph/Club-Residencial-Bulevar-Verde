@@ -1,0 +1,18 @@
+mutation ImportarContactosEmergencia(
+  $datos: [ContactoEmergencia_Data!]!
+    @allow(
+      fields: """
+        id
+        unidadId
+        nombre
+        parentesco
+        telefono
+        activo
+      """
+      maxCount: 50
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  contacto_emergencia_upsertMany(data: $datos)
+}

@@ -1,0 +1,8 @@
+# Operación administrativa para importar lotes de unidades.
+# Debe ubicarse dentro de la carpeta del connector.
+
+mutation ImportarUnidades($datos: [Unidad_Data!]!)
+@auth(level: NO_ACCESS)
+@transaction {
+  unidad_insertMany(data: $datos)
+}

@@ -1,0 +1,16 @@
+# EJEMPLO DE REFERENCIA.
+# No reemplaces el valor real de database que ya funciona en tu proyecto.
+specVersion: "v1"
+serviceId: portal-bulevar-verde
+location: us-east4
+
+schema:
+  source: ./schema
+  datasource:
+    postgresql:
+      database: bulevar-verde
+      cloudSql:
+        instanceId: bulevar-verde-sql
+
+connectorDirs:
+  - ./admin

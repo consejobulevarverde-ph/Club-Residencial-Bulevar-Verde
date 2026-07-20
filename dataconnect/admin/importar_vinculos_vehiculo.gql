@@ -1,0 +1,28 @@
+# Importación administrativa del historial vehículo-unidad.
+mutation ImportarVinculosVehiculoUnidad(
+  $datos: [VinculoVehiculoUnidad_Data!]!
+    @allow(
+      fields: """
+        id
+        vehiculoId
+        unidadId
+        tipoVinculo
+        estadoVinculo
+        esActual
+        vigenteDesde
+        vigenteHasta
+        protegidoHasta
+        origenRegistro
+        fuente
+        fuentesRespaldo
+        confianza
+        estadoRevision
+        registradoPorUid
+      """
+      maxCount: 50
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  vinculo_vehiculo_unidad_upsertMany(data: $datos)
+}

@@ -1,0 +1,14 @@
+# Obtiene el mapa codigoOficial -> UUID de las unidades ya creadas.
+query ObtenerMapaUnidadesImportacion(
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: NO_ACCESS) {
+  unidades(
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    codigoOficial
+  }
+}
