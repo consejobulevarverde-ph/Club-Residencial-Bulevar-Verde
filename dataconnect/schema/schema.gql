@@ -176,31 +176,25 @@ type Reserva @table(name: "reservas", singular: "reserva", plural: "reservas", k
 type UsuarioPortal
   @table(
     name: "usuarios_portal"
-    singular: "usuarioPortal"
-    plural: "usuariosPortal"
+    singular: "usuario_portal"
+    plural: "usuarios_portal"
     key: "id"
   ) {
-
   id: UUID! @default(expr: "uuidV4()")
 
-  # Identificador único suministrado por Firebase Authentication.
-  # Es la identidad principal usada para autorización.
   firebaseUid: String! @unique
-
-  # Se conserva para visualización, búsqueda y comunicaciones.
-  # Debe normalizarse en minúsculas.
-  correo: String! @unique
-
-  # Opcional porque administración o vigilancia podrían no estar
-  # registradas como personas vinculadas a una unidad.
   persona: Persona
 
-  # Permite bloquear el acceso al portal sin eliminar la cuenta
-  # de Firebase Authentication ni su historial.
+  rolGlobal: String!
   activo: Boolean! @default(value: true)
 
-  fechaCreacion: Timestamp! @default(expr: "request.time")
-  fechaActualizacion: Timestamp! @default(expr: "request.time")
+  ultimoAcceso: Timestamp
+
+  fechaCreacion: Timestamp!
+    @default(expr: "request.time")
+
+  fechaActualizacion: Timestamp!
+    @default(expr: "request.time")
 }
 
 type EventoAuditoria @table(name: "eventos_auditoria", singular: "evento_auditoria", plural: "eventos_auditoria", key: "id") {
