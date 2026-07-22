@@ -29,8 +29,10 @@ title = 'Club Residencial Bulevar Verde'
   # Redes sociales
   facebook = ''
   instagram = ''
-  portalClientVersion = "20260718-8"
+  portalClientVersion = "20260722-11-post"
   portalWebAppUrl = "https://script.google.com/macros/s/AKfycby3_c1PhF_tVZ2t3L59QATP9PawpF7EnSRAMVr69zUdcdSCHE4FYZ__GNRfSo2NjQ4vSw/exec"
+  pqrsWebAppUrl = "https://script.google.com/macros/s/AKfycbzkkhv8K9du6J4X77gll8KytBZ9PtcvBaVm6ipaWMCjGxxSJUJG5cgkG7PDa5TvlERi8Q/exec"
+  pqrsMaintenanceVersion = "20260722-5-post-transport"
   reservasWebAppUrl = "https://script.google.com/macros/s/AKfycbywtGpeya1SKIDKChYU3k5WK_lhPpeqXnuWiCz07cpxCLf4xxR5L_Gzj6NBGOQYOC-l/exec"
 
 [menu]
