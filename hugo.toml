@@ -32,7 +32,7 @@ title = 'Club Residencial Bulevar Verde'
   portalClientVersion = "20260722-12-gestion"
   portalWebAppUrl = "https://script.google.com/macros/s/AKfycby3_c1PhF_tVZ2t3L59QATP9PawpF7EnSRAMVr69zUdcdSCHE4FYZ__GNRfSo2NjQ4vSw/exec"
   # Completar después de desplegar google/pqrs.js como Web App.
-  pqrsWebAppUrl = "https://script.google.com/macros/s/AKfycbwkwAYBCFjau8uHGPkC-BGC7_sooz6d-1NiSym1ZR8luQg9XhIjqN-WQb84Zr12eX-oMg/exec"
+  pqrsWebAppUrl = "https://script.google.com/macros/s/AKfycbys_meDqB-DqG1nX1e9G_QJ-sQn5YbSqPVEFlINgH9sG73lv2Jwbgpq8LH5oKClbwsncQ/exec"
   pqrsMaintenanceVersion = "20260722-6-gestion"
   pqrsGestionVersion = "20260722-4-evidence-200"
   reservasWebAppUrl = "https://script.google.com/macros/s/AKfycbywtGpeya1SKIDKChYU3k5WK_lhPpeqXnuWiCz07cpxCLf4xxR5L_Gzj6NBGOQYOC-l/exec"

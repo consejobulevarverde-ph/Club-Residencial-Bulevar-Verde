@@ -3,7 +3,7 @@
  * CLUB RESIDENCIAL BULEVAR VERDE
  ***************************************/
 
-const PQRS_VERSION = '2.1.1-gestion-mantenimiento';
+const PQRS_VERSION = '2.1.2-sin-correos-mantenimiento';
 const PQRS_TIMEZONE = 'America/Bogota';
 
 const PQRS_ADMIN_EMAIL = 'bulevarverdeadmon@gmail.com';
@@ -128,7 +128,6 @@ function onFormSubmit(e) {
 
     MailApp.sendEmail({
       to: PQRS_ADMIN_EMAIL,
-      cc: PQRS_CC_EMAIL,
       subject: '[Bulevar Verde] Nueva PQRS recibida - ' + idCaso,
       body: cuerpo
     });
@@ -1374,12 +1373,19 @@ function pqrsSendMaintenanceClosureNotification_(report) {
       'Hoja de seguimiento: ' + report.spreadsheetUrl + '\n\n' +
       'Este correo fue generado automáticamente por el portal de Bulevar Verde.';
 
+    // ENVÍO DE CORREO DE MANTENIMIENTO DESHABILITADO.
+    // Se conserva el código para poder reactivarlo posteriormente.
+    /*
     MailApp.sendEmail({
       to: PQRS_ADMIN_EMAIL,
-      cc: PQRS_CC_EMAIL,
       subject: '[Bulevar Verde] Mantenimiento finalizado - ' + report.reportId,
       body: body
     });
+    */
+    Logger.log(
+      'Correo de cierre de mantenimiento omitido por configuración: ' +
+      report.reportId
+    );
   } catch (error) {
     Logger.log(
       'El reporte se cerró, pero no fue posible enviar la notificación: ' +
@@ -1406,12 +1412,19 @@ function pqrsSendMaintenanceNotification_(report) {
       'Hoja de seguimiento: ' + report.spreadsheetUrl + '\n\n' +
       'Este correo fue generado automáticamente por el portal de Bulevar Verde.';
 
+    // ENVÍO DE CORREO DE MANTENIMIENTO DESHABILITADO.
+    // Se conserva el código para poder reactivarlo posteriormente.
+    /*
     MailApp.sendEmail({
       to: PQRS_ADMIN_EMAIL,
-      cc: PQRS_CC_EMAIL,
       subject: '[Bulevar Verde] Nuevo reporte de mantenimiento - ' + report.reportId,
       body: body
     });
+    */
+    Logger.log(
+      'Correo de creación de mantenimiento omitido por configuración: ' +
+      report.reportId
+    );
   } catch (error) {
     Logger.log(
       'El reporte se guardó, pero no fue posible enviar la notificación: ' +
