@@ -40,6 +40,33 @@
     footer { color: var(--color-light); padding: 34px 0; margin-top: 60px; }
     footer a { color: var(--color-light); }
     [hidden] { display: none !important; }
+    .management-modal-close {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-primary);
+      color: #fff;
+      font-size: 1.2rem;
+      line-height: 1;
+      opacity: .9;
+      transition: background-color .15s ease, opacity .15s ease, transform .15s ease;
+    }
+    .management-modal-close:hover,
+    .management-modal-close:focus-visible {
+      background: var(--color-secondary);
+      color: #fff;
+      opacity: 1;
+      transform: scale(1.04);
+    }
+    .management-modal-close:focus-visible {
+      outline: 3px solid rgba(74, 140, 75, .35);
+      outline-offset: 2px;
+    }
   </style>
 </head>
 <body>
@@ -124,7 +151,9 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2 id="managementDetailTitle" class="modal-title h5 fw-bold">Detalle del reporte</h2>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          <button type="button" class="management-modal-close" data-bs-dismiss="modal" aria-label="Cerrar">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
         </div>
         <div class="modal-body">
           <div id="managementDetailBody"></div>
