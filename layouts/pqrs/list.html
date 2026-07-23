@@ -243,6 +243,11 @@
                     <h4><i class="bi bi-tools"></i> Solicitud de mantenimiento</h4>
                     <p class="mb-2">Reporta luminarias dañadas, tornillos faltantes, daños en juegos, canchas, pasillos u otras zonas comunes.</p>
                     <p class="mb-0"><strong>El reporte no se pierde:</strong> si no hay conexión, queda guardado en este dispositivo y se reintenta automáticamente.</p>
+                    <div class="mt-3">
+                        <a href="{{ "pqrs/gestion/" | relURL }}" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-clipboard2-check"></i> Gestión de mantenimiento
+                        </a>
+                    </div>
                 </div>
 
                 <div class="card maintenance-form-card">
@@ -335,7 +340,7 @@
     <script src="{{ "js/portal-bv-client.js" | relURL }}?v={{ .Site.Params.portalClientVersion }}"></script>
     <script>
         window.PQRS_MAINTENANCE_CONFIG = {
-            webAppUrl: {{ .Site.Params.pqrsWebAppUrl | default "" | jsonify }},
+            webAppUrl: {{ .Site.Params.pqrsWebAppUrl | default "" }},
             maxPhotos: 3,
             maxImageBytes: 5242880,
             targetImageBytes: 921600,

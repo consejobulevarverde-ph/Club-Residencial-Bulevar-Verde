@@ -3,7 +3,7 @@
  * CLUB RESIDENCIAL BULEVAR VERDE
  ***************************************/
 
-const PQRS_VERSION = '2.0.0-mantenimiento-offline';
+const PQRS_VERSION = '2.1.1-gestion-mantenimiento';
 const PQRS_TIMEZONE = 'America/Bogota';
 
 const PQRS_ADMIN_EMAIL = 'bulevarverdeadmon@gmail.com';
@@ -14,6 +14,12 @@ const MANTENIMIENTO_SHEET_NAME = 'Reportes Mantenimiento';
 const MANTENIMIENTO_FOLDER_NAME = 'Reportes Mantenimiento - Evidencias';
 const MANTENIMIENTO_MAX_PHOTOS = 3;
 const MANTENIMIENTO_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+const MANTENIMIENTO_GESTION_SESSION_SECONDS = 6 * 60 * 60;
+const MANTENIMIENTO_GESTION_KEY_HASH_PROPERTY = 'MANTENIMIENTO_GESTION_CLAVE_HASH';
+const MANTENIMIENTO_GESTION_SECRET_PROPERTY = 'MANTENIMIENTO_GESTION_SECRET';
+const MANTENIMIENTO_GESTION_SESSION_PREFIX = 'pqrs_mantenimiento_session_';
+const MANTENIMIENTO_GESTION_ATTEMPT_PREFIX = 'pqrs_mantenimiento_login_';
 
 const MANTENIMIENTO_HEADERS = Object.freeze([
   'ID Reporte',
@@ -189,6 +195,18 @@ function doPost(e) {
       result = crearReporteMantenimiento(payload, origin);
     } else if (action === 'verificarReporteMantenimiento') {
       result = verificarReporteMantenimiento(payload, origin);
+    } else if (action === 'iniciarSesionGestionMantenimiento') {
+      result = iniciarSesionGestionMantenimiento(payload, origin);
+    } else if (action === 'listarReportesMantenimiento') {
+      result = listarReportesMantenimiento(payload, origin);
+    } else if (action === 'obtenerReporteMantenimiento') {
+      result = obtenerReporteMantenimiento(payload, origin);
+    } else if (action === 'obtenerEvidenciaMantenimiento') {
+      result = obtenerEvidenciaMantenimiento(payload, origin);
+    } else if (action === 'finalizarReporteMantenimiento') {
+      result = finalizarReporteMantenimiento(payload, origin);
+    } else if (action === 'cerrarSesionGestionMantenimiento') {
+      result = cerrarSesionGestionMantenimiento(payload, origin);
     } else {
       throw new Error('Acción no permitida.');
     }
@@ -292,7 +310,13 @@ function pqrsBuildBridgeHtml_(allowedOrigins) {
       const status = document.getElementById('status');
       const actionMap = {
         crearReporteMantenimiento: 'crearReporteMantenimiento',
-        verificarReporteMantenimiento: 'verificarReporteMantenimiento'
+        verificarReporteMantenimiento: 'verificarReporteMantenimiento',
+        iniciarSesionGestionMantenimiento: 'iniciarSesionGestionMantenimiento',
+        listarReportesMantenimiento: 'listarReportesMantenimiento',
+        obtenerReporteMantenimiento: 'obtenerReporteMantenimiento',
+        obtenerEvidenciaMantenimiento: 'obtenerEvidenciaMantenimiento',
+        finalizarReporteMantenimiento: 'finalizarReporteMantenimiento',
+        cerrarSesionGestionMantenimiento: 'cerrarSesionGestionMantenimiento'
       };
 
       function originAllowed(origin) {
@@ -347,8 +371,20 @@ function pqrsBuildBridgeHtml_(allowedOrigins) {
 
         if (serverFunction === 'crearReporteMantenimiento') {
           runner.crearReporteMantenimiento(payload, event.origin);
-        } else {
+        } else if (serverFunction === 'verificarReporteMantenimiento') {
           runner.verificarReporteMantenimiento(payload, event.origin);
+        } else if (serverFunction === 'iniciarSesionGestionMantenimiento') {
+          runner.iniciarSesionGestionMantenimiento(payload, event.origin);
+        } else if (serverFunction === 'listarReportesMantenimiento') {
+          runner.listarReportesMantenimiento(payload, event.origin);
+        } else if (serverFunction === 'obtenerReporteMantenimiento') {
+          runner.obtenerReporteMantenimiento(payload, event.origin);
+        } else if (serverFunction === 'obtenerEvidenciaMantenimiento') {
+          runner.obtenerEvidenciaMantenimiento(payload, event.origin);
+        } else if (serverFunction === 'finalizarReporteMantenimiento') {
+          runner.finalizarReporteMantenimiento(payload, event.origin);
+        } else {
+          runner.cerrarSesionGestionMantenimiento(payload, event.origin);
         }
       });
 
@@ -494,6 +530,560 @@ function verificarReporteMantenimiento(payload, origin) {
     exists: !!existing,
     reportId: existing ? existing.reportId : ''
   };
+}
+
+
+/***************************************
+ * GESTIÓN DE REPORTES DE MANTENIMIENTO
+ ***************************************/
+function configurarClaveGestionMantenimiento(clave) {
+  clave = safeTrimPQRS_(clave);
+
+  if (clave.length < 6 || clave.length > 100) {
+    throw new Error('La clave de gestión debe tener entre 6 y 100 caracteres.');
+  }
+
+  const properties = PropertiesService.getScriptProperties();
+  let secret = safeTrimPQRS_(
+    properties.getProperty(MANTENIMIENTO_GESTION_SECRET_PROPERTY)
+  );
+
+  if (!secret) {
+    secret = Utilities.getUuid() + Utilities.getUuid();
+    properties.setProperty(MANTENIMIENTO_GESTION_SECRET_PROPERTY, secret);
+  }
+
+  properties.setProperty(
+    MANTENIMIENTO_GESTION_KEY_HASH_PROPERTY,
+    pqrsHash_(clave + '|' + secret)
+  );
+
+  return {
+    ok: true,
+    message: 'Clave de gestión configurada correctamente.'
+  };
+}
+
+function iniciarSesionGestionMantenimiento(payload, origin) {
+  pqrsAssertOrigin_(origin);
+  payload = payload || {};
+
+  const nombre = safeTrimPQRS_(payload.nombre);
+  const clave = safeTrimPQRS_(payload.clave);
+
+  if (nombre.length < 3 || nombre.length > 120) {
+    throw new Error('Ingresa el nombre de la persona que realizará el mantenimiento.');
+  }
+  if (!clave) {
+    throw new Error('Ingresa la clave de gestión.');
+  }
+
+  const properties = PropertiesService.getScriptProperties();
+  const expectedHash = safeTrimPQRS_(
+    properties.getProperty(MANTENIMIENTO_GESTION_KEY_HASH_PROPERTY)
+  );
+  const secret = safeTrimPQRS_(
+    properties.getProperty(MANTENIMIENTO_GESTION_SECRET_PROPERTY)
+  );
+
+  if (!expectedHash || !secret) {
+    throw new Error(
+      'La gestión de mantenimiento todavía no tiene una clave configurada. Ejecuta configurarClaveGestionMantenimiento desde Apps Script.'
+    );
+  }
+
+  const cache = CacheService.getScriptCache();
+  const attemptKey = MANTENIMIENTO_GESTION_ATTEMPT_PREFIX +
+    pqrsHash_(origin).slice(0, 32);
+  const attempts = Number(cache.get(attemptKey) || 0);
+
+  if (attempts >= 8) {
+    throw new Error('Se agotaron temporalmente los intentos de ingreso. Intenta nuevamente en 15 minutos.');
+  }
+
+  const receivedHash = pqrsHash_(clave + '|' + secret);
+  if (receivedHash !== expectedHash) {
+    cache.put(attemptKey, String(attempts + 1), 15 * 60);
+    throw new Error('La clave de gestión no es válida.');
+  }
+
+  cache.remove(attemptKey);
+
+  const token = Utilities.getUuid().replace(/-/g, '') +
+    Utilities.getUuid().replace(/-/g, '');
+  const expiresAt = Date.now() + MANTENIMIENTO_GESTION_SESSION_SECONDS * 1000;
+  const session = {
+    nombre: nombre,
+    origin: origin,
+    createdAt: Date.now(),
+    expiresAt: expiresAt
+  };
+
+  cache.put(
+    pqrsMaintenanceSessionKey_(token),
+    JSON.stringify(session),
+    MANTENIMIENTO_GESTION_SESSION_SECONDS
+  );
+
+  console.log(JSON.stringify({
+    event: 'PQRS_MAINTENANCE_MANAGEMENT_LOGIN',
+    name: nombre,
+    origin: origin,
+    expiresAt: expiresAt
+  }));
+
+  return {
+    ok: true,
+    token: token,
+    nombre: nombre,
+    expiresAt: expiresAt
+  };
+}
+
+function cerrarSesionGestionMantenimiento(payload, origin) {
+  pqrsAssertOrigin_(origin);
+  const token = pqrsSafeToken_((payload || {}).token);
+
+  if (token) {
+    CacheService.getScriptCache().remove(
+      pqrsMaintenanceSessionKey_(token)
+    );
+  }
+
+  return { ok: true };
+}
+
+function listarReportesMantenimiento(payload, origin) {
+  const session = pqrsRequireMaintenanceSession_(
+    (payload || {}).token,
+    origin
+  );
+  const sheet = pqrsEnsureMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    return {
+      ok: true,
+      usuario: session.nombre,
+      total: 0,
+      reportes: []
+    };
+  }
+
+  const values = sheet.getRange(
+    2,
+    1,
+    lastRow - 1,
+    MANTENIMIENTO_HEADERS.length
+  ).getValues();
+
+  const richPhotoLinks = sheet.getRange(
+    2,
+    14,
+    lastRow - 1,
+    3
+  ).getRichTextValues();
+
+  const reportes = values
+    .map(function (row, index) {
+      return {
+        row: row,
+        rowNumber: index + 2,
+        photoLinks: pqrsExtractPhotoLinks_(row, richPhotoLinks[index])
+      };
+    })
+    .filter(function (item) {
+      return !!safeTrimPQRS_(item.row[0]);
+    })
+    .map(function (item) {
+      return pqrsMaintenanceRowToObject_(
+        item.row,
+        item.rowNumber,
+        item.photoLinks
+      );
+    })
+    .sort(function (a, b) {
+      const aClosed = a.estado === 'Cerrado' || a.estado === 'Resuelto';
+      const bClosed = b.estado === 'Cerrado' || b.estado === 'Resuelto';
+      if (aClosed !== bClosed) return aClosed ? 1 : -1;
+      return String(b.fechaRecepcion || b.fechaReporte || '')
+        .localeCompare(String(a.fechaRecepcion || a.fechaReporte || ''));
+    });
+
+  return {
+    ok: true,
+    usuario: session.nombre,
+    total: reportes.length,
+    reportes: reportes
+  };
+}
+
+function obtenerReporteMantenimiento(payload, origin) {
+  pqrsRequireMaintenanceSession_((payload || {}).token, origin);
+  const reportId = pqrsSafeId_((payload || {}).reportId);
+
+  if (!reportId) {
+    throw new Error('Debes indicar el reporte que deseas consultar.');
+  }
+
+  const sheet = pqrsEnsureMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const found = pqrsFindMaintenanceReportById_(sheet, reportId);
+
+  if (!found) {
+    throw new Error('El reporte solicitado no existe.');
+  }
+
+  const row = sheet.getRange(
+    found.row,
+    1,
+    1,
+    MANTENIMIENTO_HEADERS.length
+  ).getValues()[0];
+
+  return {
+    ok: true,
+    reporte: pqrsMaintenanceRowToObject_(
+      row,
+      found.row,
+      pqrsGetMaintenancePhotoLinksForRow_(sheet, found.row, row)
+    )
+  };
+}
+
+
+function obtenerEvidenciaMantenimiento(payload, origin) {
+  pqrsRequireMaintenanceSession_((payload || {}).token, origin);
+  payload = payload || {};
+
+  const reportId = pqrsSafeId_(payload.reportId);
+  const photoIndex = Number(payload.photoIndex || 0);
+
+  if (!reportId) {
+    throw new Error('No se identificó el reporte de la evidencia.');
+  }
+  if (!Number.isInteger(photoIndex) || photoIndex < 1 || photoIndex > 3) {
+    throw new Error('El número de evidencia no es válido.');
+  }
+
+  const sheet = pqrsEnsureMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const found = pqrsFindMaintenanceReportById_(sheet, reportId);
+
+  if (!found) {
+    throw new Error('El reporte solicitado no existe.');
+  }
+
+  const row = sheet.getRange(
+    found.row,
+    1,
+    1,
+    MANTENIMIENTO_HEADERS.length
+  ).getValues()[0];
+  const links = pqrsGetMaintenancePhotoLinksForRow_(sheet, found.row, row);
+  const photoUrl = links[photoIndex - 1] || '';
+
+  if (!photoUrl) {
+    throw new Error('La evidencia solicitada no existe.');
+  }
+
+  const fileId = pqrsExtractGoogleDriveFileId_(photoUrl);
+  if (!fileId) {
+    throw new Error('No fue posible identificar el archivo de la evidencia.');
+  }
+
+  let file;
+  try {
+    file = DriveApp.getFileById(fileId);
+  } catch (error) {
+    throw new Error('No fue posible acceder al archivo de la evidencia.');
+  }
+
+  const blob = file.getBlob();
+  const mimeType = safeTrimPQRS_(blob.getContentType()) || 'image/jpeg';
+
+  if (!/^image\//i.test(mimeType)) {
+    throw new Error('El archivo de evidencia no es una imagen válida.');
+  }
+
+  const bytes = blob.getBytes();
+  if (!bytes || !bytes.length) {
+    throw new Error('La evidencia está vacía.');
+  }
+
+  // Las imágenes del formulario ya se comprimen antes de subirlas. Este límite
+  // evita respuestas excesivamente grandes en caso de archivos antiguos.
+  if (bytes.length > 5 * 1024 * 1024) {
+    throw new Error('La evidencia es demasiado grande para previsualizarla.');
+  }
+
+  return {
+    ok: true,
+    reportId: reportId,
+    photoIndex: photoIndex,
+    mimeType: mimeType,
+    bytes: bytes.length,
+    dataUrl: 'data:' + mimeType + ';base64,' + Utilities.base64Encode(bytes)
+  };
+}
+
+function finalizarReporteMantenimiento(payload, origin) {
+  const session = pqrsRequireMaintenanceSession_(
+    (payload || {}).token,
+    origin
+  );
+  payload = payload || {};
+
+  const reportId = pqrsSafeId_(payload.reportId);
+  const responsable = safeTrimPQRS_(payload.responsable) || session.nombre;
+  const observaciones = safeTrimPQRS_(payload.observaciones);
+
+  if (!reportId) {
+    throw new Error('No se identificó el reporte que deseas finalizar.');
+  }
+  if (responsable.length < 3 || responsable.length > 120) {
+    throw new Error('Ingresa el nombre de la persona responsable de la atención.');
+  }
+  if (observaciones.length < 5 || observaciones.length > 3000) {
+    throw new Error('Las observaciones de cierre deben tener entre 5 y 3000 caracteres.');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = pqrsGetSpreadsheet_();
+    const sheet = pqrsEnsureMaintenanceSheet_(ss);
+    const found = pqrsFindMaintenanceReportById_(sheet, reportId);
+
+    if (!found) {
+      throw new Error('El reporte solicitado no existe.');
+    }
+
+    const row = found.row;
+    const current = sheet.getRange(
+      row,
+      1,
+      1,
+      MANTENIMIENTO_HEADERS.length
+    ).getValues()[0];
+    const currentStatus = safeTrimPQRS_(current[7]);
+
+    if (currentStatus === 'Cerrado') {
+      return {
+        ok: true,
+        alreadyClosed: true,
+        reportId: reportId,
+        message: 'El reporte ya se encontraba cerrado.',
+        reporte: pqrsMaintenanceRowToObject_(
+          current,
+          row,
+          pqrsGetMaintenancePhotoLinksForRow_(sheet, row, current)
+        )
+      };
+    }
+
+    const now = new Date();
+    const previousObservations = safeTrimPQRS_(current[18]);
+    const timestamp = Utilities.formatDate(
+      now,
+      Session.getScriptTimeZone() || PQRS_TIMEZONE,
+      'yyyy-MM-dd HH:mm'
+    );
+    const closureEntry =
+      '[' + timestamp + '] ' + responsable + ': ' + observaciones;
+    const consolidatedObservations = previousObservations
+      ? previousObservations + '\n\n' + closureEntry
+      : closureEntry;
+
+    sheet.getRange(row, 8).setValue('Cerrado');
+    sheet.getRange(row, 9).setValue(responsable);
+    if (!current[16]) {
+      sheet.getRange(row, 17).setValue(now);
+    }
+    sheet.getRange(row, 18).setValue(now);
+    sheet.getRange(row, 19).setValue(consolidatedObservations);
+    sheet.getRange(row, 20).setValue(PQRS_VERSION);
+    SpreadsheetApp.flush();
+
+    const updated = sheet.getRange(
+      row,
+      1,
+      1,
+      MANTENIMIENTO_HEADERS.length
+    ).getValues()[0];
+
+    pqrsSendMaintenanceClosureNotification_({
+      reportId: reportId,
+      responsable: responsable,
+      observaciones: observaciones,
+      ubicacion: safeTrimPQRS_(updated[5]),
+      descripcion: safeTrimPQRS_(updated[6]),
+      closedAt: now,
+      spreadsheetUrl: ss.getUrl()
+    });
+
+    console.log(JSON.stringify({
+      event: 'PQRS_MAINTENANCE_REPORT_CLOSED',
+      reportId: reportId,
+      responsable: responsable,
+      sessionName: session.nombre,
+      origin: origin
+    }));
+
+    return {
+      ok: true,
+      alreadyClosed: false,
+      reportId: reportId,
+      message: 'La atención fue finalizada y registrada en el mismo reporte.',
+      reporte: pqrsMaintenanceRowToObject_(
+        updated,
+        row,
+        pqrsGetMaintenancePhotoLinksForRow_(sheet, row, updated)
+      )
+    };
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
+}
+
+function pqrsRequireMaintenanceSession_(token, origin) {
+  pqrsAssertOrigin_(origin);
+  token = pqrsSafeToken_(token);
+
+  if (!token) {
+    throw new Error('Sesión de gestión requerida.');
+  }
+
+  const cache = CacheService.getScriptCache();
+  const key = pqrsMaintenanceSessionKey_(token);
+  const raw = cache.get(key);
+
+  if (!raw) {
+    throw new Error('La sesión de gestión venció. Ingresa nuevamente.');
+  }
+
+  const session = JSON.parse(raw);
+  if (session.origin !== origin) {
+    cache.remove(key);
+    throw new Error('El origen de la sesión no es válido.');
+  }
+  if (Date.now() > Number(session.expiresAt || 0)) {
+    cache.remove(key);
+    throw new Error('La sesión de gestión venció. Ingresa nuevamente.');
+  }
+
+  return session;
+}
+
+function pqrsMaintenanceSessionKey_(token) {
+  return MANTENIMIENTO_GESTION_SESSION_PREFIX +
+    pqrsHash_(token).slice(0, 48);
+}
+
+function pqrsMaintenanceRowToObject_(row, rowNumber, photoLinks) {
+  return {
+    fila: rowNumber,
+    reportId: safeTrimPQRS_(row[0]),
+    clientRequestId: safeTrimPQRS_(row[1]),
+    fechaReporte: pqrsDateToIso_(row[2]),
+    fechaRecepcion: pqrsDateToIso_(row[3]),
+    reportadoPor: safeTrimPQRS_(row[4]),
+    ubicacion: safeTrimPQRS_(row[5]),
+    descripcion: safeTrimPQRS_(row[6]),
+    estado: safeTrimPQRS_(row[7]) || 'Abierto',
+    responsable: safeTrimPQRS_(row[8]),
+    prioridad: safeTrimPQRS_(row[9]) || 'Media',
+    fotos: Array.isArray(photoLinks)
+      ? photoLinks
+      : [row[13], row[14], row[15]]
+          .map(function (value) { return safeTrimPQRS_(value); })
+          .filter(function (value) { return /^https:\/\//i.test(value); }),
+    fechaAtencion: pqrsDateToIso_(row[16]),
+    fechaCierre: pqrsDateToIso_(row[17]),
+    observacionesGestion: safeTrimPQRS_(row[18]),
+    version: safeTrimPQRS_(row[19])
+  };
+}
+
+function pqrsGetMaintenancePhotoLinksForRow_(sheet, rowNumber, rowValues) {
+  const richValues = sheet.getRange(rowNumber, 14, 1, 3)
+    .getRichTextValues()[0];
+  return pqrsExtractPhotoLinks_(rowValues, richValues);
+}
+
+function pqrsExtractPhotoLinks_(rowValues, richValues) {
+  return [0, 1, 2]
+    .map(function (index) {
+      const rich = richValues && richValues[index];
+      const richUrl = rich && typeof rich.getLinkUrl === 'function'
+        ? safeTrimPQRS_(rich.getLinkUrl())
+        : '';
+      const rawValue = rowValues
+        ? safeTrimPQRS_(rowValues[13 + index])
+        : '';
+      return richUrl || (/^https:\/\//i.test(rawValue) ? rawValue : '');
+    })
+    .filter(function (url) { return !!url; });
+}
+
+
+function pqrsExtractGoogleDriveFileId_(url) {
+  const value = safeTrimPQRS_(url);
+  if (!value) return '';
+
+  const pathMatch = value.match(/\/file\/d\/([^/?#]+)/i);
+  if (pathMatch && pathMatch[1]) {
+    return pqrsSafeDriveFileId_(pathMatch[1]);
+  }
+
+  const queryMatch = value.match(/[?&]id=([^&#]+)/i);
+  if (queryMatch && queryMatch[1]) {
+    try {
+      return pqrsSafeDriveFileId_(decodeURIComponent(queryMatch[1]));
+    } catch (error) {
+      return pqrsSafeDriveFileId_(queryMatch[1]);
+    }
+  }
+
+  return '';
+}
+
+function pqrsSafeDriveFileId_(value) {
+  return safeTrimPQRS_(value)
+    .replace(/[^A-Za-z0-9_-]/g, '')
+    .slice(0, 180);
+}
+
+function pqrsFindMaintenanceReportById_(sheet, reportId) {
+  if (sheet.getLastRow() < 2) return null;
+
+  const finder = sheet
+    .getRange(2, 1, sheet.getLastRow() - 1, 1)
+    .createTextFinder(reportId)
+    .matchEntireCell(true)
+    .findNext();
+
+  return finder ? { row: finder.getRow(), reportId: reportId } : null;
+}
+
+function pqrsDateToIso_(value) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  return isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
+function pqrsSafeToken_(value) {
+  return safeTrimPQRS_(value)
+    .replace(/[^A-Za-z0-9]/g, '')
+    .slice(0, 160);
+}
+
+function pqrsHash_(value) {
+  const digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(value || ''),
+    Utilities.Charset.UTF_8
+  );
+  return Utilities.base64EncodeWebSafe(digest).replace(/=+$/g, '');
 }
 
 /***************************************
@@ -764,6 +1354,38 @@ function pqrsGenerateMaintenanceId_(date) {
   );
   const suffix = Utilities.getUuid().replace(/-/g, '').slice(0, 5).toUpperCase();
   return 'MANT-' + prefix + '-' + suffix;
+}
+
+
+function pqrsSendMaintenanceClosureNotification_(report) {
+  try {
+    const body =
+      'Se finalizó una solicitud de mantenimiento.\n\n' +
+      'ID del reporte: ' + report.reportId + '\n' +
+      'Responsable: ' + report.responsable + '\n' +
+      'Ubicación: ' + report.ubicacion + '\n' +
+      'Problema reportado: ' + report.descripcion + '\n\n' +
+      'Gestión realizada:\n' + report.observaciones + '\n\n' +
+      'Fecha de cierre: ' + Utilities.formatDate(
+        report.closedAt,
+        Session.getScriptTimeZone() || PQRS_TIMEZONE,
+        'yyyy-MM-dd HH:mm'
+      ) + '\n\n' +
+      'Hoja de seguimiento: ' + report.spreadsheetUrl + '\n\n' +
+      'Este correo fue generado automáticamente por el portal de Bulevar Verde.';
+
+    MailApp.sendEmail({
+      to: PQRS_ADMIN_EMAIL,
+      cc: PQRS_CC_EMAIL,
+      subject: '[Bulevar Verde] Mantenimiento finalizado - ' + report.reportId,
+      body: body
+    });
+  } catch (error) {
+    Logger.log(
+      'El reporte se cerró, pero no fue posible enviar la notificación: ' +
+      (error.message || String(error))
+    );
+  }
 }
 
 function pqrsSendMaintenanceNotification_(report) {
