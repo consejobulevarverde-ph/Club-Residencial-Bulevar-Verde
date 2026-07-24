@@ -9,6 +9,9 @@
   var reports = [];
   var selectedReport = null;
   var detailModal = null;
+  var selectedClosureEvidence = null;
+  var uploadedClosureEvidenceUrl = '';
+  var closureEvidenceObjectUrl = '';
 
   var elements = {};
 
@@ -52,6 +55,15 @@
       closureForm: $('managementClosureForm'),
       responsible: $('managementResponsible'),
       observations: $('managementObservations'),
+      evidenceCameraButton: $('managementOpenEvidenceCameraButton'),
+      evidenceGalleryButton: $('managementOpenEvidenceGalleryButton'),
+      evidenceRemoveButton: $('managementRemoveEvidenceButton'),
+      evidenceCameraInput: $('managementEvidenceCameraInput'),
+      evidenceGalleryInput: $('managementEvidenceGalleryInput'),
+      evidencePreviewContainer: $('managementEvidencePreviewContainer'),
+      evidencePreview: $('managementEvidencePreview'),
+      evidenceInfo: $('managementEvidenceInfo'),
+      evidenceStatus: $('managementEvidenceStatus'),
       closeConfirm: $('managementCloseConfirm'),
       closeButton: $('managementCloseButton')
     };
@@ -66,6 +78,15 @@
     elements.statusFilter.addEventListener('change', renderReports);
     elements.reportList.addEventListener('click', handleReportClick);
     elements.closureForm.addEventListener('submit', handleCloseReport);
+    elements.evidenceCameraButton.addEventListener('click', function () {
+      elements.evidenceCameraInput.click();
+    });
+    elements.evidenceGalleryButton.addEventListener('click', function () {
+      elements.evidenceGalleryInput.click();
+    });
+    elements.evidenceCameraInput.addEventListener('change', handleClosureEvidenceSelection);
+    elements.evidenceGalleryInput.addEventListener('change', handleClosureEvidenceSelection);
+    elements.evidenceRemoveButton.addEventListener('click', resetClosureEvidence);
 
     restoreSession();
   }
@@ -307,6 +328,7 @@
       }, 60000);
 
       selectedReport = result.reporte;
+      resetClosureEvidence();
       renderDetail(selectedReport);
     } catch (error) {
       elements.detailBody.innerHTML = '<div class="alert alert-danger mb-0">' + esc(error.message) + '</div>';
@@ -351,6 +373,7 @@
       elements.observations.value = '';
       elements.closeConfirm.checked = false;
       elements.closureForm.classList.remove('was-validated');
+      resetClosureEvidence();
     }
   }
 
@@ -366,11 +389,46 @@
     setBusy(elements.closeButton, true, 'Finalizando…');
 
     try {
+      var evidenceUrl = uploadedClosureEvidenceUrl;
+
+      if (selectedClosureEvidence && !evidenceUrl) {
+        elements.evidenceStatus.textContent = 'Comprimiendo y cargando evidencia…';
+        var compressedEvidence = await compressClosureEvidence(selectedClosureEvidence);
+        var uploadResult = await call('subirEvidenciaGestionMantenimiento', {
+          token: session.token,
+          reportId: selectedReport.reportId,
+          clientEvidenceId: selectedClosureEvidence.clientEvidenceId,
+          evidence: compressedEvidence
+        }, 120000);
+
+        if (!uploadResult || !uploadResult.ok || !uploadResult.url) {
+          throw new Error('El servicio no confirmó la carga de la evidencia.');
+        }
+
+        evidenceUrl = uploadResult.url;
+        uploadedClosureEvidenceUrl = evidenceUrl;
+        elements.evidenceStatus.textContent = 'Evidencia cargada. Se agregará el enlace a las observaciones.';
+        log('info', 'Evidencia de cierre cargada.', {
+          reportId: selectedReport.reportId,
+          bytes: uploadResult.bytes || 0,
+          duplicate: Boolean(uploadResult.duplicate)
+        });
+      }
+
+      var observations = elements.observations.value.trim();
+      var observationsWithEvidence = evidenceUrl
+        ? observations + ' ' + evidenceUrl
+        : observations;
+
+      if (observationsWithEvidence.length > 3000) {
+        throw new Error('Las observaciones y la URL de evidencia superan el máximo de 3000 caracteres.');
+      }
+
       var result = await call('finalizarReporteMantenimiento', {
         token: session.token,
         reportId: selectedReport.reportId,
         responsable: elements.responsible.value.trim(),
-        observaciones: elements.observations.value.trim()
+        observaciones: observationsWithEvidence
       }, 90000);
 
       if (!result || !result.ok) {
@@ -395,6 +453,182 @@
     } finally {
       setBusy(elements.closeButton, false);
     }
+  }
+
+  function handleClosureEvidenceSelection(event) {
+    var input = event.target;
+    var file = input && input.files && input.files[0];
+    input.value = '';
+
+    if (!file) return;
+    if (!/^image\//i.test(file.type || '')) {
+      showAlert('warning', 'Selecciona un archivo de imagen válido.');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      showAlert('warning', 'La imagen original no puede superar 20 MB.');
+      return;
+    }
+
+    resetClosureEvidence();
+    selectedClosureEvidence = {
+      file: file,
+      name: file.name || 'evidencia.jpg',
+      type: file.type || 'image/jpeg',
+      originalBytes: file.size || 0,
+      clientEvidenceId: createClientEvidenceId()
+    };
+
+    closureEvidenceObjectUrl = URL.createObjectURL(file);
+    elements.evidencePreview.src = closureEvidenceObjectUrl;
+    elements.evidencePreviewContainer.hidden = false;
+    elements.evidenceRemoveButton.hidden = false;
+    elements.evidenceInfo.textContent = selectedClosureEvidence.name +
+      ' · ' + formatBytes(selectedClosureEvidence.originalBytes);
+    elements.evidenceStatus.textContent = 'Evidencia lista. Se cargará al finalizar la atención.';
+
+    log('info', 'Evidencia de cierre seleccionada.', {
+      name: selectedClosureEvidence.name,
+      type: selectedClosureEvidence.type,
+      originalBytes: selectedClosureEvidence.originalBytes,
+      clientEvidenceId: selectedClosureEvidence.clientEvidenceId
+    });
+  }
+
+  function resetClosureEvidence() {
+    if (closureEvidenceObjectUrl) {
+      URL.revokeObjectURL(closureEvidenceObjectUrl);
+      closureEvidenceObjectUrl = '';
+    }
+    selectedClosureEvidence = null;
+    uploadedClosureEvidenceUrl = '';
+    if (!elements.evidencePreviewContainer) return;
+    elements.evidencePreview.removeAttribute('src');
+    elements.evidencePreviewContainer.hidden = true;
+    elements.evidenceRemoveButton.hidden = true;
+    elements.evidenceInfo.textContent = '';
+    elements.evidenceStatus.textContent = 'La imagen se comprimirá antes de almacenarse.';
+    elements.evidenceCameraInput.value = '';
+    elements.evidenceGalleryInput.value = '';
+  }
+
+  async function compressClosureEvidence(selected) {
+    var file = selected.file;
+    var image = await loadImageFile(file);
+    var dimensions = fitDimensions(image.width, image.height, 1600);
+    var canvas = document.createElement('canvas');
+    canvas.width = dimensions.width;
+    canvas.height = dimensions.height;
+    var context = canvas.getContext('2d', { alpha: false });
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image.source, 0, 0, canvas.width, canvas.height);
+
+    if (typeof image.close === 'function') image.close();
+
+    var quality = 0.86;
+    var blob = await canvasToBlob(canvas, quality);
+    while (blob.size > 950 * 1024 && quality > 0.48) {
+      quality -= 0.08;
+      blob = await canvasToBlob(canvas, quality);
+    }
+
+    if (blob.size > 2 * 1024 * 1024) {
+      throw new Error('No fue posible reducir la evidencia por debajo de 2 MB.');
+    }
+
+    var dataUrl = await blobToDataUrl(blob);
+    log('info', 'Evidencia de cierre comprimida.', {
+      originalBytes: file.size || 0,
+      finalBytes: blob.size,
+      width: canvas.width,
+      height: canvas.height,
+      quality: quality
+    });
+
+    return {
+      name: sanitizeFileName(selected.name),
+      mimeType: 'image/jpeg',
+      sizeBytes: blob.size,
+      dataUrl: dataUrl
+    };
+  }
+
+  async function loadImageFile(file) {
+    if ('createImageBitmap' in window) {
+      try {
+        var bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        return {
+          source: bitmap,
+          width: bitmap.width,
+          height: bitmap.height,
+          close: function () { bitmap.close(); }
+        };
+      } catch (error) {
+        log('warn', 'createImageBitmap falló; se usará Image.', { message: error.message });
+      }
+    }
+
+    return new Promise(function (resolve, reject) {
+      var image = new Image();
+      var objectUrl = URL.createObjectURL(file);
+      image.onload = function () {
+        URL.revokeObjectURL(objectUrl);
+        resolve({ source: image, width: image.naturalWidth, height: image.naturalHeight });
+      };
+      image.onerror = function () {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('No fue posible leer la imagen seleccionada.'));
+      };
+      image.src = objectUrl;
+    });
+  }
+
+  function fitDimensions(width, height, maxDimension) {
+    var ratio = Math.min(1, maxDimension / Math.max(width, height));
+    return {
+      width: Math.max(1, Math.round(width * ratio)),
+      height: Math.max(1, Math.round(height * ratio))
+    };
+  }
+
+  function canvasToBlob(canvas, quality) {
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (blob) {
+        if (blob) resolve(blob);
+        else reject(new Error('No fue posible comprimir la evidencia.'));
+      }, 'image/jpeg', quality);
+    });
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(String(reader.result || '')); };
+      reader.onerror = function () { reject(new Error('No fue posible preparar la evidencia para el envío.')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function createClientEvidenceId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return 'MEVID-' + window.crypto.randomUUID();
+    }
+    return 'MEVID-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+  }
+
+  function sanitizeFileName(value) {
+    return String(value || 'evidencia.jpg')
+      .replace(/[^A-Za-z0-9._-]+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 120);
+  }
+
+  function formatBytes(bytes) {
+    var value = Number(bytes || 0);
+    if (value < 1024) return value + ' B';
+    if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KB';
+    return (value / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
   function renderEvidencePreview(url, index) {

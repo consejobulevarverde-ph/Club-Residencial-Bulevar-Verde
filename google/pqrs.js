@@ -3,7 +3,7 @@
  * CLUB RESIDENCIAL BULEVAR VERDE
  ***************************************/
 
-const PQRS_VERSION = '2.1.2-sin-correos-mantenimiento';
+const PQRS_VERSION = '2.1.3-evidencia-cierre';
 const PQRS_TIMEZONE = 'America/Bogota';
 
 const PQRS_ADMIN_EMAIL = 'bulevarverdeadmon@gmail.com';
@@ -202,6 +202,8 @@ function doPost(e) {
       result = obtenerReporteMantenimiento(payload, origin);
     } else if (action === 'obtenerEvidenciaMantenimiento') {
       result = obtenerEvidenciaMantenimiento(payload, origin);
+    } else if (action === 'subirEvidenciaGestionMantenimiento') {
+      result = subirEvidenciaGestionMantenimiento(payload, origin);
     } else if (action === 'finalizarReporteMantenimiento') {
       result = finalizarReporteMantenimiento(payload, origin);
     } else if (action === 'cerrarSesionGestionMantenimiento') {
@@ -314,6 +316,7 @@ function pqrsBuildBridgeHtml_(allowedOrigins) {
         listarReportesMantenimiento: 'listarReportesMantenimiento',
         obtenerReporteMantenimiento: 'obtenerReporteMantenimiento',
         obtenerEvidenciaMantenimiento: 'obtenerEvidenciaMantenimiento',
+        subirEvidenciaGestionMantenimiento: 'subirEvidenciaGestionMantenimiento',
         finalizarReporteMantenimiento: 'finalizarReporteMantenimiento',
         cerrarSesionGestionMantenimiento: 'cerrarSesionGestionMantenimiento'
       };
@@ -380,6 +383,8 @@ function pqrsBuildBridgeHtml_(allowedOrigins) {
           runner.obtenerReporteMantenimiento(payload, event.origin);
         } else if (serverFunction === 'obtenerEvidenciaMantenimiento') {
           runner.obtenerEvidenciaMantenimiento(payload, event.origin);
+        } else if (serverFunction === 'subirEvidenciaGestionMantenimiento') {
+          runner.subirEvidenciaGestionMantenimiento(payload, event.origin);
         } else if (serverFunction === 'finalizarReporteMantenimiento') {
           runner.finalizarReporteMantenimiento(payload, event.origin);
         } else {
@@ -821,6 +826,96 @@ function obtenerEvidenciaMantenimiento(payload, origin) {
     mimeType: mimeType,
     bytes: bytes.length,
     dataUrl: 'data:' + mimeType + ';base64,' + Utilities.base64Encode(bytes)
+  };
+}
+
+function subirEvidenciaGestionMantenimiento(payload, origin) {
+  const session = pqrsRequireMaintenanceSession_(
+    (payload || {}).token,
+    origin
+  );
+  payload = payload || {};
+
+  const reportId = pqrsSafeId_(payload.reportId);
+  const clientEvidenceId = pqrsSafeId_(payload.clientEvidenceId);
+  const evidence = payload.evidence || {};
+
+  if (!reportId) {
+    throw new Error('No se identificó el reporte asociado a la evidencia.');
+  }
+  if (!clientEvidenceId) {
+    throw new Error('No se identificó la evidencia de cierre.');
+  }
+
+  const sheet = pqrsEnsureMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const found = pqrsFindMaintenanceReportById_(sheet, reportId);
+  if (!found) {
+    throw new Error('El reporte solicitado no existe.');
+  }
+
+  const dataUrl = String(evidence.dataUrl || '');
+  const match = dataUrl.match(
+    /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/i
+  );
+  if (!match) {
+    throw new Error('La evidencia de cierre tiene un formato inválido.');
+  }
+
+  const mimeType = match[1].toLowerCase().replace('image/jpg', 'image/jpeg');
+  const bytes = Utilities.base64Decode(match[2]);
+  if (!bytes.length) {
+    throw new Error('La evidencia de cierre está vacía.');
+  }
+  if (bytes.length > MANTENIMIENTO_MAX_IMAGE_BYTES) {
+    throw new Error('La evidencia de cierre supera el tamaño permitido.');
+  }
+
+  const extension = mimeType === 'image/png'
+    ? 'png'
+    : mimeType === 'image/webp'
+      ? 'webp'
+      : 'jpg';
+  const safeEvidenceId = clientEvidenceId.replace(/[^A-Za-z0-9_-]/g, '')
+    .slice(0, 80);
+  const fileName = reportId + '-gestion-' + safeEvidenceId + '.' + extension;
+  const folder = pqrsGetMaintenanceFolder_();
+  const existing = folder.getFilesByName(fileName);
+
+  if (existing.hasNext()) {
+    const existingFile = existing.next();
+    return {
+      ok: true,
+      duplicate: true,
+      reportId: reportId,
+      fileId: existingFile.getId(),
+      url: existingFile.getUrl(),
+      bytes: existingFile.getSize()
+    };
+  }
+
+  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+  const file = folder.createFile(blob);
+  file.setDescription(
+    'Evidencia de cierre del reporte ' + reportId +
+    '. Cargada por ' + session.nombre + '.'
+  );
+
+  console.log(JSON.stringify({
+    event: 'PQRS_MAINTENANCE_CLOSURE_EVIDENCE_UPLOADED',
+    reportId: reportId,
+    fileId: file.getId(),
+    bytes: bytes.length,
+    sessionName: session.nombre,
+    origin: origin
+  }));
+
+  return {
+    ok: true,
+    duplicate: false,
+    reportId: reportId,
+    fileId: file.getId(),
+    url: file.getUrl(),
+    bytes: bytes.length
   };
 }
 

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="{{ .Site.LanguageCode }}">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,26 +21,116 @@
       --color-light: #e8f5e9;
       --color-white: #fff;
     }
-    body { font-family: var(--font-primary); background: #f3f7f3; min-height: 100vh; }
-    .navbar, footer { background-color: var(--color-primary) !important; }
-    .navbar-brand { font-weight: 800; color: var(--color-white) !important; }
-    .nav-link { color: var(--color-light) !important; font-weight: 600; }
-    .page-header { background: linear-gradient(135deg, var(--color-secondary), var(--color-primary)); color: #fff; padding: 48px 0 38px; }
-    .page-header h1 { font-weight: 800; }
-    .surface { background: #fff; border-radius: 14px; box-shadow: 0 3px 16px rgba(26, 77, 28, .09); }
-    .login-card { max-width: 540px; margin: -28px auto 50px; position: relative; }
-    .metric-card i { font-size: 1.35rem; color: var(--color-primary); }
-    .metric-value { font-size: 1.65rem; font-weight: 800; color: #183d1a; }
-    .report-card { transition: transform .15s ease, box-shadow .15s ease; color: inherit; }
-    .report-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26, 77, 28, .15) !important; }
-    .report-description { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: #435143; }
-    .detail-field { background: #f7faf7; border: 1px solid #dfe9df; border-radius: 10px; padding: 14px; }
-    .preserve-lines { white-space: pre-wrap; word-break: break-word; }
-    .btn-primary { background: var(--color-primary); border-color: var(--color-primary); font-weight: 700; }
-    .btn-primary:hover { background: var(--color-secondary); border-color: var(--color-secondary); }
-    footer { color: var(--color-light); padding: 34px 0; margin-top: 60px; }
-    footer a { color: var(--color-light); }
-    [hidden] { display: none !important; }
+
+    body {
+      font-family: var(--font-primary);
+      background: #f3f7f3;
+      min-height: 100vh;
+    }
+
+    .navbar,
+    footer {
+      background-color: var(--color-primary) !important;
+    }
+
+    .navbar-brand {
+      font-weight: 800;
+      color: var(--color-white) !important;
+    }
+
+    .nav-link {
+      color: var(--color-light) !important;
+      font-weight: 600;
+    }
+
+    .page-header {
+      background: linear-gradient(135deg, var(--color-secondary), var(--color-primary));
+      color: #fff;
+      padding: 48px 0 38px;
+    }
+
+    .page-header h1 {
+      font-weight: 800;
+    }
+
+    .surface {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 3px 16px rgba(26, 77, 28, .09);
+    }
+
+    .login-card {
+      max-width: 540px;
+      margin: -28px auto 50px;
+      position: relative;
+    }
+
+    .metric-card i {
+      font-size: 1.35rem;
+      color: var(--color-primary);
+    }
+
+    .metric-value {
+      font-size: 1.65rem;
+      font-weight: 800;
+      color: #183d1a;
+    }
+
+    .report-card {
+      transition: transform .15s ease, box-shadow .15s ease;
+      color: inherit;
+    }
+
+    .report-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(26, 77, 28, .15) !important;
+    }
+
+    .report-description {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      color: #435143;
+    }
+
+    .detail-field {
+      background: #f7faf7;
+      border: 1px solid #dfe9df;
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    .preserve-lines {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .btn-primary {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      font-weight: 700;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-secondary);
+      border-color: var(--color-secondary);
+    }
+
+    footer {
+      color: var(--color-light);
+      padding: 34px 0;
+      margin-top: 60px;
+    }
+
+    footer a {
+      color: var(--color-light);
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
     .management-modal-close {
       width: 36px;
       height: 36px;
@@ -56,6 +147,7 @@
       opacity: .9;
       transition: background-color .15s ease, opacity .15s ease, transform .15s ease;
     }
+
     .management-modal-close:hover,
     .management-modal-close:focus-visible {
       background: var(--color-secondary);
@@ -63,20 +155,38 @@
       opacity: 1;
       transform: scale(1.04);
     }
+
     .management-modal-close:focus-visible {
       outline: 3px solid rgba(74, 140, 75, .35);
       outline-offset: 2px;
     }
+
+    .management-evidence-preview {
+      width: 180px;
+      height: 180px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid #cfe3cf;
+      background: #f7faf7;
+      display: block;
+    }
+
+    .management-evidence-actions .btn {
+      min-width: 150px;
+    }
   </style>
 </head>
+
 <body>
   <nav class="navbar navbar-expand-lg navbar-dark">
     <div class="container">
       <a class="navbar-brand" href="{{ "/" | relURL }}"><i class="bi bi-houses-fill"></i> Club Bulevar Verde</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span class="navbar-toggler-icon"></span></button>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"><span
+          class="navbar-toggler-icon"></span></button>
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-          {{ range .Site.Menus.main }}<li class="nav-item"><a class="nav-link" href="{{ .URL }}">{{ .Name }}</a></li>{{ end }}
+          {{ range .Site.Menus.main }}<li class="nav-item"><a class="nav-link" href="{{ .URL }}">{{ .Name }}</a></li>{{
+          end }}
         </ul>
       </div>
     </div>
@@ -101,17 +211,21 @@
       <form id="managementLoginForm" novalidate>
         <div class="mb-3">
           <label for="managementTechnicianName" class="form-label fw-semibold">Nombre completo</label>
-          <input id="managementTechnicianName" class="form-control" type="text" minlength="3" maxlength="120" autocomplete="name" required>
+          <input id="managementTechnicianName" class="form-control" type="text" minlength="3" maxlength="120"
+            autocomplete="name" required>
           <div class="invalid-feedback">Ingresa el nombre de quien realizará la gestión.</div>
         </div>
         <div class="mb-4">
           <label for="managementAccessCode" class="form-label fw-semibold">Clave de gestión</label>
-          <input id="managementAccessCode" class="form-control" type="password" minlength="6" maxlength="100" autocomplete="current-password" required>
+          <input id="managementAccessCode" class="form-control" type="password" minlength="6" maxlength="100"
+            autocomplete="current-password" required>
           <div class="invalid-feedback">Ingresa la clave asignada al personal autorizado.</div>
         </div>
-        <button id="managementLoginButton" class="btn btn-primary btn-lg w-100" type="submit"><i class="bi bi-box-arrow-in-right me-2"></i>Ingresar</button>
+        <button id="managementLoginButton" class="btn btn-primary btn-lg w-100" type="submit"><i
+            class="bi bi-box-arrow-in-right me-2"></i>Ingresar</button>
       </form>
-      <div class="text-center mt-4"><a href="{{ "pqrs/" | relURL }}" class="text-success"><i class="bi bi-arrow-left"></i> Volver a PQRS</a></div>
+      <div class="text-center mt-4"><a href="{{ "pqrs/" | relURL }}" class="text-success"><i
+            class="bi bi-arrow-left"></i> Volver a PQRS</a></div>
     </section>
 
     <section id="managementAppPanel" hidden>
@@ -121,27 +235,66 @@
           <div class="fw-bold"><i class="bi bi-person-badge me-1"></i><span id="managementUserName"></span></div>
         </div>
         <div class="d-flex gap-2">
-          <button id="managementRefreshButton" class="btn btn-outline-success" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Actualizar</button>
-          <button id="managementLogoutButton" class="btn btn-outline-secondary" type="button"><i class="bi bi-box-arrow-right me-1"></i>Salir</button>
+          <button id="managementRefreshButton" class="btn btn-outline-success" type="button"><i
+              class="bi bi-arrow-clockwise me-1"></i>Actualizar</button>
+          <button id="managementLogoutButton" class="btn btn-outline-secondary" type="button"><i
+              class="bi bi-box-arrow-right me-1"></i>Salir</button>
         </div>
       </div>
 
       <div class="row g-3 mb-4">
-        <div class="col-6 col-lg-3"><div class="surface metric-card p-3 h-100"><i class="bi bi-inbox"></i><div id="metricOpen" class="metric-value">0</div><div class="small text-muted">Abiertos</div></div></div>
-        <div class="col-6 col-lg-3"><div class="surface metric-card p-3 h-100"><i class="bi bi-tools"></i><div id="metricInProgress" class="metric-value">0</div><div class="small text-muted">En proceso</div></div></div>
-        <div class="col-6 col-lg-3"><div class="surface metric-card p-3 h-100"><i class="bi bi-check-circle"></i><div id="metricClosed" class="metric-value">0</div><div class="small text-muted">Cerrados</div></div></div>
-        <div class="col-6 col-lg-3"><div class="surface metric-card p-3 h-100"><i class="bi bi-list-check"></i><div id="metricTotal" class="metric-value">0</div><div class="small text-muted">Total</div></div></div>
+        <div class="col-6 col-lg-3">
+          <div class="surface metric-card p-3 h-100"><i class="bi bi-inbox"></i>
+            <div id="metricOpen" class="metric-value">0</div>
+            <div class="small text-muted">Abiertos</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="surface metric-card p-3 h-100"><i class="bi bi-tools"></i>
+            <div id="metricInProgress" class="metric-value">0</div>
+            <div class="small text-muted">En proceso</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="surface metric-card p-3 h-100"><i class="bi bi-check-circle"></i>
+            <div id="metricClosed" class="metric-value">0</div>
+            <div class="small text-muted">Cerrados</div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="surface metric-card p-3 h-100"><i class="bi bi-list-check"></i>
+            <div id="metricTotal" class="metric-value">0</div>
+            <div class="small text-muted">Total</div>
+          </div>
+        </div>
       </div>
 
       <div class="surface p-3 p-md-4 mb-4">
         <div class="row g-3">
-          <div class="col-md-8"><label for="managementSearch" class="form-label fw-semibold">Buscar</label><input id="managementSearch" type="search" class="form-control" placeholder="ID, ubicación, descripción, responsable…"></div>
-          <div class="col-md-4"><label for="managementStatusFilter" class="form-label fw-semibold">Estado</label><select id="managementStatusFilter" class="form-select"><option value="">Todos</option><option>Abierto</option><option>Asignado</option><option>En proceso</option><option>Resuelto</option><option>Cerrado</option></select></div>
+          <div class="col-md-8"><label for="managementSearch" class="form-label fw-semibold">Buscar</label><input
+              id="managementSearch" type="search" class="form-control"
+              placeholder="ID, ubicación, descripción, responsable…"></div>
+          <div class="col-md-4"><label for="managementStatusFilter" class="form-label fw-semibold">Estado</label><select
+              id="managementStatusFilter" class="form-select">
+              <option value="">Todos</option>
+              <option>Abierto</option>
+              <option>Asignado</option>
+              <option>En proceso</option>
+              <option>Resuelto</option>
+              <option>Cerrado</option>
+            </select></div>
         </div>
       </div>
 
-      <div id="managementLoading" class="text-center py-5" hidden><div class="spinner-border text-success"></div><p class="mt-2 text-muted">Cargando reportes…</p></div>
-      <div id="managementEmpty" class="surface text-center p-5" hidden><i class="bi bi-inbox display-5 text-success"></i><h2 class="h5 mt-3">No hay reportes para mostrar</h2><p class="text-muted mb-0">Cambia los filtros o actualiza la lista.</p></div>
+      <div id="managementLoading" class="text-center py-5" hidden>
+        <div class="spinner-border text-success"></div>
+        <p class="mt-2 text-muted">Cargando reportes…</p>
+      </div>
+      <div id="managementEmpty" class="surface text-center p-5" hidden><i
+          class="bi bi-inbox display-5 text-success"></i>
+        <h2 class="h5 mt-3">No hay reportes para mostrar</h2>
+        <p class="text-muted mb-0">Cambia los filtros o actualiza la lista.</p>
+      </div>
       <div id="managementReportList" class="row g-3"></div>
     </section>
   </main>
@@ -161,10 +314,46 @@
             <h3 class="h5 fw-bold text-success"><i class="bi bi-check2-circle me-1"></i>Finalizar atención</h3>
             <p class="text-muted">El cierre actualizará la misma fila del reporte en la hoja de cálculo.</p>
             <form id="managementClosureForm" novalidate>
-              <div class="mb-3"><label for="managementResponsible" class="form-label fw-semibold">Responsable</label><input id="managementResponsible" type="text" class="form-control" minlength="3" maxlength="120" required><div class="invalid-feedback">Ingresa el responsable de la atención.</div></div>
-              <div class="mb-3"><label for="managementObservations" class="form-label fw-semibold">Trabajo realizado y observaciones</label><textarea id="managementObservations" class="form-control" rows="5" minlength="5" maxlength="3000" required placeholder="Describe la reparación, cambio o ajuste realizado."></textarea><div class="invalid-feedback">Describe la gestión realizada.</div></div>
-              <div class="form-check mb-4"><input id="managementCloseConfirm" class="form-check-input" type="checkbox" required><label class="form-check-label" for="managementCloseConfirm">Confirmo que la atención fue completada y este reporte puede marcarse como cerrado.</label><div class="invalid-feedback">Debes confirmar el cierre.</div></div>
-              <button id="managementCloseButton" class="btn btn-primary btn-lg w-100" type="submit"><i class="bi bi-check-circle me-2"></i>Finalizar atención</button>
+              <div class="mb-3"><label for="managementResponsible"
+                  class="form-label fw-semibold">Responsable</label><input id="managementResponsible" type="text"
+                  class="form-control" minlength="3" maxlength="120" required>
+                <div class="invalid-feedback">Ingresa el responsable de la atención.</div>
+              </div>
+              <div class="mb-3"><label for="managementObservations" class="form-label fw-semibold">Trabajo realizado y
+                  observaciones</label><textarea id="managementObservations" class="form-control" rows="5" minlength="5"
+                  maxlength="3000" required placeholder="Describe la reparación, cambio o ajuste realizado."></textarea>
+                <div class="invalid-feedback">Describe la gestión realizada.</div>
+              </div>
+              <div class="mb-4">
+                <label class="form-label fw-semibold">Evidencia de la atención <span
+                    class="text-muted fw-normal">(opcional)</span></label>
+                <div class="management-evidence-actions d-flex flex-wrap gap-2">
+                  <button id="managementOpenEvidenceCameraButton" type="button" class="btn btn-outline-success">
+                    <i class="bi bi-camera me-1"></i>Tomar foto
+                  </button>
+                  <button id="managementOpenEvidenceGalleryButton" type="button" class="btn btn-outline-success">
+                    <i class="bi bi-images me-1"></i>Elegir de galería
+                  </button>
+                  <button id="managementRemoveEvidenceButton" type="button" class="btn btn-outline-danger" hidden>
+                    <i class="bi bi-trash me-1"></i>Quitar evidencia
+                  </button>
+                </div>
+                <input id="managementEvidenceCameraInput" type="file" accept="image/*" capture="environment" hidden>
+                <input id="managementEvidenceGalleryInput" type="file" accept="image/*" hidden>
+                <div id="managementEvidencePreviewContainer" class="mt-3" hidden>
+                  <img id="managementEvidencePreview" class="management-evidence-preview"
+                    alt="Previsualización de la evidencia de cierre">
+                  <div id="managementEvidenceInfo" class="small text-muted mt-2"></div>
+                </div>
+                <div id="managementEvidenceStatus" class="form-text">La imagen se comprimirá antes de almacenarse.</div>
+              </div>
+              <div class="form-check mb-4"><input id="managementCloseConfirm" class="form-check-input" type="checkbox"
+                  required><label class="form-check-label" for="managementCloseConfirm">Confirmo que la atención fue
+                  completada y este reporte puede marcarse como cerrado.</label>
+                <div class="invalid-feedback">Debes confirmar el cierre.</div>
+              </div>
+              <button id="managementCloseButton" class="btn btn-primary btn-lg w-100" type="submit"><i
+                  class="bi bi-check-circle me-2"></i>Finalizar atención</button>
             </form>
           </section>
         </div>
@@ -172,16 +361,21 @@
     </div>
   </div>
 
-  <footer><div class="container text-center"><p class="mb-0">&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</p></div></footer>
+  <footer>
+    <div class="container text-center">
+      <p class="mb-0">&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</p>
+    </div>
+  </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ "js/portal-bv-client.js" | relURL }}?v={{ .Site.Params.portalClientVersion }}"></script>
   <script>
     window.PQRS_GESTION_CONFIG = {
       webAppUrl: {{ .Site.Params.pqrsWebAppUrl | default "" }},
-      storageKey: 'bvMaintenanceManagementSession'
+    storageKey: 'bvMaintenanceManagementSession'
     };
   </script>
   <script src="{{ "js/pqrs-gestion.js" | relURL }}?v={{ .Site.Params.pqrsGestionVersion | default "1" }}"></script>
 </body>
+
 </html>

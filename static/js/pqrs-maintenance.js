@@ -30,6 +30,7 @@
   var client = null;
   var flushInProgress = false;
   var queuedFlushRequest = null;
+  var selectedPhotoFiles = [];
 
   var elements = {};
 
@@ -113,8 +114,12 @@
     elements.reporter = byId('maintenanceReporter');
     elements.location = byId('maintenanceLocation');
     elements.description = byId('maintenanceDescription');
-    elements.photos = byId('maintenancePhotos');
+    elements.cameraButton = byId('maintenanceOpenCameraButton');
+    elements.galleryButton = byId('maintenanceOpenGalleryButton');
+    elements.cameraInput = byId('maintenanceCameraInput');
+    elements.galleryInput = byId('maintenanceGalleryInput');
     elements.previews = byId('maintenancePhotoPreviews');
+    elements.photoSelectionStatus = byId('maintenancePhotoSelectionStatus');
     elements.submit = byId('maintenanceSubmit');
     elements.retry = byId('maintenanceRetry');
     elements.status = byId('maintenanceStatus');
@@ -133,8 +138,8 @@
     createClient('inicio del módulo');
 
     bindPanelButtons();
+    bindPhotoSelectors();
     elements.form.addEventListener('submit', handleSubmit);
-    elements.photos.addEventListener('change', renderSelectedPhotos);
     elements.retry.addEventListener('click', function () {
       log('info', 'Botón "Intentar enviar" presionado.');
       flushQueue(true, null, 'botón manual');
@@ -229,13 +234,86 @@
     maintenanceButton.addEventListener('click', function () { show('maintenance'); });
   }
 
+  function bindPhotoSelectors() {
+    if (!elements.cameraButton || !elements.galleryButton ||
+        !elements.cameraInput || !elements.galleryInput || !elements.previews) {
+      log('error', 'No se encontraron todos los controles de cámara y galería.');
+      return;
+    }
+
+    elements.cameraButton.addEventListener('click', function () {
+      log('debug', 'Abriendo cámara del dispositivo.');
+      elements.cameraInput.click();
+    });
+
+    elements.galleryButton.addEventListener('click', function () {
+      log('debug', 'Abriendo galería o selector de archivos.');
+      elements.galleryInput.click();
+    });
+
+    elements.cameraInput.addEventListener('change', function (event) {
+      addSelectedPhotos(event.target.files, 'Cámara');
+      event.target.value = '';
+    });
+
+    elements.galleryInput.addEventListener('change', function (event) {
+      addSelectedPhotos(event.target.files, 'Galería');
+      event.target.value = '';
+    });
+
+    renderSelectedPhotos();
+  }
+
+  function addSelectedPhotos(fileList, source) {
+    var incoming = Array.prototype.slice.call(fileList || []);
+    var availableSlots = MAX_PHOTOS - selectedPhotoFiles.length;
+
+    if (!incoming.length) return;
+
+    if (availableSlots <= 0) {
+      showStatus('warning', 'Ya seleccionaste el máximo de tres fotografías.');
+      return;
+    }
+
+    var validImages = incoming.filter(function (file) {
+      return file && /^image\//i.test(file.type || '');
+    });
+
+    if (validImages.length !== incoming.length) {
+      showStatus('warning', 'Se omitieron archivos que no son imágenes.');
+    }
+
+    var accepted = validImages.slice(0, availableSlots);
+    accepted.forEach(function (file) {
+      selectedPhotoFiles.push({ file: file, source: source || 'Dispositivo' });
+    });
+
+    if (validImages.length > availableSlots) {
+      showStatus(
+        'warning',
+        'Solo se agregaron ' + accepted.length +
+        ' fotografía(s) porque el máximo permitido es tres.'
+      );
+    }
+
+    log('info', 'Fotografías agregadas a la selección.', {
+      source: source || 'Dispositivo',
+      added: accepted.map(function (item) {
+        return { name: item.name, type: item.type, sizeBytes: item.size };
+      }),
+      selectedCount: selectedPhotoFiles.length
+    });
+
+    renderSelectedPhotos();
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
     var reportadoPor = elements.reporter.value.trim();
     var ubicacion = elements.location.value.trim();
     var descripcion = elements.description.value.trim();
-    var files = Array.prototype.slice.call(elements.photos.files || []);
+    var files = selectedPhotoFiles.map(function (item) { return item.file; });
 
     log('info', 'Inicio de creación de reporte.', {
       reporterLength: reportadoPor.length,
@@ -633,8 +711,18 @@
   }
 
   function setBusy(isBusy, label) {
+    var photoLimitReached = selectedPhotoFiles.length >= MAX_PHOTOS;
+
     elements.submit.disabled = isBusy;
-    elements.photos.disabled = isBusy;
+    if (elements.cameraButton) {
+      elements.cameraButton.disabled = isBusy || photoLimitReached;
+    }
+    if (elements.galleryButton) {
+      elements.galleryButton.disabled = isBusy || photoLimitReached;
+    }
+    if (elements.cameraInput) elements.cameraInput.disabled = isBusy;
+    if (elements.galleryInput) elements.galleryInput.disabled = isBusy;
+
     elements.submit.innerHTML = isBusy
       ? '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>' +
         escapeHtml(label || 'Procesando…')
@@ -644,35 +732,88 @@
   function resetForm() {
     elements.form.reset();
     elements.form.classList.remove('was-validated');
-    elements.previews.innerHTML = '';
+    selectedPhotoFiles = [];
+    if (elements.cameraInput) elements.cameraInput.value = '';
+    if (elements.galleryInput) elements.galleryInput.value = '';
+    renderSelectedPhotos();
+  }
+
+  function removeSelectedPhoto(index) {
+    if (index < 0 || index >= selectedPhotoFiles.length) return;
+
+    var removed = selectedPhotoFiles.splice(index, 1)[0];
+    log('info', 'Fotografía retirada de la selección.', {
+      name: removed && removed.file ? removed.file.name : '',
+      selectedCount: selectedPhotoFiles.length
+    });
+    renderSelectedPhotos();
   }
 
   function renderSelectedPhotos() {
-    var files = Array.prototype.slice.call(elements.photos.files || []);
+    if (!elements.previews) return;
+
     elements.previews.innerHTML = '';
 
-    if (files.length > MAX_PHOTOS) {
-      showStatus('danger', 'Seleccionaste más de tres fotografías.');
-      elements.photos.value = '';
-      return;
-    }
-
-    files.forEach(function (file) {
+    selectedPhotoFiles.forEach(function (selected, index) {
+      var file = selected.file;
       var card = document.createElement('div');
       card.className = 'maintenance-photo-preview';
 
       var image = document.createElement('img');
       image.alt = 'Vista previa de ' + file.name;
-      image.src = URL.createObjectURL(file);
-      image.onload = function () { URL.revokeObjectURL(image.src); };
+      var objectUrl = URL.createObjectURL(file);
+      image.src = objectUrl;
+      image.onload = function () { URL.revokeObjectURL(objectUrl); };
+      image.onerror = function () { URL.revokeObjectURL(objectUrl); };
+
+      var removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'btn btn-danger btn-sm maintenance-photo-remove';
+      removeButton.setAttribute('aria-label', 'Retirar ' + file.name);
+      removeButton.title = 'Retirar fotografía';
+      removeButton.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+      removeButton.addEventListener('click', function () {
+        removeSelectedPhoto(index);
+      });
 
       var caption = document.createElement('small');
+      caption.className = 'fw-semibold';
       caption.textContent = file.name;
 
+      var source = document.createElement('div');
+      source.className = 'maintenance-photo-source';
+      source.textContent = (selected.source || 'Dispositivo') +
+        ' · ' + formatFileSize(file.size);
+
       card.appendChild(image);
+      card.appendChild(removeButton);
       card.appendChild(caption);
+      card.appendChild(source);
       elements.previews.appendChild(card);
     });
+
+    if (elements.photoSelectionStatus) {
+      var count = selectedPhotoFiles.length;
+      var remaining = Math.max(0, MAX_PHOTOS - count);
+      elements.photoSelectionStatus.textContent = count === 0
+        ? 'Ninguna fotografía seleccionada. Puedes adjuntar hasta tres.'
+        : count + ' fotografía(s) seleccionada(s). Puedes agregar ' +
+          remaining + ' más.';
+    }
+
+    if (elements.cameraButton) {
+      elements.cameraButton.disabled = selectedPhotoFiles.length >= MAX_PHOTOS;
+    }
+    if (elements.galleryButton) {
+      elements.galleryButton.disabled = selectedPhotoFiles.length >= MAX_PHOTOS;
+    }
+  }
+
+  function formatFileSize(bytes) {
+    var value = Number(bytes || 0);
+    if (value < 1024) return value + ' B';
+    if (value < 1024 * 1024) return Math.round(value / 1024) + ' KB';
+    return (value / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
   async function compressImage(file, photoNumber) {
