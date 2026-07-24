@@ -361,7 +361,11 @@
       (report.responsable ? detailField('Responsable', esc(report.responsable), 'col-md-6') : '') +
       (report.fechaCierre ? detailField('Fecha de cierre', esc(formatDate(report.fechaCierre)), 'col-md-6') : '') +
       (report.observacionesGestion
-        ? detailField('Historial de gestión', '<div class="preserve-lines">' + esc(report.observacionesGestion) + '</div>', 'col-12')
+        ? detailField(
+            'Historial de gestión',
+            '<div class="preserve-lines">' + renderTextWithLinks(report.observacionesGestion) + '</div>',
+            'col-12'
+          )
         : '') +
       '</div>';
 
@@ -773,6 +777,56 @@
     return /sesión|sesion|ingresa nuevamente|origen de la sesión/i.test(
       String(error && error.message || '')
     );
+  }
+
+  function renderTextWithLinks(value) {
+    var text = String(value || '');
+    var urlPattern = /https?:\/\/[^\s<>"']+/gi;
+    var output = '';
+    var lastIndex = 0;
+    var match;
+
+    while ((match = urlPattern.exec(text)) !== null) {
+      output += esc(text.slice(lastIndex, match.index));
+
+      var rawUrl = match[0];
+      var normalized = splitTrailingUrlPunctuation(rawUrl);
+      var url = normalized.url;
+      var trailing = normalized.trailing;
+      var isDriveEvidence = /^https:\/\/(?:drive|docs)\.google\.com\//i.test(url);
+      var label = isDriveEvidence ? 'Ver evidencia' : 'Abrir enlace';
+      var icon = isDriveEvidence ? 'bi-image' : 'bi-box-arrow-up-right';
+
+      output += '<a class="btn btn-outline-success btn-sm mx-1 align-baseline" ' +
+        'href="' + escAttr(url) + '" target="_blank" rel="noopener noreferrer" ' +
+        'title="Abrir en una pestaña nueva">' +
+        '<i class="bi ' + icon + ' me-1" aria-hidden="true"></i>' +
+        esc(label) + '</a>' + esc(trailing);
+
+      lastIndex = urlPattern.lastIndex;
+    }
+
+    output += esc(text.slice(lastIndex));
+    return output;
+  }
+
+  function splitTrailingUrlPunctuation(value) {
+    var url = String(value || '');
+    var trailing = '';
+
+    while (/[.,;:!?]$/.test(url)) {
+      trailing = url.slice(-1) + trailing;
+      url = url.slice(0, -1);
+    }
+
+    // Retira un paréntesis final solo cuando no existe uno de apertura dentro
+    // de la propia URL; así no se dañan enlaces que contienen paréntesis válidos.
+    while (/\)$/.test(url) && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length) {
+      trailing = ')' + trailing;
+      url = url.slice(0, -1);
+    }
+
+    return { url: url, trailing: trailing };
   }
 
   function normalizeText(value) {
