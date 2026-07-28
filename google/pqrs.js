@@ -526,7 +526,7 @@ function verificarReporteMantenimiento(payload, origin) {
     throw new Error('ID de solicitud inválido.');
   }
 
-  const sheet = pqrsEnsureMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const sheet = pqrsGetMaintenanceSheet_();
   const existing = pqrsFindMaintenanceReport_(sheet, clientRequestId);
 
   return {
@@ -662,7 +662,7 @@ function listarReportesMantenimiento(payload, origin) {
     (payload || {}).token,
     origin
   );
-  const sheet = pqrsEnsureMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const sheet = pqrsGetMaintenanceSheet_();
   const lastRow = sheet.getLastRow();
 
   if (lastRow < 2) {
@@ -730,7 +730,7 @@ function obtenerReporteMantenimiento(payload, origin) {
     throw new Error('Debes indicar el reporte que deseas consultar.');
   }
 
-  const sheet = pqrsEnsureMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const sheet = pqrsGetMaintenanceSheet_();
   const found = pqrsFindMaintenanceReportById_(sheet, reportId);
 
   if (!found) {
@@ -769,7 +769,7 @@ function obtenerEvidenciaMantenimiento(payload, origin) {
     throw new Error('El número de evidencia no es válido.');
   }
 
-  const sheet = pqrsEnsureMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const sheet = pqrsGetMaintenanceSheet_();
   const found = pqrsFindMaintenanceReportById_(sheet, reportId);
 
   if (!found) {
@@ -847,7 +847,7 @@ function subirEvidenciaGestionMantenimiento(payload, origin) {
     throw new Error('No se identificó la evidencia de cierre.');
   }
 
-  const sheet = pqrsEnsureMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const sheet = pqrsGetMaintenanceSheet_();
   const found = pqrsFindMaintenanceReportById_(sheet, reportId);
   if (!found) {
     throw new Error('El reporte solicitado no existe.');
@@ -945,7 +945,7 @@ function finalizarReporteMantenimiento(payload, origin) {
 
   try {
     const ss = pqrsGetSpreadsheet_();
-    const sheet = pqrsEnsureMaintenanceSheet_(ss);
+    const sheet = pqrsGetMaintenanceSheet_(ss);
     const found = pqrsFindMaintenanceReportById_(sheet, reportId);
 
     if (!found) {
@@ -1257,6 +1257,19 @@ function pqrsGetSpreadsheet_() {
   );
 }
 
+function pqrsGetMaintenanceSheet_(ss) {
+  const spreadsheet = ss || pqrsGetSpreadsheet_();
+  const sheet = spreadsheet.getSheetByName(MANTENIMIENTO_SHEET_NAME);
+
+  if (!sheet) {
+    throw new Error(
+      'No existe la hoja de reportes de mantenimiento. Ejecuta crearEstructuraMantenimiento una sola vez desde Apps Script.'
+    );
+  }
+
+  return sheet;
+}
+
 function pqrsEnsureMaintenanceSheet_(ss) {
   let sheet = ss.getSheetByName(MANTENIMIENTO_SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(MANTENIMIENTO_SHEET_NAME);
@@ -1293,8 +1306,10 @@ function pqrsEnsureMaintenanceSheet_(ss) {
     sheet.setColumnWidth(index + 1, width);
   });
 
-  sheet.getRange('C:D').setNumberFormat('yyyy-mm-dd hh:mm:ss');
-  sheet.getRange('Q:R').setNumberFormat('yyyy-mm-dd hh:mm:ss');
+  // No se aplica setNumberFormat a columnas completas. Las columnas de una
+  // tabla de Google Sheets pueden tener un tipo administrado y rechazar el
+  // cambio con: "No puedes establecer el formato de los números...".
+  // Los valores se guardan como Date y la UI los transforma a ISO al leerlos.
 
   const maxRows = Math.max(sheet.getMaxRows() - 1, 1);
   sheet.getRange(2, 8, maxRows, 1).setDataValidation(
