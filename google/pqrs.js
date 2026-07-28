@@ -3,7 +3,7 @@
  * CLUB RESIDENCIAL BULEVAR VERDE
  ***************************************/
 
-const PQRS_VERSION = '2.1.3-evidencia-cierre';
+const PQRS_VERSION = '2.1.4-recuperacion-cola';
 const PQRS_TIMEZONE = 'America/Bogota';
 
 const PQRS_ADMIN_EMAIL = 'bulevarverdeadmon@gmail.com';
@@ -12,6 +12,8 @@ const PQRS_FORM_SHEET_NAME = 'Respuestas de formulario 1';
 
 const MANTENIMIENTO_SHEET_NAME = 'Reportes Mantenimiento';
 const MANTENIMIENTO_FOLDER_NAME = 'Reportes Mantenimiento - Evidencias';
+const MANTENIMIENTO_PENDING_FOLDER_NAME = 'Reportes Mantenimiento - Respaldo de cola';
+const MANTENIMIENTO_PENDING_FOLDER_PROPERTY = 'MANTENIMIENTO_PENDING_FOLDER_ID';
 const MANTENIMIENTO_MAX_PHOTOS = 3;
 const MANTENIMIENTO_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
@@ -436,15 +438,34 @@ function crearReporteMantenimiento(payload, origin) {
     throw new Error('Solo se permiten hasta tres fotografías.');
   }
 
+  // Antes de tocar la hoja se conserva una copia completa del payload en
+  // una carpeta privada de Drive. Esto permite recuperar el reporte incluso
+  // si la tabla rechaza una operación o el dispositivo deja de estar disponible.
+  try {
+    pqrsBackupPendingMaintenancePayload_(payload);
+  } catch (backupError) {
+    console.error(JSON.stringify({
+      event: 'PQRS_MAINTENANCE_BACKUP_FAILED',
+      clientRequestId: clientRequestId,
+      error: backupError && backupError.message
+        ? backupError.message
+        : String(backupError)
+    }));
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
 
   try {
     const ss = pqrsGetSpreadsheet_();
-    const sheet = pqrsEnsureMaintenanceSheet_(ss);
+    // El envío normal solo obtiene la hoja. No debe intentar cambiar formatos,
+    // anchos, validaciones ni tipos de columnas en cada reporte.
+    const sheet = pqrsGetMaintenanceSheet_(ss);
+    pqrsValidateMaintenanceHeaders_(sheet);
     const existing = pqrsFindMaintenanceReport_(sheet, clientRequestId);
 
     if (existing) {
+      pqrsDeletePendingMaintenanceBackup_(clientRequestId);
       return {
         ok: true,
         duplicate: true,
@@ -455,7 +476,9 @@ function crearReporteMantenimiento(payload, origin) {
 
     const now = new Date();
     const reportedAt = pqrsParseDate_(payload.reportedAt) || now;
-    const reportId = pqrsGenerateMaintenanceId_(now);
+    // El ID es estable para el mismo clientRequestId. Un reintento después de
+    // una respuesta perdida no crea otro conjunto de evidencias.
+    const reportId = pqrsGenerateMaintenanceId_(reportedAt, clientRequestId);
     const folder = pqrsGetMaintenanceFolder_();
     const photoRecords = [];
 
@@ -491,8 +514,25 @@ function crearReporteMantenimiento(payload, origin) {
     sheet.appendRow(rowValues);
     const row = sheet.getLastRow();
 
-    pqrsFormatMaintenanceRow_(sheet, row, photoRecords);
+    try {
+      pqrsFormatMaintenanceRow_(sheet, row, photoRecords);
+    } catch (formatError) {
+      // La fila ya está guardada. Un problema visual de la tabla no debe hacer
+      // que el dispositivo conserve y reenvíe indefinidamente el reporte.
+      console.error(JSON.stringify({
+        event: 'PQRS_MAINTENANCE_ROW_FORMAT_FAILED',
+        clientRequestId: clientRequestId,
+        reportId: reportId,
+        row: row,
+        error: formatError && formatError.message
+          ? formatError.message
+          : String(formatError)
+      }));
+    }
     SpreadsheetApp.flush();
+
+    // La fila ya quedó confirmada; se elimina el respaldo temporal de Drive.
+    pqrsDeletePendingMaintenanceBackup_(clientRequestId);
 
     pqrsSendMaintenanceNotification_({
       reportId: reportId,
@@ -1270,6 +1310,25 @@ function pqrsGetMaintenanceSheet_(ss) {
   return sheet;
 }
 
+function pqrsValidateMaintenanceHeaders_(sheet) {
+  const lastColumn = Math.max(sheet.getLastColumn(), MANTENIMIENTO_HEADERS.length);
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0]
+    .map(function (value) { return safeTrimPQRS_(value); });
+
+  const missing = MANTENIMIENTO_HEADERS.filter(function (header, index) {
+    return headers[index] !== header;
+  });
+
+  if (missing.length) {
+    throw new Error(
+      'La hoja de mantenimiento no tiene la estructura esperada. ' +
+      'Faltan o cambiaron encabezados: ' + missing.join(', ')
+    );
+  }
+
+  return true;
+}
+
 function pqrsEnsureMaintenanceSheet_(ss) {
   let sheet = ss.getSheetByName(MANTENIMIENTO_SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(MANTENIMIENTO_SHEET_NAME);
@@ -1360,7 +1419,19 @@ function pqrsSaveMaintenancePhoto_(folder, reportId, photo, photoNumber) {
       : 'jpg';
   const fileName = reportId + '-foto-' + photoNumber + '.' + extension;
   const blob = Utilities.newBlob(bytes, mimeType, fileName);
-  const file = folder.createFile(blob);
+  const existingFiles = folder.getFilesByName(fileName);
+  let file;
+
+  if (existingFiles.hasNext()) {
+    // Reutiliza la evidencia creada por un intento anterior que no alcanzó a
+    // confirmar la fila. Así se evitan archivos duplicados en cada reintento.
+    file = existingFiles.next();
+    while (existingFiles.hasNext()) {
+      existingFiles.next().setTrashed(true);
+    }
+  } else {
+    file = folder.createFile(blob);
+  }
 
   file.setDescription(
     'Evidencia fotográfica del reporte de mantenimiento ' + reportId + '.'
@@ -1435,6 +1506,190 @@ function pqrsGetMaintenanceFolder_() {
   return folder;
 }
 
+function pqrsGetPendingMaintenanceFolder_() {
+  const properties = PropertiesService.getScriptProperties();
+  const configuredId = safeTrimPQRS_(
+    properties.getProperty(MANTENIMIENTO_PENDING_FOLDER_PROPERTY)
+  );
+
+  if (configuredId) {
+    try {
+      return DriveApp.getFolderById(configuredId);
+    } catch (error) {
+      Logger.log(
+        'La carpeta de respaldo configurada no está disponible: ' +
+        (error.message || String(error))
+      );
+    }
+  }
+
+  const folders = DriveApp.getFoldersByName(MANTENIMIENTO_PENDING_FOLDER_NAME);
+  const folder = folders.hasNext()
+    ? folders.next()
+    : DriveApp.createFolder(MANTENIMIENTO_PENDING_FOLDER_NAME);
+
+  properties.setProperty(MANTENIMIENTO_PENDING_FOLDER_PROPERTY, folder.getId());
+  return folder;
+}
+
+function pqrsBackupPendingMaintenancePayload_(payload) {
+  payload = payload || {};
+  const clientRequestId = pqrsSafeId_(payload.clientRequestId);
+
+  if (!clientRequestId) {
+    throw new Error('No se puede respaldar un reporte sin clientRequestId.');
+  }
+
+  const folder = pqrsGetPendingMaintenanceFolder_();
+  const fileName = 'PENDIENTE-' + clientRequestId + '.json';
+  const envelope = {
+    backupVersion: 1,
+    backedUpAt: new Date().toISOString(),
+    scriptVersion: PQRS_VERSION,
+    clientRequestId: clientRequestId,
+    payload: payload
+  };
+  const content = JSON.stringify(envelope);
+  const files = folder.getFilesByName(fileName);
+  let file;
+
+  if (files.hasNext()) {
+    file = files.next();
+    file.setContent(content);
+    while (files.hasNext()) {
+      files.next().setTrashed(true);
+    }
+  } else {
+    file = folder.createFile(fileName, content, MimeType.PLAIN_TEXT);
+  }
+
+  file.setDescription(
+    'Respaldo temporal de un reporte de mantenimiento pendiente. ' +
+    'Se elimina automáticamente cuando la fila queda confirmada.'
+  );
+
+  console.log(JSON.stringify({
+    event: 'PQRS_MAINTENANCE_BACKUP_SAVED',
+    clientRequestId: clientRequestId,
+    fileId: file.getId(),
+    bytes: content.length
+  }));
+
+  return {
+    fileId: file.getId(),
+    fileUrl: file.getUrl(),
+    fileName: fileName,
+    bytes: content.length
+  };
+}
+
+function pqrsDeletePendingMaintenanceBackup_(clientRequestId) {
+  clientRequestId = pqrsSafeId_(clientRequestId);
+  if (!clientRequestId) return 0;
+
+  try {
+    const folder = pqrsGetPendingMaintenanceFolder_();
+    const files = folder.getFilesByName(
+      'PENDIENTE-' + clientRequestId + '.json'
+    );
+    let deleted = 0;
+
+    while (files.hasNext()) {
+      files.next().setTrashed(true);
+      deleted += 1;
+    }
+
+    if (deleted) {
+      console.log(JSON.stringify({
+        event: 'PQRS_MAINTENANCE_BACKUP_REMOVED',
+        clientRequestId: clientRequestId,
+        deleted: deleted
+      }));
+    }
+
+    return deleted;
+  } catch (error) {
+    // La limpieza del respaldo es secundaria. La confirmación del reporte no
+    // debe fallar si Drive no permite eliminar temporalmente el archivo.
+    console.error(JSON.stringify({
+      event: 'PQRS_MAINTENANCE_BACKUP_REMOVE_FAILED',
+      clientRequestId: clientRequestId,
+      error: error && error.message ? error.message : String(error)
+    }));
+    return 0;
+  }
+}
+
+/**
+ * Ejecutar manualmente desde Apps Script para revisar qué reportes quedaron
+ * respaldados en Drive y aún no han sido confirmados en la hoja.
+ */
+function listarRespaldosPendientesMantenimiento() {
+  const folder = pqrsGetPendingMaintenanceFolder_();
+  const files = folder.getFiles();
+  const result = [];
+
+  while (files.hasNext()) {
+    const file = files.next();
+    if (!/^PENDIENTE-.*\.json$/i.test(file.getName())) continue;
+    result.push({
+      name: file.getName(),
+      url: file.getUrl(),
+      sizeBytes: file.getSize(),
+      updatedAt: file.getLastUpdated().toISOString()
+    });
+  }
+
+  result.sort(function (a, b) {
+    return String(a.updatedAt).localeCompare(String(b.updatedAt));
+  });
+  console.log(JSON.stringify(result));
+  return result;
+}
+
+/**
+ * Recupera manualmente hasta 10 respaldos por ejecución. Úsala únicamente si
+ * el dispositivo deja de reintentar. Los archivos confirmados se eliminan de
+ * la carpeta de respaldo de forma automática.
+ */
+function recuperarRespaldosPendientesMantenimiento(limite) {
+  const maxItems = Math.max(1, Math.min(Number(limite || 10), 10));
+  const folder = pqrsGetPendingMaintenanceFolder_();
+  const files = folder.getFiles();
+  const allowedOrigins = pqrsGetAllowedOrigins_();
+  const origin = allowedOrigins.indexOf('*') !== -1
+    ? '*'
+    : allowedOrigins[0];
+  const result = [];
+  let processed = 0;
+
+  while (files.hasNext() && processed < maxItems) {
+    const file = files.next();
+    if (!/^PENDIENTE-.*\.json$/i.test(file.getName())) continue;
+    processed += 1;
+
+    try {
+      const envelope = JSON.parse(file.getBlob().getDataAsString('UTF-8'));
+      const response = crearReporteMantenimiento(envelope.payload || {}, origin);
+      result.push({
+        file: file.getName(),
+        ok: true,
+        reportId: response && response.reportId || '',
+        duplicate: Boolean(response && response.duplicate)
+      });
+    } catch (error) {
+      result.push({
+        file: file.getName(),
+        ok: false,
+        error: error && error.message ? error.message : String(error)
+      });
+    }
+  }
+
+  console.log(JSON.stringify(result));
+  return result;
+}
+
 /***************************************
  * BÚSQUEDA, IDENTIFICADORES Y CORREO
  ***************************************/
@@ -1455,13 +1710,16 @@ function pqrsFindMaintenanceReport_(sheet, clientRequestId) {
   };
 }
 
-function pqrsGenerateMaintenanceId_(date) {
+function pqrsGenerateMaintenanceId_(date, clientRequestId) {
   const prefix = Utilities.formatDate(
     date,
     Session.getScriptTimeZone() || PQRS_TIMEZONE,
     'yyyyMMdd-HHmmss'
   );
-  const suffix = Utilities.getUuid().replace(/-/g, '').slice(0, 5).toUpperCase();
+  const stableSource = pqrsSafeId_(clientRequestId);
+  const suffix = stableSource
+    ? pqrsHash_(stableSource).replace(/[^A-Za-z0-9]/g, '').slice(0, 5).toUpperCase()
+    : Utilities.getUuid().replace(/-/g, '').slice(0, 5).toUpperCase();
   return 'MANT-' + prefix + '-' + suffix;
 }
 
