@@ -17,8 +17,28 @@
  ***************************************/
 const SHEET_ID_SANCIONES = '1GeJZ4Rd4-ddzE6Vi8kpq9iB2_oxuLW87UiAnbZQ6Iow';
 const SHEET_PLANILLA = 'PLANILLA';
+const FOLDER_ID_SANCIONES_HISTORICAS = '1dHYZmOK0Oji3JhfDph8HB5pEQ68bX6IA';
+const REGEX_NOMBRE_SANCIONES_HISTORICAS = /^(\d{4})(0[1-9]|1[0-2])\s+sanciones$/i;
+
+// Catálogo de respaldo para que la consulta histórica funcione incluso
+// cuando el proyecto todavía no tenga autorizado DriveApp.
+// La detección automática desde la carpeta se conserva y complementa
+// este catálogo cuando el alcance drive.readonly ya está autorizado.
+const CATALOGO_SANCIONES_HISTORICAS = [
+  {
+    periodo: '202606',
+    spreadsheetId: '1R-GRVKOGq-GHln_emWM7EjSg421Z3hiF5qo0-Q_MfN8',
+    fileName: '202606 sanciones'
+  },
+  {
+    periodo: '202604',
+    spreadsheetId: '1OB5W2eD7lIMNXD0Vjh2qrUBFJYJPwBMwFoxivAjGXjI',
+    fileName: '202604 sanciones'
+  }
+];
 const SHEET_ID_VIGILANCIA_PLACAS = '1_Lwp2jYRuYjJu_PiXGOibD5TjfPf9jQ_pBO9kio7AZY';
-const SHEET_GID_VIGILANCIA_PLACAS = 1955503575;
+const SHEET_NOMBRE_VIGILANCIA_PLACAS = "REGISTRO VEHICULAR";
+const SHEET_GID_VIGILANCIA_PLACAS = 931924058;
 const SHEET_ID_CORREOS_APTOS = '1MjNg_qR134dB-8vdK0NEJyeXlLS848dsOpu-bylkVBQ';
 const SHEET_GID_CORREOS_APTOS = 0;
 const SHEET_LOG_CONSULTAS_SANCIONES = "log_consultas_sanciones";
@@ -61,16 +81,55 @@ function doGet(e) {
   const action = getParam_(e, 'action');
   const aptoConsultado = getParam_(e, 'apto') || '';
   const placaConsultada = getParam_(e, 'placa') || '';
+  const periodoConsultado = getParam_(e, 'periodo') || '';
 
   try {
     Logger.log('=== CONSULTA WEB APP SANCIONES ===');
     Logger.log('Action: ' + action);
     Logger.log('Apto consultado: ' + aptoConsultado);
     Logger.log('Placa consultada: ' + placaConsultada);
-    Logger.log('Parámetros completos: ' + JSON.stringify(e.parameter));
+    Logger.log('Periodo consultado: ' + periodoConsultado);
+    Logger.log('Parámetros completos: ' + JSON.stringify(e && e.parameter ? e.parameter : {}));
+
+    if (action === 'listarPeriodosHistoricos') {
+      return jsonOutput_({
+        ok: true,
+        periodos: listarPeriodosHistoricos_()
+      });
+    }
 
     if (action === 'consultar') {
-      return consultarSanciones_(aptoConsultado, placaConsultada, e);
+      return consultarSanciones_(
+        aptoConsultado,
+        placaConsultada,
+        e,
+        {
+          action: 'consultar',
+          historico: false,
+          soloLectura: false,
+          spreadsheetId: SHEET_ID_SANCIONES,
+          periodo: '',
+          periodoLabel: ''
+        }
+      );
+    }
+
+    if (action === 'consultarHistorico') {
+      const fuenteHistorica = resolverFuenteHistoricaSanciones_(periodoConsultado);
+
+      return consultarSanciones_(
+        aptoConsultado,
+        placaConsultada,
+        e,
+        {
+          action: 'consultarHistorico',
+          historico: true,
+          soloLectura: true,
+          spreadsheetId: fuenteHistorica.spreadsheetId,
+          periodo: fuenteHistorica.periodo,
+          periodoLabel: fuenteHistorica.label
+        }
+      );
     }
 
     registrarConsultaSanciones_({
@@ -109,6 +168,187 @@ function doGet(e) {
 }
 
 /***************************************
+ * ARCHIVO HISTÓRICO DE SANCIONES
+ *
+ * Los archivos deben estar dentro de:
+ * FOLDER_ID_SANCIONES_HISTORICAS
+ *
+ * Convención de nombre:
+ * YYYYMM sanciones
+ * Ejemplo: 202606 sanciones
+ ***************************************/
+function listarPeriodosHistoricos_() {
+  return listarFuentesHistoricasSanciones_().map(function (fuente) {
+    return {
+      periodo: fuente.periodo,
+      label: fuente.label
+    };
+  });
+}
+
+function resolverFuenteHistoricaSanciones_(periodoInput) {
+  const periodo = safeTrim_(periodoInput);
+
+  if (!/^\d{6}$/.test(periodo)) {
+    throw new Error('El periodo histórico no tiene un formato válido.');
+  }
+
+  const mes = Number(periodo.substring(4, 6));
+
+  if (mes < 1 || mes > 12) {
+    throw new Error('El periodo histórico contiene un mes inválido.');
+  }
+
+  const fuentes = listarFuentesHistoricasSanciones_();
+  const encontrada = fuentes.find(function (fuente) {
+    return fuente.periodo === periodo;
+  });
+
+  if (!encontrada) {
+    throw new Error(
+      'No se encontró un archivo histórico de sanciones para ' +
+      formatearPeriodoSanciones_(periodo) +
+      '.'
+    );
+  }
+
+  return encontrada;
+}
+
+function listarFuentesHistoricasSanciones_() {
+  const periodoActual = Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    'yyyyMM'
+  );
+
+  const mapaPorPeriodo = {};
+
+  // 1. Cargar primero el catálogo de respaldo.
+  CATALOGO_SANCIONES_HISTORICAS.forEach(function (item) {
+    const periodo = safeTrim_(item.periodo);
+    const spreadsheetId = safeTrim_(item.spreadsheetId);
+
+    if (!/^\d{6}$/.test(periodo) || !spreadsheetId) {
+      Logger.log(
+        'Registro histórico de respaldo inválido: ' +
+        JSON.stringify(item)
+      );
+      return;
+    }
+
+    // Solo exponer meses cerrados.
+    if (periodo >= periodoActual) {
+      return;
+    }
+
+    mapaPorPeriodo[periodo] = {
+      periodo: periodo,
+      label: formatearPeriodoSanciones_(periodo),
+      spreadsheetId: spreadsheetId,
+      fileName: safeTrim_(item.fileName) || periodo + ' sanciones',
+      lastUpdated: 0,
+      fuente: 'CATALOGO_RESPALDO'
+    };
+  });
+
+  // 2. Intentar complementar el catálogo leyendo automáticamente la carpeta.
+  // DriveApp siempre requiere autorización OAuth, aunque la carpeta tenga
+  // acceso público por vínculo. Si todavía no está autorizado, se conserva
+  // el catálogo de respaldo sin interrumpir la consulta del portal.
+  try {
+    const folder = DriveApp.getFolderById(FOLDER_ID_SANCIONES_HISTORICAS);
+    const files = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+
+    while (files.hasNext()) {
+      const file = files.next();
+      const nombre = safeTrim_(file.getName());
+      const match = nombre.match(REGEX_NOMBRE_SANCIONES_HISTORICAS);
+
+      if (!match) {
+        continue;
+      }
+
+      const periodo = match[1] + match[2];
+
+      if (periodo >= periodoActual) {
+        continue;
+      }
+
+      const fuente = {
+        periodo: periodo,
+        label: formatearPeriodoSanciones_(periodo),
+        spreadsheetId: file.getId(),
+        fileName: nombre,
+        lastUpdated: file.getLastUpdated().getTime(),
+        fuente: 'CARPETA_DRIVE'
+      };
+
+      // La fuente encontrada directamente en Drive reemplaza el respaldo.
+      if (
+        !mapaPorPeriodo[periodo] ||
+        mapaPorPeriodo[periodo].fuente === 'CATALOGO_RESPALDO' ||
+        fuente.lastUpdated > mapaPorPeriodo[periodo].lastUpdated
+      ) {
+        mapaPorPeriodo[periodo] = fuente;
+      }
+    }
+  } catch (error) {
+    Logger.log(
+      'ADVERTENCIA: no fue posible leer automáticamente la carpeta de ' +
+      'sanciones históricas con DriveApp. Se usará el catálogo de respaldo. ' +
+      'Detalle: ' + (error.message || String(error))
+    );
+  }
+
+  return Object.keys(mapaPorPeriodo)
+    .map(function (periodo) {
+      return mapaPorPeriodo[periodo];
+    })
+    .sort(function (a, b) {
+      return b.periodo.localeCompare(a.periodo);
+    });
+}
+
+/**
+ * Ejecutar manualmente una vez desde el editor de Apps Script.
+ * Fuerza la solicitud del permiso de solo lectura de Google Drive y
+ * valida que la carpeta histórica sea visible para la cuenta ejecutora.
+ */
+function autorizarLecturaSancionesHistoricas() {
+  const folder = DriveApp.getFolderById(FOLDER_ID_SANCIONES_HISTORICAS);
+  const periodos = listarPeriodosHistoricos_();
+
+  Logger.log('Carpeta histórica autorizada: ' + folder.getName());
+  Logger.log('Periodos detectados: ' + JSON.stringify(periodos));
+
+  return periodos;
+}
+
+function formatearPeriodoSanciones_(periodoInput) {
+  const periodo = safeTrim_(periodoInput);
+
+  if (!/^\d{6}$/.test(periodo)) {
+    return periodo;
+  }
+
+  const meses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril',
+    'Mayo', 'Junio', 'Julio', 'Agosto',
+    'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  const anio = periodo.substring(0, 4);
+  const mesIndex = Number(periodo.substring(4, 6)) - 1;
+
+  if (mesIndex < 0 || mesIndex >= meses.length) {
+    return periodo;
+  }
+
+  return meses[mesIndex] + ' ' + anio;
+}
+
+/***************************************
  * CONSULTA DE SANCIONES
  *
  * Flujo de validación:
@@ -121,10 +361,13 @@ function doGet(e) {
  * Si no existe dicha columna, se usa "residente o visitante"
  * como campo de respaldo (debe contener el número del apto).
  ***************************************/
-function consultarSanciones_(aptoInput, placaInput, e) {
+function consultarSanciones_(aptoInput, placaInput, e, options) {
+  const opts = options || {};
+  const actionConsulta = opts.action || "consultar";
+  const esHistorico = opts.historico === true;
   if (!aptoInput || !placaInput) {
     registrarConsultaSanciones_({
-      action: "consultar",
+      action: actionConsulta,
       aptoInput: aptoInput,
       placaInput: placaInput,
       aptoNorm: normalizeApto_(aptoInput),
@@ -145,14 +388,15 @@ function consultarSanciones_(aptoInput, placaInput, e) {
   try {
     const contextoPlanilla = leerPlanillaSanciones_({
       includeRichText: true,
-      allowMissingSheet: true
+      allowMissingSheet: true,
+      spreadsheetId: opts.spreadsheetId || SHEET_ID_SANCIONES
     });
 
     const sheet = contextoPlanilla.sheet;
 
     if (!sheet) {
       registrarConsultaSanciones_({
-        action: "consultar",
+        action: actionConsulta,
         aptoInput: aptoInput,
         placaInput: placaInput,
         aptoNorm: normalizeApto_(aptoInput),
@@ -175,7 +419,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
 
     if (lastRow < 2 || lastCol < 1) {
       registrarConsultaSanciones_({
-        action: "consultar",
+        action: actionConsulta,
         aptoInput: aptoInput,
         placaInput: placaInput,
         aptoNorm: normalizeApto_(aptoInput),
@@ -187,7 +431,14 @@ function consultarSanciones_(aptoInput, placaInput, e) {
         parametros: e && e.parameter ? e.parameter : {}
       });
 
-      return jsonOutput_({ ok: true, apto: apto, sanciones: [] });
+      return jsonOutput_({
+        ok: true,
+        apto: apto,
+        sanciones: [],
+        historico: esHistorico,
+        periodo: opts.periodo || "",
+        periodoLabel: opts.periodoLabel || ""
+      });
     }
 
     const allData = contextoPlanilla.allData;
@@ -202,7 +453,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
 
     if (IDX.placa === -1) {
       registrarConsultaSanciones_({
-        action: "consultar",
+        action: actionConsulta,
         aptoInput: aptoInput,
         placaInput: placaInput,
         aptoNorm: normalizeApto_(aptoInput),
@@ -245,7 +496,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
     if (placaRows.length === 0) {
 
       registrarConsultaSanciones_({
-        action: "consultar",
+        action: actionConsulta,
         aptoInput: aptoInput,
         placaInput: placaInput,
         aptoNorm: aptoNorm,
@@ -273,7 +524,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
     if (!matchesApto) {
 
       registrarConsultaSanciones_({
-        action: "consultar",
+        action: actionConsulta,
         aptoInput: aptoInput,
         placaInput: placaInput,
         aptoNorm: aptoNorm,
@@ -342,17 +593,26 @@ function consultarSanciones_(aptoInput, placaInput, e) {
     });
 
 
-    const correccionesInteligentes = analizarInconsistenciasSancionesDesdeResultado_(
-      sheet,
-      registrosNormalizados,
-      sanciones,
-      IDX,
-      aptoNorm,
-      placa
-    );
+    let correccionesInteligentes = [];
 
-    Logger.log("Correcciones inteligentes detectadas después de obtener sanciones:");
-    Logger.log(JSON.stringify(correccionesInteligentes, null, 2));
+    if (!opts.soloLectura) {
+      correccionesInteligentes = analizarInconsistenciasSancionesDesdeResultado_(
+        sheet,
+        registrosNormalizados,
+        sanciones,
+        IDX,
+        aptoNorm,
+        placa
+      );
+
+      Logger.log("Correcciones inteligentes detectadas después de obtener sanciones:");
+      Logger.log(JSON.stringify(correccionesInteligentes, null, 2));
+    } else {
+      Logger.log(
+        "Consulta histórica en modo solo lectura. " +
+        "No se ejecutan correcciones inteligentes sobre el archivo archivado."
+      );
+    }
 
 
     Logger.log('TOTAL SANCIONES DEL APTO: ' + sanciones.length);
@@ -368,7 +628,7 @@ function consultarSanciones_(aptoInput, placaInput, e) {
     ).join(", ");
 
     registrarConsultaSanciones_({
-      action: "consultar",
+      action: actionConsulta,
       aptoInput: aptoInput,
       placaInput: placaInput,
       aptoNorm: aptoNorm,
@@ -380,11 +640,18 @@ function consultarSanciones_(aptoInput, placaInput, e) {
       parametros: e && e.parameter ? e.parameter : {}
     });
 
-    return jsonOutput_({ ok: true, apto: apto, sanciones: sanciones });
+    return jsonOutput_({
+      ok: true,
+      apto: apto,
+      sanciones: sanciones,
+      historico: esHistorico,
+      periodo: opts.periodo || "",
+      periodoLabel: opts.periodoLabel || ""
+    });
 
   } catch (error) {
     registrarConsultaSanciones_({
-      action: "consultar",
+      action: actionConsulta,
       aptoInput: aptoInput,
       placaInput: placaInput,
       aptoNorm: normalizeApto_(aptoInput),
@@ -478,15 +745,208 @@ function normalizeApto_(value) {
   return normalizeText_(value).replace(/^0+(\d)/, '$1');
 }
 
-function getCellUrlOrText_(richData, allData, rowIndex, colIndex) {
-  var rich = richData[rowIndex][colIndex];
+function getCellUrlOrText_(
+  richData,
+  allData,
+  rowIndex,
+  colIndex,
+  expectedRecordId,
+  expectedMediaType
+) {
+  const rawValue = getCellValueSafe_(allData, rowIndex, colIndex);
+  const rich = getRichTextValueSafe_(richData, rowIndex, colIndex);
+  const linkedUrl = rich ? safeTrim_(rich.getLinkUrl()) : "";
 
-  if (rich) {
-    var url = rich.getLinkUrl();
-    if (url) return url;
+  if (!linkedUrl) {
+    return rawValue;
+  }
+
+  const validation = validarEnlaceMediaRegistro_({
+    url: linkedUrl,
+    rawValue: rawValue,
+    expectedRecordId: expectedRecordId,
+    expectedMediaType: expectedMediaType
+  });
+
+  if (validation.ok) {
+    return linkedUrl;
+  }
+
+  Logger.log(
+    [
+      "ENLACE DE EVIDENCIA DESCARTADO",
+      "Fila: " + (rowIndex + 1),
+      "Columna: " + (colIndex + 1),
+      "ID esperado: " + safeTrim_(expectedRecordId),
+      "Tipo esperado: " + safeTrim_(expectedMediaType),
+      "Ruta de la celda: " + rawValue,
+      "Archivo del enlace: " + validation.linkedFileName,
+      "Motivo: " + validation.reason
+    ].join(" | ")
+  );
+
+  // La ruta escrita en la celda pertenece al registro de esa fila.
+  // Es preferible devolverla y no mostrar una imagen antes que entregar
+  // un hipervínculo firmado correspondiente a otro registro.
+  return rawValue;
+}
+
+function getCellValueSafe_(allData, rowIndex, colIndex) {
+  if (
+    !allData ||
+    !allData[rowIndex] ||
+    colIndex < 0 ||
+    colIndex >= allData[rowIndex].length
+  ) {
+    return "";
   }
 
   return safeTrim_(allData[rowIndex][colIndex]);
+}
+
+function getRichTextValueSafe_(richData, rowIndex, colIndex) {
+  if (
+    !richData ||
+    !richData[rowIndex] ||
+    colIndex < 0 ||
+    colIndex >= richData[rowIndex].length
+  ) {
+    return null;
+  }
+
+  return richData[rowIndex][colIndex] || null;
+}
+
+function validarEnlaceMediaRegistro_(params) {
+  const url = safeTrim_(params && params.url);
+  const rawValue = normalizarRutaMedia_(params && params.rawValue);
+  const expectedRecordId = safeTrim_(
+    params && params.expectedRecordId
+  ).toLowerCase();
+  const expectedMediaType = safeTrim_(
+    params && params.expectedMediaType
+  ).toUpperCase();
+
+  const linkedFileName = extraerNombreArchivoMediaDesdeUrl_(url);
+  const linkedPath = normalizarRutaMedia_(linkedFileName);
+  const linkedBaseName = obtenerBaseNameMedia_(linkedPath).toLowerCase();
+  const rawBaseName = obtenerBaseNameMedia_(rawValue).toLowerCase();
+
+  if (!url) {
+    return {
+      ok: false,
+      linkedFileName: "",
+      reason: "El hipervínculo está vacío."
+    };
+  }
+
+  if (!linkedBaseName) {
+    return {
+      ok: false,
+      linkedFileName: linkedFileName,
+      reason: "No se pudo identificar el archivo del hipervínculo."
+    };
+  }
+
+  if (
+    expectedRecordId &&
+    linkedBaseName.indexOf(expectedRecordId + ".") !== 0
+  ) {
+    return {
+      ok: false,
+      linkedFileName: linkedFileName,
+      reason:
+        'El archivo enlazado no pertenece al ID "' +
+        expectedRecordId +
+        '".'
+    };
+  }
+
+  if (
+    expectedMediaType &&
+    linkedBaseName.indexOf(
+      "." + expectedMediaType.toLowerCase() + "."
+    ) === -1
+  ) {
+    return {
+      ok: false,
+      linkedFileName: linkedFileName,
+      reason:
+        'El archivo enlazado no corresponde al tipo "' +
+        expectedMediaType +
+        '".'
+    };
+  }
+
+  // Cuando la celda conserva la ruta real de AppSheet, el nombre del
+  // archivo debe coincidir exactamente con el fileName del hipervínculo.
+  if (
+    rawBaseName &&
+    esRutaArchivoMedia_(rawValue) &&
+    rawBaseName !== linkedBaseName
+  ) {
+    return {
+      ok: false,
+      linkedFileName: linkedFileName,
+      reason:
+        'El archivo del hipervínculo "' +
+        linkedBaseName +
+        '" no coincide con la ruta de la celda "' +
+        rawBaseName +
+        '".'
+    };
+  }
+
+  return {
+    ok: true,
+    linkedFileName: linkedFileName,
+    reason: ""
+  };
+}
+
+function extraerNombreArchivoMediaDesdeUrl_(url) {
+  const value = safeTrim_(url);
+
+  if (!value) return "";
+
+  const match = value.match(/[?&]fileName=([^&#]+)/i);
+
+  if (match && match[1]) {
+    try {
+      return decodeURIComponent(match[1].replace(/\+/g, "%20"));
+    } catch (error) {
+      Logger.log(
+        "No fue posible decodificar fileName del enlace de evidencia: " +
+        (error.message || String(error))
+      );
+      return match[1];
+    }
+  }
+
+  // También admite URLs directas de Drive u otros proveedores.
+  const withoutQuery = value.split("?")[0].split("#")[0];
+  return withoutQuery.substring(withoutQuery.lastIndexOf("/") + 1);
+}
+
+function normalizarRutaMedia_(value) {
+  return safeTrim_(value)
+    .replace(/\\/g, "/")
+    .replace(/\/+/g, "/");
+}
+
+function obtenerBaseNameMedia_(value) {
+  const normalized = normalizarRutaMedia_(value);
+
+  if (!normalized) return "";
+
+  const parts = normalized.split("/");
+  return safeTrim_(parts[parts.length - 1]);
+}
+
+function esRutaArchivoMedia_(value) {
+  const baseName = obtenerBaseNameMedia_(value);
+
+  return /\.(?:jpe?g|png|gif|webp|heic|pdf)$/i.test(baseName);
 }
 
 function leerPlanillaSanciones_(options) {
@@ -494,7 +954,8 @@ function leerPlanillaSanciones_(options) {
   const includeRichText = opts.includeRichText === true;
   const allowMissingSheet = opts.allowMissingSheet === true;
 
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const spreadsheetId = safeTrim_(opts.spreadsheetId) || SHEET_ID_SANCIONES;
+  const ss = SpreadsheetApp.openById(spreadsheetId);
   const sheet = ss.getSheetByName(SHEET_PLANILLA);
 
   if (!sheet) {
@@ -537,7 +998,8 @@ function leerPlanillaSanciones_(options) {
     allData: allData,
     richData: richData,
     rows: rows,
-    IDX: IDX
+    IDX: IDX,
+    spreadsheetId: spreadsheetId
   };
 }
 
@@ -615,13 +1077,14 @@ function construirRegistrosNormalizados_(rows, IDX, richData, allData) {
   return rows.map(function (row, index) {
     var realRowIndex = index + 1;
     var sheetRow = index + 2;
+    var recordId = IDX.id !== -1 ? safeTrim_(row[IDX.id]) : '';
 
     return {
       row: row,
       realRowIndex: realRowIndex,
       sheetRow: sheetRow,
 
-      id: IDX.id !== -1 ? safeTrim_(row[IDX.id]) : '',
+      id: recordId,
       fecha: IDX.fecha !== -1 ? formatFecha_(row[IDX.fecha]) : '',
 
       apto: IDX.apto !== -1 ? safeTrim_(row[IDX.apto]) : '',
@@ -637,8 +1100,26 @@ function construirRegistrosNormalizados_(rows, IDX, richData, allData) {
       residenteOVisitante: IDX.residenteVisitante !== -1 ? safeTrim_(row[IDX.residenteVisitante]) : '',
       observaciones: IDX.observaciones !== -1 ? safeTrim_(row[IDX.observaciones]) : '',
 
-      foto: IDX.foto !== -1 ? getCellUrlOrText_(richData, allData, realRowIndex, IDX.foto) : '',
-      firma: IDX.firma !== -1 ? getCellUrlOrText_(richData, allData, realRowIndex, IDX.firma) : ''
+      foto: IDX.foto !== -1
+        ? getCellUrlOrText_(
+          richData,
+          allData,
+          realRowIndex,
+          IDX.foto,
+          recordId,
+          "FOTO"
+        )
+        : '',
+      firma: IDX.firma !== -1
+        ? getCellUrlOrText_(
+          richData,
+          allData,
+          realRowIndex,
+          IDX.firma,
+          recordId,
+          "FIRMA"
+        )
+        : ''
     };
   }).filter(function (reg) {
     return reg.placaNorm || reg.aptoNorm;
@@ -1656,80 +2137,167 @@ function getSheetByGid_(ss, gid) {
   return null;
 }
 
+function getSheetByNormalizedName_(ss, expectedName) {
+  const nombreEsperado = normalizeHeader_(expectedName);
+  const sheets = ss.getSheets();
+
+  for (var i = 0; i < sheets.length; i++) {
+    if (normalizeHeader_(sheets[i].getName()) === nombreEsperado) {
+      return sheets[i];
+    }
+  }
+
+  return null;
+}
+
+function resolverHojaVigilanciaPlacas_(ss) {
+  // Se busca primero por nombre porque el gid puede cambiar
+  // cuando una pestaña es eliminada y creada nuevamente.
+  var sheet = getSheetByNormalizedName_(
+    ss,
+    SHEET_NOMBRE_VIGILANCIA_PLACAS
+  );
+
+  if (sheet) {
+    logResumen_(
+      "Hoja de vigilancia encontrada por nombre: " +
+      sheet.getName() +
+      " | gid: " +
+      sheet.getSheetId()
+    );
+
+    return sheet;
+  }
+
+  // Respaldo por gid.
+  sheet = getSheetByGid_(ss, SHEET_GID_VIGILANCIA_PLACAS);
+
+  if (sheet) {
+    logResumen_(
+      "Hoja de vigilancia encontrada por gid: " +
+      sheet.getName() +
+      " | gid: " +
+      sheet.getSheetId()
+    );
+
+    return sheet;
+  }
+
+  const disponibles = ss.getSheets().map(function (s) {
+    return s.getName() + " [gid=" + s.getSheetId() + "]";
+  });
+
+  throw new Error(
+    'No se encontró la hoja de vigilancia "' +
+    SHEET_NOMBRE_VIGILANCIA_PLACAS +
+    '". Hojas disponibles: ' +
+    disponibles.join(", ")
+  );
+}
+
 function leerMapaVigilanciaPlacas_() {
   const ss = SpreadsheetApp.openById(SHEET_ID_VIGILANCIA_PLACAS);
-  const sheet = getSheetByGid_(ss, SHEET_GID_VIGILANCIA_PLACAS);
-
-  if (!sheet) {
-    throw new Error('No se encontró la hoja de vigilancia con gid ' + SHEET_GID_VIGILANCIA_PLACAS);
-  }
+  const sheet = resolverHojaVigilanciaPlacas_(ss);
 
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
 
-  if (lastRow < 2 || lastCol < 2) {
+  if (lastRow < 3 || lastCol < 2) {
+    Logger.log("La hoja de vigilancia no contiene datos suficientes.");
     return {};
   }
 
-  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  const data = sheet
+    .getRange(1, 1, lastRow, lastCol)
+    .getValues();
+
+  const estructura = detectarColumnasVigilancia_(data);
+  const paresColumnas = estructura.pares;
+  const headerRowIndex = estructura.headerRowIndex;
 
   const mapa = {};
   const conflictos = [];
   const placasConflictivas = {};
 
-  // Formato esperado:
-  // Col A-B, D-E, G-H, etc.
-  const paresColumnas = generarParesColumnasVigilancia_(lastCol);
+  data
+    .slice(headerRowIndex + 1)
+    .forEach(function (row, index) {
+      const realRowIndex = headerRowIndex + 1 + index;
+      const numeroFila = realRowIndex + 1;
 
-  data.forEach(function (row, rowIndex) {
-    paresColumnas.forEach(function (par) {
-      const placaRaw = row[par.placaCol];
-      const aptoRaw = row[par.aptoCol];
+      paresColumnas.forEach(function (par) {
+        const placaRaw = row[par.placaCol];
+        const aptoRaw = row[par.aptoCol];
 
-      const placa = normalizePlaca_(placaRaw);
-      const apto = safeTrim_(aptoRaw);
-      const aptoNorm = normalizeApto_(apto);
+        const placa = normalizePlaca_(placaRaw);
+        const apto = safeTrim_(aptoRaw);
+        const aptoNorm = normalizeApto_(apto);
 
-      if (!placa || !apto) return;
+        if (!placa || !apto) return;
 
-      // Evitar tomar encabezados o basura.
-      if (!esPlacaColombianaBasica_(placa)) return;
-      if (!/^\d{2,5}$/.test(aptoNorm)) return;
-      if (placasConflictivas[placa]) {
-        return;
-      }
+        // Evita encabezados, textos y placas inválidas.
+        if (!esPlacaColombianaBasica_(placa)) return;
 
+        // Solo acepta un apartamento individual.
+        // Valores como "602 - 2007" se dejan para revisión manual.
+        if (!/^\d{2,5}$/.test(aptoNorm)) {
+          logResumen_(
+            "Registro vigilancia omitido por apartamento ambiguo" +
+            " | Fila: " + numeroFila +
+            " | Placa: " + placa +
+            " | Apartamento: " + apto
+          );
+          return;
+        }
 
-      if (mapa[placa] && mapa[placa].apartamentoNorm !== aptoNorm) {
-        conflictos.push({
+        if (placasConflictivas[placa]) {
+          return;
+        }
+
+        if (
+          mapa[placa] &&
+          mapa[placa].apartamentoNorm !== aptoNorm
+        ) {
+          conflictos.push({
+            placa: placa,
+            aptoExistente: mapa[placa].apartamento,
+            aptoNuevo: apto,
+            fila: numeroFila
+          });
+
+          delete mapa[placa];
+          placasConflictivas[placa] = true;
+          return;
+        }
+
+        mapa[placa] = {
           placa: placa,
-          aptoExistente: mapa[placa].apartamento,
-          aptoNuevo: apto,
-          fila: rowIndex + 1
-        });
-
-        delete mapa[placa];
-        placasConflictivas[placa] = true;
-
-        return;
-      }
-
-      mapa[placa] = {
-        placa: placa,
-        apartamento: apto,
-        apartamentoNorm: aptoNorm,
-        fuente: 'VIGILANCIA_PLACAS',
-        row: rowIndex + 1,
-        placaCol: par.placaCol + 1,
-        aptoCol: par.aptoCol + 1
-      };
+          apartamento: apto,
+          apartamentoNorm: aptoNorm,
+          fuente: "VIGILANCIA_PLACAS",
+          row: numeroFila,
+          placaCol: par.placaCol + 1,
+          aptoCol: par.aptoCol + 1
+        };
+      });
     });
-  });
 
-  logResumen_('Total placas cargadas desde vigilancia: ' + Object.keys(mapa).length);
+  logResumen_(
+    "Total placas cargadas desde vigilancia: " +
+    Object.keys(mapa).length
+  );
+
+  logResumen_(
+    "Total placas conflictivas omitidas: " +
+    Object.keys(placasConflictivas).length
+  );
 
   if (conflictos.length > 0) {
-    logMuestra_('Conflictos encontrados en vigilancia', conflictos, 20);
+    logMuestra_(
+      "Conflictos encontrados en vigilancia",
+      conflictos,
+      20
+    );
   }
 
   return mapa;
@@ -1747,37 +2315,85 @@ function esPlacaColombianaBasica_(placa) {
   return false;
 }
 
-function generarParesColumnasVigilancia_(lastCol) {
-  const pares = [];
+function detectarColumnasVigilancia_(data) {
+  const maxFilasEncabezado = Math.min(data.length, 10);
 
-  // Patrón:
-  // A-B, D-E, G-H, J-K, M-N, P-Q, S-T, V-W, Y-Z, AB-AC
-  for (var placaCol = 0; placaCol < lastCol; placaCol += 3) {
-    var aptoCol = placaCol + 1;
+  for (var rowIndex = 0; rowIndex < maxFilasEncabezado; rowIndex++) {
+    const headers = data[rowIndex].map(function (value) {
+      return normalizeHeader_(value);
+    });
 
-    if (aptoCol < lastCol) {
-      pares.push({
-        placaCol: placaCol,
-        aptoCol: aptoCol
-      });
+    const pares = [];
+
+    for (var colIndex = 0; colIndex < headers.length; colIndex++) {
+      if (headers[colIndex] !== "placa") {
+        continue;
+      }
+
+      var aptoCol = -1;
+
+      // Normalmente APT está inmediatamente después de PLACA,
+      // pero se revisan hasta dos columnas.
+      for (var offset = 1; offset <= 2; offset++) {
+        const posibleCol = colIndex + offset;
+
+        if (posibleCol >= headers.length) {
+          break;
+        }
+
+        if (
+          headers[posibleCol] === "apt" ||
+          headers[posibleCol] === "apto" ||
+          headers[posibleCol] === "apartamento"
+        ) {
+          aptoCol = posibleCol;
+          break;
+        }
+      }
+
+      if (aptoCol !== -1) {
+        pares.push({
+          placaCol: colIndex,
+          aptoCol: aptoCol
+        });
+      }
+    }
+
+    if (pares.length > 0) {
+      logResumen_(
+        "Fila de encabezados de vigilancia: " +
+        (rowIndex + 1)
+      );
+
+      logResumen_(
+        "Bloques PLACA/APT detectados: " +
+        pares.length
+      );
+
+      logDetalle_(
+        JSON.stringify(
+          pares.map(function (par) {
+            return {
+              placaCol: columnToLetter_(par.placaCol + 1),
+              aptoCol: columnToLetter_(par.aptoCol + 1)
+            };
+          }),
+          null,
+          2
+        )
+      );
+
+      return {
+        headerRowIndex: rowIndex,
+        pares: pares
+      };
     }
   }
 
-  logDetalle_("Pares de columnas vigilancia detectados:");
-  logDetalle_(JSON.stringify(
-    pares.map(function (p) {
-      return {
-        placaCol: p.placaCol + 1,
-        aptoCol: p.aptoCol + 1,
-        placaLetra: columnToLetter_(p.placaCol + 1),
-        aptoLetra: columnToLetter_(p.aptoCol + 1)
-      };
-    }),
-    null,
-    2
-  ));
-
-  return pares;
+  throw new Error(
+    'No se encontraron encabezados repetidos "PLACA" y "APT" ' +
+    "en las primeras 10 filas de la hoja de vigilancia."
+  );
 }
 
 function columnToLetter_(column) {
