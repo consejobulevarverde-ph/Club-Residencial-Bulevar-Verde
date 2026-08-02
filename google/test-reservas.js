@@ -49,7 +49,10 @@ function TEST_2_VerificarFuncionesNuevas() {
     'normalizeTorre_',
     'resolveBienFromReservationValue_',
     'resolveBienDescriptionById_',
-    'diagnosticarEstructuraReservas'
+    'diagnosticarEstructuraReservas',
+    'getReservationPolicy_',
+    'isBlockingReservationState_',
+    'reservasAplicarPoliticaCanchas'
   ];
   
   let todasExisten = true;
@@ -861,3 +864,202 @@ function TEST_18_EstadosNotificacionNoBloqueante() {
   };
 }
 
+/***************************************
+ * TEST 19: Políticas de las modalidades de cancha
+ * No modifica hojas.
+ ***************************************/
+function TEST_19_PoliticasModalidadesCancha() {
+  const bien = {
+    BienID: 'CANCHA1',
+    Tipo: 'CANCHA',
+    Activo: true,
+    DuracionMin: 1,
+    DuracionMax: 1,
+    CostoReserva: 126000,
+    DepositoGarantia: 0,
+    RequierePago: 'SI',
+    RequiereAprobacion: 'SI',
+    AnticipacionMinHabiles: 3,
+    AnticipacionMaxDias: 30
+  };
+  const config = Object.assign(
+    {},
+    getDefaultReservationConfig_(),
+    {
+      cancha_recreativa_costo: 0,
+      cancha_recreativa_requiere_pago: 'NO',
+      cancha_recreativa_requiere_aprobacion: 'NO',
+      cancha_recreativa_anticipacion_min_habiles: 0,
+      cancha_recreativa_anticipacion_max_dias: 7
+    }
+  );
+  const recreational = getReservationPolicy_(
+    bien,
+    MODALIDAD_USO_RECREATIVO,
+    config
+  );
+  const organized = getReservationPolicy_(
+    bien,
+    MODALIDAD_USO_ORGANIZADO,
+    config
+  );
+
+  assertReservas_(
+    isBienEnabled_(bien),
+    'La cancha activa debe estar habilitada desde Bienes.'
+  );
+  assertReservas_(
+    !isBienEnabled_(Object.assign({}, bien, { Activo: false })),
+    'El código no debe forzar la activación de una cancha inactiva.'
+  );
+  assertReservas_(
+    recreational.price === 0 &&
+    recreational.autoConfirm === true &&
+    recreational.requiresPayment === false &&
+    recreational.requiresApproval === false,
+    'La modalidad recreativa debe provenir de Config.'
+  );
+  assertReservas_(
+    organized.price === 126000 &&
+    organized.autoConfirm === false &&
+    organized.requiresPayment === true &&
+    organized.requiresApproval === true,
+    'La modalidad organizada debe usar costo y reglas de Bienes.'
+  );
+  assertReservas_(
+    recreational.durationMinHours === 1 &&
+    recreational.durationMaxHours === 1 &&
+    organized.durationMinHours === 1 &&
+    organized.durationMaxHours === 1,
+    'Las duraciones deben provenir de DuracionMin/DuracionMax.'
+  );
+
+  return {
+    ok: true,
+    recreativo: recreational,
+    organizado: organized,
+    hojasConfiguracion: ['Bienes', 'Config'],
+    elegibilidadSeConserva: true
+  };
+}
+
+/***************************************
+ * TEST 20: Estados que bloquean disponibilidad
+ * No modifica hojas.
+ ***************************************/
+function TEST_20_EstadosBloqueantesReserva() {
+  assertReservas_(
+    isBlockingReservationState_('Pendiente'),
+    'Pendiente debe bloquear.'
+  );
+  assertReservas_(
+    isBlockingReservationState_('Confirmado'),
+    'Confirmado debe bloquear.'
+  );
+  assertReservas_(
+    !isBlockingReservationState_('Cancelada'),
+    'Cancelada no debe bloquear.'
+  );
+  assertReservas_(
+    !isBlockingReservationState_('Rechazada por regla'),
+    'Rechazada por regla no debe bloquear.'
+  );
+  assertReservas_(
+    !isBlockingReservationState_('Finalizada'),
+    'Finalizada no debe bloquear.'
+  );
+
+  return { ok: true };
+}
+
+/***************************************
+ * TEST 21: Normalización de claves de Config
+ * No modifica hojas.
+ ***************************************/
+function TEST_21_NormalizacionConfigReservas() {
+  assertReservas_(
+    normalizeReservationConfigKey_(
+      'dias_anticipacion_max 30'
+    ) === 'dias_anticipacion_max',
+    'No se normalizó dias_anticipacion_max.'
+  );
+  assertReservas_(
+    normalizeReservationConfigKey_(
+      'duracion_min_horas 2'
+    ) === 'duracion_min_horas',
+    'No se normalizó duracion_min_horas.'
+  );
+
+  return { ok: true };
+}
+
+/***************************************
+ * TEST 22: Condiciones del uso recreativo
+ * No modifica hojas.
+ ***************************************/
+function TEST_22_ParticipantesUsoRecreativo() {
+  const bien = { Tipo: 'CANCHA' };
+
+  const valid = validateCourtParticipants_(
+    bien,
+    MODALIDAD_USO_RECREATIVO,
+    {
+      modalidadUso: MODALIDAD_USO_RECREATIVO,
+      confirmaSoloResidentes: true,
+      participanMenores14: true,
+      nombre: 'Residente responsable'
+    }
+  );
+
+  const invalidResidents = validateCourtParticipants_(
+    bien,
+    MODALIDAD_USO_RECREATIVO,
+    {
+      modalidadUso: MODALIDAD_USO_RECREATIVO,
+      confirmaSoloResidentes: false,
+      nombre: 'Residente responsable'
+    }
+  );
+
+  const invalidAdult = validateCourtParticipants_(
+    bien,
+    MODALIDAD_USO_RECREATIVO,
+    {
+      modalidadUso: MODALIDAD_USO_RECREATIVO,
+      confirmaSoloResidentes: true,
+      participanMenores14: true,
+      nombre: ''
+    }
+  );
+
+  assertReservas_(valid.ok, 'El caso recreativo válido fue rechazado.');
+  assertReservas_(
+    !invalidResidents.ok,
+    'El uso recreativo debe exigir confirmación de uso exclusivo para residentes.'
+  );
+  assertReservas_(
+    !invalidAdult.ok,
+    'Debe exigirse el nombre del adulto responsable cuando participan menores.'
+  );
+
+  return { ok: true };
+}
+
+/***************************************
+ * TEST 23: valida las dos hojas reales de configuración
+ * No modifica hojas.
+ ***************************************/
+function TEST_23_ConfiguracionBienesYConfig() {
+  const result = reservasValidarConfiguracion();
+
+  assertReservas_(
+    result.hojasConfiguracion.join('|') === 'Bienes|Config',
+    'Las fuentes de configuración deben ser únicamente Bienes y Config.'
+  );
+
+  return result;
+}
+
+function assertReservas_(condition, message) {
+  if (!condition) throw new Error(message);
+}
