@@ -3200,10 +3200,12 @@ function pintarCalendarioReservas_(hoja, data, anio, mes, filaInicio) {
       reservasPorDia[dia] = [];
     }
 
-    const horarioMinutos = parseTimeToMinutes_(row['Horario']);
+    const horarioRaw = row['Horario'];
+    const horarioMinutos = parseTimeToMinutes_(horarioRaw);
+    const horarioOrdenMinutos = getHoraInicioCalendario_(horarioRaw);
     const horario = horarioMinutos !== null
       ? minutesToHHmm_(horarioMinutos)
-      : safeTrim_(row['Horario']);
+      : safeTrim_(horarioRaw);
 
     const inmueble = safeTrim_(row['Inmueble']);
     const torre = safeTrim_(row['Torre']);
@@ -3211,13 +3213,25 @@ function pintarCalendarioReservas_(hoja, data, anio, mes, filaInicio) {
     const nombre = safeTrim_(row['Nombre']);
     const observaciones = safeTrim_(row['Observaciones']);
 
-    let textoReserva = `${horario} - ${getInmuebleCorto_(inmueble)}\n${torre}-${apto} | ${nombre}`;
+    const iconoTipoUso = getIconoTipoUsoCancha_(row, inmueble);
+
+    let textoReserva =
+      `${horario} - ${getInmuebleCorto_(inmueble)}${iconoTipoUso}` +
+      `\n${torre}-${apto} | ${nombre}`;
 
     if (observaciones) {
       textoReserva += `\n📝 ${observaciones}`;
     }
 
-    reservasPorDia[dia].push(textoReserva);
+    reservasPorDia[dia].push({
+      texto: textoReserva,
+      ordenTipoBien: getOrdenTipoBienCalendario_(inmueble),
+      ordenBien: getOrdenBienCalendario_(inmueble),
+      horarioMinutos: horarioOrdenMinutos !== null
+        ? horarioOrdenMinutos
+        : 9999,
+      inmueble: inmueble
+    });
   });
 
   // Título
@@ -3245,10 +3259,31 @@ function pintarCalendarioReservas_(hoja, data, anio, mes, filaInicio) {
   let fila = filaInicio + 2;
 
   for (let dia = 1; dia <= ultimoDiaMes.getDate(); dia++) {
-    const reservas = reservasPorDia[dia] || [];
+    const reservas = (reservasPorDia[dia] || [])
+      .slice()
+      .sort(function (a, b) {
+        if (a.ordenTipoBien !== b.ordenTipoBien) {
+          return a.ordenTipoBien - b.ordenTipoBien;
+        }
+
+        if (a.horarioMinutos !== b.horarioMinutos) {
+          return a.horarioMinutos - b.horarioMinutos;
+        }
+
+        if (a.ordenBien !== b.ordenBien) {
+          return a.ordenBien - b.ordenBien;
+        }
+
+        return safeTrim_(a.inmueble).localeCompare(
+          safeTrim_(b.inmueble),
+          'es'
+        );
+      });
 
     const textoCelda = reservas.length
-      ? `${dia}\n\n${reservas.join('\n\n')}`
+      ? `${dia}\n\n${reservas.map(function (reserva) {
+          return reserva.texto;
+        }).join('\n\n')}`
       : String(dia);
 
     const celda = hoja.getRange(fila, columna);
@@ -3314,6 +3349,137 @@ function eliminarTriggersCalendarioReservas_() {
       ScriptApp.deleteTrigger(trigger);
     }
   });
+}
+
+/***************************************
+ * ICONO DE TIPO DE USO PARA CANCHAS
+ * 💵 = reserva paga
+ * 👪 = reserva gratuita
+ ***************************************/
+function getIconoTipoUsoCancha_(row, inmueble) {
+  const inmuebleNormalizado = safeTrim_(inmueble).toLowerCase();
+
+  if (!inmuebleNormalizado.includes('cancha')) {
+    return '';
+  }
+
+  // Los registros nuevos almacenan explícitamente si requieren pago.
+  const requierePagoRaw = safeTrim_(row['RequierePago']);
+  if (requierePagoRaw) {
+    return normalizeYesNo_(requierePagoRaw) === 'SI' ? '💵' : '👪';
+  }
+
+  // Respaldo para registros creados con modalidad o precio, pero sin
+  // la columna RequierePago diligenciada.
+  const modalidad = normalizeReservationMode_(row['ModalidadUso']);
+  if (modalidad === MODALIDAD_USO_ORGANIZADO) {
+    return '💵';
+  }
+
+  if (modalidad === MODALIDAD_USO_RECREATIVO) {
+    return '👪';
+  }
+
+  const precioReserva = toNumber_(row['PrecioReserva']);
+  if (precioReserva !== null && precioReserva > 0) {
+    return '💵';
+  }
+
+  // Compatibilidad con reservas históricas que no tienen las columnas
+  // técnicas. Si el texto menciona pago, cobro o visitantes se considera
+  // paga; en ausencia de evidencia se conserva como uso gratuito.
+  const textoHistorico = [
+    row['Asunto'],
+    row['Observaciones']
+  ]
+    .map(function (value) {
+      return safeTrim_(value);
+    })
+    .join(' ')
+    .toLowerCase();
+
+  if (/pago|pagado|cobro|visitante/.test(textoHistorico)) {
+    return '💵';
+  }
+
+  return '👪';
+}
+
+/***************************************
+ * HORA INICIAL PARA ORDENAR EL CALENDARIO
+ * Admite horas simples y rangos, por ejemplo:
+ * 08:00, 10:00-11:00, 16:00 – 18:00.
+ ***************************************/
+function getHoraInicioCalendario_(horario) {
+  if (horario === null || horario === undefined || horario === '') {
+    return null;
+  }
+
+  if (
+    Object.prototype.toString.call(horario) === '[object Date]' &&
+    !isNaN(horario.getTime())
+  ) {
+    return parseTimeToMinutes_(horario);
+  }
+
+  const texto = safeTrim_(horario);
+  if (!texto) return null;
+
+  // Toma únicamente la hora inicial. También admite guion corto,
+  // guion medio y guion largo como separadores del rango.
+  const match = texto.match(
+    /^(\d{1,2}:\d{2}(?:\s*(?:am|pm))?)(?:\s*[-–—]\s*.*)?$/i
+  );
+
+  if (!match) return null;
+
+  return parseTimeToMinutes_(match[1]);
+}
+
+/***************************************
+ * ORDEN DE BIENES EN EL CALENDARIO
+ * 1. Salones sociales
+ * 2. Canchas
+ * 3. Otros bienes
+ ***************************************/
+function getOrdenTipoBienCalendario_(inmueble) {
+  const value = safeTrim_(inmueble).toLowerCase();
+
+  if (value.includes('salon social') || value.includes('salón social')) {
+    return 1;
+  }
+
+  if (value.includes('cancha')) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function getOrdenBienCalendario_(inmueble) {
+  const value = safeTrim_(inmueble).toLowerCase();
+
+  if (value.includes('salon social 1') || value.includes('salón social 1')) {
+    return 1;
+  }
+
+  if (value.includes('salon social 2') || value.includes('salón social 2')) {
+    return 2;
+  }
+
+  if (value.includes('salon social 3') || value.includes('salón social 3')) {
+    return 3;
+  }
+
+  if (value.includes('cancha sintetica 1') || value.includes('cancha sintética 1')) {
+    return 1;
+  }
+
+  if (value.includes('cancha sintetica 2') || value.includes('cancha sintética 2')) {
+    return 2;
+  }
+
+  return 99;
 }
 
 /***************************************
