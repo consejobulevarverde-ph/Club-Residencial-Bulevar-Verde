@@ -20,6 +20,69 @@ const SHEET_PLANILLA = 'PLANILLA';
 const FOLDER_ID_SANCIONES_HISTORICAS = '1dHYZmOK0Oji3JhfDph8HB5pEQ68bX6IA';
 const REGEX_NOMBRE_SANCIONES_HISTORICAS = /^(\d{4})(0[1-9]|1[0-2])\s+sanciones$/i;
 
+// Carpeta original de Dorchester que contiene las evidencias de AppSheet.
+// generarImagenes() no copia, no mueve y no cambia permisos de estos archivos.
+// Para que las URLs funcionen sin iniciar sesion, Dorchester debe compartir
+// esta carpeta como "Cualquier persona con el enlace - Lector".
+const FOLDER_ID_IMAGENES_SANCIONES_ORIGEN =
+  '1b_zgJSBztapVhY38ZdyoGwzkMsNjriQO';
+const GENERAR_IMAGENES_FILAS_MAXIMAS_POR_EJECUCION = 500;
+const GENERAR_IMAGENES_CHECKPOINT_FILAS = 50;
+const GENERAR_IMAGENES_TIEMPO_MAX_MS = 4.5 * 60 * 1000;
+const GENERAR_IMAGENES_MARGEN_CORTE_MS = 15 * 1000;
+const GENERAR_IMAGENES_TRIGGER_MS = 30 * 1000;
+const GENERAR_IMAGENES_MAX_ERRORES_CONSECUTIVOS = 5;
+const GENERAR_IMAGENES_GUARDAR_NOTAS = false;
+const GENERAR_IMAGENES_INDICE_VERSION = '4_REFERENCIAS_PLANILLA';
+const SHEET_INDICE_IMAGENES_SANCIONES = '_indice_imagenes_sanciones';
+const TEXTO_ENLACE_IMAGEN_SANCION = 'Full size';
+const PROP_GENERAR_IMAGENES_ESTADO = 'SANCIONES_IMAGENES_ESTADO';
+const PROP_GENERAR_IMAGENES_SIGUIENTE_FILA =
+  'SANCIONES_IMAGENES_SIGUIENTE_FILA';
+const PROP_GENERAR_IMAGENES_RESUMEN = 'SANCIONES_IMAGENES_RESUMEN';
+const PROP_GENERAR_IMAGENES_TEXTO_REPARADO =
+  'SANCIONES_IMAGENES_TEXTO_REPARADO';
+const PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS =
+  'SANCIONES_IMAGENES_ERRORES_CONSECUTIVOS';
+const PROP_GENERAR_IMAGENES_INDICE_VERSION =
+  'SANCIONES_IMAGENES_INDICE_VERSION';
+const PROP_GENERAR_IMAGENES_INDICE_ACTUALIZADO =
+  'SANCIONES_IMAGENES_INDICE_ACTUALIZADO';
+const PROP_PREPARAR_INDICE_ESTADO =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_ESTADO';
+const PROP_PREPARAR_INDICE_TOKEN =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_TOKEN';
+const PROP_PREPARAR_INDICE_ARCHIVOS_REVISADOS =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_ARCHIVOS_REVISADOS';
+const PROP_PREPARAR_INDICE_ARCHIVOS_VALIDOS =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_ARCHIVOS_VALIDOS';
+const PROP_PREPARAR_INDICE_ARCHIVOS_NECESARIOS =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_ARCHIVOS_NECESARIOS';
+const PROP_PREPARAR_INDICE_ARCHIVOS_PENDIENTES =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_ARCHIVOS_PENDIENTES';
+const PROP_PREPARAR_INDICE_ARCHIVOS_OMITIDOS =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_ARCHIVOS_OMITIDOS';
+const PROP_PREPARAR_INDICE_REFERENCIAS_INVALIDAS =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_REFERENCIAS_INVALIDAS';
+const PROP_PREPARAR_INDICE_CELDAS_YA_PUBLICAS =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_CELDAS_YA_PUBLICAS';
+const PROP_PREPARAR_INDICE_INICIADO =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_INICIADO';
+const PROP_PREPARAR_INDICE_ACTUALIZADO =
+  'SANCIONES_IMAGENES_PREPARAR_INDICE_ACTUALIZADO';
+const PREPARAR_INDICE_ARCHIVOS_MAXIMOS_POR_EJECUCION = 3000;
+const PREPARAR_INDICE_TIEMPO_MAX_MS = 4 * 60 * 1000;
+const PREPARAR_INDICE_MARGEN_CORTE_MS = 20 * 1000;
+const PREPARAR_INDICE_LOG_CADA_ARCHIVOS = 500;
+const PREPARAR_INDICE_TRIGGER_MS = 30 * 1000;
+const FUNCION_TRIGGER_GENERAR_IMAGENES = 'continuarGeneracionImagenes_';
+const FUNCION_TRIGGER_PREPARAR_INDICE =
+  'continuarPreparacionIndiceImagenesSanciones_';
+
+// Cache por ejecucion para recuperar URLs cuando una celda conserva el texto
+// "Full size" pero perdio el hipervinculo enriquecido.
+let CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_ = null;
+
 // Catálogo de respaldo para que la consulta histórica funcione incluso
 // cuando el proyecto todavía no tenga autorizado DriveApp.
 // La detección automática desde la carpeta se conserva y complementa
@@ -758,7 +821,32 @@ function getCellUrlOrText_(
   const linkedUrl = rich ? safeTrim_(rich.getLinkUrl()) : "";
 
   if (!linkedUrl) {
+    // Compatibilidad: algunas escrituras externas o posteriores pueden
+    // conservar el texto "Full size" y eliminar el RichText. En ese caso
+    // recuperamos la URL permanente desde el indice usando ID + FOTO/FIRMA.
+    if (rawValue === TEXTO_ENLACE_IMAGEN_SANCION) {
+      const recoveredUrl = obtenerUrlImagenSancionDesdeIndice_(
+        expectedRecordId,
+        expectedMediaType
+      );
+
+      if (recoveredUrl) {
+        return recoveredUrl;
+      }
+    }
+
     return rawValue;
+  }
+
+  // Las URLs permanentes generadas por este script no incluyen el nombre del
+  // archivo en la ruta. Se reconocen por el proveedor, el parametro id y el
+  // texto controlado "Full size" almacenado en la celda.
+  if (
+    esUrlPublicaPermanenteImagenSancion_(linkedUrl) &&
+    (rawValue === TEXTO_ENLACE_IMAGEN_SANCION ||
+      esUrlPublicaPermanenteImagenSancion_(rawValue))
+  ) {
+    return linkedUrl;
   }
 
   const validation = validarEnlaceMediaRegistro_({
@@ -947,6 +1035,1867 @@ function esRutaArchivoMedia_(value) {
   const baseName = obtenerBaseNameMedia_(value);
 
   return /\.(?:jpe?g|png|gif|webp|heic|pdf)$/i.test(baseName);
+}
+
+/***************************************
+ * ENLAZAR EVIDENCIAS ORIGINALES DE DORCHESTER
+ *
+ * Ejecutar una vez antes del proceso masivo:
+ *   prepararIndiceImagenesSanciones()
+ *
+ * Luego ejecutar:
+ *   generarImagenes()
+ *
+ * El proceso no crea copias. Construye URLs permanentes usando directamente
+ * el ID de cada archivo original de Dorchester y guarda en FOTO/FIRMA el texto
+ * visible "Full size" con el hipervinculo correspondiente.
+ *
+ * Requisito: la carpeta original debe estar compartida por Dorchester como
+ * "Cualquier persona con el enlace - Lector". Una firma del Consejo no puede
+ * convertir por si sola un archivo privado de Drive en un archivo publico.
+ *
+ * Optimizaciones:
+ * 1. Solo se indexan los nombres FOTO/FIRMA realmente usados por PLANILLA.
+ * 2. El recorrido de Drive se detiene apenas encuentra todas las referencias.
+ * 3. Durante generarImagenes() no se llama a Drive por cada FOTO/FIRMA.
+ * 4. Cada ejecucion procesa hasta 500 filas y guarda checkpoints cada 50.
+ * 5. No se escriben notas nuevas, reduciendo operaciones sobre Sheets.
+ ***************************************/
+function generarImagenes() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  let reparacionTexto = null;
+  let estadoSinTrabajo = null;
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+    const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+    if (!sheet) {
+      throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
+    }
+
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const IDX = obtenerIdxPlanilla_(headers);
+
+    validarColumnasGenerarImagenes_(IDX);
+    validarCarpetaOrigenImagenesPublica_();
+
+    const estadoActual = safeTrim_(
+      props.getProperty(PROP_GENERAR_IMAGENES_ESTADO)
+    );
+    const siguienteFilaGuardada = Number(
+      props.getProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA) || 2
+    );
+
+    if (!estadoActual || estadoActual === "NO_INICIADO") {
+      eliminarTriggersGenerarImagenes_();
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
+      props.setProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA, "2");
+      props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
+      props.setProperty(
+        PROP_GENERAR_IMAGENES_RESUMEN,
+        JSON.stringify(crearResumenInicialGeneracionImagenes_())
+      );
+    } else if (estadoActual === "ERROR") {
+      // Retoma desde la fila guardada; no reinicia desde el principio.
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
+      props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
+    } else if (
+      estadoActual === "COMPLETADO" &&
+      siguienteFilaGuardada > sheet.getLastRow()
+    ) {
+      estadoSinTrabajo = obtenerEstadoGeneracionImagenes();
+    } else if (estadoActual === "COMPLETADO") {
+      // Existen filas nuevas despues de una ejecucion completada.
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
+    }
+
+    // Repara automaticamente las URLs que una version anterior escribio como
+    // texto completo. No vuelve a copiar archivos.
+    if (
+      safeTrim_(props.getProperty(PROP_GENERAR_IMAGENES_TEXTO_REPARADO)) !==
+      TEXTO_ENLACE_IMAGEN_SANCION
+    ) {
+      reparacionTexto = normalizarTextoUrlsPublicasGeneradas_(sheet, IDX);
+      props.setProperty(
+        PROP_GENERAR_IMAGENES_TEXTO_REPARADO,
+        TEXTO_ENLACE_IMAGEN_SANCION
+      );
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  if (estadoSinTrabajo) {
+    if (reparacionTexto) {
+      estadoSinTrabajo.reparacionTexto = reparacionTexto;
+    }
+    return estadoSinTrabajo;
+  }
+
+  const resultado = procesarLoteGeneracionImagenes_();
+
+  if (reparacionTexto) {
+    resultado.reparacionTexto = reparacionTexto;
+  }
+
+  return resultado;
+}
+
+function continuarGeneracionImagenes_() {
+  try {
+    return procesarLoteGeneracionImagenes_();
+  } catch (error) {
+    const props = PropertiesService.getScriptProperties();
+    const resumen = leerResumenGeneracionImagenes_();
+    const erroresConsecutivos =
+      Number(
+        props.getProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS) || 0
+      ) + 1;
+    const detalleError = error && error.stack
+      ? error.stack
+      : String(error);
+
+    resumen.erroresEjecucion = Number(resumen.erroresEjecucion || 0) + 1;
+    resumen.ultimoErrorEjecucion = detalleError.substring(0, 1500);
+    resumen.actualizado = new Date().toISOString();
+
+    props.setProperty(
+      PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS,
+      String(erroresConsecutivos)
+    );
+    props.setProperty(
+      PROP_GENERAR_IMAGENES_RESUMEN,
+      JSON.stringify(resumen)
+    );
+
+    if (
+      erroresConsecutivos >= GENERAR_IMAGENES_MAX_ERRORES_CONSECUTIVOS
+    ) {
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "ERROR");
+      eliminarTriggersGenerarImagenes_();
+    } else {
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
+      programarSiguienteLoteGenerarImagenes_();
+    }
+
+    logGeneracionImagenes_("ERROR de ejecucion", {
+      erroresConsecutivos: erroresConsecutivos,
+      detalle: detalleError.substring(0, 1500)
+    });
+
+    return obtenerEstadoGeneracionImagenes();
+  }
+}
+
+function procesarLoteGeneracionImagenes_() {
+  const lock = LockService.getScriptLock();
+
+  if (!lock.tryLock(30000)) {
+    programarSiguienteLoteGenerarImagenes_();
+
+    return {
+      ok: true,
+      estado: "EN_PROCESO",
+      mensaje: "Ya existe otro lote de imagenes en ejecucion."
+    };
+  }
+
+  const inicioMs = Date.now();
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const estado = safeTrim_(props.getProperty(PROP_GENERAR_IMAGENES_ESTADO));
+
+    if (estado !== "EN_PROCESO") {
+      return obtenerEstadoGeneracionImagenes();
+    }
+
+    programarSiguienteLoteGenerarImagenes_();
+
+    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+    const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+    if (!sheet) {
+      throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
+    }
+
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const IDX = obtenerIdxPlanilla_(headers);
+
+    validarColumnasGenerarImagenes_(IDX);
+
+    let nextRow = Number(
+      props.getProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA) || 2
+    );
+
+    if (!Number.isFinite(nextRow) || nextRow < 2) {
+      nextRow = 2;
+    }
+
+    if (nextRow > lastRow) {
+      return completarGeneracionImagenes_(sheet, lastRow);
+    }
+
+    const indicePreparado = asegurarIndiceImagenesSanciones_(ss);
+    const indiceArchivos = indicePreparado.mapa;
+    const sourceFolder = indicePreparado.folder;
+
+    const maxEndRow = Math.min(
+      lastRow,
+      nextRow + GENERAR_IMAGENES_FILAS_MAXIMAS_POR_EJECUCION - 1
+    );
+    const rowCount = maxEndRow - nextRow + 1;
+
+    const ids = sheet
+      .getRange(nextRow, IDX.id + 1, rowCount, 1)
+      .getDisplayValues();
+    const fotoRange = sheet.getRange(nextRow, IDX.foto + 1, rowCount, 1);
+    const firmaRange = sheet.getRange(nextRow, IDX.firma + 1, rowCount, 1);
+    const fotoValues = fotoRange.getDisplayValues();
+    const firmaValues = firmaRange.getDisplayValues();
+    const fotoRich = fotoRange.getRichTextValues();
+    const firmaRich = firmaRange.getRichTextValues();
+
+    const resumen = leerResumenGeneracionImagenes_();
+    let procesadasEnEjecucion = 0;
+    let inicioCheckpoint = 0;
+
+    logGeneracionImagenes_("Inicio de ejecucion sin copias", {
+      filaInicial: nextRow,
+      filaMaximaLeida: maxEndRow,
+      ultimaFila: lastRow,
+      archivosIndexados: indicePreparado.origenes,
+      carpetaOrigen: sourceFolder.getName()
+    });
+
+    for (let i = 0; i < rowCount; i++) {
+      const tiempoConsumido = Date.now() - inicioMs;
+
+      if (
+        procesadasEnEjecucion > 0 &&
+        tiempoConsumido >= GENERAR_IMAGENES_TIEMPO_MAX_MS
+      ) {
+        break;
+      }
+
+      const sheetRow = nextRow + i;
+      const recordId = safeTrim_(ids[i][0]);
+
+      const fotoResult = convertirCampoImagenSancionOrigenDirecto_(
+        {
+          recordId: recordId,
+          mediaType: "FOTO",
+          rawValue: fotoValues[i][0],
+          richText: fotoRich[i][0],
+          sheetRow: sheetRow
+        },
+        indiceArchivos
+      );
+
+      const firmaResult = convertirCampoImagenSancionOrigenDirecto_(
+        {
+          recordId: recordId,
+          mediaType: "FIRMA",
+          rawValue: firmaValues[i][0],
+          richText: firmaRich[i][0],
+          sheetRow: sheetRow
+        },
+        indiceArchivos
+      );
+
+      fotoRich[i][0] = fotoResult.richText;
+      firmaRich[i][0] = firmaResult.richText;
+
+      acumularResultadoGenerarImagenes_(resumen, fotoResult.status);
+      acumularResultadoGenerarImagenes_(resumen, firmaResult.status);
+      resumen.filasProcesadas += 1;
+      procesadasEnEjecucion += 1;
+
+      const esCheckpoint =
+        procesadasEnEjecucion % GENERAR_IMAGENES_CHECKPOINT_FILAS === 0;
+      const esUltimaLeida = i === rowCount - 1;
+      const cercaDelLimite =
+        Date.now() - inicioMs >=
+        GENERAR_IMAGENES_TIEMPO_MAX_MS - GENERAR_IMAGENES_MARGEN_CORTE_MS;
+
+      if (esCheckpoint || esUltimaLeida || cercaDelLimite) {
+        const finCheckpoint = i;
+        const siguienteFila = nextRow + finCheckpoint + 1;
+
+        guardarCheckpointGeneracionImagenes_({
+          props: props,
+          resumen: resumen,
+          fotoRange: fotoRange,
+          firmaRange: firmaRange,
+          fotoRich: fotoRich,
+          firmaRich: firmaRich,
+          inicioOffset: inicioCheckpoint,
+          finOffset: finCheckpoint,
+          siguienteFila: siguienteFila
+        });
+
+        logGeneracionImagenes_("Checkpoint guardado", {
+          filaProcesadaHasta: siguienteFila - 1,
+          siguienteFila: siguienteFila,
+          filasEnEjecucion: procesadasEnEjecucion,
+          segundosConsumidos: Math.round((Date.now() - inicioMs) / 100) / 10,
+          urlsGeneradas: resumen.urlsGeneradas,
+          urlsYaPublicas: resumen.urlsYaPublicas,
+          archivosNoEncontrados: resumen.archivosNoEncontrados
+        });
+
+        inicioCheckpoint = i + 1;
+      }
+
+      if (cercaDelLimite) {
+        break;
+      }
+    }
+
+    const siguienteFila = nextRow + procesadasEnEjecucion;
+
+    if (siguienteFila > lastRow) {
+      return completarGeneracionImagenes_(sheet, lastRow);
+    }
+
+    programarSiguienteLoteGenerarImagenes_();
+
+    const result = construirEstadoGeneracionImagenes_(
+      "EN_PROCESO",
+      siguienteFila,
+      lastRow,
+      resumen,
+      sourceFolder
+    );
+
+    result.filasProcesadasEnEjecucion = procesadasEnEjecucion;
+    result.duracionSegundos =
+      Math.round((Date.now() - inicioMs) / 100) / 10;
+    result.indiceTecnico = indicePreparado.nombreHoja;
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function guardarCheckpointGeneracionImagenes_(params) {
+  const cantidad = params.finOffset - params.inicioOffset + 1;
+
+  if (cantidad <= 0) return;
+
+  params.fotoRange
+    .offset(params.inicioOffset, 0, cantidad, 1)
+    .setRichTextValues(
+      params.fotoRich.slice(
+        params.inicioOffset,
+        params.finOffset + 1
+      )
+    );
+  params.firmaRange
+    .offset(params.inicioOffset, 0, cantidad, 1)
+    .setRichTextValues(
+      params.firmaRich.slice(
+        params.inicioOffset,
+        params.finOffset + 1
+      )
+    );
+
+  params.resumen.actualizado = new Date().toISOString();
+  params.props.setProperty(
+    PROP_GENERAR_IMAGENES_SIGUIENTE_FILA,
+    String(params.siguienteFila)
+  );
+  params.props.setProperty(
+    PROP_GENERAR_IMAGENES_RESUMEN,
+    JSON.stringify(params.resumen)
+  );
+  params.props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
+}
+
+
+function construirClaveRegistroTipoImagenSancion_(recordId, mediaType) {
+  const id = safeTrim_(recordId).toLowerCase();
+  const tipo = safeTrim_(mediaType).toUpperCase();
+
+  return id && tipo ? id + "|" + tipo : "";
+}
+
+function extraerRegistroTipoDesdeNombreImagenSancion_(fileName) {
+  const baseName = obtenerBaseNameMedia_(fileName);
+  const match = baseName.match(/^([^.]+)\.(FOTO|FIRMA)\./i);
+
+  if (!match) return null;
+
+  return {
+    recordId: safeTrim_(match[1]),
+    mediaType: safeTrim_(match[2]).toUpperCase()
+  };
+}
+
+function obtenerMapaUrlsImagenesSancionesPorRegistroTipo_() {
+  if (CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_) {
+    return CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_;
+  }
+
+  const mapa = {};
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
+
+  if (!sheet || sheet.getLastRow() < 2) {
+    CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_ = mapa;
+    return mapa;
+  }
+
+  const values = sheet
+    .getRange(2, 1, sheet.getLastRow() - 1, 4)
+    .getDisplayValues();
+
+  values.forEach(function (row) {
+    const info = extraerRegistroTipoDesdeNombreImagenSancion_(row[0]);
+    const publicUrl = safeTrim_(row[3]);
+
+    if (!info || !esUrlPublicaPermanenteImagenSancion_(publicUrl)) return;
+
+    const key = construirClaveRegistroTipoImagenSancion_(
+      info.recordId,
+      info.mediaType
+    );
+
+    if (key && !mapa[key]) {
+      mapa[key] = publicUrl;
+    }
+  });
+
+  CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_ = mapa;
+  return mapa;
+}
+
+function obtenerUrlImagenSancionDesdeIndice_(recordId, mediaType) {
+  const key = construirClaveRegistroTipoImagenSancion_(recordId, mediaType);
+
+  if (!key) return "";
+
+  return safeTrim_(
+    obtenerMapaUrlsImagenesSancionesPorRegistroTipo_()[key]
+  );
+}
+
+function convertirCampoImagenSancionOrigenDirecto_(params, indiceArchivos) {
+  const rawValue = safeTrim_(params && params.rawValue);
+  const linkedUrl = params && params.richText
+    ? safeTrim_(params.richText.getLinkUrl())
+    : "";
+
+  if (!rawValue && !linkedUrl) {
+    return construirResultadoCampoImagen_("", "", "VACIO");
+  }
+
+  const existingPublicUrl = esUrlPublicaPermanenteImagenSancion_(rawValue)
+    ? rawValue
+    : esUrlPublicaPermanenteImagenSancion_(linkedUrl)
+      ? linkedUrl
+      : "";
+
+  if (existingPublicUrl) {
+    return construirResultadoCampoImagen_(
+      existingPublicUrl,
+      "",
+      "YA_PUBLICA"
+    );
+  }
+
+  // Si la celda contiene solo "Full size" y perdio el enlace, no existe
+  // nombre de archivo para validar. Recuperamos la entrada por ID + tipo.
+  if (rawValue === TEXTO_ENLACE_IMAGEN_SANCION && !linkedUrl) {
+    const aliasKey =
+      "@REGISTRO_TIPO:" +
+      construirClaveRegistroTipoImagenSancion_(
+        params.recordId,
+        params.mediaType
+      );
+    const recoveredEntry = indiceArchivos[aliasKey];
+
+    if (
+      recoveredEntry &&
+      recoveredEntry.sourceId &&
+      recoveredEntry.publicUrl
+    ) {
+      return construirResultadoCampoImagen_(
+        recoveredEntry.publicUrl,
+        "",
+        "GENERADA"
+      );
+    }
+  }
+
+  const fileName = resolverNombreArchivoParaPublicar_(rawValue, linkedUrl);
+  const validation = validarNombreArchivoParaPublicar_(
+    fileName,
+    params.recordId,
+    params.mediaType
+  );
+
+  if (!validation.ok) {
+    logGeneracionImagenes_("Imagen omitida por nombre invalido", {
+      fila: params.sheetRow,
+      id: safeTrim_(params.recordId),
+      tipo: safeTrim_(params.mediaType),
+      valor: rawValue,
+      motivo: validation.reason
+    });
+
+    return construirResultadoCampoImagenPlano_(
+      rawValue,
+      "",
+      "NOMBRE_INVALIDO"
+    );
+  }
+
+  const entry = indiceArchivos[validation.fileName];
+
+  if (!entry || !entry.sourceId || !entry.publicUrl) {
+    logGeneracionImagenes_("Archivo original no encontrado en el indice", {
+      fila: params.sheetRow,
+      archivo: validation.fileName
+    });
+
+    return construirResultadoCampoImagenPlano_(
+      rawValue,
+      "",
+      "NO_ENCONTRADO"
+    );
+  }
+
+  return construirResultadoCampoImagen_(
+    entry.publicUrl,
+    "",
+    "GENERADA"
+  );
+}
+
+
+function construirResultadoCampoImagen_(url, note, status) {
+  const publicUrl = safeTrim_(url);
+
+  return {
+    url: publicUrl,
+    richText: crearRichTextEnlaceImagenSancion_(publicUrl),
+    note: safeTrim_(note),
+    status: status
+  };
+}
+
+function construirResultadoCampoImagenPlano_(value, note, status) {
+  return {
+    url: "",
+    richText: crearRichTextPlanoImagenSancion_(value),
+    note: safeTrim_(note),
+    status: status
+  };
+}
+
+function crearRichTextEnlaceImagenSancion_(url) {
+  const publicUrl = safeTrim_(url);
+
+  if (!publicUrl) {
+    return crearRichTextPlanoImagenSancion_("");
+  }
+
+  return SpreadsheetApp
+    .newRichTextValue()
+    .setText(TEXTO_ENLACE_IMAGEN_SANCION)
+    .setLinkUrl(publicUrl)
+    .build();
+}
+
+function crearRichTextPlanoImagenSancion_(value) {
+  return SpreadsheetApp
+    .newRichTextValue()
+    .setText(safeTrim_(value))
+    .build();
+}
+
+function normalizarTextoUrlsPublicasGeneradas_(sheet, IDX) {
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    return {
+      ok: true,
+      celdasActualizadas: 0,
+      textoVisible: TEXTO_ENLACE_IMAGEN_SANCION
+    };
+  }
+
+  const rowCount = lastRow - 1;
+  const ids = sheet
+    .getRange(2, IDX.id + 1, rowCount, 1)
+    .getDisplayValues();
+  const mapaUrls = obtenerMapaUrlsImagenesSancionesPorRegistroTipo_();
+  const columnConfigs = [
+    { columnIndex: IDX.foto, mediaType: "FOTO" },
+    { columnIndex: IDX.firma, mediaType: "FIRMA" }
+  ];
+  let updatedCells = 0;
+
+  columnConfigs.forEach(function (config) {
+    const columnIndex = config.columnIndex;
+    const range = sheet.getRange(2, columnIndex + 1, rowCount, 1);
+    const displayValues = range.getDisplayValues();
+    const richValues = range.getRichTextValues();
+    let changed = false;
+
+    for (let i = 0; i < rowCount; i++) {
+      const rawValue = safeTrim_(displayValues[i][0]);
+      const currentRich = richValues[i][0];
+      const linkedUrl = currentRich
+        ? safeTrim_(currentRich.getLinkUrl())
+        : "";
+      let publicUrl = esUrlPublicaPermanenteImagenSancion_(rawValue)
+        ? rawValue
+        : esUrlPublicaPermanenteImagenSancion_(linkedUrl)
+          ? linkedUrl
+          : "";
+
+      if (
+        !publicUrl &&
+        rawValue === TEXTO_ENLACE_IMAGEN_SANCION
+      ) {
+        const key = construirClaveRegistroTipoImagenSancion_(
+          ids[i][0],
+          config.mediaType
+        );
+        publicUrl = safeTrim_(mapaUrls[key]);
+      }
+
+      if (!publicUrl) continue;
+
+      if (
+        currentRich &&
+        safeTrim_(currentRich.getText()) === TEXTO_ENLACE_IMAGEN_SANCION &&
+        linkedUrl === publicUrl
+      ) {
+        continue;
+      }
+
+      richValues[i][0] = crearRichTextEnlaceImagenSancion_(publicUrl);
+      updatedCells += 1;
+      changed = true;
+    }
+
+    if (changed) {
+      range.setRichTextValues(richValues);
+    }
+  });
+
+  SpreadsheetApp.flush();
+
+  return {
+    ok: true,
+    celdasActualizadas: updatedCells,
+    textoVisible: TEXTO_ENLACE_IMAGEN_SANCION
+  };
+}
+
+function repararTextoVisualizacionImagenes() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+  if (!sheet) {
+    throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
+  }
+
+  const headers = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getValues()[0];
+  const IDX = obtenerIdxPlanilla_(headers);
+
+  validarColumnasGenerarImagenes_(IDX);
+
+  const result = normalizarTextoUrlsPublicasGeneradas_(sheet, IDX);
+  PropertiesService.getScriptProperties().setProperty(
+    PROP_GENERAR_IMAGENES_TEXTO_REPARADO,
+    TEXTO_ENLACE_IMAGEN_SANCION
+  );
+
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function resolverNombreArchivoParaPublicar_(rawValue, linkedUrl) {
+  const candidates = [safeTrim_(rawValue), safeTrim_(linkedUrl)];
+
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    if (!candidate) continue;
+
+    const extracted = extraerNombreArchivoMediaDesdeUrl_(candidate);
+    const baseName = obtenerBaseNameMedia_(extracted || candidate);
+
+    if (esRutaArchivoMedia_(baseName)) {
+      return baseName;
+    }
+  }
+
+  return "";
+}
+
+function validarNombreArchivoParaPublicar_(fileName, recordId, mediaType) {
+  const normalizedFileName = obtenerBaseNameMedia_(fileName);
+  const lowerFileName = normalizedFileName.toLowerCase();
+  const expectedId = safeTrim_(recordId).toLowerCase();
+  const expectedType = safeTrim_(mediaType).toLowerCase();
+
+  if (!normalizedFileName || !esRutaArchivoMedia_(normalizedFileName)) {
+    return {
+      ok: false,
+      fileName: normalizedFileName,
+      reason: "No se identifico un nombre de archivo de imagen valido."
+    };
+  }
+
+  if (!expectedId) {
+    return {
+      ok: false,
+      fileName: normalizedFileName,
+      reason: "La fila no tiene ID de sancion."
+    };
+  }
+
+  if (lowerFileName.indexOf(expectedId + ".") !== 0) {
+    return {
+      ok: false,
+      fileName: normalizedFileName,
+      reason: 'El archivo no pertenece al ID "' + expectedId + '".'
+    };
+  }
+
+  if (lowerFileName.indexOf("." + expectedType + ".") === -1) {
+    return {
+      ok: false,
+      fileName: normalizedFileName,
+      reason: 'El archivo no corresponde al tipo "' + mediaType + '".'
+    };
+  }
+
+  return {
+    ok: true,
+    fileName: normalizedFileName,
+    reason: ""
+  };
+}
+
+function getHeadersIndiceImagenesSanciones_() {
+  return [
+    "Archivo",
+    "OrigenFileId",
+    "ResourceKey",
+    "PublicUrl",
+    "Actualizado"
+  ];
+}
+
+function getOrCreateHojaIndiceImagenesSanciones_(ss) {
+  let sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
+  const headers = getHeadersIndiceImagenesSanciones_();
+
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_INDICE_IMAGENES_SANCIONES);
+  }
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.setFrozenRows(1);
+
+  try {
+    sheet.hideSheet();
+  } catch (error) {
+    // No interrumpe el proceso si la hoja no puede ocultarse.
+  }
+
+  return sheet;
+}
+
+/**
+ * Obtiene exclusivamente los nombres FOTO/FIRMA que la PLANILLA necesita.
+ * Las celdas que ya contienen una URL permanente se excluyen del indice.
+ */
+function obtenerArchivosNecesariosImagenesSanciones_(ss) {
+  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+  if (!sheet) {
+    throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const resultado = {
+    mapa: {},
+    total: 0,
+    referenciasTotales: 0,
+    referenciasDuplicadas: 0,
+    referenciasInvalidas: 0,
+    celdasVacias: 0,
+    celdasYaPublicas: 0
+  };
+
+  if (lastRow < 2 || lastCol < 1) {
+    return resultado;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const IDX = obtenerIdxPlanilla_(headers);
+  validarColumnasGenerarImagenes_(IDX);
+
+  const rowCount = lastRow - 1;
+  const ids = sheet
+    .getRange(2, IDX.id + 1, rowCount, 1)
+    .getDisplayValues();
+  const fotoRange = sheet.getRange(2, IDX.foto + 1, rowCount, 1);
+  const firmaRange = sheet.getRange(2, IDX.firma + 1, rowCount, 1);
+  const fotoValues = fotoRange.getDisplayValues();
+  const firmaValues = firmaRange.getDisplayValues();
+  const fotoRich = fotoRange.getRichTextValues();
+  const firmaRich = firmaRange.getRichTextValues();
+
+  for (let i = 0; i < rowCount; i++) {
+    const recordId = safeTrim_(ids[i][0]);
+
+    registrarArchivoNecesarioImagenSancion_(resultado, {
+      recordId: recordId,
+      mediaType: 'FOTO',
+      rawValue: fotoValues[i][0],
+      richText: fotoRich[i][0]
+    });
+
+    registrarArchivoNecesarioImagenSancion_(resultado, {
+      recordId: recordId,
+      mediaType: 'FIRMA',
+      rawValue: firmaValues[i][0],
+      richText: firmaRich[i][0]
+    });
+  }
+
+  resultado.total = Object.keys(resultado.mapa).length;
+  return resultado;
+}
+
+function registrarArchivoNecesarioImagenSancion_(resultado, params) {
+  const rawValue = safeTrim_(params && params.rawValue);
+  const linkedUrl = params && params.richText
+    ? safeTrim_(params.richText.getLinkUrl())
+    : '';
+
+  if (!rawValue && !linkedUrl) {
+    resultado.celdasVacias += 1;
+    return;
+  }
+
+  resultado.referenciasTotales += 1;
+
+  if (
+    esUrlPublicaPermanenteImagenSancion_(rawValue) ||
+    esUrlPublicaPermanenteImagenSancion_(linkedUrl)
+  ) {
+    resultado.celdasYaPublicas += 1;
+    return;
+  }
+
+  const fileName = resolverNombreArchivoParaPublicar_(rawValue, linkedUrl);
+  const validation = validarNombreArchivoParaPublicar_(
+    fileName,
+    params.recordId,
+    params.mediaType
+  );
+
+  if (!validation.ok) {
+    resultado.referenciasInvalidas += 1;
+    return;
+  }
+
+  if (resultado.mapa[validation.fileName]) {
+    resultado.referenciasDuplicadas += 1;
+    return;
+  }
+
+  resultado.mapa[validation.fileName] = true;
+}
+
+function cargarNombresIndexadosImagenesSanciones_(indexSheet) {
+  const mapa = {};
+  const lastRow = indexSheet.getLastRow();
+
+  if (lastRow < 2) {
+    return mapa;
+  }
+
+  const values = indexSheet
+    .getRange(2, 1, lastRow - 1, 1)
+    .getDisplayValues();
+
+  values.forEach(function (row) {
+    const fileName = safeTrim_(row[0]);
+    if (fileName) mapa[fileName] = true;
+  });
+
+  return mapa;
+}
+
+function construirMapaPendientesIndiceImagenesSanciones_(
+  archivosNecesarios,
+  archivosIndexados
+) {
+  const pendientes = {};
+
+  Object.keys(archivosNecesarios).forEach(function (fileName) {
+    if (!archivosIndexados[fileName]) {
+      pendientes[fileName] = true;
+    }
+  });
+
+  return pendientes;
+}
+
+function prepararIndiceImagenesSanciones() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+    const indexSheet = getOrCreateHojaIndiceImagenesSanciones_(ss);
+    const sourceFolder = validarCarpetaOrigenImagenesPublica_();
+    const necesarios = obtenerArchivosNecesariosImagenesSanciones_(ss);
+    const headers = getHeadersIndiceImagenesSanciones_();
+    const now = new Date().toISOString();
+
+    eliminarTriggersPrepararIndiceImagenesSanciones_();
+    eliminarTriggersGenerarImagenes_();
+
+    indexSheet.clearContents();
+    indexSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+    props.deleteProperty(PROP_GENERAR_IMAGENES_INDICE_VERSION);
+    props.deleteProperty(PROP_GENERAR_IMAGENES_INDICE_ACTUALIZADO);
+    props.deleteProperty(PROP_PREPARAR_INDICE_TOKEN);
+    props.setProperty(PROP_PREPARAR_INDICE_ESTADO, 'EN_PROCESO');
+    props.setProperty(PROP_PREPARAR_INDICE_ARCHIVOS_REVISADOS, '0');
+    props.setProperty(PROP_PREPARAR_INDICE_ARCHIVOS_VALIDOS, '0');
+    props.setProperty(
+      PROP_PREPARAR_INDICE_ARCHIVOS_NECESARIOS,
+      String(necesarios.total)
+    );
+    props.setProperty(
+      PROP_PREPARAR_INDICE_ARCHIVOS_PENDIENTES,
+      String(necesarios.total)
+    );
+    props.setProperty(PROP_PREPARAR_INDICE_ARCHIVOS_OMITIDOS, '0');
+    props.setProperty(
+      PROP_PREPARAR_INDICE_REFERENCIAS_INVALIDAS,
+      String(necesarios.referenciasInvalidas)
+    );
+    props.setProperty(
+      PROP_PREPARAR_INDICE_CELDAS_YA_PUBLICAS,
+      String(necesarios.celdasYaPublicas)
+    );
+    props.setProperty(PROP_PREPARAR_INDICE_INICIADO, now);
+    props.setProperty(PROP_PREPARAR_INDICE_ACTUALIZADO, now);
+
+    logGeneracionImagenes_('Indice filtrado inicializado por lotes', {
+      carpetaOrigen: sourceFolder.getName(),
+      carpetaId: sourceFolder.getId(),
+      archivosNecesarios: necesarios.total,
+      referenciasTotales: necesarios.referenciasTotales,
+      referenciasDuplicadas: necesarios.referenciasDuplicadas,
+      referenciasInvalidas: necesarios.referenciasInvalidas,
+      celdasYaPublicas: necesarios.celdasYaPublicas,
+      celdasVacias: necesarios.celdasVacias,
+      archivosMaximosPorEjecucion:
+        PREPARAR_INDICE_ARCHIVOS_MAXIMOS_POR_EJECUCION,
+      tiempoMaximoSegundos: PREPARAR_INDICE_TIEMPO_MAX_MS / 1000
+    });
+
+    if (necesarios.total === 0) {
+      completarPreparacionIndiceImagenesSanciones_(props, now, 0);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  const estado = obtenerEstadoPreparacionIndiceImagenesSanciones();
+
+  if (estado.estado === 'COMPLETADO') {
+    return estado;
+  }
+
+  return procesarLoteIndiceImagenesSanciones_();
+}
+
+function continuarPreparacionIndiceImagenesSanciones_() {
+  return procesarLoteIndiceImagenesSanciones_();
+}
+
+function reanudarPreparacionIndiceImagenesSanciones() {
+  const props = PropertiesService.getScriptProperties();
+  const token = safeTrim_(props.getProperty(PROP_PREPARAR_INDICE_TOKEN));
+
+  if (!token) {
+    return prepararIndiceImagenesSanciones();
+  }
+
+  props.setProperty(PROP_PREPARAR_INDICE_ESTADO, 'EN_PROCESO');
+  return procesarLoteIndiceImagenesSanciones_();
+}
+
+function refrescarIndiceImagenesSanciones() {
+  return prepararIndiceImagenesSanciones();
+}
+
+function reconstruirIndiceImagenesSanciones_() {
+  return prepararIndiceImagenesSanciones();
+}
+
+function procesarLoteIndiceImagenesSanciones_() {
+  const lock = LockService.getScriptLock();
+
+  if (!lock.tryLock(30000)) {
+    programarSiguienteLotePrepararIndiceImagenesSanciones_();
+    return obtenerEstadoPreparacionIndiceImagenesSanciones();
+  }
+
+  const inicioMs = Date.now();
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const estado = safeTrim_(
+      props.getProperty(PROP_PREPARAR_INDICE_ESTADO)
+    );
+
+    if (estado !== 'EN_PROCESO') {
+      return obtenerEstadoPreparacionIndiceImagenesSanciones();
+    }
+
+    // Se programa antes de empezar para conservar la cadena si Drive tarda.
+    programarSiguienteLotePrepararIndiceImagenesSanciones_();
+
+    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+    const indexSheet = getOrCreateHojaIndiceImagenesSanciones_(ss);
+    const sourceFolder = validarCarpetaOrigenImagenesPublica_();
+    const necesarios = obtenerArchivosNecesariosImagenesSanciones_(ss);
+    const indexados = cargarNombresIndexadosImagenesSanciones_(indexSheet);
+    const pendientes = construirMapaPendientesIndiceImagenesSanciones_(
+      necesarios.mapa,
+      indexados
+    );
+    let pendientesRestantes = Object.keys(pendientes).length;
+
+    props.setProperty(
+      PROP_PREPARAR_INDICE_ARCHIVOS_NECESARIOS,
+      String(necesarios.total)
+    );
+    props.setProperty(
+      PROP_PREPARAR_INDICE_ARCHIVOS_PENDIENTES,
+      String(pendientesRestantes)
+    );
+    props.setProperty(
+      PROP_PREPARAR_INDICE_REFERENCIAS_INVALIDAS,
+      String(necesarios.referenciasInvalidas)
+    );
+    props.setProperty(
+      PROP_PREPARAR_INDICE_CELDAS_YA_PUBLICAS,
+      String(necesarios.celdasYaPublicas)
+    );
+
+    if (pendientesRestantes === 0) {
+      const updatedSinPendientes = new Date().toISOString();
+      completarPreparacionIndiceImagenesSanciones_(
+        props,
+        updatedSinPendientes,
+        0
+      );
+      const terminado = obtenerEstadoPreparacionIndiceImagenesSanciones();
+      terminado.finalizacionAnticipada = true;
+      logGeneracionImagenes_(
+        'Indice completado: todas las referencias ya estaban encontradas',
+        terminado
+      );
+      return terminado;
+    }
+
+    const continuationToken = safeTrim_(
+      props.getProperty(PROP_PREPARAR_INDICE_TOKEN)
+    );
+    const iterator = continuationToken
+      ? DriveApp.continueFileIterator(continuationToken)
+      : sourceFolder.getFiles();
+    const updated = new Date().toISOString();
+    const rows = [];
+    const nombresLote = {};
+    let revisadosLote = 0;
+    let validosLote = 0;
+    let omitidosLote = 0;
+    let duplicadosLote = 0;
+
+    let revisadosAcumulados = Number(
+      props.getProperty(PROP_PREPARAR_INDICE_ARCHIVOS_REVISADOS) || 0
+    );
+    let omitidosAcumulados = Number(
+      props.getProperty(PROP_PREPARAR_INDICE_ARCHIVOS_OMITIDOS) || 0
+    );
+
+    logGeneracionImagenes_('Inicio de lote del indice filtrado', {
+      reanudadoConToken: !!continuationToken,
+      archivosNecesarios: necesarios.total,
+      archivosEncontrados: Object.keys(indexados).length,
+      archivosPendientes: pendientesRestantes,
+      archivosRevisadosAcumulados: revisadosAcumulados,
+      filasActualesIndice: Math.max(0, indexSheet.getLastRow() - 1)
+    });
+
+    while (iterator.hasNext() && pendientesRestantes > 0) {
+      const tiempoConsumido = Date.now() - inicioMs;
+      const cercaDelLimite =
+        tiempoConsumido >=
+        PREPARAR_INDICE_TIEMPO_MAX_MS - PREPARAR_INDICE_MARGEN_CORTE_MS;
+
+      if (
+        revisadosLote >= PREPARAR_INDICE_ARCHIVOS_MAXIMOS_POR_EJECUCION ||
+        cercaDelLimite
+      ) {
+        break;
+      }
+
+      const file = iterator.next();
+      revisadosLote += 1;
+      const fileName = safeTrim_(file.getName());
+
+      // Esta es la optimizacion principal: los metadatos adicionales solo se
+      // consultan para nombres realmente referenciados por FOTO/FIRMA.
+      if (!fileName || !pendientes[fileName]) {
+        omitidosLote += 1;
+        continue;
+      }
+
+      if (nombresLote[fileName]) {
+        duplicadosLote += 1;
+        continue;
+      }
+
+      nombresLote[fileName] = true;
+      const resourceKey = safeTrim_(file.getResourceKey());
+      const sourceId = file.getId();
+
+      rows.push([
+        fileName,
+        sourceId,
+        resourceKey,
+        construirUrlPublicaPermanenteDriveDesdeDatos_(
+          sourceId,
+          resourceKey
+        ),
+        updated
+      ]);
+      validosLote += 1;
+      delete pendientes[fileName];
+      pendientesRestantes -= 1;
+
+      if (
+        revisadosLote % PREPARAR_INDICE_LOG_CADA_ARCHIVOS === 0 ||
+        pendientesRestantes === 0
+      ) {
+        logGeneracionImagenes_('Avance del lote del indice filtrado', {
+          revisadosLote: revisadosLote,
+          encontradosLote: validosLote,
+          omitidosLote: omitidosLote,
+          archivosPendientes: pendientesRestantes,
+          revisadosAcumulados: revisadosAcumulados + revisadosLote,
+          segundosConsumidos:
+            Math.round((Date.now() - inicioMs) / 100) / 10
+        });
+      }
+    }
+
+    if (rows.length > 0) {
+      indexSheet
+        .getRange(
+          indexSheet.getLastRow() + 1,
+          1,
+          rows.length,
+          rows[0].length
+        )
+        .setValues(rows);
+    }
+
+    revisadosAcumulados += revisadosLote;
+    omitidosAcumulados += omitidosLote;
+    const encontradosAcumulados = Math.max(0, indexSheet.getLastRow() - 1);
+
+    props.setProperty(
+      PROP_PREPARAR_INDICE_ARCHIVOS_REVISADOS,
+      String(revisadosAcumulados)
+    );
+    props.setProperty(
+      PROP_PREPARAR_INDICE_ARCHIVOS_VALIDOS,
+      String(encontradosAcumulados)
+    );
+    props.setProperty(
+      PROP_PREPARAR_INDICE_ARCHIVOS_PENDIENTES,
+      String(pendientesRestantes)
+    );
+    props.setProperty(
+      PROP_PREPARAR_INDICE_ARCHIVOS_OMITIDOS,
+      String(omitidosAcumulados)
+    );
+    props.setProperty(PROP_PREPARAR_INDICE_ACTUALIZADO, updated);
+
+    if (pendientesRestantes === 0) {
+      completarPreparacionIndiceImagenesSanciones_(props, updated, 0);
+
+      const result = obtenerEstadoPreparacionIndiceImagenesSanciones();
+      result.archivosRevisadosEnEjecucion = revisadosLote;
+      result.archivosEncontradosEnEjecucion = validosLote;
+      result.archivosOmitidosEnEjecucion = omitidosLote;
+      result.duplicadosEnEjecucion = duplicadosLote;
+      result.finalizacionAnticipada = iterator.hasNext();
+      result.duracionSegundos =
+        Math.round((Date.now() - inicioMs) / 100) / 10;
+
+      logGeneracionImagenes_(
+        'Indice filtrado completado al encontrar todas las referencias',
+        result
+      );
+      return result;
+    }
+
+    if (iterator.hasNext()) {
+      const nextToken = iterator.getContinuationToken();
+      props.setProperty(PROP_PREPARAR_INDICE_TOKEN, nextToken);
+      props.setProperty(PROP_PREPARAR_INDICE_ESTADO, 'EN_PROCESO');
+      programarSiguienteLotePrepararIndiceImagenesSanciones_();
+
+      const result = obtenerEstadoPreparacionIndiceImagenesSanciones();
+      result.archivosRevisadosEnEjecucion = revisadosLote;
+      result.archivosEncontradosEnEjecucion = validosLote;
+      result.archivosOmitidosEnEjecucion = omitidosLote;
+      result.duplicadosEnEjecucion = duplicadosLote;
+      result.duracionSegundos =
+        Math.round((Date.now() - inicioMs) / 100) / 10;
+
+      logGeneracionImagenes_('Lote de indice filtrado guardado', result);
+      return result;
+    }
+
+    // Se recorrio toda la carpeta. El indice queda utilizable incluso cuando
+    // faltan archivos: generarImagenes() los reportara como NO_ENCONTRADO.
+    completarPreparacionIndiceImagenesSanciones_(
+      props,
+      updated,
+      pendientesRestantes
+    );
+
+    const result = obtenerEstadoPreparacionIndiceImagenesSanciones();
+    result.archivosRevisadosEnEjecucion = revisadosLote;
+    result.archivosEncontradosEnEjecucion = validosLote;
+    result.archivosOmitidosEnEjecucion = omitidosLote;
+    result.duplicadosEnEjecucion = duplicadosLote;
+    result.duracionSegundos =
+      Math.round((Date.now() - inicioMs) / 100) / 10;
+
+    logGeneracionImagenes_('Indice filtrado completado con faltantes', result);
+    return result;
+  } catch (error) {
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty(PROP_PREPARAR_INDICE_ESTADO, 'ERROR');
+    props.setProperty(
+      PROP_PREPARAR_INDICE_ACTUALIZADO,
+      new Date().toISOString()
+    );
+    eliminarTriggersPrepararIndiceImagenesSanciones_();
+
+    logGeneracionImagenes_('ERROR preparando indice filtrado', {
+      error: error && error.stack ? error.stack : String(error)
+    });
+    throw error;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function completarPreparacionIndiceImagenesSanciones_(
+  props,
+  updated,
+  pendientes
+) {
+  props.deleteProperty(PROP_PREPARAR_INDICE_TOKEN);
+  props.setProperty(PROP_PREPARAR_INDICE_ESTADO, 'COMPLETADO');
+  props.setProperty(
+    PROP_PREPARAR_INDICE_ARCHIVOS_PENDIENTES,
+    String(Math.max(0, Number(pendientes) || 0))
+  );
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_INDICE_VERSION,
+    GENERAR_IMAGENES_INDICE_VERSION
+  );
+  props.setProperty(PROP_GENERAR_IMAGENES_INDICE_ACTUALIZADO, updated);
+  props.setProperty(PROP_PREPARAR_INDICE_ACTUALIZADO, updated);
+  eliminarTriggersPrepararIndiceImagenesSanciones_();
+}
+
+function obtenerEstadoPreparacionIndiceImagenesSanciones() {
+  const props = PropertiesService.getScriptProperties();
+  let filasIndice = 0;
+
+  try {
+    const sheet = SpreadsheetApp
+      .openById(SHEET_ID_SANCIONES)
+      .getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
+    filasIndice = sheet ? Math.max(0, sheet.getLastRow() - 1) : 0;
+  } catch (error) {
+    Logger.log(error.message || String(error));
+  }
+
+  const estado =
+    safeTrim_(props.getProperty(PROP_PREPARAR_INDICE_ESTADO)) ||
+    'NO_INICIADO';
+  const necesarios = Number(
+    props.getProperty(PROP_PREPARAR_INDICE_ARCHIVOS_NECESARIOS) || 0
+  );
+  const encontrados = Number(
+    props.getProperty(PROP_PREPARAR_INDICE_ARCHIVOS_VALIDOS) || filasIndice
+  );
+  const pendientes = Number(
+    props.getProperty(PROP_PREPARAR_INDICE_ARCHIVOS_PENDIENTES) || 0
+  );
+  const progreso = necesarios > 0
+    ? Math.round((Math.min(necesarios, encontrados) / necesarios) * 10000) / 100
+    : estado === 'COMPLETADO'
+      ? 100
+      : 0;
+
+  let mensaje = 'El indice filtrado continua automaticamente por lotes.';
+
+  if (estado === 'COMPLETADO' && pendientes === 0) {
+    mensaje =
+      'Se encontraron todas las FOTO/FIRMA requeridas. Ya puede ejecutar generarImagenes().';
+  } else if (estado === 'COMPLETADO' && pendientes > 0) {
+    mensaje =
+      'Se recorrio la carpeta completa, pero faltan ' +
+      pendientes +
+      ' archivo(s) referenciados en PLANILLA. generarImagenes() los reportara como no encontrados.';
+  } else if (estado === 'ERROR') {
+    mensaje = 'La preparacion del indice filtrado termino con error.';
+  }
+
+  return {
+    ok: estado !== 'ERROR',
+    estado: estado,
+    modo: 'ORIGEN_DIRECTO_FILTRADO_POR_PLANILLA',
+    archivosNecesarios: necesarios,
+    archivosEncontrados: encontrados,
+    archivosPendientes: pendientes,
+    progresoPorcentaje: progreso,
+    archivosRevisados: Number(
+      props.getProperty(PROP_PREPARAR_INDICE_ARCHIVOS_REVISADOS) || 0
+    ),
+    archivosOmitidosPorNoEstarEnPlanilla: Number(
+      props.getProperty(PROP_PREPARAR_INDICE_ARCHIVOS_OMITIDOS) || 0
+    ),
+    referenciasInvalidas: Number(
+      props.getProperty(PROP_PREPARAR_INDICE_REFERENCIAS_INVALIDAS) || 0
+    ),
+    celdasYaPublicas: Number(
+      props.getProperty(PROP_PREPARAR_INDICE_CELDAS_YA_PUBLICAS) || 0
+    ),
+    filasIndice: filasIndice,
+    iniciado: safeTrim_(
+      props.getProperty(PROP_PREPARAR_INDICE_INICIADO)
+    ),
+    actualizado: safeTrim_(
+      props.getProperty(PROP_PREPARAR_INDICE_ACTUALIZADO)
+    ),
+    tieneContinuacion: !!safeTrim_(
+      props.getProperty(PROP_PREPARAR_INDICE_TOKEN)
+    ),
+    mensaje: mensaje
+  };
+}
+
+function mostrarEstadoPreparacionIndiceImagenesSanciones() {
+  const estado = obtenerEstadoPreparacionIndiceImagenesSanciones();
+  Logger.log(JSON.stringify(estado, null, 2));
+  return estado;
+}
+
+function programarSiguienteLotePrepararIndiceImagenesSanciones_() {
+  eliminarTriggersPrepararIndiceImagenesSanciones_();
+  ScriptApp
+    .newTrigger(FUNCION_TRIGGER_PREPARAR_INDICE)
+    .timeBased()
+    .after(PREPARAR_INDICE_TRIGGER_MS)
+    .create();
+}
+
+function eliminarTriggersPrepararIndiceImagenesSanciones_() {
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (
+      trigger.getHandlerFunction() === FUNCION_TRIGGER_PREPARAR_INDICE
+    ) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}
+
+function asegurarIndiceImagenesSanciones_(ss) {
+  const props = PropertiesService.getScriptProperties();
+  const version = safeTrim_(
+    props.getProperty(PROP_GENERAR_IMAGENES_INDICE_VERSION)
+  );
+  const estadoIndice = safeTrim_(
+    props.getProperty(PROP_PREPARAR_INDICE_ESTADO)
+  );
+  const archivosNecesarios = Number(
+    props.getProperty(PROP_PREPARAR_INDICE_ARCHIVOS_NECESARIOS) || 0
+  );
+  const sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
+
+  if (
+    version !== GENERAR_IMAGENES_INDICE_VERSION ||
+    estadoIndice !== 'COMPLETADO' ||
+    !sheet ||
+    (archivosNecesarios > 0 && sheet.getLastRow() < 2)
+  ) {
+    throw new Error(
+      'El indice filtrado de imagenes de Dorchester aun no esta completo. ' +
+      'Ejecute prepararIndiceImagenesSanciones() una vez y espere a que ' +
+      'obtenerEstadoPreparacionIndiceImagenesSanciones() indique COMPLETADO.'
+    );
+  }
+
+  return cargarIndiceImagenesSanciones_(ss);
+}
+
+function cargarIndiceImagenesSanciones_(ss) {
+  const sheet = getOrCreateHojaIndiceImagenesSanciones_(ss);
+  const lastRow = sheet.getLastRow();
+  const mapa = {};
+  let origenes = 0;
+
+  if (lastRow >= 2) {
+    const values = sheet.getRange(2, 1, lastRow - 1, 5).getDisplayValues();
+
+    values.forEach(function (row) {
+      const fileName = safeTrim_(row[0]);
+
+      if (!fileName) return;
+
+      const sourceId = safeTrim_(row[1]);
+      const resourceKey = safeTrim_(row[2]);
+      const publicUrl = safeTrim_(row[3]);
+
+      const entry = {
+        fileName: fileName,
+        sourceId: sourceId,
+        resourceKey: resourceKey,
+        publicUrl: publicUrl,
+        updated: safeTrim_(row[4])
+      };
+
+      mapa[fileName] = entry;
+
+      const info = extraerRegistroTipoDesdeNombreImagenSancion_(fileName);
+      if (info) {
+        const aliasKey =
+          "@REGISTRO_TIPO:" +
+          construirClaveRegistroTipoImagenSancion_(
+            info.recordId,
+            info.mediaType
+          );
+
+        if (!mapa[aliasKey]) {
+          mapa[aliasKey] = entry;
+        }
+      }
+
+      if (sourceId && publicUrl) origenes += 1;
+    });
+  }
+
+  return {
+    sheet: sheet,
+    folder: validarCarpetaOrigenImagenesPublica_(),
+    mapa: mapa,
+    origenes: origenes,
+    nombreHoja: SHEET_INDICE_IMAGENES_SANCIONES
+  };
+}
+
+
+function validarCarpetaOrigenImagenesPublica_() {
+  const folder = DriveApp.getFolderById(
+    FOLDER_ID_IMAGENES_SANCIONES_ORIGEN
+  );
+  const access = folder.getSharingAccess();
+  const esPublica =
+    access === DriveApp.Access.ANYONE_WITH_LINK ||
+    access === DriveApp.Access.ANYONE;
+
+  if (!esPublica) {
+    throw new Error(
+      'La carpeta original de Dorchester no esta publica. ' +
+      'El propietario debe configurarla como "Cualquier persona con el enlace - Lector". ' +
+      'El script del Consejo no puede firmar ni publicar archivos privados de otra cuenta.'
+    );
+  }
+
+  return folder;
+}
+
+
+function validarAccesoDirectoImagenesSanciones() {
+  const folder = validarCarpetaOrigenImagenesPublica_();
+  const files = folder.getFiles();
+  let sample = null;
+
+  while (files.hasNext()) {
+    const file = files.next();
+    if (!esRutaArchivoMedia_(file.getName())) continue;
+
+    sample = {
+      archivo: file.getName(),
+      fileId: file.getId(),
+      url: construirUrlPublicaPermanenteDrive_(file)
+    };
+    break;
+  }
+
+  const result = {
+    ok: true,
+    modo: "ORIGEN_DIRECTO_SIN_COPIAS",
+    carpeta: folder.getName(),
+    carpetaId: folder.getId(),
+    muestra: sample
+  };
+
+  logGeneracionImagenes_("Acceso directo validado", result);
+  return result;
+}
+
+
+function construirUrlPublicaPermanenteDriveDesdeDatos_(fileId, resourceKey) {
+  let url =
+    "https://drive.google.com/uc?export=view&id=" +
+    encodeURIComponent(safeTrim_(fileId));
+  const key = safeTrim_(resourceKey);
+
+  if (key) {
+    url += "&resourcekey=" + encodeURIComponent(key);
+  }
+
+  return url;
+}
+
+function construirUrlPublicaPermanenteDrive_(file) {
+  return construirUrlPublicaPermanenteDriveDesdeDatos_(
+    file.getId(),
+    safeTrim_(file.getResourceKey())
+  );
+}
+
+function esUrlPublicaPermanenteImagenSancion_(value) {
+  const url = safeTrim_(value).toLowerCase();
+
+  return (
+    url.indexOf("https://drive.google.com/uc?") === 0 &&
+    url.indexOf("id=") !== -1
+  );
+}
+
+function construirNotaUrlPublicaImagen_(currentNote, fileName, rawValue) {
+  const marker = "[URL_PUBLICA_SANCIONES]";
+
+  if (safeTrim_(currentNote).indexOf(marker) !== -1) {
+    return currentNote;
+  }
+
+  const originalValue = safeTrim_(rawValue);
+  const noteLines = [
+    marker,
+    "Generada: " +
+      Utilities.formatDate(
+        new Date(),
+        Session.getScriptTimeZone(),
+        "yyyy-MM-dd HH:mm:ss"
+      ),
+    "Archivo original: " + fileName
+  ];
+
+  if (originalValue && originalValue.length <= 500) {
+    noteLines.push("Valor anterior: " + originalValue);
+  }
+
+  return safeTrim_(currentNote)
+    ? currentNote + "\n\n" + noteLines.join("\n")
+    : noteLines.join("\n");
+}
+
+function obtenerOCrearCarpetaCopiasPublicasSanciones_() {
+  throw new Error(
+    "Funcion obsoleta: el proceso usa directamente la carpeta original de Dorchester y no crea copias."
+  );
+}
+
+
+function validarColumnasGenerarImagenes_(IDX) {
+  if (!IDX || IDX.id === -1 || IDX.foto === -1 || IDX.firma === -1) {
+    throw new Error(
+      'La hoja "' +
+      SHEET_PLANILLA +
+      '" debe contener las columnas ID, FOTO y FIRMA.'
+    );
+  }
+}
+
+function crearResumenInicialGeneracionImagenes_() {
+  return {
+    iniciado: new Date().toISOString(),
+    actualizado: new Date().toISOString(),
+    filasProcesadas: 0,
+    urlsGeneradas: 0,
+    urlsYaPublicas: 0,
+    camposVacios: 0,
+    archivosNoEncontrados: 0,
+    nombresInvalidos: 0,
+    errores: 0,
+    erroresEjecucion: 0
+  };
+}
+
+function leerResumenGeneracionImagenes_() {
+  const raw = PropertiesService
+    .getScriptProperties()
+    .getProperty(PROP_GENERAR_IMAGENES_RESUMEN);
+
+  if (!raw) {
+    return crearResumenInicialGeneracionImagenes_();
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    parsed.erroresEjecucion = Number(parsed.erroresEjecucion || 0);
+    return parsed;
+  } catch (error) {
+    throw new Error("El resumen de generarImagenes esta corrupto.");
+  }
+}
+
+function acumularResultadoGenerarImagenes_(resumen, status) {
+  switch (status) {
+    case "GENERADA":
+      resumen.urlsGeneradas += 1;
+      break;
+    case "YA_PUBLICA":
+      resumen.urlsYaPublicas += 1;
+      break;
+    case "VACIO":
+      resumen.camposVacios += 1;
+      break;
+    case "NO_ENCONTRADO":
+      resumen.archivosNoEncontrados += 1;
+      break;
+    case "NOMBRE_INVALIDO":
+      resumen.nombresInvalidos += 1;
+      break;
+    case "ERROR":
+      resumen.errores += 1;
+      break;
+  }
+}
+
+function completarGeneracionImagenes_(sheet, lastRow) {
+  const props = PropertiesService.getScriptProperties();
+  const resumen = leerResumenGeneracionImagenes_();
+  const sourceFolder = validarCarpetaOrigenImagenesPublica_();
+
+  resumen.actualizado = new Date().toISOString();
+  resumen.finalizado = new Date().toISOString();
+
+  props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "COMPLETADO");
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_SIGUIENTE_FILA,
+    String(lastRow + 1)
+  );
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_RESUMEN,
+    JSON.stringify(resumen)
+  );
+  props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
+  eliminarTriggersGenerarImagenes_();
+
+  const result = construirEstadoGeneracionImagenes_(
+    "COMPLETADO",
+    lastRow + 1,
+    lastRow,
+    resumen,
+    sourceFolder
+  );
+
+  logGeneracionImagenes_("Proceso completado sin crear copias", result);
+  return result;
+}
+
+
+function construirEstadoGeneracionImagenes_(
+  estado,
+  nextRow,
+  lastRow,
+  resumen,
+  sourceFolder
+) {
+  const totalFilas = Math.max(0, lastRow - 1);
+  const filasHasta = Math.max(0, Math.min(totalFilas, nextRow - 2));
+  const progreso = totalFilas > 0
+    ? Math.round((filasHasta / totalFilas) * 10000) / 100
+    : 100;
+
+  return {
+    ok: estado !== "ERROR",
+    estado: estado,
+    modo: "ORIGEN_DIRECTO_SIN_COPIAS",
+    siguienteFila: nextRow,
+    ultimaFila: lastRow,
+    progresoPorcentaje: progreso,
+    textoVisible: TEXTO_ENLACE_IMAGEN_SANCION,
+    erroresConsecutivos: Number(
+      PropertiesService
+        .getScriptProperties()
+        .getProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS) || 0
+    ),
+    resumen: resumen,
+    carpetaOrigenDorchester: sourceFolder
+      ? "https://drive.google.com/drive/folders/" + sourceFolder.getId()
+      : "",
+    mensaje:
+      estado === "COMPLETADO"
+        ? "FOTO y FIRMA apuntan directamente a los archivos originales de Dorchester."
+        : "El proceso continua sin crear copias y guarda avances parciales."
+  };
+}
+
+
+function obtenerEstadoGeneracionImagenes() {
+  const props = PropertiesService.getScriptProperties();
+  const estado =
+    safeTrim_(props.getProperty(PROP_GENERAR_IMAGENES_ESTADO)) ||
+    "NO_INICIADO";
+  const nextRow = Number(
+    props.getProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA) || 2
+  );
+  const resumen = leerResumenGeneracionImagenes_();
+  let sourceFolder = null;
+
+  try {
+    sourceFolder = validarCarpetaOrigenImagenesPublica_();
+  } catch (error) {
+    Logger.log(error.message || String(error));
+  }
+
+  let lastRow = 0;
+  try {
+    const sheet = SpreadsheetApp
+      .openById(SHEET_ID_SANCIONES)
+      .getSheetByName(SHEET_PLANILLA);
+    lastRow = sheet ? sheet.getLastRow() : 0;
+  } catch (error) {
+    Logger.log(error.message || String(error));
+  }
+
+  return construirEstadoGeneracionImagenes_(
+    estado,
+    nextRow,
+    lastRow,
+    resumen,
+    sourceFolder
+  );
+}
+
+
+function mostrarProgresoGeneracionImagenes() {
+  const estado = obtenerEstadoGeneracionImagenes();
+  logGeneracionImagenes_("Estado solicitado", estado);
+  return estado;
+}
+
+function programarSiguienteLoteGenerarImagenes_() {
+  eliminarTriggersGenerarImagenes_();
+  ScriptApp
+    .newTrigger(FUNCION_TRIGGER_GENERAR_IMAGENES)
+    .timeBased()
+    .after(GENERAR_IMAGENES_TRIGGER_MS)
+    .create();
+}
+
+function eliminarTriggersGenerarImagenes_() {
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (
+      trigger.getHandlerFunction() === FUNCION_TRIGGER_GENERAR_IMAGENES
+    ) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}
+
+function reiniciarGeneracionImagenes() {
+  const props = PropertiesService.getScriptProperties();
+  eliminarTriggersGenerarImagenes_();
+  eliminarTriggersPrepararIndiceImagenesSanciones_();
+  props.deleteProperty(PROP_GENERAR_IMAGENES_ESTADO);
+  props.deleteProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA);
+  props.deleteProperty(PROP_GENERAR_IMAGENES_RESUMEN);
+  props.deleteProperty(PROP_GENERAR_IMAGENES_TEXTO_REPARADO);
+  props.deleteProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS);
+  props.deleteProperty(PROP_GENERAR_IMAGENES_INDICE_VERSION);
+  props.deleteProperty(PROP_GENERAR_IMAGENES_INDICE_ACTUALIZADO);
+  props.deleteProperty(PROP_PREPARAR_INDICE_ESTADO);
+  props.deleteProperty(PROP_PREPARAR_INDICE_TOKEN);
+  props.deleteProperty(PROP_PREPARAR_INDICE_ARCHIVOS_REVISADOS);
+  props.deleteProperty(PROP_PREPARAR_INDICE_ARCHIVOS_VALIDOS);
+  props.deleteProperty(PROP_PREPARAR_INDICE_ARCHIVOS_NECESARIOS);
+  props.deleteProperty(PROP_PREPARAR_INDICE_ARCHIVOS_PENDIENTES);
+  props.deleteProperty(PROP_PREPARAR_INDICE_ARCHIVOS_OMITIDOS);
+  props.deleteProperty(PROP_PREPARAR_INDICE_REFERENCIAS_INVALIDAS);
+  props.deleteProperty(PROP_PREPARAR_INDICE_CELDAS_YA_PUBLICAS);
+  props.deleteProperty(PROP_PREPARAR_INDICE_INICIADO);
+  props.deleteProperty(PROP_PREPARAR_INDICE_ACTUALIZADO);
+
+  return {
+    ok: true,
+    mensaje:
+      "Estado reiniciado. No se eliminan archivos ni se crean copias."
+  };
+}
+
+function logGeneracionImagenes_(mensaje, data) {
+  const prefix = "[GENERAR_IMAGENES] ";
+
+  if (data === undefined) {
+    Logger.log(prefix + mensaje);
+    return;
+  }
+
+  let detalle;
+  try {
+    detalle = JSON.stringify(data);
+  } catch (error) {
+    detalle = String(data);
+  }
+
+  Logger.log(prefix + mensaje + " | " + detalle);
 }
 
 function leerPlanillaSanciones_(options) {
@@ -4804,4 +6753,75 @@ function maestraEsConfiableParaCorreccion_(master) {
   }
 
   return true;
+}
+
+function reiniciarSoloGeneracionImagenes() {
+  const props = PropertiesService.getScriptProperties();
+
+  eliminarTriggersGenerarImagenes_();
+
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_ESTADO,
+    "EN_PROCESO"
+  );
+
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_SIGUIENTE_FILA,
+    "2"
+  );
+
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_RESUMEN,
+    JSON.stringify(crearResumenInicialGeneracionImagenes_())
+  );
+
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS,
+    "0"
+  );
+
+  // Permite volver a corregir URLs completas a texto "Full size".
+  props.deleteProperty(
+    PROP_GENERAR_IMAGENES_TEXTO_REPARADO
+  );
+
+  const resultado = {
+    ok: true,
+    estado: "EN_PROCESO",
+    siguienteFila: 2,
+    mensaje:
+      "Se reinició únicamente la generación de enlaces. " +
+      "El índice de imágenes se conserva."
+  };
+
+  Logger.log(JSON.stringify(resultado, null, 2));
+  return resultado;
+}
+
+function diagnosticarIndiceImagenesSanciones() {
+  const props = PropertiesService.getScriptProperties();
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
+
+  const resultado = {
+    versionEsperada: GENERAR_IMAGENES_INDICE_VERSION,
+    versionGuardada: safeTrim_(
+      props.getProperty(PROP_GENERAR_IMAGENES_INDICE_VERSION)
+    ),
+    estadoIndice: safeTrim_(
+      props.getProperty(PROP_PREPARAR_INDICE_ESTADO)
+    ),
+    existeHojaIndice: !!sheet,
+    filasIndice: sheet ? Math.max(0, sheet.getLastRow() - 1) : 0,
+    valido: false
+  };
+
+  resultado.valido =
+    resultado.versionGuardada === resultado.versionEsperada &&
+    resultado.estadoIndice === "COMPLETADO" &&
+    resultado.existeHojaIndice &&
+    resultado.filasIndice > 0;
+
+  Logger.log(JSON.stringify(resultado, null, 2));
+  return resultado;
 }

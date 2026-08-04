@@ -562,7 +562,8 @@
         // V10 Sanciones https://script.google.com/macros/s/AKfycbwXBHPiLRwHCZB6aYc-MMWvJUClHB_AyUOcYU4DpLjjoxoHR0AvAnUNyrzxG08Gv27zUA/exec
         // V11 Sanciones https://script.google.com/macros/s/AKfycbwVMBuVMH3GOaElmE9CE5kMEgLMpTA2Th6A6g9v6Beb7Up4PcmVf9rqks7rR3oV48Vf/exec
         // V12 Sanciones https://script.google.com/macros/s/AKfycbyyrV6kX6OwPJlxERYLN3r_Da-LYKOZjBcxYNc3bhSsMNT5AVhKV1dr5Nt9FPGVmHcWJw/exec
-        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyyrV6kX6OwPJlxERYLN3r_Da-LYKOZjBcxYNc3bhSsMNT5AVhKV1dr5Nt9FPGVmHcWJw/exec';
+        //V14 Sanciones https://script.google.com/macros/s/AKfycbzQs8yx04g0XfWUL0jsJPJPASxCRimmm2R94VuXrcC1Bz4_1gz8VC_xOituVEH2deV3/exec
+        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzQs8yx04g0XfWUL0jsJPJPASxCRimmm2R94VuXrcC1Bz4_1gz8VC_xOituVEH2deV3/exec';
 
         var currentApto = '';
         var currentPeriodoLabel = '';
@@ -975,21 +976,153 @@
                 return '';
             }
 
-            var url = normalizeMediaUrl_(rawValue);
+            var originalUrl = normalizeMediaUrl_(rawValue);
 
-            if (!url) return '';
+            if (!originalUrl) return '';
+
+            var displayUrls = buildMediaDisplayUrls_(originalUrl);
+            var initialUrl = displayUrls.shift() || originalUrl;
+            var fallbackUrls = encodeURIComponent(JSON.stringify(displayUrls));
 
             return '' +
-                '<a href="' + escapeHtml_(url) + '" target="_blank" rel="noopener noreferrer">' +
+                '<a href="' + escapeHtml_(originalUrl) + '" target="_blank" rel="noopener noreferrer">' +
                     '<img ' +
-                        'src="' + escapeHtml_(url) + '" ' +
+                        'src="' + escapeHtml_(initialUrl) + '" ' +
+                        'data-original-url="' + escapeHtml_(originalUrl) + '" ' +
+                        'data-fallback-urls="' + escapeHtml_(fallbackUrls) + '" ' +
                         'alt="Foto de la sanción" ' +
                         'class="sancion-photo-thumb" ' +
                         'loading="lazy" ' +
+                        'decoding="async" ' +
                         'referrerpolicy="no-referrer" ' +
-                        'onerror="this.style.display=\'none\'; this.parentElement.insertAdjacentHTML(\'afterend\', \'<a class=&quot;media-link&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot; href=&quot;' + escapeHtml_(url) + '&quot;><i class=&quot;bi bi-camera-fill&quot;></i> Abrir foto</a>\');"' +
+                        'onerror="window.handleSancionPhotoError_(this)"' +
                     '>' +
                 '</a>';
+        }
+
+        window.handleSancionPhotoError_ = function (img) {
+            if (!img) return;
+
+            var fallbackUrls = [];
+
+            try {
+                fallbackUrls = JSON.parse(
+                    decodeURIComponent(img.getAttribute('data-fallback-urls') || '')
+                );
+            } catch (error) {
+                fallbackUrls = [];
+            }
+
+            if (fallbackUrls.length > 0) {
+                var nextUrl = fallbackUrls.shift();
+                img.setAttribute(
+                    'data-fallback-urls',
+                    encodeURIComponent(JSON.stringify(fallbackUrls))
+                );
+                img.src = nextUrl;
+                return;
+            }
+
+            var originalUrl = img.getAttribute('data-original-url') || '';
+            var parent = img.parentElement;
+
+            img.style.display = 'none';
+
+            if (!parent || !originalUrl) return;
+            if (parent.nextElementSibling && parent.nextElementSibling.classList.contains('media-link')) {
+                return;
+            }
+
+            var link = document.createElement('a');
+            link.className = 'media-link';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.href = originalUrl;
+            link.innerHTML = '<i class="bi bi-camera-fill"></i> Abrir foto';
+            parent.insertAdjacentElement('afterend', link);
+        };
+
+        function buildMediaDisplayUrls_(url) {
+            var normalizedUrl = normalizeMediaUrl_(url);
+
+            if (!normalizedUrl) return [];
+
+            var driveInfo = parseGoogleDriveMediaUrl_(normalizedUrl);
+
+            // Compatibilidad anterior: las URLs firmadas de AppSheet y otras
+            // URLs HTTP continúan utilizándose sin transformación.
+            if (!driveInfo) {
+                return [normalizedUrl];
+            }
+
+            var resourceKeyQuery = driveInfo.resourceKey
+                ? '&resourcekey=' + encodeURIComponent(driveInfo.resourceKey)
+                : '';
+
+            // El endpoint /uc puede responder 403 al cargarse como recurso
+            // embebido. Para la miniatura se intenta primero el endpoint
+            // thumbnail y luego dos alternativas, conservando /uc como enlace.
+            return uniqueStrings_([
+                'https://drive.google.com/thumbnail?id=' +
+                    encodeURIComponent(driveInfo.fileId) +
+                    resourceKeyQuery +
+                    '&sz=w1200',
+                'https://lh3.googleusercontent.com/d/' +
+                    encodeURIComponent(driveInfo.fileId) +
+                    '=w1200',
+                normalizedUrl
+            ]);
+        }
+
+        function parseGoogleDriveMediaUrl_(url) {
+            var value = String(url || '').trim();
+
+            if (!value || value.indexOf('drive.google.com') === -1) {
+                return null;
+            }
+
+            var fileId = '';
+            var resourceKey = '';
+
+            try {
+                var parsed = new URL(value, window.location.href);
+                fileId = parsed.searchParams.get('id') || '';
+                resourceKey = parsed.searchParams.get('resourcekey') || '';
+
+                if (!fileId) {
+                    var pathMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/i);
+                    fileId = pathMatch && pathMatch[1] ? pathMatch[1] : '';
+                }
+            } catch (error) {
+                var idMatch = value.match(/[?&]id=([^&#]+)/i);
+                var keyMatch = value.match(/[?&]resourcekey=([^&#]+)/i);
+                var pathMatchFallback = value.match(/\/file\/d\/([^/?#]+)/i);
+
+                fileId = idMatch && idMatch[1]
+                    ? decodeURIComponent(idMatch[1])
+                    : pathMatchFallback && pathMatchFallback[1]
+                        ? decodeURIComponent(pathMatchFallback[1])
+                        : '';
+                resourceKey = keyMatch && keyMatch[1]
+                    ? decodeURIComponent(keyMatch[1])
+                    : '';
+            }
+
+            return fileId
+                ? { fileId: fileId, resourceKey: resourceKey }
+                : null;
+        }
+
+        function uniqueStrings_(values) {
+            var seen = {};
+
+            return values.filter(function (value) {
+                var key = String(value || '').trim();
+
+                if (!key || seen[key]) return false;
+                seen[key] = true;
+                return true;
+            });
         }
 
 
