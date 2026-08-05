@@ -1,0 +1,21 @@
+# Crea una unidad. La API restringe este endpoint a administrador/superadmin.
+mutation CrearUnidad(
+  $input: Unidad_Data!
+    @allow(
+      fields: """
+        torre
+        apartamento
+        codigoOficial
+        areaPrivada
+        coeficiente
+        presupuestoAnual
+        fechaEntrega
+        estadoUnidad
+        activo
+      """
+    )
+)
+@auth(level: USER, insecureReason: "La API (routes.ts) restringe este endpoint a roles administrador/superadmin antes de invocar la mutación.")
+@transaction {
+  unidad_insert(data: $input)
+}

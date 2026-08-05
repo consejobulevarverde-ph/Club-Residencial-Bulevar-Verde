@@ -1,0 +1,25 @@
+# Lista unidades de forma paginada para el portal.
+query ListarUnidades(
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: USER, insecureReason: "Cualquier usuario autenticado del portal puede listar unidades.") {
+  unidades(
+    limit: $limit
+    offset: $offset
+    orderBy: [{ torre: ASC }, { apartamento: ASC }]
+  ) {
+    id
+    torre
+    apartamento
+    codigoOficial
+    areaPrivada
+    coeficiente
+    presupuestoAnual
+    fechaEntrega
+    estadoUnidad
+    activo
+    fechaCreacion
+    fechaActualizacion
+  }
+}

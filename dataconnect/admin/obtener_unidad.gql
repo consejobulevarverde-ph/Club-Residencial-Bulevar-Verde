@@ -1,0 +1,20 @@
+# Obtiene el detalle de una unidad por id.
+query ObtenerUnidad(
+  $id: UUID!
+)
+@auth(level: USER, insecureReason: "Cualquier usuario autenticado del portal puede consultar una unidad por id.") {
+  unidad(id: $id) {
+    id
+    torre
+    apartamento
+    codigoOficial
+    areaPrivada
+    coeficiente
+    presupuestoAnual
+    fechaEntrega
+    estadoUnidad
+    activo
+    fechaCreacion
+    fechaActualizacion
+  }
+}
