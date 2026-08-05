@@ -15,6 +15,24 @@
  * ═══════════════════════════════════════════════════════════
  *
  ***************************************/
+
+/***************************************
+ * ORGANIZACIÓN DEL ARCHIVO
+ *
+ * 01. Web App y consultas
+ * 02. Archivos históricos
+ * 03. Lectura y modelo de PLANILLA
+ * 04. Índice de evidencias en Drive
+ * 05. Generación y reparación de enlaces
+ * 06. Normalización y análisis de sanciones
+ * 07. Maestra, vigilancia y validación
+ * 08. Resúmenes y correos de sanciones
+ * 09. Notificaciones de debido proceso
+ * 10. Triggers operativos
+ * 11. Helpers generales
+ *
+ * La reorganización conserva las firmas, nombres y lógica de las funciones.
+ ***************************************/
 const SHEET_ID_SANCIONES = '1GeJZ4Rd4-ddzE6Vi8kpq9iB2_oxuLW87UiAnbZQ6Iow';
 const SHEET_PLANILLA = 'PLANILLA';
 const FOLDER_ID_SANCIONES_HISTORICAS = '1dHYZmOK0Oji3JhfDph8HB5pEQ68bX6IA';
@@ -79,6 +97,28 @@ const FUNCION_TRIGGER_GENERAR_IMAGENES = 'continuarGeneracionImagenes_';
 const FUNCION_TRIGGER_PREPARAR_INDICE =
   'continuarPreparacionIndiceImagenesSanciones_';
 
+// Programación diaria de procesos operativos.
+const TRIGGERS_OPERATIVOS_SANCIONES = [
+  {
+    funcion: "enviarCorreosResumenSanciones",
+    descripcion: "1. Enviar notificaciones de sanciones",
+    hora: 6,
+    minuto: 0
+  },
+  {
+    funcion: "prepararResumenNotificacionesDebidoProceso",
+    descripcion: "2. Generar resumen de notificaciones de debido proceso",
+    hora: 10,
+    minuto: 0
+  },
+  {
+    funcion: "enviarNotificacionesDebidoProceso",
+    descripcion: "3. Enviar notificaciones de debido proceso",
+    hora: 11,
+    minuto: 0
+  }
+];
+
 // Cache por ejecucion para recuperar URLs cuando una celda conserva el texto
 // "Full size" pero perdio el hipervinculo enriquecido.
 let CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_ = null;
@@ -135,6 +175,10 @@ const LOG_LEVEL = "RESUMEN";
 // "SILENCIO"  = casi nada
 // "RESUMEN"   = recomendado
 // "DETALLE"   = debug completo
+
+/***************************************
+ * 01. WEB APP Y CONSULTAS
+ ***************************************/
 
 /***************************************
  * WEB APP - ENDPOINT PRINCIPAL
@@ -228,187 +272,6 @@ function doGet(e) {
 
     return jsonOutput_({ ok: false, error: error.message || String(error) });
   }
-}
-
-/***************************************
- * ARCHIVO HISTÓRICO DE SANCIONES
- *
- * Los archivos deben estar dentro de:
- * FOLDER_ID_SANCIONES_HISTORICAS
- *
- * Convención de nombre:
- * YYYYMM sanciones
- * Ejemplo: 202606 sanciones
- ***************************************/
-function listarPeriodosHistoricos_() {
-  return listarFuentesHistoricasSanciones_().map(function (fuente) {
-    return {
-      periodo: fuente.periodo,
-      label: fuente.label
-    };
-  });
-}
-
-function resolverFuenteHistoricaSanciones_(periodoInput) {
-  const periodo = safeTrim_(periodoInput);
-
-  if (!/^\d{6}$/.test(periodo)) {
-    throw new Error('El periodo histórico no tiene un formato válido.');
-  }
-
-  const mes = Number(periodo.substring(4, 6));
-
-  if (mes < 1 || mes > 12) {
-    throw new Error('El periodo histórico contiene un mes inválido.');
-  }
-
-  const fuentes = listarFuentesHistoricasSanciones_();
-  const encontrada = fuentes.find(function (fuente) {
-    return fuente.periodo === periodo;
-  });
-
-  if (!encontrada) {
-    throw new Error(
-      'No se encontró un archivo histórico de sanciones para ' +
-      formatearPeriodoSanciones_(periodo) +
-      '.'
-    );
-  }
-
-  return encontrada;
-}
-
-function listarFuentesHistoricasSanciones_() {
-  const periodoActual = Utilities.formatDate(
-    new Date(),
-    Session.getScriptTimeZone(),
-    'yyyyMM'
-  );
-
-  const mapaPorPeriodo = {};
-
-  // 1. Cargar primero el catálogo de respaldo.
-  CATALOGO_SANCIONES_HISTORICAS.forEach(function (item) {
-    const periodo = safeTrim_(item.periodo);
-    const spreadsheetId = safeTrim_(item.spreadsheetId);
-
-    if (!/^\d{6}$/.test(periodo) || !spreadsheetId) {
-      Logger.log(
-        'Registro histórico de respaldo inválido: ' +
-        JSON.stringify(item)
-      );
-      return;
-    }
-
-    // Solo exponer meses cerrados.
-    if (periodo >= periodoActual) {
-      return;
-    }
-
-    mapaPorPeriodo[periodo] = {
-      periodo: periodo,
-      label: formatearPeriodoSanciones_(periodo),
-      spreadsheetId: spreadsheetId,
-      fileName: safeTrim_(item.fileName) || periodo + ' sanciones',
-      lastUpdated: 0,
-      fuente: 'CATALOGO_RESPALDO'
-    };
-  });
-
-  // 2. Intentar complementar el catálogo leyendo automáticamente la carpeta.
-  // DriveApp siempre requiere autorización OAuth, aunque la carpeta tenga
-  // acceso público por vínculo. Si todavía no está autorizado, se conserva
-  // el catálogo de respaldo sin interrumpir la consulta del portal.
-  try {
-    const folder = DriveApp.getFolderById(FOLDER_ID_SANCIONES_HISTORICAS);
-    const files = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
-
-    while (files.hasNext()) {
-      const file = files.next();
-      const nombre = safeTrim_(file.getName());
-      const match = nombre.match(REGEX_NOMBRE_SANCIONES_HISTORICAS);
-
-      if (!match) {
-        continue;
-      }
-
-      const periodo = match[1] + match[2];
-
-      if (periodo >= periodoActual) {
-        continue;
-      }
-
-      const fuente = {
-        periodo: periodo,
-        label: formatearPeriodoSanciones_(periodo),
-        spreadsheetId: file.getId(),
-        fileName: nombre,
-        lastUpdated: file.getLastUpdated().getTime(),
-        fuente: 'CARPETA_DRIVE'
-      };
-
-      // La fuente encontrada directamente en Drive reemplaza el respaldo.
-      if (
-        !mapaPorPeriodo[periodo] ||
-        mapaPorPeriodo[periodo].fuente === 'CATALOGO_RESPALDO' ||
-        fuente.lastUpdated > mapaPorPeriodo[periodo].lastUpdated
-      ) {
-        mapaPorPeriodo[periodo] = fuente;
-      }
-    }
-  } catch (error) {
-    Logger.log(
-      'ADVERTENCIA: no fue posible leer automáticamente la carpeta de ' +
-      'sanciones históricas con DriveApp. Se usará el catálogo de respaldo. ' +
-      'Detalle: ' + (error.message || String(error))
-    );
-  }
-
-  return Object.keys(mapaPorPeriodo)
-    .map(function (periodo) {
-      return mapaPorPeriodo[periodo];
-    })
-    .sort(function (a, b) {
-      return b.periodo.localeCompare(a.periodo);
-    });
-}
-
-/**
- * Ejecutar manualmente una vez desde el editor de Apps Script.
- * Fuerza la solicitud del permiso de solo lectura de Google Drive y
- * valida que la carpeta histórica sea visible para la cuenta ejecutora.
- */
-function autorizarLecturaSancionesHistoricas() {
-  const folder = DriveApp.getFolderById(FOLDER_ID_SANCIONES_HISTORICAS);
-  const periodos = listarPeriodosHistoricos_();
-
-  Logger.log('Carpeta histórica autorizada: ' + folder.getName());
-  Logger.log('Periodos detectados: ' + JSON.stringify(periodos));
-
-  return periodos;
-}
-
-function formatearPeriodoSanciones_(periodoInput) {
-  const periodo = safeTrim_(periodoInput);
-
-  if (!/^\d{6}$/.test(periodo)) {
-    return periodo;
-  }
-
-  const meses = [
-    'Enero', 'Febrero', 'Marzo', 'Abril',
-    'Mayo', 'Junio', 'Julio', 'Agosto',
-    'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
-
-  const anio = periodo.substring(0, 4);
-  const mesIndex = Number(periodo.substring(4, 6)) - 1;
-
-  if (mesIndex < 0 || mesIndex >= meses.length) {
-    return periodo;
-  }
-
-  return meses[mesIndex] + ' ' + anio;
 }
 
 /***************************************
@@ -733,79 +596,380 @@ function consultarSanciones_(aptoInput, placaInput, e, options) {
   }
 }
 
-/***************************************
- * HELPERS DE BÚSQUEDA DE COLUMNAS
- ***************************************/
+function getOrCreateHojaLogConsultas_(ss) {
+  let sheet = ss.getSheetByName(SHEET_LOG_CONSULTAS_SANCIONES);
 
-// Retorna el índice de la primera columna encontrada según una lista de nombres posibles
-function findColIdx_(colMap, names) {
-  for (var i = 0; i < names.length; i++) {
-    if (colMap[names[i]] !== undefined) return colMap[names[i]];
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_LOG_CONSULTAS_SANCIONES);
+
+    sheet.getRange(1, 1, 1, 11).setValues([[
+      "FechaHora",
+      "Action",
+      "ApartamentoInput",
+      "PlacaInput",
+      "ApartamentoNormalizado",
+      "PlacaNormalizada",
+      "Resultado",
+      "Mensaje",
+      "CantidadSanciones",
+      "PlacasDevueltas",
+      "Parametros"
+    ]]);
+
+    sheet.getRange(1, 1, 1, 11)
+      .setFontWeight("bold")
+      .setBackground("#d9ead3");
+
+    sheet.setFrozenRows(1);
   }
-  return -1;
+
+  return sheet;
+}
+
+function registrarConsultaSanciones_(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+    const sheet = getOrCreateHojaLogConsultas_(ss);
+
+    sheet.appendRow([
+      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
+      data.action || "",
+      data.aptoInput || "",
+      data.placaInput || "",
+      data.aptoNorm || "",
+      data.placaNorm || "",
+      data.resultado || "",
+      data.mensaje || "",
+      data.cantidadSanciones || 0,
+      data.placasDevueltas || "",
+      data.parametros ? JSON.stringify(data.parametros) : ""
+    ]);
+  } catch (error) {
+    Logger.log("ERROR registrando consulta sanciones: " + error.message);
+  }
 }
 
 /***************************************
- * HELPERS DE FORMATO
+ * 02. ARCHIVOS HISTÓRICOS
  ***************************************/
 
-function formatFecha_(value) {
-  if (!value) return '';
-  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy');
-  }
-  return safeTrim_(String(value));
+/***************************************
+ * ARCHIVO HISTÓRICO DE SANCIONES
+ *
+ * Los archivos deben estar dentro de:
+ * FOLDER_ID_SANCIONES_HISTORICAS
+ *
+ * Convención de nombre:
+ * YYYYMM sanciones
+ * Ejemplo: 202606 sanciones
+ ***************************************/
+function listarPeriodosHistoricos_() {
+  return listarFuentesHistoricasSanciones_().map(function (fuente) {
+    return {
+      periodo: fuente.periodo,
+      label: fuente.label
+    };
+  });
 }
 
-function parseFechaParaOrdenDesc_(value) {
-  var texto = safeTrim_(value);
+function resolverFuenteHistoricaSanciones_(periodoInput) {
+  const periodo = safeTrim_(periodoInput);
 
-  if (!texto) return 0;
+  if (!/^\d{6}$/.test(periodo)) {
+    throw new Error('El periodo histórico no tiene un formato válido.');
+  }
 
-  var partes = texto.split('/');
-  if (partes.length === 3) {
-    var dia = Number(partes[0]);
-    var mes = Number(partes[1]) - 1;
-    var anio = Number(partes[2]);
+  const mes = Number(periodo.substring(4, 6));
 
-    if (!isNaN(dia) && !isNaN(mes) && !isNaN(anio)) {
-      return new Date(anio, mes, dia).getTime();
+  if (mes < 1 || mes > 12) {
+    throw new Error('El periodo histórico contiene un mes inválido.');
+  }
+
+  const fuentes = listarFuentesHistoricasSanciones_();
+  const encontrada = fuentes.find(function (fuente) {
+    return fuente.periodo === periodo;
+  });
+
+  if (!encontrada) {
+    throw new Error(
+      'No se encontró un archivo histórico de sanciones para ' +
+      formatearPeriodoSanciones_(periodo) +
+      '.'
+    );
+  }
+
+  return encontrada;
+}
+
+function listarFuentesHistoricasSanciones_() {
+  const periodoActual = Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    'yyyyMM'
+  );
+
+  const mapaPorPeriodo = {};
+
+  // 1. Cargar primero el catálogo de respaldo.
+  CATALOGO_SANCIONES_HISTORICAS.forEach(function (item) {
+    const periodo = safeTrim_(item.periodo);
+    const spreadsheetId = safeTrim_(item.spreadsheetId);
+
+    if (!/^\d{6}$/.test(periodo) || !spreadsheetId) {
+      Logger.log(
+        'Registro histórico de respaldo inválido: ' +
+        JSON.stringify(item)
+      );
+      return;
     }
+
+    // Solo exponer meses cerrados.
+    if (periodo >= periodoActual) {
+      return;
+    }
+
+    mapaPorPeriodo[periodo] = {
+      periodo: periodo,
+      label: formatearPeriodoSanciones_(periodo),
+      spreadsheetId: spreadsheetId,
+      fileName: safeTrim_(item.fileName) || periodo + ' sanciones',
+      lastUpdated: 0,
+      fuente: 'CATALOGO_RESPALDO'
+    };
+  });
+
+  // 2. Intentar complementar el catálogo leyendo automáticamente la carpeta.
+  // DriveApp siempre requiere autorización OAuth, aunque la carpeta tenga
+  // acceso público por vínculo. Si todavía no está autorizado, se conserva
+  // el catálogo de respaldo sin interrumpir la consulta del portal.
+  try {
+    const folder = DriveApp.getFolderById(FOLDER_ID_SANCIONES_HISTORICAS);
+    const files = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+
+    while (files.hasNext()) {
+      const file = files.next();
+      const nombre = safeTrim_(file.getName());
+      const match = nombre.match(REGEX_NOMBRE_SANCIONES_HISTORICAS);
+
+      if (!match) {
+        continue;
+      }
+
+      const periodo = match[1] + match[2];
+
+      if (periodo >= periodoActual) {
+        continue;
+      }
+
+      const fuente = {
+        periodo: periodo,
+        label: formatearPeriodoSanciones_(periodo),
+        spreadsheetId: file.getId(),
+        fileName: nombre,
+        lastUpdated: file.getLastUpdated().getTime(),
+        fuente: 'CARPETA_DRIVE'
+      };
+
+      // La fuente encontrada directamente en Drive reemplaza el respaldo.
+      if (
+        !mapaPorPeriodo[periodo] ||
+        mapaPorPeriodo[periodo].fuente === 'CATALOGO_RESPALDO' ||
+        fuente.lastUpdated > mapaPorPeriodo[periodo].lastUpdated
+      ) {
+        mapaPorPeriodo[periodo] = fuente;
+      }
+    }
+  } catch (error) {
+    Logger.log(
+      'ADVERTENCIA: no fue posible leer automáticamente la carpeta de ' +
+      'sanciones históricas con DriveApp. Se usará el catálogo de respaldo. ' +
+      'Detalle: ' + (error.message || String(error))
+    );
   }
 
-  var timestamp = Date.parse(texto);
-  return isNaN(timestamp) ? 0 : timestamp;
+  return Object.keys(mapaPorPeriodo)
+    .map(function (periodo) {
+      return mapaPorPeriodo[periodo];
+    })
+    .sort(function (a, b) {
+      return b.periodo.localeCompare(a.periodo);
+    });
+}
+
+/**
+ * Ejecutar manualmente una vez desde el editor de Apps Script.
+ * Fuerza la solicitud del permiso de solo lectura de Google Drive y
+ * valida que la carpeta histórica sea visible para la cuenta ejecutora.
+ */
+function autorizarLecturaSancionesHistoricas() {
+  const folder = DriveApp.getFolderById(FOLDER_ID_SANCIONES_HISTORICAS);
+  const periodos = listarPeriodosHistoricos_();
+
+  Logger.log('Carpeta histórica autorizada: ' + folder.getName());
+  Logger.log('Periodos detectados: ' + JSON.stringify(periodos));
+
+  return periodos;
+}
+
+function formatearPeriodoSanciones_(periodoInput) {
+  const periodo = safeTrim_(periodoInput);
+
+  if (!/^\d{6}$/.test(periodo)) {
+    return periodo;
+  }
+
+  const meses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril',
+    'Mayo', 'Junio', 'Julio', 'Agosto',
+    'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  const anio = periodo.substring(0, 4);
+  const mesIndex = Number(periodo.substring(4, 6)) - 1;
+
+  if (mesIndex < 0 || mesIndex >= meses.length) {
+    return periodo;
+  }
+
+  return meses[mesIndex] + ' ' + anio;
 }
 
 /***************************************
- * HELPERS GENERALES
+ * 03. LECTURA Y MODELO DE PLANILLA
  ***************************************/
 
-function getParam_(e, key) {
-  if (!e || !e.parameter) return null;
-  return e.parameter[key] || null;
+function leerPlanillaSanciones_(options) {
+  const opts = options || {};
+  const includeRichText = opts.includeRichText === true;
+  const allowMissingSheet = opts.allowMissingSheet === true;
+
+  const spreadsheetId = safeTrim_(opts.spreadsheetId) || SHEET_ID_SANCIONES;
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+  if (!sheet) {
+    if (allowMissingSheet) {
+      return {
+        ss: ss,
+        sheet: null,
+        lastRow: 0,
+        lastCol: 0,
+        allData: [],
+        richData: [],
+        rows: [],
+        IDX: null
+      };
+    }
+
+    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const hasGrid = lastRow >= 1 && lastCol >= 1;
+
+  const allData = hasGrid
+    ? sheet.getRange(1, 1, lastRow, lastCol).getValues()
+    : [];
+
+  const richData = includeRichText && hasGrid
+    ? sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues()
+    : [];
+
+  const rows = allData.length > 1 ? allData.slice(1) : [];
+  const IDX = allData.length > 0 ? obtenerIdxPlanilla_(allData[0]) : null;
+
+  return {
+    ss: ss,
+    sheet: sheet,
+    lastRow: lastRow,
+    lastCol: lastCol,
+    allData: allData,
+    richData: richData,
+    rows: rows,
+    IDX: IDX,
+    spreadsheetId: spreadsheetId
+  };
 }
 
-function jsonOutput_(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+function obtenerIdxPlanilla_(rawHeaders) {
+  const headers = rawHeaders.map(function (h) {
+    return normalizeHeader_(h);
+  });
+
+  const colMap = {};
+  headers.forEach(function (h, i) {
+    colMap[h] = i;
+  });
+
+  return {
+    id: findColIdx_(colMap, ["id"]),
+    fecha: findColIdx_(colMap, ["fecha"]),
+    vigilante: findColIdx_(colMap, ["vigilante que toma el registro", "vigilante", "agente"]),
+    tipoVehiculo: findColIdx_(colMap, ["tipo de vehiculo", "tipo vehiculo", "vehiculo"]),
+    placa: findColIdx_(colMap, ["placa"]),
+    apto: findColIdx_(colMap, ["apto", "apartamento", "apt", "numero de apto", "no. apto", "nro apto"]),
+    residenteVisitante: findColIdx_(colMap, ["residente o visitante", "residente", "tipo residente", "residente/visitante"]),
+    observaciones: findColIdx_(colMap, ["observaciones", "observacion"]),
+    foto: findColIdx_(colMap, ["foto", "imagen", "fotografia"]),
+    firma: findColIdx_(colMap, ["firma"])
+  };
 }
 
-function safeTrim_(value) {
-  if (value === null || value === undefined) return '';
-  return String(value).trim();
-}
+/***************************************
+ * CONSTRUIR REGISTROS NORMALIZADOS
+ ***************************************/
+function construirRegistrosNormalizados_(rows, IDX, richData, allData) {
+  return rows.map(function (row, index) {
+    var realRowIndex = index + 1;
+    var sheetRow = index + 2;
+    var recordId = IDX.id !== -1 ? safeTrim_(row[IDX.id]) : '';
 
-// Normaliza texto para comparación: minúsculas y sin espacios extras
-function normalizeText_(value) {
-  return safeTrim_(value).toLowerCase().replace(/\s+/g, ' ');
-}
+    return {
+      row: row,
+      realRowIndex: realRowIndex,
+      sheetRow: sheetRow,
 
-// Normaliza un número de apartamento: aplica normalizeText_ y elimina ceros a la izquierda.
-// "0226" → "226", "1127" → "1127", "  0430  " → "430"
-function normalizeApto_(value) {
-  return normalizeText_(value).replace(/^0+(\d)/, '$1');
+      id: recordId,
+      fecha: IDX.fecha !== -1 ? formatFecha_(row[IDX.fecha]) : '',
+
+      apto: IDX.apto !== -1 ? safeTrim_(row[IDX.apto]) : '',
+      aptoNorm: IDX.apto !== -1 ? normalizeApto_(row[IDX.apto]) : '',
+
+      placa: IDX.placa !== -1 ? safeTrim_(row[IDX.placa]).toUpperCase() : '',
+      placaNorm: IDX.placa !== -1 ? normalizePlaca_(row[IDX.placa]) : '',
+
+      tipoVehiculo: IDX.tipoVehiculo !== -1 ? safeTrim_(row[IDX.tipoVehiculo]) : '',
+      tipoVehiculoNorm: IDX.tipoVehiculo !== -1 ? normalizarTipoVehiculo_(row[IDX.tipoVehiculo]) : '',
+
+      vigilante: IDX.vigilante !== -1 ? safeTrim_(row[IDX.vigilante]) : '',
+      residenteOVisitante: IDX.residenteVisitante !== -1 ? safeTrim_(row[IDX.residenteVisitante]) : '',
+      observaciones: IDX.observaciones !== -1 ? safeTrim_(row[IDX.observaciones]) : '',
+
+      foto: IDX.foto !== -1
+        ? getCellUrlOrText_(
+          richData,
+          allData,
+          realRowIndex,
+          IDX.foto,
+          recordId,
+          "FOTO"
+        )
+        : '',
+      firma: IDX.firma !== -1
+        ? getCellUrlOrText_(
+          richData,
+          allData,
+          realRowIndex,
+          IDX.firma,
+          recordId,
+          "FIRMA"
+        )
+        : ''
+    };
+  }).filter(function (reg) {
+    return reg.placaNorm || reg.aptoNorm;
+  });
 }
 
 function getCellUrlOrText_(
@@ -1038,928 +1202,36 @@ function esRutaArchivoMedia_(value) {
 }
 
 /***************************************
- * ENLAZAR EVIDENCIAS ORIGINALES DE DORCHESTER
- *
- * Ejecutar una vez antes del proceso masivo:
- *   prepararIndiceImagenesSanciones()
- *
- * Luego ejecutar:
- *   generarImagenes()
- *
- * El proceso no crea copias. Construye URLs permanentes usando directamente
- * el ID de cada archivo original de Dorchester y guarda en FOTO/FIRMA el texto
- * visible "Full size" con el hipervinculo correspondiente.
- *
- * Requisito: la carpeta original debe estar compartida por Dorchester como
- * "Cualquier persona con el enlace - Lector". Una firma del Consejo no puede
- * convertir por si sola un archivo privado de Drive en un archivo publico.
- *
- * Optimizaciones:
- * 1. Solo se indexan los nombres FOTO/FIRMA realmente usados por PLANILLA.
- * 2. El recorrido de Drive se detiene apenas encuentra todas las referencias.
- * 3. Durante generarImagenes() no se llama a Drive por cada FOTO/FIRMA.
- * 4. Cada ejecucion procesa hasta 500 filas y guarda checkpoints cada 50.
- * 5. No se escriben notas nuevas, reduciendo operaciones sobre Sheets.
+ * 04. ÍNDICE DE EVIDENCIAS EN DRIVE
  ***************************************/
-function generarImagenes() {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
 
-  let reparacionTexto = null;
-  let estadoSinTrabajo = null;
+function validarAccesoDirectoImagenesSanciones() {
+  const folder = validarCarpetaOrigenImagenesPublica_();
+  const files = folder.getFiles();
+  let sample = null;
 
-  try {
-    const props = PropertiesService.getScriptProperties();
-    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-    const sheet = ss.getSheetByName(SHEET_PLANILLA);
+  while (files.hasNext()) {
+    const file = files.next();
+    if (!esRutaArchivoMedia_(file.getName())) continue;
 
-    if (!sheet) {
-      throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
-    }
-
-    const lastCol = sheet.getLastColumn();
-    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-    const IDX = obtenerIdxPlanilla_(headers);
-
-    validarColumnasGenerarImagenes_(IDX);
-    validarCarpetaOrigenImagenesPublica_();
-
-    const estadoActual = safeTrim_(
-      props.getProperty(PROP_GENERAR_IMAGENES_ESTADO)
-    );
-    const siguienteFilaGuardada = Number(
-      props.getProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA) || 2
-    );
-
-    if (!estadoActual || estadoActual === "NO_INICIADO") {
-      eliminarTriggersGenerarImagenes_();
-      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
-      props.setProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA, "2");
-      props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
-      props.setProperty(
-        PROP_GENERAR_IMAGENES_RESUMEN,
-        JSON.stringify(crearResumenInicialGeneracionImagenes_())
-      );
-    } else if (estadoActual === "ERROR") {
-      // Retoma desde la fila guardada; no reinicia desde el principio.
-      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
-      props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
-    } else if (
-      estadoActual === "COMPLETADO" &&
-      siguienteFilaGuardada > sheet.getLastRow()
-    ) {
-      estadoSinTrabajo = obtenerEstadoGeneracionImagenes();
-    } else if (estadoActual === "COMPLETADO") {
-      // Existen filas nuevas despues de una ejecucion completada.
-      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
-    }
-
-    // Repara automaticamente las URLs que una version anterior escribio como
-    // texto completo. No vuelve a copiar archivos.
-    if (
-      safeTrim_(props.getProperty(PROP_GENERAR_IMAGENES_TEXTO_REPARADO)) !==
-      TEXTO_ENLACE_IMAGEN_SANCION
-    ) {
-      reparacionTexto = normalizarTextoUrlsPublicasGeneradas_(sheet, IDX);
-      props.setProperty(
-        PROP_GENERAR_IMAGENES_TEXTO_REPARADO,
-        TEXTO_ENLACE_IMAGEN_SANCION
-      );
-    }
-  } finally {
-    lock.releaseLock();
-  }
-
-  if (estadoSinTrabajo) {
-    if (reparacionTexto) {
-      estadoSinTrabajo.reparacionTexto = reparacionTexto;
-    }
-    return estadoSinTrabajo;
-  }
-
-  const resultado = procesarLoteGeneracionImagenes_();
-
-  if (reparacionTexto) {
-    resultado.reparacionTexto = reparacionTexto;
-  }
-
-  return resultado;
-}
-
-function continuarGeneracionImagenes_() {
-  try {
-    return procesarLoteGeneracionImagenes_();
-  } catch (error) {
-    const props = PropertiesService.getScriptProperties();
-    const resumen = leerResumenGeneracionImagenes_();
-    const erroresConsecutivos =
-      Number(
-        props.getProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS) || 0
-      ) + 1;
-    const detalleError = error && error.stack
-      ? error.stack
-      : String(error);
-
-    resumen.erroresEjecucion = Number(resumen.erroresEjecucion || 0) + 1;
-    resumen.ultimoErrorEjecucion = detalleError.substring(0, 1500);
-    resumen.actualizado = new Date().toISOString();
-
-    props.setProperty(
-      PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS,
-      String(erroresConsecutivos)
-    );
-    props.setProperty(
-      PROP_GENERAR_IMAGENES_RESUMEN,
-      JSON.stringify(resumen)
-    );
-
-    if (
-      erroresConsecutivos >= GENERAR_IMAGENES_MAX_ERRORES_CONSECUTIVOS
-    ) {
-      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "ERROR");
-      eliminarTriggersGenerarImagenes_();
-    } else {
-      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
-      programarSiguienteLoteGenerarImagenes_();
-    }
-
-    logGeneracionImagenes_("ERROR de ejecucion", {
-      erroresConsecutivos: erroresConsecutivos,
-      detalle: detalleError.substring(0, 1500)
-    });
-
-    return obtenerEstadoGeneracionImagenes();
-  }
-}
-
-function procesarLoteGeneracionImagenes_() {
-  const lock = LockService.getScriptLock();
-
-  if (!lock.tryLock(30000)) {
-    programarSiguienteLoteGenerarImagenes_();
-
-    return {
-      ok: true,
-      estado: "EN_PROCESO",
-      mensaje: "Ya existe otro lote de imagenes en ejecucion."
+    sample = {
+      archivo: file.getName(),
+      fileId: file.getId(),
+      url: construirUrlPublicaPermanenteDrive_(file)
     };
+    break;
   }
 
-  const inicioMs = Date.now();
-
-  try {
-    const props = PropertiesService.getScriptProperties();
-    const estado = safeTrim_(props.getProperty(PROP_GENERAR_IMAGENES_ESTADO));
-
-    if (estado !== "EN_PROCESO") {
-      return obtenerEstadoGeneracionImagenes();
-    }
-
-    programarSiguienteLoteGenerarImagenes_();
-
-    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-    const sheet = ss.getSheetByName(SHEET_PLANILLA);
-
-    if (!sheet) {
-      throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
-    }
-
-    const lastRow = sheet.getLastRow();
-    const lastCol = sheet.getLastColumn();
-    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-    const IDX = obtenerIdxPlanilla_(headers);
-
-    validarColumnasGenerarImagenes_(IDX);
-
-    let nextRow = Number(
-      props.getProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA) || 2
-    );
-
-    if (!Number.isFinite(nextRow) || nextRow < 2) {
-      nextRow = 2;
-    }
-
-    if (nextRow > lastRow) {
-      return completarGeneracionImagenes_(sheet, lastRow);
-    }
-
-    const indicePreparado = asegurarIndiceImagenesSanciones_(ss);
-    const indiceArchivos = indicePreparado.mapa;
-    const sourceFolder = indicePreparado.folder;
-
-    const maxEndRow = Math.min(
-      lastRow,
-      nextRow + GENERAR_IMAGENES_FILAS_MAXIMAS_POR_EJECUCION - 1
-    );
-    const rowCount = maxEndRow - nextRow + 1;
-
-    const ids = sheet
-      .getRange(nextRow, IDX.id + 1, rowCount, 1)
-      .getDisplayValues();
-    const fotoRange = sheet.getRange(nextRow, IDX.foto + 1, rowCount, 1);
-    const firmaRange = sheet.getRange(nextRow, IDX.firma + 1, rowCount, 1);
-    const fotoValues = fotoRange.getDisplayValues();
-    const firmaValues = firmaRange.getDisplayValues();
-    const fotoRich = fotoRange.getRichTextValues();
-    const firmaRich = firmaRange.getRichTextValues();
-
-    const resumen = leerResumenGeneracionImagenes_();
-    let procesadasEnEjecucion = 0;
-    let inicioCheckpoint = 0;
-
-    logGeneracionImagenes_("Inicio de ejecucion sin copias", {
-      filaInicial: nextRow,
-      filaMaximaLeida: maxEndRow,
-      ultimaFila: lastRow,
-      archivosIndexados: indicePreparado.origenes,
-      carpetaOrigen: sourceFolder.getName()
-    });
-
-    for (let i = 0; i < rowCount; i++) {
-      const tiempoConsumido = Date.now() - inicioMs;
-
-      if (
-        procesadasEnEjecucion > 0 &&
-        tiempoConsumido >= GENERAR_IMAGENES_TIEMPO_MAX_MS
-      ) {
-        break;
-      }
-
-      const sheetRow = nextRow + i;
-      const recordId = safeTrim_(ids[i][0]);
-
-      const fotoResult = convertirCampoImagenSancionOrigenDirecto_(
-        {
-          recordId: recordId,
-          mediaType: "FOTO",
-          rawValue: fotoValues[i][0],
-          richText: fotoRich[i][0],
-          sheetRow: sheetRow
-        },
-        indiceArchivos
-      );
-
-      const firmaResult = convertirCampoImagenSancionOrigenDirecto_(
-        {
-          recordId: recordId,
-          mediaType: "FIRMA",
-          rawValue: firmaValues[i][0],
-          richText: firmaRich[i][0],
-          sheetRow: sheetRow
-        },
-        indiceArchivos
-      );
-
-      fotoRich[i][0] = fotoResult.richText;
-      firmaRich[i][0] = firmaResult.richText;
-
-      acumularResultadoGenerarImagenes_(resumen, fotoResult.status);
-      acumularResultadoGenerarImagenes_(resumen, firmaResult.status);
-      resumen.filasProcesadas += 1;
-      procesadasEnEjecucion += 1;
-
-      const esCheckpoint =
-        procesadasEnEjecucion % GENERAR_IMAGENES_CHECKPOINT_FILAS === 0;
-      const esUltimaLeida = i === rowCount - 1;
-      const cercaDelLimite =
-        Date.now() - inicioMs >=
-        GENERAR_IMAGENES_TIEMPO_MAX_MS - GENERAR_IMAGENES_MARGEN_CORTE_MS;
-
-      if (esCheckpoint || esUltimaLeida || cercaDelLimite) {
-        const finCheckpoint = i;
-        const siguienteFila = nextRow + finCheckpoint + 1;
-
-        guardarCheckpointGeneracionImagenes_({
-          props: props,
-          resumen: resumen,
-          fotoRange: fotoRange,
-          firmaRange: firmaRange,
-          fotoRich: fotoRich,
-          firmaRich: firmaRich,
-          inicioOffset: inicioCheckpoint,
-          finOffset: finCheckpoint,
-          siguienteFila: siguienteFila
-        });
-
-        logGeneracionImagenes_("Checkpoint guardado", {
-          filaProcesadaHasta: siguienteFila - 1,
-          siguienteFila: siguienteFila,
-          filasEnEjecucion: procesadasEnEjecucion,
-          segundosConsumidos: Math.round((Date.now() - inicioMs) / 100) / 10,
-          urlsGeneradas: resumen.urlsGeneradas,
-          urlsYaPublicas: resumen.urlsYaPublicas,
-          archivosNoEncontrados: resumen.archivosNoEncontrados
-        });
-
-        inicioCheckpoint = i + 1;
-      }
-
-      if (cercaDelLimite) {
-        break;
-      }
-    }
-
-    const siguienteFila = nextRow + procesadasEnEjecucion;
-
-    if (siguienteFila > lastRow) {
-      return completarGeneracionImagenes_(sheet, lastRow);
-    }
-
-    programarSiguienteLoteGenerarImagenes_();
-
-    const result = construirEstadoGeneracionImagenes_(
-      "EN_PROCESO",
-      siguienteFila,
-      lastRow,
-      resumen,
-      sourceFolder
-    );
-
-    result.filasProcesadasEnEjecucion = procesadasEnEjecucion;
-    result.duracionSegundos =
-      Math.round((Date.now() - inicioMs) / 100) / 10;
-    result.indiceTecnico = indicePreparado.nombreHoja;
-    return result;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-
-function guardarCheckpointGeneracionImagenes_(params) {
-  const cantidad = params.finOffset - params.inicioOffset + 1;
-
-  if (cantidad <= 0) return;
-
-  params.fotoRange
-    .offset(params.inicioOffset, 0, cantidad, 1)
-    .setRichTextValues(
-      params.fotoRich.slice(
-        params.inicioOffset,
-        params.finOffset + 1
-      )
-    );
-  params.firmaRange
-    .offset(params.inicioOffset, 0, cantidad, 1)
-    .setRichTextValues(
-      params.firmaRich.slice(
-        params.inicioOffset,
-        params.finOffset + 1
-      )
-    );
-
-  params.resumen.actualizado = new Date().toISOString();
-  params.props.setProperty(
-    PROP_GENERAR_IMAGENES_SIGUIENTE_FILA,
-    String(params.siguienteFila)
-  );
-  params.props.setProperty(
-    PROP_GENERAR_IMAGENES_RESUMEN,
-    JSON.stringify(params.resumen)
-  );
-  params.props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
-}
-
-
-function construirClaveRegistroTipoImagenSancion_(recordId, mediaType) {
-  const id = safeTrim_(recordId).toLowerCase();
-  const tipo = safeTrim_(mediaType).toUpperCase();
-
-  return id && tipo ? id + "|" + tipo : "";
-}
-
-function extraerRegistroTipoDesdeNombreImagenSancion_(fileName) {
-  const baseName = obtenerBaseNameMedia_(fileName);
-  const match = baseName.match(/^([^.]+)\.(FOTO|FIRMA)\./i);
-
-  if (!match) return null;
-
-  return {
-    recordId: safeTrim_(match[1]),
-    mediaType: safeTrim_(match[2]).toUpperCase()
-  };
-}
-
-function obtenerMapaUrlsImagenesSancionesPorRegistroTipo_() {
-  if (CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_) {
-    return CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_;
-  }
-
-  const mapa = {};
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
-
-  if (!sheet || sheet.getLastRow() < 2) {
-    CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_ = mapa;
-    return mapa;
-  }
-
-  const values = sheet
-    .getRange(2, 1, sheet.getLastRow() - 1, 4)
-    .getDisplayValues();
-
-  values.forEach(function (row) {
-    const info = extraerRegistroTipoDesdeNombreImagenSancion_(row[0]);
-    const publicUrl = safeTrim_(row[3]);
-
-    if (!info || !esUrlPublicaPermanenteImagenSancion_(publicUrl)) return;
-
-    const key = construirClaveRegistroTipoImagenSancion_(
-      info.recordId,
-      info.mediaType
-    );
-
-    if (key && !mapa[key]) {
-      mapa[key] = publicUrl;
-    }
-  });
-
-  CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_ = mapa;
-  return mapa;
-}
-
-function obtenerUrlImagenSancionDesdeIndice_(recordId, mediaType) {
-  const key = construirClaveRegistroTipoImagenSancion_(recordId, mediaType);
-
-  if (!key) return "";
-
-  return safeTrim_(
-    obtenerMapaUrlsImagenesSancionesPorRegistroTipo_()[key]
-  );
-}
-
-function convertirCampoImagenSancionOrigenDirecto_(params, indiceArchivos) {
-  const rawValue = safeTrim_(params && params.rawValue);
-  const linkedUrl = params && params.richText
-    ? safeTrim_(params.richText.getLinkUrl())
-    : "";
-
-  if (!rawValue && !linkedUrl) {
-    return construirResultadoCampoImagen_("", "", "VACIO");
-  }
-
-  const existingPublicUrl = esUrlPublicaPermanenteImagenSancion_(rawValue)
-    ? rawValue
-    : esUrlPublicaPermanenteImagenSancion_(linkedUrl)
-      ? linkedUrl
-      : "";
-
-  if (existingPublicUrl) {
-    return construirResultadoCampoImagen_(
-      existingPublicUrl,
-      "",
-      "YA_PUBLICA"
-    );
-  }
-
-  // Si la celda contiene solo "Full size" y perdio el enlace, no existe
-  // nombre de archivo para validar. Recuperamos la entrada por ID + tipo.
-  if (rawValue === TEXTO_ENLACE_IMAGEN_SANCION && !linkedUrl) {
-    const aliasKey =
-      "@REGISTRO_TIPO:" +
-      construirClaveRegistroTipoImagenSancion_(
-        params.recordId,
-        params.mediaType
-      );
-    const recoveredEntry = indiceArchivos[aliasKey];
-
-    if (
-      recoveredEntry &&
-      recoveredEntry.sourceId &&
-      recoveredEntry.publicUrl
-    ) {
-      return construirResultadoCampoImagen_(
-        recoveredEntry.publicUrl,
-        "",
-        "GENERADA"
-      );
-    }
-  }
-
-  const fileName = resolverNombreArchivoParaPublicar_(rawValue, linkedUrl);
-  const validation = validarNombreArchivoParaPublicar_(
-    fileName,
-    params.recordId,
-    params.mediaType
-  );
-
-  if (!validation.ok) {
-    logGeneracionImagenes_("Imagen omitida por nombre invalido", {
-      fila: params.sheetRow,
-      id: safeTrim_(params.recordId),
-      tipo: safeTrim_(params.mediaType),
-      valor: rawValue,
-      motivo: validation.reason
-    });
-
-    return construirResultadoCampoImagenPlano_(
-      rawValue,
-      "",
-      "NOMBRE_INVALIDO"
-    );
-  }
-
-  const entry = indiceArchivos[validation.fileName];
-
-  if (!entry || !entry.sourceId || !entry.publicUrl) {
-    logGeneracionImagenes_("Archivo original no encontrado en el indice", {
-      fila: params.sheetRow,
-      archivo: validation.fileName
-    });
-
-    return construirResultadoCampoImagenPlano_(
-      rawValue,
-      "",
-      "NO_ENCONTRADO"
-    );
-  }
-
-  return construirResultadoCampoImagen_(
-    entry.publicUrl,
-    "",
-    "GENERADA"
-  );
-}
-
-
-function construirResultadoCampoImagen_(url, note, status) {
-  const publicUrl = safeTrim_(url);
-
-  return {
-    url: publicUrl,
-    richText: crearRichTextEnlaceImagenSancion_(publicUrl),
-    note: safeTrim_(note),
-    status: status
-  };
-}
-
-function construirResultadoCampoImagenPlano_(value, note, status) {
-  return {
-    url: "",
-    richText: crearRichTextPlanoImagenSancion_(value),
-    note: safeTrim_(note),
-    status: status
-  };
-}
-
-function crearRichTextEnlaceImagenSancion_(url) {
-  const publicUrl = safeTrim_(url);
-
-  if (!publicUrl) {
-    return crearRichTextPlanoImagenSancion_("");
-  }
-
-  return SpreadsheetApp
-    .newRichTextValue()
-    .setText(TEXTO_ENLACE_IMAGEN_SANCION)
-    .setLinkUrl(publicUrl)
-    .build();
-}
-
-function crearRichTextPlanoImagenSancion_(value) {
-  return SpreadsheetApp
-    .newRichTextValue()
-    .setText(safeTrim_(value))
-    .build();
-}
-
-function normalizarTextoUrlsPublicasGeneradas_(sheet, IDX) {
-  const lastRow = sheet.getLastRow();
-
-  if (lastRow < 2) {
-    return {
-      ok: true,
-      celdasActualizadas: 0,
-      textoVisible: TEXTO_ENLACE_IMAGEN_SANCION
-    };
-  }
-
-  const rowCount = lastRow - 1;
-  const ids = sheet
-    .getRange(2, IDX.id + 1, rowCount, 1)
-    .getDisplayValues();
-  const mapaUrls = obtenerMapaUrlsImagenesSancionesPorRegistroTipo_();
-  const columnConfigs = [
-    { columnIndex: IDX.foto, mediaType: "FOTO" },
-    { columnIndex: IDX.firma, mediaType: "FIRMA" }
-  ];
-  let updatedCells = 0;
-
-  columnConfigs.forEach(function (config) {
-    const columnIndex = config.columnIndex;
-    const range = sheet.getRange(2, columnIndex + 1, rowCount, 1);
-    const displayValues = range.getDisplayValues();
-    const richValues = range.getRichTextValues();
-    let changed = false;
-
-    for (let i = 0; i < rowCount; i++) {
-      const rawValue = safeTrim_(displayValues[i][0]);
-      const currentRich = richValues[i][0];
-      const linkedUrl = currentRich
-        ? safeTrim_(currentRich.getLinkUrl())
-        : "";
-      let publicUrl = esUrlPublicaPermanenteImagenSancion_(rawValue)
-        ? rawValue
-        : esUrlPublicaPermanenteImagenSancion_(linkedUrl)
-          ? linkedUrl
-          : "";
-
-      if (
-        !publicUrl &&
-        rawValue === TEXTO_ENLACE_IMAGEN_SANCION
-      ) {
-        const key = construirClaveRegistroTipoImagenSancion_(
-          ids[i][0],
-          config.mediaType
-        );
-        publicUrl = safeTrim_(mapaUrls[key]);
-      }
-
-      if (!publicUrl) continue;
-
-      if (
-        currentRich &&
-        safeTrim_(currentRich.getText()) === TEXTO_ENLACE_IMAGEN_SANCION &&
-        linkedUrl === publicUrl
-      ) {
-        continue;
-      }
-
-      richValues[i][0] = crearRichTextEnlaceImagenSancion_(publicUrl);
-      updatedCells += 1;
-      changed = true;
-    }
-
-    if (changed) {
-      range.setRichTextValues(richValues);
-    }
-  });
-
-  SpreadsheetApp.flush();
-
-  return {
+  const result = {
     ok: true,
-    celdasActualizadas: updatedCells,
-    textoVisible: TEXTO_ENLACE_IMAGEN_SANCION
+    modo: "ORIGEN_DIRECTO_SIN_COPIAS",
+    carpeta: folder.getName(),
+    carpetaId: folder.getId(),
+    muestra: sample
   };
-}
 
-function repararTextoVisualizacionImagenes() {
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const sheet = ss.getSheetByName(SHEET_PLANILLA);
-
-  if (!sheet) {
-    throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
-  }
-
-  const headers = sheet
-    .getRange(1, 1, 1, sheet.getLastColumn())
-    .getValues()[0];
-  const IDX = obtenerIdxPlanilla_(headers);
-
-  validarColumnasGenerarImagenes_(IDX);
-
-  const result = normalizarTextoUrlsPublicasGeneradas_(sheet, IDX);
-  PropertiesService.getScriptProperties().setProperty(
-    PROP_GENERAR_IMAGENES_TEXTO_REPARADO,
-    TEXTO_ENLACE_IMAGEN_SANCION
-  );
-
-  Logger.log(JSON.stringify(result, null, 2));
+  logGeneracionImagenes_("Acceso directo validado", result);
   return result;
-}
-
-function resolverNombreArchivoParaPublicar_(rawValue, linkedUrl) {
-  const candidates = [safeTrim_(rawValue), safeTrim_(linkedUrl)];
-
-  for (let i = 0; i < candidates.length; i++) {
-    const candidate = candidates[i];
-    if (!candidate) continue;
-
-    const extracted = extraerNombreArchivoMediaDesdeUrl_(candidate);
-    const baseName = obtenerBaseNameMedia_(extracted || candidate);
-
-    if (esRutaArchivoMedia_(baseName)) {
-      return baseName;
-    }
-  }
-
-  return "";
-}
-
-function validarNombreArchivoParaPublicar_(fileName, recordId, mediaType) {
-  const normalizedFileName = obtenerBaseNameMedia_(fileName);
-  const lowerFileName = normalizedFileName.toLowerCase();
-  const expectedId = safeTrim_(recordId).toLowerCase();
-  const expectedType = safeTrim_(mediaType).toLowerCase();
-
-  if (!normalizedFileName || !esRutaArchivoMedia_(normalizedFileName)) {
-    return {
-      ok: false,
-      fileName: normalizedFileName,
-      reason: "No se identifico un nombre de archivo de imagen valido."
-    };
-  }
-
-  if (!expectedId) {
-    return {
-      ok: false,
-      fileName: normalizedFileName,
-      reason: "La fila no tiene ID de sancion."
-    };
-  }
-
-  if (lowerFileName.indexOf(expectedId + ".") !== 0) {
-    return {
-      ok: false,
-      fileName: normalizedFileName,
-      reason: 'El archivo no pertenece al ID "' + expectedId + '".'
-    };
-  }
-
-  if (lowerFileName.indexOf("." + expectedType + ".") === -1) {
-    return {
-      ok: false,
-      fileName: normalizedFileName,
-      reason: 'El archivo no corresponde al tipo "' + mediaType + '".'
-    };
-  }
-
-  return {
-    ok: true,
-    fileName: normalizedFileName,
-    reason: ""
-  };
-}
-
-function getHeadersIndiceImagenesSanciones_() {
-  return [
-    "Archivo",
-    "OrigenFileId",
-    "ResourceKey",
-    "PublicUrl",
-    "Actualizado"
-  ];
-}
-
-function getOrCreateHojaIndiceImagenesSanciones_(ss) {
-  let sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
-  const headers = getHeadersIndiceImagenesSanciones_();
-
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_INDICE_IMAGENES_SANCIONES);
-  }
-
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.setFrozenRows(1);
-
-  try {
-    sheet.hideSheet();
-  } catch (error) {
-    // No interrumpe el proceso si la hoja no puede ocultarse.
-  }
-
-  return sheet;
-}
-
-/**
- * Obtiene exclusivamente los nombres FOTO/FIRMA que la PLANILLA necesita.
- * Las celdas que ya contienen una URL permanente se excluyen del indice.
- */
-function obtenerArchivosNecesariosImagenesSanciones_(ss) {
-  const sheet = ss.getSheetByName(SHEET_PLANILLA);
-
-  if (!sheet) {
-    throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
-  }
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  const resultado = {
-    mapa: {},
-    total: 0,
-    referenciasTotales: 0,
-    referenciasDuplicadas: 0,
-    referenciasInvalidas: 0,
-    celdasVacias: 0,
-    celdasYaPublicas: 0
-  };
-
-  if (lastRow < 2 || lastCol < 1) {
-    return resultado;
-  }
-
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  const IDX = obtenerIdxPlanilla_(headers);
-  validarColumnasGenerarImagenes_(IDX);
-
-  const rowCount = lastRow - 1;
-  const ids = sheet
-    .getRange(2, IDX.id + 1, rowCount, 1)
-    .getDisplayValues();
-  const fotoRange = sheet.getRange(2, IDX.foto + 1, rowCount, 1);
-  const firmaRange = sheet.getRange(2, IDX.firma + 1, rowCount, 1);
-  const fotoValues = fotoRange.getDisplayValues();
-  const firmaValues = firmaRange.getDisplayValues();
-  const fotoRich = fotoRange.getRichTextValues();
-  const firmaRich = firmaRange.getRichTextValues();
-
-  for (let i = 0; i < rowCount; i++) {
-    const recordId = safeTrim_(ids[i][0]);
-
-    registrarArchivoNecesarioImagenSancion_(resultado, {
-      recordId: recordId,
-      mediaType: 'FOTO',
-      rawValue: fotoValues[i][0],
-      richText: fotoRich[i][0]
-    });
-
-    registrarArchivoNecesarioImagenSancion_(resultado, {
-      recordId: recordId,
-      mediaType: 'FIRMA',
-      rawValue: firmaValues[i][0],
-      richText: firmaRich[i][0]
-    });
-  }
-
-  resultado.total = Object.keys(resultado.mapa).length;
-  return resultado;
-}
-
-function registrarArchivoNecesarioImagenSancion_(resultado, params) {
-  const rawValue = safeTrim_(params && params.rawValue);
-  const linkedUrl = params && params.richText
-    ? safeTrim_(params.richText.getLinkUrl())
-    : '';
-
-  if (!rawValue && !linkedUrl) {
-    resultado.celdasVacias += 1;
-    return;
-  }
-
-  resultado.referenciasTotales += 1;
-
-  if (
-    esUrlPublicaPermanenteImagenSancion_(rawValue) ||
-    esUrlPublicaPermanenteImagenSancion_(linkedUrl)
-  ) {
-    resultado.celdasYaPublicas += 1;
-    return;
-  }
-
-  const fileName = resolverNombreArchivoParaPublicar_(rawValue, linkedUrl);
-  const validation = validarNombreArchivoParaPublicar_(
-    fileName,
-    params.recordId,
-    params.mediaType
-  );
-
-  if (!validation.ok) {
-    resultado.referenciasInvalidas += 1;
-    return;
-  }
-
-  if (resultado.mapa[validation.fileName]) {
-    resultado.referenciasDuplicadas += 1;
-    return;
-  }
-
-  resultado.mapa[validation.fileName] = true;
-}
-
-function cargarNombresIndexadosImagenesSanciones_(indexSheet) {
-  const mapa = {};
-  const lastRow = indexSheet.getLastRow();
-
-  if (lastRow < 2) {
-    return mapa;
-  }
-
-  const values = indexSheet
-    .getRange(2, 1, lastRow - 1, 1)
-    .getDisplayValues();
-
-  values.forEach(function (row) {
-    const fileName = safeTrim_(row[0]);
-    if (fileName) mapa[fileName] = true;
-  });
-
-  return mapa;
-}
-
-function construirMapaPendientesIndiceImagenesSanciones_(
-  archivosNecesarios,
-  archivosIndexados
-) {
-  const pendientes = {};
-
-  Object.keys(archivosNecesarios).forEach(function (fileName) {
-    if (!archivosIndexados[fileName]) {
-      pendientes[fileName] = true;
-    }
-  });
-
-  return pendientes;
 }
 
 function prepararIndiceImagenesSanciones() {
@@ -2535,6 +1807,175 @@ function cargarIndiceImagenesSanciones_(ss) {
   };
 }
 
+function getHeadersIndiceImagenesSanciones_() {
+  return [
+    "Archivo",
+    "OrigenFileId",
+    "ResourceKey",
+    "PublicUrl",
+    "Actualizado"
+  ];
+}
+
+function getOrCreateHojaIndiceImagenesSanciones_(ss) {
+  let sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
+  const headers = getHeadersIndiceImagenesSanciones_();
+
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_INDICE_IMAGENES_SANCIONES);
+  }
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.setFrozenRows(1);
+
+  try {
+    sheet.hideSheet();
+  } catch (error) {
+    // No interrumpe el proceso si la hoja no puede ocultarse.
+  }
+
+  return sheet;
+}
+
+/**
+ * Obtiene exclusivamente los nombres FOTO/FIRMA que la PLANILLA necesita.
+ * Las celdas que ya contienen una URL permanente se excluyen del indice.
+ */
+function obtenerArchivosNecesariosImagenesSanciones_(ss) {
+  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+  if (!sheet) {
+    throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const resultado = {
+    mapa: {},
+    total: 0,
+    referenciasTotales: 0,
+    referenciasDuplicadas: 0,
+    referenciasInvalidas: 0,
+    celdasVacias: 0,
+    celdasYaPublicas: 0
+  };
+
+  if (lastRow < 2 || lastCol < 1) {
+    return resultado;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const IDX = obtenerIdxPlanilla_(headers);
+  validarColumnasGenerarImagenes_(IDX);
+
+  const rowCount = lastRow - 1;
+  const ids = sheet
+    .getRange(2, IDX.id + 1, rowCount, 1)
+    .getDisplayValues();
+  const fotoRange = sheet.getRange(2, IDX.foto + 1, rowCount, 1);
+  const firmaRange = sheet.getRange(2, IDX.firma + 1, rowCount, 1);
+  const fotoValues = fotoRange.getDisplayValues();
+  const firmaValues = firmaRange.getDisplayValues();
+  const fotoRich = fotoRange.getRichTextValues();
+  const firmaRich = firmaRange.getRichTextValues();
+
+  for (let i = 0; i < rowCount; i++) {
+    const recordId = safeTrim_(ids[i][0]);
+
+    registrarArchivoNecesarioImagenSancion_(resultado, {
+      recordId: recordId,
+      mediaType: 'FOTO',
+      rawValue: fotoValues[i][0],
+      richText: fotoRich[i][0]
+    });
+
+    registrarArchivoNecesarioImagenSancion_(resultado, {
+      recordId: recordId,
+      mediaType: 'FIRMA',
+      rawValue: firmaValues[i][0],
+      richText: firmaRich[i][0]
+    });
+  }
+
+  resultado.total = Object.keys(resultado.mapa).length;
+  return resultado;
+}
+
+function registrarArchivoNecesarioImagenSancion_(resultado, params) {
+  const rawValue = safeTrim_(params && params.rawValue);
+  const linkedUrl = params && params.richText
+    ? safeTrim_(params.richText.getLinkUrl())
+    : '';
+
+  if (!rawValue && !linkedUrl) {
+    resultado.celdasVacias += 1;
+    return;
+  }
+
+  resultado.referenciasTotales += 1;
+
+  if (
+    esUrlPublicaPermanenteImagenSancion_(rawValue) ||
+    esUrlPublicaPermanenteImagenSancion_(linkedUrl)
+  ) {
+    resultado.celdasYaPublicas += 1;
+    return;
+  }
+
+  const fileName = resolverNombreArchivoParaPublicar_(rawValue, linkedUrl);
+  const validation = validarNombreArchivoParaPublicar_(
+    fileName,
+    params.recordId,
+    params.mediaType
+  );
+
+  if (!validation.ok) {
+    resultado.referenciasInvalidas += 1;
+    return;
+  }
+
+  if (resultado.mapa[validation.fileName]) {
+    resultado.referenciasDuplicadas += 1;
+    return;
+  }
+
+  resultado.mapa[validation.fileName] = true;
+}
+
+function cargarNombresIndexadosImagenesSanciones_(indexSheet) {
+  const mapa = {};
+  const lastRow = indexSheet.getLastRow();
+
+  if (lastRow < 2) {
+    return mapa;
+  }
+
+  const values = indexSheet
+    .getRange(2, 1, lastRow - 1, 1)
+    .getDisplayValues();
+
+  values.forEach(function (row) {
+    const fileName = safeTrim_(row[0]);
+    if (fileName) mapa[fileName] = true;
+  });
+
+  return mapa;
+}
+
+function construirMapaPendientesIndiceImagenesSanciones_(
+  archivosNecesarios,
+  archivosIndexados
+) {
+  const pendientes = {};
+
+  Object.keys(archivosNecesarios).forEach(function (fileName) {
+    if (!archivosIndexados[fileName]) {
+      pendientes[fileName] = true;
+    }
+  });
+
+  return pendientes;
+}
 
 function validarCarpetaOrigenImagenesPublica_() {
   const folder = DriveApp.getFolderById(
@@ -2555,37 +1996,6 @@ function validarCarpetaOrigenImagenesPublica_() {
 
   return folder;
 }
-
-
-function validarAccesoDirectoImagenesSanciones() {
-  const folder = validarCarpetaOrigenImagenesPublica_();
-  const files = folder.getFiles();
-  let sample = null;
-
-  while (files.hasNext()) {
-    const file = files.next();
-    if (!esRutaArchivoMedia_(file.getName())) continue;
-
-    sample = {
-      archivo: file.getName(),
-      fileId: file.getId(),
-      url: construirUrlPublicaPermanenteDrive_(file)
-    };
-    break;
-  }
-
-  const result = {
-    ok: true,
-    modo: "ORIGEN_DIRECTO_SIN_COPIAS",
-    carpeta: folder.getName(),
-    carpetaId: folder.getId(),
-    muestra: sample
-  };
-
-  logGeneracionImagenes_("Acceso directo validado", result);
-  return result;
-}
-
 
 function construirUrlPublicaPermanenteDriveDesdeDatos_(fileId, resourceKey) {
   let url =
@@ -2616,40 +2026,761 @@ function esUrlPublicaPermanenteImagenSancion_(value) {
   );
 }
 
-function construirNotaUrlPublicaImagen_(currentNote, fileName, rawValue) {
-  const marker = "[URL_PUBLICA_SANCIONES]";
+function construirClaveRegistroTipoImagenSancion_(recordId, mediaType) {
+  const id = safeTrim_(recordId).toLowerCase();
+  const tipo = safeTrim_(mediaType).toUpperCase();
 
-  if (safeTrim_(currentNote).indexOf(marker) !== -1) {
-    return currentNote;
-  }
-
-  const originalValue = safeTrim_(rawValue);
-  const noteLines = [
-    marker,
-    "Generada: " +
-      Utilities.formatDate(
-        new Date(),
-        Session.getScriptTimeZone(),
-        "yyyy-MM-dd HH:mm:ss"
-      ),
-    "Archivo original: " + fileName
-  ];
-
-  if (originalValue && originalValue.length <= 500) {
-    noteLines.push("Valor anterior: " + originalValue);
-  }
-
-  return safeTrim_(currentNote)
-    ? currentNote + "\n\n" + noteLines.join("\n")
-    : noteLines.join("\n");
+  return id && tipo ? id + "|" + tipo : "";
 }
 
-function obtenerOCrearCarpetaCopiasPublicasSanciones_() {
-  throw new Error(
-    "Funcion obsoleta: el proceso usa directamente la carpeta original de Dorchester y no crea copias."
+function extraerRegistroTipoDesdeNombreImagenSancion_(fileName) {
+  const baseName = obtenerBaseNameMedia_(fileName);
+  const match = baseName.match(/^([^.]+)\.(FOTO|FIRMA)\./i);
+
+  if (!match) return null;
+
+  return {
+    recordId: safeTrim_(match[1]),
+    mediaType: safeTrim_(match[2]).toUpperCase()
+  };
+}
+
+function obtenerMapaUrlsImagenesSancionesPorRegistroTipo_() {
+  if (CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_) {
+    return CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_;
+  }
+
+  const mapa = {};
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
+
+  if (!sheet || sheet.getLastRow() < 2) {
+    CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_ = mapa;
+    return mapa;
+  }
+
+  const values = sheet
+    .getRange(2, 1, sheet.getLastRow() - 1, 4)
+    .getDisplayValues();
+
+  values.forEach(function (row) {
+    const info = extraerRegistroTipoDesdeNombreImagenSancion_(row[0]);
+    const publicUrl = safeTrim_(row[3]);
+
+    if (!info || !esUrlPublicaPermanenteImagenSancion_(publicUrl)) return;
+
+    const key = construirClaveRegistroTipoImagenSancion_(
+      info.recordId,
+      info.mediaType
+    );
+
+    if (key && !mapa[key]) {
+      mapa[key] = publicUrl;
+    }
+  });
+
+  CACHE_URLS_IMAGENES_SANCIONES_POR_REGISTRO_TIPO_ = mapa;
+  return mapa;
+}
+
+function obtenerUrlImagenSancionDesdeIndice_(recordId, mediaType) {
+  const key = construirClaveRegistroTipoImagenSancion_(recordId, mediaType);
+
+  if (!key) return "";
+
+  return safeTrim_(
+    obtenerMapaUrlsImagenesSancionesPorRegistroTipo_()[key]
   );
 }
 
+/***************************************
+ * 05. GENERACIÓN Y REPARACIÓN DE ENLACES
+ ***************************************/
+
+/***************************************
+ * ENLAZAR EVIDENCIAS ORIGINALES DE DORCHESTER
+ *
+ * Ejecutar una vez antes del proceso masivo:
+ *   prepararIndiceImagenesSanciones()
+ *
+ * Luego ejecutar:
+ *   generarImagenes()
+ *
+ * El proceso no crea copias. Construye URLs permanentes usando directamente
+ * el ID de cada archivo original de Dorchester y guarda en FOTO/FIRMA el texto
+ * visible "Full size" con el hipervinculo correspondiente.
+ *
+ * Requisito: la carpeta original debe estar compartida por Dorchester como
+ * "Cualquier persona con el enlace - Lector". Una firma del Consejo no puede
+ * convertir por si sola un archivo privado de Drive en un archivo publico.
+ *
+ * Optimizaciones:
+ * 1. Solo se indexan los nombres FOTO/FIRMA realmente usados por PLANILLA.
+ * 2. El recorrido de Drive se detiene apenas encuentra todas las referencias.
+ * 3. Durante generarImagenes() no se llama a Drive por cada FOTO/FIRMA.
+ * 4. Cada ejecucion procesa hasta 500 filas y guarda checkpoints cada 50.
+ * 5. No se escriben notas nuevas, reduciendo operaciones sobre Sheets.
+ ***************************************/
+function generarImagenes() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  let reparacionTexto = null;
+  let estadoSinTrabajo = null;
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+    const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+    if (!sheet) {
+      throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
+    }
+
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const IDX = obtenerIdxPlanilla_(headers);
+
+    validarColumnasGenerarImagenes_(IDX);
+    validarCarpetaOrigenImagenesPublica_();
+
+    const estadoActual = safeTrim_(
+      props.getProperty(PROP_GENERAR_IMAGENES_ESTADO)
+    );
+    const siguienteFilaGuardada = Number(
+      props.getProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA) || 2
+    );
+
+    if (!estadoActual || estadoActual === "NO_INICIADO") {
+      eliminarTriggersGenerarImagenes_();
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
+      props.setProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA, "2");
+      props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
+      props.setProperty(
+        PROP_GENERAR_IMAGENES_RESUMEN,
+        JSON.stringify(crearResumenInicialGeneracionImagenes_())
+      );
+    } else if (estadoActual === "ERROR") {
+      // Retoma desde la fila guardada; no reinicia desde el principio.
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
+      props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
+    } else if (
+      estadoActual === "COMPLETADO" &&
+      siguienteFilaGuardada > sheet.getLastRow()
+    ) {
+      estadoSinTrabajo = obtenerEstadoGeneracionImagenes();
+    } else if (estadoActual === "COMPLETADO") {
+      // Existen filas nuevas despues de una ejecucion completada.
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
+    }
+
+    // Repara automaticamente las URLs que una version anterior escribio como
+    // texto completo. No vuelve a copiar archivos.
+    if (
+      safeTrim_(props.getProperty(PROP_GENERAR_IMAGENES_TEXTO_REPARADO)) !==
+      TEXTO_ENLACE_IMAGEN_SANCION
+    ) {
+      reparacionTexto = normalizarTextoUrlsPublicasGeneradas_(sheet, IDX);
+      props.setProperty(
+        PROP_GENERAR_IMAGENES_TEXTO_REPARADO,
+        TEXTO_ENLACE_IMAGEN_SANCION
+      );
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  if (estadoSinTrabajo) {
+    if (reparacionTexto) {
+      estadoSinTrabajo.reparacionTexto = reparacionTexto;
+    }
+    return estadoSinTrabajo;
+  }
+
+  const resultado = procesarLoteGeneracionImagenes_();
+
+  if (reparacionTexto) {
+    resultado.reparacionTexto = reparacionTexto;
+  }
+
+  return resultado;
+}
+
+function continuarGeneracionImagenes_() {
+  try {
+    return procesarLoteGeneracionImagenes_();
+  } catch (error) {
+    const props = PropertiesService.getScriptProperties();
+    const resumen = leerResumenGeneracionImagenes_();
+    const erroresConsecutivos =
+      Number(
+        props.getProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS) || 0
+      ) + 1;
+    const detalleError = error && error.stack
+      ? error.stack
+      : String(error);
+
+    resumen.erroresEjecucion = Number(resumen.erroresEjecucion || 0) + 1;
+    resumen.ultimoErrorEjecucion = detalleError.substring(0, 1500);
+    resumen.actualizado = new Date().toISOString();
+
+    props.setProperty(
+      PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS,
+      String(erroresConsecutivos)
+    );
+    props.setProperty(
+      PROP_GENERAR_IMAGENES_RESUMEN,
+      JSON.stringify(resumen)
+    );
+
+    if (
+      erroresConsecutivos >= GENERAR_IMAGENES_MAX_ERRORES_CONSECUTIVOS
+    ) {
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "ERROR");
+      eliminarTriggersGenerarImagenes_();
+    } else {
+      props.setProperty(PROP_GENERAR_IMAGENES_ESTADO, "EN_PROCESO");
+      programarSiguienteLoteGenerarImagenes_();
+    }
+
+    logGeneracionImagenes_("ERROR de ejecucion", {
+      erroresConsecutivos: erroresConsecutivos,
+      detalle: detalleError.substring(0, 1500)
+    });
+
+    return obtenerEstadoGeneracionImagenes();
+  }
+}
+
+function procesarLoteGeneracionImagenes_() {
+  const lock = LockService.getScriptLock();
+
+  if (!lock.tryLock(30000)) {
+    programarSiguienteLoteGenerarImagenes_();
+
+    return {
+      ok: true,
+      estado: "EN_PROCESO",
+      mensaje: "Ya existe otro lote de imagenes en ejecucion."
+    };
+  }
+
+  const inicioMs = Date.now();
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const estado = safeTrim_(props.getProperty(PROP_GENERAR_IMAGENES_ESTADO));
+
+    if (estado !== "EN_PROCESO") {
+      return obtenerEstadoGeneracionImagenes();
+    }
+
+    programarSiguienteLoteGenerarImagenes_();
+
+    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+    const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+    if (!sheet) {
+      throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
+    }
+
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const IDX = obtenerIdxPlanilla_(headers);
+
+    validarColumnasGenerarImagenes_(IDX);
+
+    let nextRow = Number(
+      props.getProperty(PROP_GENERAR_IMAGENES_SIGUIENTE_FILA) || 2
+    );
+
+    if (!Number.isFinite(nextRow) || nextRow < 2) {
+      nextRow = 2;
+    }
+
+    if (nextRow > lastRow) {
+      return completarGeneracionImagenes_(sheet, lastRow);
+    }
+
+    const indicePreparado = asegurarIndiceImagenesSanciones_(ss);
+    const indiceArchivos = indicePreparado.mapa;
+    const sourceFolder = indicePreparado.folder;
+
+    const maxEndRow = Math.min(
+      lastRow,
+      nextRow + GENERAR_IMAGENES_FILAS_MAXIMAS_POR_EJECUCION - 1
+    );
+    const rowCount = maxEndRow - nextRow + 1;
+
+    const ids = sheet
+      .getRange(nextRow, IDX.id + 1, rowCount, 1)
+      .getDisplayValues();
+    const fotoRange = sheet.getRange(nextRow, IDX.foto + 1, rowCount, 1);
+    const firmaRange = sheet.getRange(nextRow, IDX.firma + 1, rowCount, 1);
+    const fotoValues = fotoRange.getDisplayValues();
+    const firmaValues = firmaRange.getDisplayValues();
+    const fotoRich = fotoRange.getRichTextValues();
+    const firmaRich = firmaRange.getRichTextValues();
+
+    const resumen = leerResumenGeneracionImagenes_();
+    let procesadasEnEjecucion = 0;
+    let inicioCheckpoint = 0;
+
+    logGeneracionImagenes_("Inicio de ejecucion sin copias", {
+      filaInicial: nextRow,
+      filaMaximaLeida: maxEndRow,
+      ultimaFila: lastRow,
+      archivosIndexados: indicePreparado.origenes,
+      carpetaOrigen: sourceFolder.getName()
+    });
+
+    for (let i = 0; i < rowCount; i++) {
+      const tiempoConsumido = Date.now() - inicioMs;
+
+      if (
+        procesadasEnEjecucion > 0 &&
+        tiempoConsumido >= GENERAR_IMAGENES_TIEMPO_MAX_MS
+      ) {
+        break;
+      }
+
+      const sheetRow = nextRow + i;
+      const recordId = safeTrim_(ids[i][0]);
+
+      const fotoResult = convertirCampoImagenSancionOrigenDirecto_(
+        {
+          recordId: recordId,
+          mediaType: "FOTO",
+          rawValue: fotoValues[i][0],
+          richText: fotoRich[i][0],
+          sheetRow: sheetRow
+        },
+        indiceArchivos
+      );
+
+      const firmaResult = convertirCampoImagenSancionOrigenDirecto_(
+        {
+          recordId: recordId,
+          mediaType: "FIRMA",
+          rawValue: firmaValues[i][0],
+          richText: firmaRich[i][0],
+          sheetRow: sheetRow
+        },
+        indiceArchivos
+      );
+
+      fotoRich[i][0] = fotoResult.richText;
+      firmaRich[i][0] = firmaResult.richText;
+
+      acumularResultadoGenerarImagenes_(resumen, fotoResult.status);
+      acumularResultadoGenerarImagenes_(resumen, firmaResult.status);
+      resumen.filasProcesadas += 1;
+      procesadasEnEjecucion += 1;
+
+      const esCheckpoint =
+        procesadasEnEjecucion % GENERAR_IMAGENES_CHECKPOINT_FILAS === 0;
+      const esUltimaLeida = i === rowCount - 1;
+      const cercaDelLimite =
+        Date.now() - inicioMs >=
+        GENERAR_IMAGENES_TIEMPO_MAX_MS - GENERAR_IMAGENES_MARGEN_CORTE_MS;
+
+      if (esCheckpoint || esUltimaLeida || cercaDelLimite) {
+        const finCheckpoint = i;
+        const siguienteFila = nextRow + finCheckpoint + 1;
+
+        guardarCheckpointGeneracionImagenes_({
+          props: props,
+          resumen: resumen,
+          fotoRange: fotoRange,
+          firmaRange: firmaRange,
+          fotoRich: fotoRich,
+          firmaRich: firmaRich,
+          inicioOffset: inicioCheckpoint,
+          finOffset: finCheckpoint,
+          siguienteFila: siguienteFila
+        });
+
+        logGeneracionImagenes_("Checkpoint guardado", {
+          filaProcesadaHasta: siguienteFila - 1,
+          siguienteFila: siguienteFila,
+          filasEnEjecucion: procesadasEnEjecucion,
+          segundosConsumidos: Math.round((Date.now() - inicioMs) / 100) / 10,
+          urlsGeneradas: resumen.urlsGeneradas,
+          urlsYaPublicas: resumen.urlsYaPublicas,
+          archivosNoEncontrados: resumen.archivosNoEncontrados
+        });
+
+        inicioCheckpoint = i + 1;
+      }
+
+      if (cercaDelLimite) {
+        break;
+      }
+    }
+
+    const siguienteFila = nextRow + procesadasEnEjecucion;
+
+    if (siguienteFila > lastRow) {
+      return completarGeneracionImagenes_(sheet, lastRow);
+    }
+
+    programarSiguienteLoteGenerarImagenes_();
+
+    const result = construirEstadoGeneracionImagenes_(
+      "EN_PROCESO",
+      siguienteFila,
+      lastRow,
+      resumen,
+      sourceFolder
+    );
+
+    result.filasProcesadasEnEjecucion = procesadasEnEjecucion;
+    result.duracionSegundos =
+      Math.round((Date.now() - inicioMs) / 100) / 10;
+    result.indiceTecnico = indicePreparado.nombreHoja;
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function guardarCheckpointGeneracionImagenes_(params) {
+  const cantidad = params.finOffset - params.inicioOffset + 1;
+
+  if (cantidad <= 0) return;
+
+  params.fotoRange
+    .offset(params.inicioOffset, 0, cantidad, 1)
+    .setRichTextValues(
+      params.fotoRich.slice(
+        params.inicioOffset,
+        params.finOffset + 1
+      )
+    );
+  params.firmaRange
+    .offset(params.inicioOffset, 0, cantidad, 1)
+    .setRichTextValues(
+      params.firmaRich.slice(
+        params.inicioOffset,
+        params.finOffset + 1
+      )
+    );
+
+  params.resumen.actualizado = new Date().toISOString();
+  params.props.setProperty(
+    PROP_GENERAR_IMAGENES_SIGUIENTE_FILA,
+    String(params.siguienteFila)
+  );
+  params.props.setProperty(
+    PROP_GENERAR_IMAGENES_RESUMEN,
+    JSON.stringify(params.resumen)
+  );
+  params.props.setProperty(PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS, "0");
+}
+
+function convertirCampoImagenSancionOrigenDirecto_(params, indiceArchivos) {
+  const rawValue = safeTrim_(params && params.rawValue);
+  const linkedUrl = params && params.richText
+    ? safeTrim_(params.richText.getLinkUrl())
+    : "";
+
+  if (!rawValue && !linkedUrl) {
+    return construirResultadoCampoImagen_("", "", "VACIO");
+  }
+
+  const existingPublicUrl = esUrlPublicaPermanenteImagenSancion_(rawValue)
+    ? rawValue
+    : esUrlPublicaPermanenteImagenSancion_(linkedUrl)
+      ? linkedUrl
+      : "";
+
+  if (existingPublicUrl) {
+    return construirResultadoCampoImagen_(
+      existingPublicUrl,
+      "",
+      "YA_PUBLICA"
+    );
+  }
+
+  // Si la celda contiene solo "Full size" y perdio el enlace, no existe
+  // nombre de archivo para validar. Recuperamos la entrada por ID + tipo.
+  if (rawValue === TEXTO_ENLACE_IMAGEN_SANCION && !linkedUrl) {
+    const aliasKey =
+      "@REGISTRO_TIPO:" +
+      construirClaveRegistroTipoImagenSancion_(
+        params.recordId,
+        params.mediaType
+      );
+    const recoveredEntry = indiceArchivos[aliasKey];
+
+    if (
+      recoveredEntry &&
+      recoveredEntry.sourceId &&
+      recoveredEntry.publicUrl
+    ) {
+      return construirResultadoCampoImagen_(
+        recoveredEntry.publicUrl,
+        "",
+        "GENERADA"
+      );
+    }
+  }
+
+  const fileName = resolverNombreArchivoParaPublicar_(rawValue, linkedUrl);
+  const validation = validarNombreArchivoParaPublicar_(
+    fileName,
+    params.recordId,
+    params.mediaType
+  );
+
+  if (!validation.ok) {
+    logGeneracionImagenes_("Imagen omitida por nombre invalido", {
+      fila: params.sheetRow,
+      id: safeTrim_(params.recordId),
+      tipo: safeTrim_(params.mediaType),
+      valor: rawValue,
+      motivo: validation.reason
+    });
+
+    return construirResultadoCampoImagenPlano_(
+      rawValue,
+      "",
+      "NOMBRE_INVALIDO"
+    );
+  }
+
+  const entry = indiceArchivos[validation.fileName];
+
+  if (!entry || !entry.sourceId || !entry.publicUrl) {
+    logGeneracionImagenes_("Archivo original no encontrado en el indice", {
+      fila: params.sheetRow,
+      archivo: validation.fileName
+    });
+
+    return construirResultadoCampoImagenPlano_(
+      rawValue,
+      "",
+      "NO_ENCONTRADO"
+    );
+  }
+
+  return construirResultadoCampoImagen_(
+    entry.publicUrl,
+    "",
+    "GENERADA"
+  );
+}
+
+function construirResultadoCampoImagen_(url, note, status) {
+  const publicUrl = safeTrim_(url);
+
+  return {
+    url: publicUrl,
+    richText: crearRichTextEnlaceImagenSancion_(publicUrl),
+    note: safeTrim_(note),
+    status: status
+  };
+}
+
+function construirResultadoCampoImagenPlano_(value, note, status) {
+  return {
+    url: "",
+    richText: crearRichTextPlanoImagenSancion_(value),
+    note: safeTrim_(note),
+    status: status
+  };
+}
+
+function crearRichTextEnlaceImagenSancion_(url) {
+  const publicUrl = safeTrim_(url);
+
+  if (!publicUrl) {
+    return crearRichTextPlanoImagenSancion_("");
+  }
+
+  return SpreadsheetApp
+    .newRichTextValue()
+    .setText(TEXTO_ENLACE_IMAGEN_SANCION)
+    .setLinkUrl(publicUrl)
+    .build();
+}
+
+function crearRichTextPlanoImagenSancion_(value) {
+  return SpreadsheetApp
+    .newRichTextValue()
+    .setText(safeTrim_(value))
+    .build();
+}
+
+function normalizarTextoUrlsPublicasGeneradas_(sheet, IDX) {
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    return {
+      ok: true,
+      celdasActualizadas: 0,
+      textoVisible: TEXTO_ENLACE_IMAGEN_SANCION
+    };
+  }
+
+  const rowCount = lastRow - 1;
+  const ids = sheet
+    .getRange(2, IDX.id + 1, rowCount, 1)
+    .getDisplayValues();
+  const mapaUrls = obtenerMapaUrlsImagenesSancionesPorRegistroTipo_();
+  const columnConfigs = [
+    { columnIndex: IDX.foto, mediaType: "FOTO" },
+    { columnIndex: IDX.firma, mediaType: "FIRMA" }
+  ];
+  let updatedCells = 0;
+
+  columnConfigs.forEach(function (config) {
+    const columnIndex = config.columnIndex;
+    const range = sheet.getRange(2, columnIndex + 1, rowCount, 1);
+    const displayValues = range.getDisplayValues();
+    const richValues = range.getRichTextValues();
+    let changed = false;
+
+    for (let i = 0; i < rowCount; i++) {
+      const rawValue = safeTrim_(displayValues[i][0]);
+      const currentRich = richValues[i][0];
+      const linkedUrl = currentRich
+        ? safeTrim_(currentRich.getLinkUrl())
+        : "";
+      let publicUrl = esUrlPublicaPermanenteImagenSancion_(rawValue)
+        ? rawValue
+        : esUrlPublicaPermanenteImagenSancion_(linkedUrl)
+          ? linkedUrl
+          : "";
+
+      if (
+        !publicUrl &&
+        rawValue === TEXTO_ENLACE_IMAGEN_SANCION
+      ) {
+        const key = construirClaveRegistroTipoImagenSancion_(
+          ids[i][0],
+          config.mediaType
+        );
+        publicUrl = safeTrim_(mapaUrls[key]);
+      }
+
+      if (!publicUrl) continue;
+
+      if (
+        currentRich &&
+        safeTrim_(currentRich.getText()) === TEXTO_ENLACE_IMAGEN_SANCION &&
+        linkedUrl === publicUrl
+      ) {
+        continue;
+      }
+
+      richValues[i][0] = crearRichTextEnlaceImagenSancion_(publicUrl);
+      updatedCells += 1;
+      changed = true;
+    }
+
+    if (changed) {
+      range.setRichTextValues(richValues);
+    }
+  });
+
+  SpreadsheetApp.flush();
+
+  return {
+    ok: true,
+    celdasActualizadas: updatedCells,
+    textoVisible: TEXTO_ENLACE_IMAGEN_SANCION
+  };
+}
+
+function repararTextoVisualizacionImagenes() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+
+  if (!sheet) {
+    throw new Error('No se encontro la hoja "' + SHEET_PLANILLA + '".');
+  }
+
+  const headers = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getValues()[0];
+  const IDX = obtenerIdxPlanilla_(headers);
+
+  validarColumnasGenerarImagenes_(IDX);
+
+  const result = normalizarTextoUrlsPublicasGeneradas_(sheet, IDX);
+  PropertiesService.getScriptProperties().setProperty(
+    PROP_GENERAR_IMAGENES_TEXTO_REPARADO,
+    TEXTO_ENLACE_IMAGEN_SANCION
+  );
+
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function resolverNombreArchivoParaPublicar_(rawValue, linkedUrl) {
+  const candidates = [safeTrim_(rawValue), safeTrim_(linkedUrl)];
+
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    if (!candidate) continue;
+
+    const extracted = extraerNombreArchivoMediaDesdeUrl_(candidate);
+    const baseName = obtenerBaseNameMedia_(extracted || candidate);
+
+    if (esRutaArchivoMedia_(baseName)) {
+      return baseName;
+    }
+  }
+
+  return "";
+}
+
+function validarNombreArchivoParaPublicar_(fileName, recordId, mediaType) {
+  const normalizedFileName = obtenerBaseNameMedia_(fileName);
+  const lowerFileName = normalizedFileName.toLowerCase();
+  const expectedId = safeTrim_(recordId).toLowerCase();
+  const expectedType = safeTrim_(mediaType).toLowerCase();
+
+  if (!normalizedFileName || !esRutaArchivoMedia_(normalizedFileName)) {
+    return {
+      ok: false,
+      fileName: normalizedFileName,
+      reason: "No se identifico un nombre de archivo de imagen valido."
+    };
+  }
+
+  if (!expectedId) {
+    return {
+      ok: false,
+      fileName: normalizedFileName,
+      reason: "La fila no tiene ID de sancion."
+    };
+  }
+
+  if (lowerFileName.indexOf(expectedId + ".") !== 0) {
+    return {
+      ok: false,
+      fileName: normalizedFileName,
+      reason: 'El archivo no pertenece al ID "' + expectedId + '".'
+    };
+  }
+
+  if (lowerFileName.indexOf("." + expectedType + ".") === -1) {
+    return {
+      ok: false,
+      fileName: normalizedFileName,
+      reason: 'El archivo no corresponde al tipo "' + mediaType + '".'
+    };
+  }
+
+  return {
+    ok: true,
+    fileName: normalizedFileName,
+    reason: ""
+  };
+}
 
 function validarColumnasGenerarImagenes_(IDX) {
   if (!IDX || IDX.id === -1 || IDX.foto === -1 || IDX.firma === -1) {
@@ -2749,7 +2880,6 @@ function completarGeneracionImagenes_(sheet, lastRow) {
   return result;
 }
 
-
 function construirEstadoGeneracionImagenes_(
   estado,
   nextRow,
@@ -2787,7 +2917,6 @@ function construirEstadoGeneracionImagenes_(
   };
 }
 
-
 function obtenerEstadoGeneracionImagenes() {
   const props = PropertiesService.getScriptProperties();
   const estado =
@@ -2823,7 +2952,6 @@ function obtenerEstadoGeneracionImagenes() {
     sourceFolder
   );
 }
-
 
 function mostrarProgresoGeneracionImagenes() {
   const estado = obtenerEstadoGeneracionImagenes();
@@ -2880,6 +3008,111 @@ function reiniciarGeneracionImagenes() {
   };
 }
 
+function reiniciarSoloGeneracionImagenes() {
+  const props = PropertiesService.getScriptProperties();
+
+  eliminarTriggersGenerarImagenes_();
+
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_ESTADO,
+    "EN_PROCESO"
+  );
+
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_SIGUIENTE_FILA,
+    "2"
+  );
+
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_RESUMEN,
+    JSON.stringify(crearResumenInicialGeneracionImagenes_())
+  );
+
+  props.setProperty(
+    PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS,
+    "0"
+  );
+
+  // Permite volver a corregir URLs completas a texto "Full size".
+  props.deleteProperty(
+    PROP_GENERAR_IMAGENES_TEXTO_REPARADO
+  );
+
+  const resultado = {
+    ok: true,
+    estado: "EN_PROCESO",
+    siguienteFila: 2,
+    mensaje:
+      "Se reinició únicamente la generación de enlaces. " +
+      "El índice de imágenes se conserva."
+  };
+
+  Logger.log(JSON.stringify(resultado, null, 2));
+  return resultado;
+}
+
+function diagnosticarIndiceImagenesSanciones() {
+  const props = PropertiesService.getScriptProperties();
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
+
+  const resultado = {
+    versionEsperada: GENERAR_IMAGENES_INDICE_VERSION,
+    versionGuardada: safeTrim_(
+      props.getProperty(PROP_GENERAR_IMAGENES_INDICE_VERSION)
+    ),
+    estadoIndice: safeTrim_(
+      props.getProperty(PROP_PREPARAR_INDICE_ESTADO)
+    ),
+    existeHojaIndice: !!sheet,
+    filasIndice: sheet ? Math.max(0, sheet.getLastRow() - 1) : 0,
+    valido: false
+  };
+
+  resultado.valido =
+    resultado.versionGuardada === resultado.versionEsperada &&
+    resultado.estadoIndice === "COMPLETADO" &&
+    resultado.existeHojaIndice &&
+    resultado.filasIndice > 0;
+
+  Logger.log(JSON.stringify(resultado, null, 2));
+  return resultado;
+}
+
+function construirNotaUrlPublicaImagen_(currentNote, fileName, rawValue) {
+  const marker = "[URL_PUBLICA_SANCIONES]";
+
+  if (safeTrim_(currentNote).indexOf(marker) !== -1) {
+    return currentNote;
+  }
+
+  const originalValue = safeTrim_(rawValue);
+  const noteLines = [
+    marker,
+    "Generada: " +
+      Utilities.formatDate(
+        new Date(),
+        Session.getScriptTimeZone(),
+        "yyyy-MM-dd HH:mm:ss"
+      ),
+    "Archivo original: " + fileName
+  ];
+
+  if (originalValue && originalValue.length <= 500) {
+    noteLines.push("Valor anterior: " + originalValue);
+  }
+
+  return safeTrim_(currentNote)
+    ? currentNote + "\n\n" + noteLines.join("\n")
+    : noteLines.join("\n");
+}
+
+function obtenerOCrearCarpetaCopiasPublicasSanciones_() {
+  throw new Error(
+    "Funcion obsoleta: el proceso usa directamente la carpeta original de Dorchester y no crea copias."
+  );
+}
+
 function logGeneracionImagenes_(mensaje, data) {
   const prefix = "[GENERAR_IMAGENES] ";
 
@@ -2898,183 +3131,129 @@ function logGeneracionImagenes_(mensaje, data) {
   Logger.log(prefix + mensaje + " | " + detalle);
 }
 
-function leerPlanillaSanciones_(options) {
-  const opts = options || {};
-  const includeRichText = opts.includeRichText === true;
-  const allowMissingSheet = opts.allowMissingSheet === true;
+/***************************************
+ * 06. NORMALIZACIÓN Y ANÁLISIS DE SANCIONES
+ ***************************************/
 
-  const spreadsheetId = safeTrim_(opts.spreadsheetId) || SHEET_ID_SANCIONES;
-  const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName(SHEET_PLANILLA);
+/***************************************
+ * NORMALIZAR TODO EL ARCHIVO SANCIONES
+ * - Normaliza placas
+ * - Corrige aptos por mayoría
+ * - Corrige tipo vehículo por regex
+ * - Crea/actualiza hoja maestra
+ * - Marca inconsistencias no reparables en rojo
+ ***************************************/
+function normalizarTodoElArchivoSanciones() {
+  Logger.log("=== INICIO NORMALIZACION GENERAL DE SANCIONES ===");
+  Logger.log("DRY_RUN: " + DRY_RUN);
 
-  if (!sheet) {
-    if (allowMissingSheet) {
-      return {
-        ss: ss,
-        sheet: null,
-        lastRow: 0,
-        lastCol: 0,
-        allData: [],
-        richData: [],
-        rows: [],
-        IDX: null
-      };
-    }
+  const contextoPlanilla = leerPlanillaSanciones_({ includeRichText: true });
+  const ss = contextoPlanilla.ss;
+  const sheet = contextoPlanilla.sheet;
+  const lastRow = contextoPlanilla.lastRow;
+  const lastCol = contextoPlanilla.lastCol;
 
-    throw new Error('No se encontró la hoja "' + SHEET_PLANILLA + '".');
+  if (lastRow < 2 || lastCol < 1) {
+    Logger.log("No hay datos para normalizar.");
+    return;
   }
 
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  const hasGrid = lastRow >= 1 && lastCol >= 1;
+  const allData = contextoPlanilla.allData;
+  const richData = contextoPlanilla.richData;
+  const IDX = contextoPlanilla.IDX;
 
-  const allData = hasGrid
-    ? sheet.getRange(1, 1, lastRow, lastCol).getValues()
-    : [];
+  Logger.log("IDX: " + JSON.stringify(IDX));
 
-  const richData = includeRichText && hasGrid
-    ? sheet.getRange(1, 1, lastRow, lastCol).getRichTextValues()
-    : [];
+  if (IDX.placa === -1) {
+    throw new Error('No se encontró la columna "placa".');
+  }
 
-  const rows = allData.length > 1 ? allData.slice(1) : [];
-  const IDX = allData.length > 0 ? obtenerIdxPlanilla_(allData[0]) : null;
+  if (IDX.apto === -1) {
+    throw new Error('No se encontró la columna "apartamento/apto".');
+  }
 
-  return {
-    ss: ss,
+  if (IDX.tipoVehiculo === -1) {
+    throw new Error('No se encontró la columna "tipo de vehiculo".');
+  }
+
+  const rows = contextoPlanilla.rows;
+
+  // 1. Normalizar placas físicamente en la hoja.
+  const resultadoPlacas = normalizarPlacasEnMemoriaYHoja_(
+    sheet,
+    rows,
+    IDX,
+    !DRY_RUN
+  );
+
+  Logger.log("Placas revisadas: " + resultadoPlacas.revisadas);
+  Logger.log("Placas corregidas: " + resultadoPlacas.corregidas);
+
+  // 2. Reconstruir registros normalizados usando los rows ya normalizados en memoria.
+  const registrosNormalizados = construirRegistrosNormalizados_(
+    rows,
+    IDX,
+    richData,
+    allData
+  );
+
+  const resultadoPlacasSimilares = detectarYCorregirPlacasSimilares_(
+    sheet,
+    registrosNormalizados,
+    IDX,
+    !DRY_RUN
+  );
+
+  Logger.log("Placas similares candidatas a corrección: " + resultadoPlacasSimilares.length);
+
+  // 3. Cargar o crear hoja maestra.
+  const hojaMaestra = getOrCreateHojaMaestra_(ss);
+  const mapaMaestra = leerMapaMaestra_(hojaMaestra);
+  const mapaVigilancia = leerMapaVigilanciaPlacas_();
+
+  const resultadoSyncVigilancia = sincronizarVigilanciaConMaestra_(
+    hojaMaestra,
+    mapaMaestra,
+    mapaVigilancia,
+    !DRY_RUN
+  );
+
+  Logger.log("Vigilancia agregadas a maestra: " + resultadoSyncVigilancia.nuevos.length);
+  Logger.log("Vigilancia omitidas por existir: " + resultadoSyncVigilancia.omitidos.length);
+
+  // 4. Analizar todas las placas.
+  const resultadoAnalisis = analizarYCorregirTodasLasPlacas_({
     sheet: sheet,
-    lastRow: lastRow,
-    lastCol: lastCol,
-    allData: allData,
-    richData: richData,
-    rows: rows,
+    registros: registrosNormalizados,
     IDX: IDX,
-    spreadsheetId: spreadsheetId
-  };
-}
-
-function normalizeHeader_(value) {
-  return safeTrim_(value)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // quita tildes
-    .replace(/\s+/g, ' ')            // quita saltos de línea y espacios dobles
-    .trim();
-}
-
-function normalizePlaca_(value) {
-  return safeTrim_(value)
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
-}
-
-
-/***************************************
- * HELPERS ANALISIS INTELIGENTE
- ***************************************/
-function contarPorCampo_(registros, campo) {
-  const conteo = {};
-
-  registros.forEach(function (reg) {
-    const valor = reg[campo] || "";
-    if (!valor) return;
-
-    if (!conteo[valor]) {
-      conteo[valor] = 0;
-    }
-
-    conteo[valor]++;
+    hojaMaestra: hojaMaestra,
+    mapaMaestra: mapaMaestra,
+    mapaVigilancia: mapaVigilancia,
+    aplicarCorrecciones: !DRY_RUN,
+    umbralAltaCerteza: UMBRAL_MAYORIA,
+    minRegistrosPlaca: MIN_REGISTROS_PARA_CORREGIR
   });
 
-  return conteo;
+  Logger.log("=== RESUMEN NORMALIZACION GENERAL ===");
+  Logger.log("Correcciones apto: " + resultadoAnalisis.correccionesApto.length);
+  Logger.log("Correcciones tipo vehículo: " + resultadoAnalisis.correccionesTipo.length);
+  Logger.log(
+    (!DRY_RUN ? "Registros maestra creados: " : "Registros maestra propuestos: ") +
+    resultadoAnalisis.maestraCreados.length
+  );
+  Logger.log("Inconsistencias no reparadas: " + resultadoAnalisis.inconsistenciasNoReparadas.length);
+
+  Logger.log("Correcciones apto:");
+  Logger.log(JSON.stringify(resultadoAnalisis.correccionesApto.slice(0, 100), null, 2));
+
+  Logger.log("Correcciones tipo:");
+  Logger.log(JSON.stringify(resultadoAnalisis.correccionesTipo.slice(0, 100), null, 2));
+
+  Logger.log("Inconsistencias no reparadas:");
+  logResumenInconsistencias_(resultadoAnalisis.inconsistenciasNoReparadas);
+
+  Logger.log("=== FIN NORMALIZACION GENERAL DE SANCIONES ===");
 }
-
-function obtenerMayoria_(conteo, total) {
-  if (!conteo || total === 0) return null;
-
-  let valorMayor = "";
-  let cantidadMayor = 0;
-
-  Object.keys(conteo).forEach(function (valor) {
-    if (conteo[valor] > cantidadMayor) {
-      valorMayor = valor;
-      cantidadMayor = conteo[valor];
-    }
-  });
-
-  if (!valorMayor) return null;
-
-  return {
-    valor: valorMayor,
-    cantidad: cantidadMayor,
-    total: total,
-    porcentaje: cantidadMayor / total
-  };
-}
-
-function obtenerTextoAptoPorNorm_(registros, aptoNorm) {
-  const match = registros.find(function (reg) {
-    return reg.aptoNorm === aptoNorm;
-  });
-
-  return match ? match.apto : aptoNorm;
-}
-
-/***************************************
- * CONSTRUIR REGISTROS NORMALIZADOS
- ***************************************/
-function construirRegistrosNormalizados_(rows, IDX, richData, allData) {
-  return rows.map(function (row, index) {
-    var realRowIndex = index + 1;
-    var sheetRow = index + 2;
-    var recordId = IDX.id !== -1 ? safeTrim_(row[IDX.id]) : '';
-
-    return {
-      row: row,
-      realRowIndex: realRowIndex,
-      sheetRow: sheetRow,
-
-      id: recordId,
-      fecha: IDX.fecha !== -1 ? formatFecha_(row[IDX.fecha]) : '',
-
-      apto: IDX.apto !== -1 ? safeTrim_(row[IDX.apto]) : '',
-      aptoNorm: IDX.apto !== -1 ? normalizeApto_(row[IDX.apto]) : '',
-
-      placa: IDX.placa !== -1 ? safeTrim_(row[IDX.placa]).toUpperCase() : '',
-      placaNorm: IDX.placa !== -1 ? normalizePlaca_(row[IDX.placa]) : '',
-
-      tipoVehiculo: IDX.tipoVehiculo !== -1 ? safeTrim_(row[IDX.tipoVehiculo]) : '',
-      tipoVehiculoNorm: IDX.tipoVehiculo !== -1 ? normalizarTipoVehiculo_(row[IDX.tipoVehiculo]) : '',
-
-      vigilante: IDX.vigilante !== -1 ? safeTrim_(row[IDX.vigilante]) : '',
-      residenteOVisitante: IDX.residenteVisitante !== -1 ? safeTrim_(row[IDX.residenteVisitante]) : '',
-      observaciones: IDX.observaciones !== -1 ? safeTrim_(row[IDX.observaciones]) : '',
-
-      foto: IDX.foto !== -1
-        ? getCellUrlOrText_(
-          richData,
-          allData,
-          realRowIndex,
-          IDX.foto,
-          recordId,
-          "FOTO"
-        )
-        : '',
-      firma: IDX.firma !== -1
-        ? getCellUrlOrText_(
-          richData,
-          allData,
-          realRowIndex,
-          IDX.firma,
-          recordId,
-          "FIRMA"
-        )
-        : ''
-    };
-  }).filter(function (reg) {
-    return reg.placaNorm || reg.aptoNorm;
-  });
-}
-
 
 /***************************************
  * ANALISIS INTELIGENTE DESDE RESULTADO
@@ -3289,128 +3468,6 @@ function analizarInconsistenciasSancionesDesdeResultado_(
   return correcciones;
 }
 
-
-/***************************************
- * NORMALIZAR TODO EL ARCHIVO SANCIONES
- * - Normaliza placas
- * - Corrige aptos por mayoría
- * - Corrige tipo vehículo por regex
- * - Crea/actualiza hoja maestra
- * - Marca inconsistencias no reparables en rojo
- ***************************************/
-function normalizarTodoElArchivoSanciones() {
-  Logger.log("=== INICIO NORMALIZACION GENERAL DE SANCIONES ===");
-  Logger.log("DRY_RUN: " + DRY_RUN);
-
-  const contextoPlanilla = leerPlanillaSanciones_({ includeRichText: true });
-  const ss = contextoPlanilla.ss;
-  const sheet = contextoPlanilla.sheet;
-  const lastRow = contextoPlanilla.lastRow;
-  const lastCol = contextoPlanilla.lastCol;
-
-  if (lastRow < 2 || lastCol < 1) {
-    Logger.log("No hay datos para normalizar.");
-    return;
-  }
-
-  const allData = contextoPlanilla.allData;
-  const richData = contextoPlanilla.richData;
-  const IDX = contextoPlanilla.IDX;
-
-  Logger.log("IDX: " + JSON.stringify(IDX));
-
-  if (IDX.placa === -1) {
-    throw new Error('No se encontró la columna "placa".');
-  }
-
-  if (IDX.apto === -1) {
-    throw new Error('No se encontró la columna "apartamento/apto".');
-  }
-
-  if (IDX.tipoVehiculo === -1) {
-    throw new Error('No se encontró la columna "tipo de vehiculo".');
-  }
-
-  const rows = contextoPlanilla.rows;
-
-  // 1. Normalizar placas físicamente en la hoja.
-  const resultadoPlacas = normalizarPlacasEnMemoriaYHoja_(
-    sheet,
-    rows,
-    IDX,
-    !DRY_RUN
-  );
-
-  Logger.log("Placas revisadas: " + resultadoPlacas.revisadas);
-  Logger.log("Placas corregidas: " + resultadoPlacas.corregidas);
-
-  // 2. Reconstruir registros normalizados usando los rows ya normalizados en memoria.
-  const registrosNormalizados = construirRegistrosNormalizados_(
-    rows,
-    IDX,
-    richData,
-    allData
-  );
-
-  const resultadoPlacasSimilares = detectarYCorregirPlacasSimilares_(
-    sheet,
-    registrosNormalizados,
-    IDX,
-    !DRY_RUN
-  );
-
-  Logger.log("Placas similares candidatas a corrección: " + resultadoPlacasSimilares.length);
-
-  // 3. Cargar o crear hoja maestra.
-  const hojaMaestra = getOrCreateHojaMaestra_(ss);
-  const mapaMaestra = leerMapaMaestra_(hojaMaestra);
-  const mapaVigilancia = leerMapaVigilanciaPlacas_();
-
-  const resultadoSyncVigilancia = sincronizarVigilanciaConMaestra_(
-    hojaMaestra,
-    mapaMaestra,
-    mapaVigilancia,
-    !DRY_RUN
-  );
-
-  Logger.log("Vigilancia agregadas a maestra: " + resultadoSyncVigilancia.nuevos.length);
-  Logger.log("Vigilancia omitidas por existir: " + resultadoSyncVigilancia.omitidos.length);
-
-  // 4. Analizar todas las placas.
-  const resultadoAnalisis = analizarYCorregirTodasLasPlacas_({
-    sheet: sheet,
-    registros: registrosNormalizados,
-    IDX: IDX,
-    hojaMaestra: hojaMaestra,
-    mapaMaestra: mapaMaestra,
-    mapaVigilancia: mapaVigilancia,
-    aplicarCorrecciones: !DRY_RUN,
-    umbralAltaCerteza: UMBRAL_MAYORIA,
-    minRegistrosPlaca: MIN_REGISTROS_PARA_CORREGIR
-  });
-
-  Logger.log("=== RESUMEN NORMALIZACION GENERAL ===");
-  Logger.log("Correcciones apto: " + resultadoAnalisis.correccionesApto.length);
-  Logger.log("Correcciones tipo vehículo: " + resultadoAnalisis.correccionesTipo.length);
-  Logger.log(
-    (!DRY_RUN ? "Registros maestra creados: " : "Registros maestra propuestos: ") +
-    resultadoAnalisis.maestraCreados.length
-  );
-  Logger.log("Inconsistencias no reparadas: " + resultadoAnalisis.inconsistenciasNoReparadas.length);
-
-  Logger.log("Correcciones apto:");
-  Logger.log(JSON.stringify(resultadoAnalisis.correccionesApto.slice(0, 100), null, 2));
-
-  Logger.log("Correcciones tipo:");
-  Logger.log(JSON.stringify(resultadoAnalisis.correccionesTipo.slice(0, 100), null, 2));
-
-  Logger.log("Inconsistencias no reparadas:");
-  logResumenInconsistencias_(resultadoAnalisis.inconsistenciasNoReparadas);
-
-  Logger.log("=== FIN NORMALIZACION GENERAL DE SANCIONES ===");
-}
-
-
 /***************************************
  * NORMALIZAR TODAS LAS PLACAS
  * Solo borra espacios y convierte a mayúsculas
@@ -3478,7 +3535,6 @@ function normalizarTodasLasPlacas_() {
     }
   }
 }
-
 
 /***************************************
  * NORMALIZAR PLACA SIMPLE
@@ -3576,7 +3632,6 @@ function getTipoVehiculoEsperadoPorRegexPlaca_(placaNorm) {
   };
 }
 
-
 function normalizarTipoVehiculo_(value) {
   const tipo = normalizeText_(value).toUpperCase();
 
@@ -3587,6 +3642,705 @@ function normalizarTipoVehiculo_(value) {
 
   return tipo;
 }
+
+/***************************************
+ * HELPERS ANALISIS INTELIGENTE
+ ***************************************/
+function contarPorCampo_(registros, campo) {
+  const conteo = {};
+
+  registros.forEach(function (reg) {
+    const valor = reg[campo] || "";
+    if (!valor) return;
+
+    if (!conteo[valor]) {
+      conteo[valor] = 0;
+    }
+
+    conteo[valor]++;
+  });
+
+  return conteo;
+}
+
+function obtenerMayoria_(conteo, total) {
+  if (!conteo || total === 0) return null;
+
+  let valorMayor = "";
+  let cantidadMayor = 0;
+
+  Object.keys(conteo).forEach(function (valor) {
+    if (conteo[valor] > cantidadMayor) {
+      valorMayor = valor;
+      cantidadMayor = conteo[valor];
+    }
+  });
+
+  if (!valorMayor) return null;
+
+  return {
+    valor: valorMayor,
+    cantidad: cantidadMayor,
+    total: total,
+    porcentaje: cantidadMayor / total
+  };
+}
+
+function obtenerTextoAptoPorNorm_(registros, aptoNorm) {
+  const match = registros.find(function (reg) {
+    return reg.aptoNorm === aptoNorm;
+  });
+
+  return match ? match.apto : aptoNorm;
+}
+
+/***************************************
+ * AGRUPAR POR CAMPO
+ ***************************************/
+function agruparPorCampo_(registros, campo) {
+  const grupos = {};
+
+  registros.forEach(function (reg) {
+    const key = reg[campo] || "";
+
+    if (!key) return;
+
+    if (!grupos[key]) {
+      grupos[key] = [];
+    }
+
+    grupos[key].push(reg);
+  });
+
+  return grupos;
+}
+
+/***************************************
+ * RESOLVER TIPO PARA MAESTRA
+ ***************************************/
+function resolverTipoParaMaestra_(regexInfo, mayoriaTipo) {
+  if (regexInfo && regexInfo.ok) {
+    return {
+      tipo: regexInfo.tipo,
+      fuente: regexInfo.regex,
+      confianza: 1
+    };
+  }
+
+  if (mayoriaTipo && mayoriaTipo.porcentaje >= UMBRAL_MAYORIA) {
+    return {
+      tipo: mayoriaTipo.valor,
+      fuente: "MAYORIA_HISTORICA_TIPO",
+      confianza: mayoriaTipo.porcentaje
+    };
+  }
+
+  return {
+    tipo: "",
+    fuente: "SIN_CERTEZA",
+    confianza: 0
+  };
+}
+
+/***************************************
+ * MARCAR INCONSISTENCIA NO REPARABLE
+ ***************************************/
+function marcarInconsistenciaNoReparable_(params) {
+  const sheet = params.sheet;
+  const IDX = params.IDX;
+  const registros = params.registros;
+  const columna = params.columna;
+  const motivo = params.motivo;
+  const inconsistenciasNoReparadas = params.inconsistenciasNoReparadas;
+  const aplicarCorrecciones = params.aplicarCorrecciones === true;
+
+  let colIndex = -1;
+
+  if (columna === "apto") {
+    colIndex = IDX.apto;
+  } else if (columna === "placa") {
+    colIndex = IDX.placa;
+  } else if (columna === "tipoVehiculo") {
+    colIndex = IDX.tipoVehiculo;
+  }
+
+  if (colIndex === -1) return;
+
+
+
+  if (registros.length > 0) {
+    const placaNorm = registros[0].placaNorm;
+
+    inconsistenciasNoReparadas.push(
+      crearResumenInconsistenciaPlaca_(
+        placaNorm,
+        registros,
+        columna,
+        motivo
+      )
+    );
+  }
+
+  registros.forEach(function (reg) {
+    if (aplicarCorrecciones) {
+      sheet.getRange(reg.sheetRow, colIndex + 1)
+        .setBackground("#f4cccc"); //ROJO
+    }
+  });
+
+
+
+}
+
+function distanciaPlacas_(a, b) {
+  const placaA = normalizePlaca_(a);
+  const placaB = normalizePlaca_(b);
+
+  if (!placaA || !placaB) return 999;
+  if (placaA.length !== placaB.length) return 999;
+
+  let distanciaTotal = 0;
+
+  for (var i = 0; i < placaA.length; i++) {
+    distanciaTotal += distanciaCaracterPlaca_(placaA[i], placaB[i]);
+  }
+
+  // Normaliza a escala 0 - 999
+  const distanciaNormalizada = Math.round((distanciaTotal / placaA.length) * 999);
+
+  return Math.min(999, distanciaNormalizada);
+}
+
+function distanciaCaracterPlaca_(charA, charB) {
+  if (charA === charB) return 0;
+
+  const esNumeroA = /^[0-9]$/.test(charA);
+  const esNumeroB = /^[0-9]$/.test(charB);
+
+  const esLetraA = /^[A-Z]$/.test(charA);
+  const esLetraB = /^[A-Z]$/.test(charB);
+
+  // Número contra número: 5 → 6 pesa menos que 5 → 9
+  if (esNumeroA && esNumeroB) {
+    return Math.abs(Number(charA) - Number(charB)) / 9;
+  }
+
+  // Letra contra letra: X → Z pesa menos que A → Z
+  if (esLetraA && esLetraB) {
+    const posA = charA.charCodeAt(0) - 65; // A = 0
+    const posB = charB.charCodeAt(0) - 65;
+    return Math.abs(posA - posB) / 25;
+  }
+
+  // Letra contra número es diferencia fuerte
+  return 1;
+}
+
+function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecciones) {
+  const grupos = {};
+
+  registros.forEach(function (reg) {
+    if (!reg.aptoNorm || !reg.tipoVehiculoNorm || !reg.placaNorm) return;
+
+    const key = reg.aptoNorm + "|" + reg.tipoVehiculoNorm;
+
+    if (!grupos[key]) {
+      grupos[key] = [];
+    }
+
+    grupos[key].push(reg);
+  });
+
+  const candidatos = [];
+  const descartados = [];
+
+  Object.keys(grupos).forEach(function (key) {
+    const registrosGrupo = grupos[key];
+    const conteoPlacas = {};
+
+    registrosGrupo.forEach(function (reg) {
+      if (!conteoPlacas[reg.placaNorm]) {
+        conteoPlacas[reg.placaNorm] = {
+          placa: reg.placaNorm,
+          cantidad: 0,
+          registros: []
+        };
+      }
+
+      conteoPlacas[reg.placaNorm].cantidad++;
+      conteoPlacas[reg.placaNorm].registros.push(reg);
+    });
+
+    const placas = Object.keys(conteoPlacas).map(function (placa) {
+      return conteoPlacas[placa];
+    });
+
+    const dominantes = placas.filter(function (item) {
+      return item.cantidad >= MIN_REGISTROS_PARA_CORREGIR;
+    });
+
+    const sospechosas = placas.filter(function (item) {
+      return item.cantidad <= MAX_REGISTROS_PLACA_SOSPECHOSA;
+    });
+
+    sospechosas.forEach(function (sospechosa) {
+      let mejorCandidato = null;
+
+      dominantes.forEach(function (dominante) {
+        if (sospechosa.placa === dominante.placa) return;
+
+        const distancia = distanciaPlacas_(sospechosa.placa, dominante.placa);
+        const tipoSimilitud = obtenerTipoSimilitudPlaca_(sospechosa.placa, dominante.placa);
+
+        const baseDescartado = {
+          apartamento: sospechosa.registros[0].apto,
+          tipoVehiculo: sospechosa.registros[0].tipoVehiculoNorm,
+          placaActual: sospechosa.placa,
+          placaComparada: dominante.placa,
+          registrosPlacaActual: sospechosa.cantidad,
+          registrosPlacaComparada: dominante.cantidad,
+          distancia: distancia,
+          tipoSimilitud: tipoSimilitud,
+          filas: sospechosa.registros.map(function (reg) {
+            return reg.sheetRow;
+          }).join(", ")
+        };
+
+
+
+
+        if (
+          distancia > MAX_DISTANCIA_PLACA_SIMILAR &&
+          tipoSimilitud !== "TRANSPOSICION_SIMPLE"
+        ) {
+          if (
+            MOSTRAR_PLACAS_SIMILARES_DESCARTADAS &&
+            distancia <= MAX_DISTANCIA_DESCARTADA_PARA_ANALISIS
+          ) {
+            descartados.push(Object.assign({}, baseDescartado, {
+              motivoDescarte: "Distancia supera el máximo permitido: " + distancia + " > " + MAX_DISTANCIA_PLACA_SIMILAR
+            }));
+          }
+          return;
+        }
+
+
+
+        const regexSospechosa = getTipoVehiculoEsperadoPorRegexPlaca_(sospechosa.placa);
+        const regexDominante = getTipoVehiculoEsperadoPorRegexPlaca_(dominante.placa);
+
+        if (!regexSospechosa.ok || !regexDominante.ok) {
+          descartados.push(Object.assign({}, baseDescartado, {
+            motivoDescarte: "Una de las placas no cumple formato colombiano reconocido."
+          }));
+          return;
+        }
+
+        if (regexSospechosa.tipo !== regexDominante.tipo) {
+          descartados.push(Object.assign({}, baseDescartado, {
+            motivoDescarte: "El tipo esperado por regex no coincide: " + regexSospechosa.tipo + " vs " + regexDominante.tipo
+          }));
+          return;
+        }
+
+        const confianza = dominante.cantidad / (dominante.cantidad + sospechosa.cantidad);
+
+        const candidato = {
+          apartamento: sospechosa.registros[0].apto,
+          apartamentoNorm: sospechosa.registros[0].aptoNorm,
+          tipoVehiculo: sospechosa.registros[0].tipoVehiculoNorm,
+          placaActual: sospechosa.placa,
+          placaSugerida: dominante.placa,
+          registrosPlacaActual: sospechosa.cantidad,
+          registrosPlacaSugerida: dominante.cantidad,
+          distancia: distancia,
+          tipoSimilitud: tipoSimilitud,
+          confianza: confianza,
+          filas: sospechosa.registros.map(function (reg) {
+            return reg.sheetRow;
+          }),
+          motivo: "Placa poco frecuente muy similar a placa dominante del mismo apartamento y tipo."
+        };
+
+        if (
+          !mejorCandidato ||
+          candidato.distancia < mejorCandidato.distancia ||
+          candidato.registrosPlacaSugerida > mejorCandidato.registrosPlacaSugerida
+        ) {
+          mejorCandidato = candidato;
+        }
+      });
+
+      if (mejorCandidato) {
+        const motivoNoCorreccion = obtenerMotivoNoCorreccionPlacaSimilar_(mejorCandidato);
+
+        const puedeCorregirAuto =
+          !motivoNoCorreccion &&
+          mejorCandidato.confianza >= UMBRAL_MAYORIA &&
+          mejorCandidato.registrosPlacaSugerida >= MIN_REGISTROS_PARA_CORREGIR &&
+          (
+            mejorCandidato.tipoSimilitud === "TRANSPOSICION_SIMPLE" ||
+            mejorCandidato.tipoSimilitud === "DIFERENCIA_BAJA"
+          );
+
+        mejorCandidato.decisionAuto = puedeCorregirAuto ? "CORREGIR_AUTO" : "SOLO_REVISION";
+        mejorCandidato.estadoEjecucion = aplicarCorrecciones
+          ? (puedeCorregirAuto ? "CORREGIDA" : "NO_CORREGIDA")
+          : "DRY_RUN_NO_APLICA";
+
+        mejorCandidato.motivoNoCorreccion = motivoNoCorreccion || (
+          aplicarCorrecciones
+            ? ""
+            : "DRY_RUN activo. No se aplican cambios físicos."
+        );
+
+        candidatos.push(mejorCandidato);
+
+        if (aplicarCorrecciones && puedeCorregirAuto) {
+          sospechosa.registros.forEach(function (reg) {
+            sheet.getRange(reg.sheetRow, IDX.placa + 1)
+              .setValue(mejorCandidato.placaSugerida)
+              .setBackground("#fff2cc");
+
+            reg.placa = mejorCandidato.placaSugerida;
+            reg.placaNorm = mejorCandidato.placaSugerida;
+          });
+        }
+      }
+    });
+  });
+
+  escribirRevisionPlacasSimilares_(candidatos);
+
+  Logger.log("=== REVISION PLACAS SIMILARES ===");
+  Logger.log("Candidatos encontrados: " + candidatos.length);
+
+  candidatos.slice(0, 50).forEach(function (item, index) {
+    Logger.log(
+      [
+        index + 1,
+        "Apto: " + item.apartamento,
+        "Tipo: " + item.tipoVehiculo,
+        "Corregir: " + item.placaActual + " → " + item.placaSugerida,
+        "Actual: " + item.registrosPlacaActual,
+        "Dominante: " + item.registrosPlacaSugerida,
+        "Distancia: " + item.distancia,
+        "Similitud: " + item.tipoSimilitud,
+        "Confianza: " + Math.round(item.confianza * 10000) / 100 + "%",
+        "DecisionAuto: " + item.decisionAuto,
+        "Estado: " + item.estadoEjecucion,
+        "MotivoNoCorreccion: " + item.motivoNoCorreccion,
+        "Filas: " + item.filas.join(", ")
+      ].join(" | ")
+    );
+  });
+
+  const noCorregidas = candidatos.filter(function (item) {
+    return item.decisionAuto !== "CORREGIR_AUTO";
+  });
+
+  Logger.log("=== CANDIDATOS NO CORREGIDOS AUTOMATICAMENTE ===");
+  Logger.log("Total candidatos solo revisión: " + noCorregidas.length);
+
+  noCorregidas.slice(0, 30).forEach(function (item, index) {
+    Logger.log(
+      [
+        index + 1,
+        "Apto: " + item.apartamento,
+        "Tipo: " + item.tipoVehiculo,
+        "Placa: " + item.placaActual + " → " + item.placaSugerida,
+        "Distancia: " + item.distancia,
+        "Similitud: " + item.tipoSimilitud,
+        "Confianza: " + Math.round(item.confianza * 10000) / 100 + "%",
+        "Motivo: " + item.motivoNoCorreccion,
+        "Filas: " + item.filas.join(", ")
+      ].join(" | ")
+    );
+  });
+
+  if (MOSTRAR_PLACAS_SIMILARES_DESCARTADAS) {
+    Logger.log("=== POSIBLES PLACAS SIMILARES DESCARTADAS ===");
+    Logger.log("Total descartadas para análisis: " + descartados.length);
+
+    descartados.slice(0, LIMITE_PLACAS_SIMILARES_DESCARTADAS).forEach(function (item, index) {
+      Logger.log(
+        [
+          index + 1,
+          "Apto: " + item.apartamento,
+          "Tipo: " + item.tipoVehiculo,
+          "Comparación: " + item.placaActual + " vs " + item.placaComparada,
+          "Actual: " + item.registrosPlacaActual,
+          "Comparada: " + item.registrosPlacaComparada,
+          "Distancia: " + item.distancia,
+          "Similitud: " + item.tipoSimilitud,
+          "MotivoDescarte: " + item.motivoDescarte,
+          "Filas: " + item.filas
+        ].join(" | ")
+      );
+    });
+
+    if (descartados.length > LIMITE_PLACAS_SIMILARES_DESCARTADAS) {
+      Logger.log("Más descartadas no mostradas: " + (descartados.length - LIMITE_PLACAS_SIMILARES_DESCARTADAS));
+    }
+  }
+
+  return candidatos;
+}
+
+function escribirRevisionPlacasSimilares_(candidatos) {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const nombreHoja = "revision_placas_similares";
+
+  let sheet = ss.getSheetByName(nombreHoja);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(nombreHoja);
+  }
+
+  sheet.clear();
+
+  sheet.getRange(1, 1, 1, 14).setValues([[
+    "Apartamento",
+    "TipoVehiculo",
+    "PlacaActual",
+    "PlacaSugerida",
+    "RegistrosPlacaActual",
+    "RegistrosPlacaSugerida",
+    "Distancia",
+    "Similitud",
+    "Confianza",
+    "DecisionAuto",
+    "EstadoEjecucion",
+    "MotivoNoCorreccion",
+    "Filas",
+    "DecisionManual"
+  ]]);
+
+  sheet.getRange(1, 1, 1, 14)
+    .setFontWeight("bold")
+    .setBackground("#fff2cc");
+
+  if (candidatos.length === 0) {
+    return;
+  }
+
+  const values = candidatos.map(function (item) {
+    return [
+      item.apartamento,
+      item.tipoVehiculo,
+      item.placaActual,
+      item.placaSugerida,
+      item.registrosPlacaActual,
+      item.registrosPlacaSugerida,
+      item.distancia,
+      item.tipoSimilitud,
+      Math.round(item.confianza * 10000) / 100 + "%",
+      item.decisionAuto || "",
+      item.estadoEjecucion || "",
+      item.motivoNoCorreccion || "",
+      item.filas.join(", "),
+      ""
+    ];
+  });
+
+  sheet.getRange(2, 1, values.length, 14).setValues(values);
+  sheet.autoResizeColumns(1, 14);
+}
+
+function obtenerTipoSimilitudPlaca_(placaActual, placaSugerida) {
+  if (placaActual === placaSugerida) return "IGUAL";
+
+  if (esTransposicionSimple_(placaActual, placaSugerida)) {
+    return "TRANSPOSICION_SIMPLE";
+  }
+
+  const distancia = distanciaPlacas_(placaActual, placaSugerida);
+
+  if (distancia <= 50) return "DIFERENCIA_BAJA";
+  if (distancia <= 120) return "DIFERENCIA_MEDIA";
+
+  return "DIFERENCIA_ALTA";
+}
+
+function esTransposicionSimple_(a, b) {
+  const placaA = normalizePlaca_(a);
+  const placaB = normalizePlaca_(b);
+
+  if (!placaA || !placaB) return false;
+  if (placaA.length !== placaB.length) return false;
+
+  const diferencias = [];
+
+  for (var i = 0; i < placaA.length; i++) {
+    if (placaA[i] !== placaB[i]) {
+      diferencias.push(i);
+    }
+  }
+
+  // Solo aplica si hay exactamente 2 diferencias
+  if (diferencias.length !== 2) return false;
+
+  const pos1 = diferencias[0];
+  const pos2 = diferencias[1];
+
+  // Las diferencias deben estar juntas
+  if (pos2 !== pos1 + 1) return false;
+
+  // Valida que sea intercambio directo:
+  // CZW11D vs CWZ11D
+  // posiciones Z/W invertidas
+  return (
+    placaA[pos1] === placaB[pos2] &&
+    placaA[pos2] === placaB[pos1]
+  );
+}
+
+function obtenerMotivoNoCorreccionPlacaSimilar_(item) {
+  if (item.confianza < UMBRAL_MAYORIA) {
+    return "Confianza menor al mínimo requerido: " +
+      Math.round(item.confianza * 10000) / 100 + "%";
+  }
+
+  if (item.registrosPlacaSugerida < MIN_REGISTROS_PARA_CORREGIR) {
+    return "La placa dominante no tiene suficientes registros.";
+  }
+
+  if (
+    item.tipoSimilitud !== "TRANSPOSICION_SIMPLE" &&
+    item.tipoSimilitud !== "DIFERENCIA_BAJA"
+  ) {
+    return "Similitud no permitida para corrección automática: " + item.tipoSimilitud;
+  }
+
+  return "";
+}
+
+function crearResumenInconsistenciaPlaca_(placaNorm, registrosPlaca, columna, motivo) {
+  const conteoAptos = contarPorCampo_(registrosPlaca, "aptoNorm");
+  const mayoriaApto = obtenerMayoria_(conteoAptos, registrosPlaca.length);
+
+  const registrosConTipo = registrosPlaca.filter(function (reg) {
+    return reg.tipoVehiculoNorm;
+  });
+
+  const conteoTipos = contarPorCampo_(registrosConTipo, "tipoVehiculoNorm");
+  const mayoriaTipo = obtenerMayoria_(conteoTipos, registrosConTipo.length);
+
+  const aptosDetalle = Object.keys(conteoAptos)
+    .sort(function (a, b) {
+      return conteoAptos[b] - conteoAptos[a];
+    })
+    .map(function (apto) {
+      return apto + "=" + conteoAptos[apto];
+    })
+    .join(", ");
+
+  const tiposDetalle = Object.keys(conteoTipos)
+    .sort(function (a, b) {
+      return conteoTipos[b] - conteoTipos[a];
+    })
+    .map(function (tipo) {
+      return tipo + "=" + conteoTipos[tipo];
+    })
+    .join(", ");
+
+  const filas = registrosPlaca.map(function (reg) {
+    return reg.sheetRow;
+  });
+
+  const porcentajeMayoria = mayoriaApto ? mayoriaApto.porcentaje : 0;
+  const porcentajeTexto = Math.round(porcentajeMayoria * 10000) / 100 + "%";
+  const umbralTexto = Math.round(UMBRAL_MAYORIA * 100) + "%";
+  const diferenciaUmbral = Math.max(0, UMBRAL_MAYORIA - porcentajeMayoria);
+  const diferenciaTexto = Math.round(diferenciaUmbral * 10000) / 100 + "%";
+
+  let recomendacion = "Revisión manual.";
+
+  if (registrosPlaca.length < MIN_REGISTROS_PARA_CORREGIR) {
+    recomendacion = "No corrige porque tiene pocos registros históricos.";
+  } else if (mayoriaApto && porcentajeMayoria < UMBRAL_MAYORIA) {
+    recomendacion = "No corrige porque la mayoría no alcanza el umbral de certeza.";
+  }
+
+  let prioridad = "BAJA";
+  let criterioRevision = "";
+
+  if (registrosPlaca.length >= MIN_REGISTROS_PARA_CORREGIR && mayoriaApto && porcentajeMayoria < UMBRAL_MAYORIA) {
+    prioridad = "ALTA";
+    criterioRevision = "Tiene suficientes registros, pero la mayoría no alcanza el umbral.";
+  } else if (registrosPlaca.length < MIN_REGISTROS_PARA_CORREGIR && registrosPlaca.length >= 3) {
+    prioridad = "MEDIA";
+    criterioRevision = "Tiene pocos registros, pero ya hay alguna repetición histórica.";
+  } else {
+    prioridad = "BAJA";
+    criterioRevision = "Tiene muy pocos registros históricos.";
+  }
+
+  return {
+    prioridad: prioridad,
+    placa: placaNorm,
+    columna: columna,
+    motivo: motivo,
+    totalRegistros: registrosPlaca.length,
+    aptosDetectados: aptosDetalle,
+    mayoriaApto: mayoriaApto ? mayoriaApto.valor : "",
+    cantidadMayoriaApto: mayoriaApto ? mayoriaApto.cantidad : 0,
+    certezaApto: porcentajeTexto,
+    umbralRequerido: umbralTexto,
+    diferenciaContraUmbral: diferenciaTexto,
+    tiposDetectados: tiposDetalle,
+    mayoriaTipo: mayoriaTipo ? mayoriaTipo.valor : "",
+    filasAfectadas: filas.slice(0, 20).join(", "),
+    totalFilasAfectadas: filas.length,
+    recomendacion: recomendacion,
+    criterioRevision: criterioRevision
+  };
+}
+
+function logResumenInconsistencias_(inconsistencias) {
+  Logger.log("=== INCONSISTENCIAS PARA REVISIÓN MANUAL ===");
+  Logger.log("Total placas con inconsistencia: " + inconsistencias.length);
+
+  const pesoPrioridad = {
+    "ALTA": 3,
+    "MEDIA": 2,
+    "BAJA": 1
+  };
+
+  const ordenadas = inconsistencias.slice().sort(function (a, b) {
+    const prioridadDiff = (pesoPrioridad[b.prioridad] || 0) - (pesoPrioridad[a.prioridad] || 0);
+    if (prioridadDiff !== 0) return prioridadDiff;
+
+    return b.totalRegistros - a.totalRegistros;
+  });
+
+  ordenadas.slice(0, 50).forEach(function (item, index) {
+    Logger.log(
+      [
+        index + 1,
+        "Prioridad: " + item.prioridad,
+        "Placa: " + item.placa,
+        "Registros: " + item.totalRegistros,
+        "Aptos: " + item.aptosDetectados,
+        "Mayoría: " + item.mayoriaApto + " (" + item.cantidadMayoriaApto + " registros / " + item.certezaApto + ")",
+        "Umbral: " + item.umbralRequerido,
+        "Faltó: " + item.diferenciaContraUmbral,
+        "Tipos: " + item.tiposDetectados,
+        "Filas: " + item.filasAfectadas,
+        "Criterio: " + item.criterioRevision,
+        "Recomendación: " + item.recomendacion
+      ].join(" | ")
+    );
+  });
+
+  if (ordenadas.length > 50) {
+    Logger.log("Más inconsistencias no mostradas: " + (ordenadas.length - 50));
+  }
+}
+
+/***************************************
+ * 07. MAESTRA, VIGILANCIA Y VALIDACIÓN
+ ***************************************/
 
 /***************************************
  * HOJA MAESTRA
@@ -3619,7 +4373,6 @@ function getOrCreateHojaMaestra_(ss) {
   return sheet;
 }
 
-
 function leerMapaMaestra_(sheet) {
   const lastRow = sheet.getLastRow();
   const mapa = {};
@@ -3651,7 +4404,6 @@ function leerMapaMaestra_(sheet) {
 
   return mapa;
 }
-
 
 function agregarRegistroMaestra_(sheet, data) {
   sheet.appendRow([
@@ -3971,108 +4723,22 @@ function analizarYCorregirTodasLasPlacas_(config) {
   };
 }
 
+function maestraEsConfiableParaCorreccion_(master) {
+  if (!master) return false;
 
-/***************************************
- * AGRUPAR POR CAMPO
- ***************************************/
-function agruparPorCampo_(registros, campo) {
-  const grupos = {};
+  const estado = safeTrim_(master.estado).toUpperCase();
+  const confianza = Number(master.confianzaApto) || 0;
 
-  registros.forEach(function (reg) {
-    const key = reg[campo] || "";
+  if (estado.indexOf("REQUIERE_VERIFICACION") !== -1) {
+    return false;
+  }
 
-    if (!key) return;
+  if (confianza < UMBRAL_MAYORIA) {
+    return false;
+  }
 
-    if (!grupos[key]) {
-      grupos[key] = [];
-    }
-
-    grupos[key].push(reg);
-  });
-
-  return grupos;
+  return true;
 }
-
-
-/***************************************
- * RESOLVER TIPO PARA MAESTRA
- ***************************************/
-function resolverTipoParaMaestra_(regexInfo, mayoriaTipo) {
-  if (regexInfo && regexInfo.ok) {
-    return {
-      tipo: regexInfo.tipo,
-      fuente: regexInfo.regex,
-      confianza: 1
-    };
-  }
-
-  if (mayoriaTipo && mayoriaTipo.porcentaje >= UMBRAL_MAYORIA) {
-    return {
-      tipo: mayoriaTipo.valor,
-      fuente: "MAYORIA_HISTORICA_TIPO",
-      confianza: mayoriaTipo.porcentaje
-    };
-  }
-
-  return {
-    tipo: "",
-    fuente: "SIN_CERTEZA",
-    confianza: 0
-  };
-}
-
-
-/***************************************
- * MARCAR INCONSISTENCIA NO REPARABLE
- ***************************************/
-function marcarInconsistenciaNoReparable_(params) {
-  const sheet = params.sheet;
-  const IDX = params.IDX;
-  const registros = params.registros;
-  const columna = params.columna;
-  const motivo = params.motivo;
-  const inconsistenciasNoReparadas = params.inconsistenciasNoReparadas;
-  const aplicarCorrecciones = params.aplicarCorrecciones === true;
-
-  let colIndex = -1;
-
-  if (columna === "apto") {
-    colIndex = IDX.apto;
-  } else if (columna === "placa") {
-    colIndex = IDX.placa;
-  } else if (columna === "tipoVehiculo") {
-    colIndex = IDX.tipoVehiculo;
-  }
-
-  if (colIndex === -1) return;
-
-
-
-  if (registros.length > 0) {
-    const placaNorm = registros[0].placaNorm;
-
-    inconsistenciasNoReparadas.push(
-      crearResumenInconsistenciaPlaca_(
-        placaNorm,
-        registros,
-        columna,
-        motivo
-      )
-    );
-  }
-
-  registros.forEach(function (reg) {
-    if (aplicarCorrecciones) {
-      sheet.getRange(reg.sheetRow, colIndex + 1)
-        .setBackground("#f4cccc"); //ROJO
-    }
-  });
-
-
-
-}
-
-
 
 function getSheetByGid_(ss, gid) {
   const sheets = ss.getSheets();
@@ -4459,6 +5125,237 @@ function sincronizarVigilanciaConMaestra_(hojaMaestra, mapaMaestra, mapaVigilanc
   };
 }
 
+function leerMapaConsultasOkSancionesPorPlaca_(ss) {
+  const sheet = ss.getSheetByName(SHEET_LOG_CONSULTAS_SANCIONES);
+  const mapa = {};
+
+  if (!sheet) {
+    Logger.log("No existe hoja de log de consultas: " + SHEET_LOG_CONSULTAS_SANCIONES);
+    return mapa;
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow < 2) {
+    return mapa;
+  }
+
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+
+  const headers = data[0].map(function (h) {
+    return normalizeHeader_(h);
+  });
+
+  const colMap = {};
+  headers.forEach(function (h, i) {
+    colMap[h] = i;
+  });
+
+  const idxFecha = colMap["fechahora"];
+  const idxAptoNorm = colMap["apartamentonormalizado"];
+  const idxPlacaNorm = colMap["placanormalizada"];
+  const idxResultado = colMap["resultado"];
+
+  if (
+    idxAptoNorm === undefined ||
+    idxPlacaNorm === undefined ||
+    idxResultado === undefined
+  ) {
+    throw new Error("El log de consultas no tiene las columnas requeridas.");
+  }
+
+  data.slice(1).forEach(function (row) {
+    const resultado = safeTrim_(row[idxResultado]).toUpperCase();
+
+    // Solo usamos consultas exitosas.
+    if (resultado !== "OK") return;
+
+    const placa = normalizePlaca_(row[idxPlacaNorm]);
+    const aptoNorm = normalizeApto_(row[idxAptoNorm]);
+
+    if (!placa || !aptoNorm) return;
+
+    if (!mapa[placa]) {
+      mapa[placa] = {
+        placa: placa,
+        totalConsultasOk: 0,
+        aptos: {},
+        aptoMayor: "",
+        cantidadMayor: 0,
+        porcentajeMayor: 0,
+        ultimaFecha: ""
+      };
+    }
+
+    if (!mapa[placa].aptos[aptoNorm]) {
+      mapa[placa].aptos[aptoNorm] = {
+        aptoNorm: aptoNorm,
+        cantidad: 0,
+        ultimaFecha: ""
+      };
+    }
+
+    mapa[placa].totalConsultasOk++;
+    mapa[placa].aptos[aptoNorm].cantidad++;
+
+    const fecha = idxFecha !== undefined ? safeTrim_(row[idxFecha]) : "";
+
+    if (fecha) {
+      mapa[placa].aptos[aptoNorm].ultimaFecha = fecha;
+      mapa[placa].ultimaFecha = fecha;
+    }
+  });
+
+  Object.keys(mapa).forEach(function (placa) {
+    const item = mapa[placa];
+
+    Object.keys(item.aptos).forEach(function (aptoNorm) {
+      const aptoItem = item.aptos[aptoNorm];
+
+      if (aptoItem.cantidad > item.cantidadMayor) {
+        item.aptoMayor = aptoNorm;
+        item.cantidadMayor = aptoItem.cantidad;
+      }
+    });
+
+    item.porcentajeMayor = item.totalConsultasOk > 0
+      ? item.cantidadMayor / item.totalConsultasOk
+      : 0;
+  });
+
+  return mapa;
+}
+
+function revisarMaestraContraLogConsultasSancionesDryRun() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const hojaMaestra = getOrCreateHojaMaestra_(ss);
+
+  revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, false);
+}
+
+function revisarMaestraContraLogConsultasSancionesAplicar() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
+  const hojaMaestra = getOrCreateHojaMaestra_(ss);
+
+  revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, true);
+}
+
+function revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, aplicarCambios) {
+  const lastRow = hojaMaestra.getLastRow();
+
+  if (lastRow < 2) {
+    Logger.log("La hoja maestra no tiene registros.");
+    return {
+      conflictos: 0,
+      revisados: 0
+    };
+  }
+
+  const mapaConsultas = leerMapaConsultasOkSancionesPorPlaca_(ss);
+
+  const range = hojaMaestra.getRange(2, 1, lastRow - 1, 9);
+  const values = range.getValues();
+
+  const now = Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    "yyyy-MM-dd HH:mm"
+  );
+
+  let revisados = 0;
+  let conflictos = 0;
+  const filasConflicto = [];
+
+  values.forEach(function (row, index) {
+    const sheetRow = index + 2;
+
+    const placa = normalizePlaca_(row[0]);
+    const aptoMaestra = safeTrim_(row[1]);
+    const aptoNormMaestra = normalizeApto_(aptoMaestra);
+
+    if (!placa || !aptoNormMaestra) return;
+
+    revisados++;
+
+    const infoConsulta = mapaConsultas[placa];
+
+    if (!infoConsulta) return;
+
+    if (infoConsulta.totalConsultasOk < MIN_CONSULTAS_OK_PARA_ALERTA_MAESTRA) {
+      return;
+    }
+
+    const aptoReportadoConsulta = infoConsulta.aptoMayor;
+
+    if (!aptoReportadoConsulta) return;
+
+    // Si coincide, no se toca la maestra.
+    if (aptoReportadoConsulta === aptoNormMaestra) {
+      return;
+    }
+
+    conflictos++;
+
+    const confianzaAnterior = Number(row[3]) || 1;
+    const nuevaConfianza = Math.min(
+      confianzaAnterior,
+      CONFIANZA_MAX_CONFLICTO_CONSULTA
+    );
+
+    const notaConflicto =
+      "[" + now + "] Conflicto con consulta web. " +
+      "Maestra indica apto " + aptoNormMaestra +
+      ", pero consulta(s) OK del residente reportan apto " + aptoReportadoConsulta +
+      " para la placa " + placa +
+      ". Dato requiere verificación manual antes de corrección automática.";
+
+    Logger.log(
+      "CONFLICTO MAESTRA VS CONSULTA | Placa: " + placa +
+      " | Maestra apto: " + aptoNormMaestra +
+      " | Consulta apto: " + aptoReportadoConsulta +
+      " | Confianza anterior: " + confianzaAnterior +
+      " | Nueva confianza: " + nuevaConfianza +
+      " | Total consultas OK: " + infoConsulta.totalConsultasOk
+    );
+
+    if (aplicarCambios) {
+      row[3] = nuevaConfianza; // ConfianzaApto
+      row[6] = now;            // FechaActualizacion
+      row[7] = ESTADO_MAESTRA_REQUIERE_VERIFICACION; // Estado
+      row[8] = safeTrim_(row[8])
+        ? safeTrim_(row[8]) + " | " + notaConflicto
+        : notaConflicto;
+
+      filasConflicto.push(sheetRow);
+    }
+  });
+
+  if (aplicarCambios) {
+    range.setValues(values);
+
+    filasConflicto.forEach(function (rowNumber) {
+      hojaMaestra
+        .getRange(rowNumber, 1, 1, 9)
+        .setBackground("#fff2cc");
+    });
+  }
+
+  Logger.log("=== REVISIÓN MAESTRA VS CONSULTAS WEB ===");
+  Logger.log("Registros maestra revisados: " + revisados);
+  Logger.log("Conflictos detectados: " + conflictos);
+  Logger.log("Aplicar cambios: " + aplicarCambios);
+
+  return {
+    conflictos: conflictos,
+    revisados: revisados
+  };
+}
+
+/***************************************
+ * 08. RESÚMENES Y CORREOS DE SANCIONES
+ ***************************************/
+
 function prepararResumenSancionesPorApartamento() {
   const contextoPlanilla = leerPlanillaSanciones_({ includeRichText: true });
   const ss = contextoPlanilla.ss;
@@ -4557,6 +5454,25 @@ function prepararResumenSancionesPorApartamento() {
   }
 
   Logger.log("Apartamentos con resumen generado: " + values.length);
+}
+
+function agruparSancionesPorApartamento_(registros) {
+  const mapa = {};
+
+  registros.forEach(function (reg) {
+    if (!reg.aptoNorm) return;
+
+    if (!mapa[reg.aptoNorm]) {
+      mapa[reg.aptoNorm] = {
+        apartamento: reg.apto,
+        sanciones: []
+      };
+    }
+
+    mapa[reg.aptoNorm].sanciones.push(reg);
+  });
+
+  return mapa;
 }
 
 function leerMapaCorreosApartamentos_() {
@@ -4683,25 +5599,6 @@ function leerMapaCorreosApartamentos_() {
   return mapa;
 }
 
-function agruparSancionesPorApartamento_(registros) {
-  const mapa = {};
-
-  registros.forEach(function (reg) {
-    if (!reg.aptoNorm) return;
-
-    if (!mapa[reg.aptoNorm]) {
-      mapa[reg.aptoNorm] = {
-        apartamento: reg.apto,
-        sanciones: []
-      };
-    }
-
-    mapa[reg.aptoNorm].sanciones.push(reg);
-  });
-
-  return mapa;
-}
-
 function getOrCreateHojaResumenEnvio_(ss) {
   let sheet = ss.getSheetByName(SHEET_RESUMEN_ENVIO_SANCIONES);
 
@@ -4710,30 +5607,6 @@ function getOrCreateHojaResumenEnvio_(ss) {
   }
 
   return sheet;
-}
-
-function obtenerIdxPlanilla_(rawHeaders) {
-  const headers = rawHeaders.map(function (h) {
-    return normalizeHeader_(h);
-  });
-
-  const colMap = {};
-  headers.forEach(function (h, i) {
-    colMap[h] = i;
-  });
-
-  return {
-    id: findColIdx_(colMap, ["id"]),
-    fecha: findColIdx_(colMap, ["fecha"]),
-    vigilante: findColIdx_(colMap, ["vigilante que toma el registro", "vigilante", "agente"]),
-    tipoVehiculo: findColIdx_(colMap, ["tipo de vehiculo", "tipo vehiculo", "vehiculo"]),
-    placa: findColIdx_(colMap, ["placa"]),
-    apto: findColIdx_(colMap, ["apto", "apartamento", "apt", "numero de apto", "no. apto", "nro apto"]),
-    residenteVisitante: findColIdx_(colMap, ["residente o visitante", "residente", "tipo residente", "residente/visitante"]),
-    observaciones: findColIdx_(colMap, ["observaciones", "observacion"]),
-    foto: findColIdx_(colMap, ["foto", "imagen", "fotografia"]),
-    firma: findColIdx_(colMap, ["firma"])
-  };
 }
 
 function enviarCorreosResumenSanciones() {
@@ -5047,61 +5920,6 @@ function convertirDetalleATablaHtml_(detalle) {
   return html;
 }
 
-function formatCOP_(value) {
-  const number = Number(value) || 0;
-  return "$" + number.toLocaleString("es-CO");
-}
-
-function escapeHtml_(value) {
-  return safeTrim_(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function buscarColumnaPorNombres_(headers, nombres) {
-  for (var i = 0; i < headers.length; i++) {
-    for (var j = 0; j < nombres.length; j++) {
-      if (headers[i] === normalizeHeader_(nombres[j])) {
-        return i;
-      }
-    }
-  }
-
-  return -1;
-}
-
-function normalizarApartamentoDesdeCorreo_(value) {
-  const raw = safeTrim_(value).toUpperCase();
-
-  if (!raw) return "";
-
-  // Ejemplos:
-  // APT-4-1127 → 1127
-  // APT-4-0430 → 430
-  // 1127 → 1127
-  const match = raw.match(/(\d{2,5})$/);
-
-  if (!match) return "";
-
-  return quitarCerosIzquierda_(match[1]);
-}
-
-function quitarCerosIzquierda_(value) {
-  const limpio = safeTrim_(value).replace(/^0+/, "");
-  return limpio || "0";
-}
-
-function esEmailValido_(email) {
-  const e = safeTrim_(email).toLowerCase();
-
-  if (!e) return false;
-
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-}
-
 function getValorSancionPorTipo_(tipoVehiculo) {
   const tipo = normalizarTipoVehiculo_(tipoVehiculo);
 
@@ -5141,174 +5959,6 @@ function agruparSancionesPorPlaca_(sanciones) {
   return Object.keys(mapa).map(function (key) {
     return mapa[key];
   });
-}
-
-function logResumen_(msg) {
-  if (LOG_LEVEL === "RESUMEN" || LOG_LEVEL === "DETALLE") {
-    Logger.log(msg);
-  }
-}
-
-function logDetalle_(msg) {
-  if (LOG_LEVEL === "DETALLE") {
-    Logger.log(msg);
-  }
-}
-
-function logJsonDetalle_(label, obj) {
-  if (LOG_LEVEL === "DETALLE") {
-    Logger.log(label);
-    Logger.log(JSON.stringify(obj, null, 2));
-  }
-}
-
-function logMuestra_(label, arr, limite) {
-  if (LOG_LEVEL === "RESUMEN" || LOG_LEVEL === "DETALLE") {
-    const max = limite || 20;
-    Logger.log(label + " total: " + arr.length);
-    Logger.log(JSON.stringify(arr.slice(0, max), null, 2));
-
-    if (arr.length > max) {
-      Logger.log("Más registros no mostrados: " + (arr.length - max));
-    }
-  }
-}
-
-function crearResumenInconsistenciaPlaca_(placaNorm, registrosPlaca, columna, motivo) {
-  const conteoAptos = contarPorCampo_(registrosPlaca, "aptoNorm");
-  const mayoriaApto = obtenerMayoria_(conteoAptos, registrosPlaca.length);
-
-  const registrosConTipo = registrosPlaca.filter(function (reg) {
-    return reg.tipoVehiculoNorm;
-  });
-
-  const conteoTipos = contarPorCampo_(registrosConTipo, "tipoVehiculoNorm");
-  const mayoriaTipo = obtenerMayoria_(conteoTipos, registrosConTipo.length);
-
-  const aptosDetalle = Object.keys(conteoAptos)
-    .sort(function (a, b) {
-      return conteoAptos[b] - conteoAptos[a];
-    })
-    .map(function (apto) {
-      return apto + "=" + conteoAptos[apto];
-    })
-    .join(", ");
-
-  const tiposDetalle = Object.keys(conteoTipos)
-    .sort(function (a, b) {
-      return conteoTipos[b] - conteoTipos[a];
-    })
-    .map(function (tipo) {
-      return tipo + "=" + conteoTipos[tipo];
-    })
-    .join(", ");
-
-  const filas = registrosPlaca.map(function (reg) {
-    return reg.sheetRow;
-  });
-
-  const porcentajeMayoria = mayoriaApto ? mayoriaApto.porcentaje : 0;
-  const porcentajeTexto = Math.round(porcentajeMayoria * 10000) / 100 + "%";
-  const umbralTexto = Math.round(UMBRAL_MAYORIA * 100) + "%";
-  const diferenciaUmbral = Math.max(0, UMBRAL_MAYORIA - porcentajeMayoria);
-  const diferenciaTexto = Math.round(diferenciaUmbral * 10000) / 100 + "%";
-
-  let recomendacion = "Revisión manual.";
-
-  if (registrosPlaca.length < MIN_REGISTROS_PARA_CORREGIR) {
-    recomendacion = "No corrige porque tiene pocos registros históricos.";
-  } else if (mayoriaApto && porcentajeMayoria < UMBRAL_MAYORIA) {
-    recomendacion = "No corrige porque la mayoría no alcanza el umbral de certeza.";
-  }
-
-  let prioridad = "BAJA";
-  let criterioRevision = "";
-
-  if (registrosPlaca.length >= MIN_REGISTROS_PARA_CORREGIR && mayoriaApto && porcentajeMayoria < UMBRAL_MAYORIA) {
-    prioridad = "ALTA";
-    criterioRevision = "Tiene suficientes registros, pero la mayoría no alcanza el umbral.";
-  } else if (registrosPlaca.length < MIN_REGISTROS_PARA_CORREGIR && registrosPlaca.length >= 3) {
-    prioridad = "MEDIA";
-    criterioRevision = "Tiene pocos registros, pero ya hay alguna repetición histórica.";
-  } else {
-    prioridad = "BAJA";
-    criterioRevision = "Tiene muy pocos registros históricos.";
-  }
-
-  return {
-    prioridad: prioridad,
-    placa: placaNorm,
-    columna: columna,
-    motivo: motivo,
-    totalRegistros: registrosPlaca.length,
-    aptosDetectados: aptosDetalle,
-    mayoriaApto: mayoriaApto ? mayoriaApto.valor : "",
-    cantidadMayoriaApto: mayoriaApto ? mayoriaApto.cantidad : 0,
-    certezaApto: porcentajeTexto,
-    umbralRequerido: umbralTexto,
-    diferenciaContraUmbral: diferenciaTexto,
-    tiposDetectados: tiposDetalle,
-    mayoriaTipo: mayoriaTipo ? mayoriaTipo.valor : "",
-    filasAfectadas: filas.slice(0, 20).join(", "),
-    totalFilasAfectadas: filas.length,
-    recomendacion: recomendacion,
-    criterioRevision: criterioRevision
-  };
-}
-
-function logResumenInconsistencias_(inconsistencias) {
-  Logger.log("=== INCONSISTENCIAS PARA REVISIÓN MANUAL ===");
-  Logger.log("Total placas con inconsistencia: " + inconsistencias.length);
-
-  const pesoPrioridad = {
-    "ALTA": 3,
-    "MEDIA": 2,
-    "BAJA": 1
-  };
-
-  const ordenadas = inconsistencias.slice().sort(function (a, b) {
-    const prioridadDiff = (pesoPrioridad[b.prioridad] || 0) - (pesoPrioridad[a.prioridad] || 0);
-    if (prioridadDiff !== 0) return prioridadDiff;
-
-    return b.totalRegistros - a.totalRegistros;
-  });
-
-  ordenadas.slice(0, 50).forEach(function (item, index) {
-    Logger.log(
-      [
-        index + 1,
-        "Prioridad: " + item.prioridad,
-        "Placa: " + item.placa,
-        "Registros: " + item.totalRegistros,
-        "Aptos: " + item.aptosDetectados,
-        "Mayoría: " + item.mayoriaApto + " (" + item.cantidadMayoriaApto + " registros / " + item.certezaApto + ")",
-        "Umbral: " + item.umbralRequerido,
-        "Faltó: " + item.diferenciaContraUmbral,
-        "Tipos: " + item.tiposDetectados,
-        "Filas: " + item.filasAfectadas,
-        "Criterio: " + item.criterioRevision,
-        "Recomendación: " + item.recomendacion
-      ].join(" | ")
-    );
-  });
-
-  if (ordenadas.length > 50) {
-    Logger.log("Más inconsistencias no mostradas: " + (ordenadas.length - 50));
-  }
-}
-
-function obtenerFechaComunicacion_() {
-  const meses = [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
-  ];
-
-  const fecha = new Date();
-  const dia = fecha.getDate();
-  const mes = meses[fecha.getMonth()];
-  const anio = fecha.getFullYear();
-
-  return dia + " de " + mes + " de " + anio;
 }
 
 function obtenerResumenPlacasDesdeDetalle_(detalle) {
@@ -5373,7 +6023,6 @@ function obtenerResumenPlacasDesdeDetalle_(detalle) {
   });
 }
 
-
 function convertirResumenPlacasATexto_(resumenPlacas) {
   return resumenPlacas.map(function (item) {
     return [
@@ -5385,498 +6034,9 @@ function convertirResumenPlacasATexto_(resumenPlacas) {
   }).join("\n");
 }
 
-function distanciaPlacas_(a, b) {
-  const placaA = normalizePlaca_(a);
-  const placaB = normalizePlaca_(b);
-
-  if (!placaA || !placaB) return 999;
-  if (placaA.length !== placaB.length) return 999;
-
-  let distanciaTotal = 0;
-
-  for (var i = 0; i < placaA.length; i++) {
-    distanciaTotal += distanciaCaracterPlaca_(placaA[i], placaB[i]);
-  }
-
-  // Normaliza a escala 0 - 999
-  const distanciaNormalizada = Math.round((distanciaTotal / placaA.length) * 999);
-
-  return Math.min(999, distanciaNormalizada);
-}
-
-function distanciaCaracterPlaca_(charA, charB) {
-  if (charA === charB) return 0;
-
-  const esNumeroA = /^[0-9]$/.test(charA);
-  const esNumeroB = /^[0-9]$/.test(charB);
-
-  const esLetraA = /^[A-Z]$/.test(charA);
-  const esLetraB = /^[A-Z]$/.test(charB);
-
-  // Número contra número: 5 → 6 pesa menos que 5 → 9
-  if (esNumeroA && esNumeroB) {
-    return Math.abs(Number(charA) - Number(charB)) / 9;
-  }
-
-  // Letra contra letra: X → Z pesa menos que A → Z
-  if (esLetraA && esLetraB) {
-    const posA = charA.charCodeAt(0) - 65; // A = 0
-    const posB = charB.charCodeAt(0) - 65;
-    return Math.abs(posA - posB) / 25;
-  }
-
-  // Letra contra número es diferencia fuerte
-  return 1;
-}
-
-function detectarYCorregirPlacasSimilares_(sheet, registros, IDX, aplicarCorrecciones) {
-  const grupos = {};
-
-  registros.forEach(function (reg) {
-    if (!reg.aptoNorm || !reg.tipoVehiculoNorm || !reg.placaNorm) return;
-
-    const key = reg.aptoNorm + "|" + reg.tipoVehiculoNorm;
-
-    if (!grupos[key]) {
-      grupos[key] = [];
-    }
-
-    grupos[key].push(reg);
-  });
-
-  const candidatos = [];
-  const descartados = [];
-
-  Object.keys(grupos).forEach(function (key) {
-    const registrosGrupo = grupos[key];
-    const conteoPlacas = {};
-
-    registrosGrupo.forEach(function (reg) {
-      if (!conteoPlacas[reg.placaNorm]) {
-        conteoPlacas[reg.placaNorm] = {
-          placa: reg.placaNorm,
-          cantidad: 0,
-          registros: []
-        };
-      }
-
-      conteoPlacas[reg.placaNorm].cantidad++;
-      conteoPlacas[reg.placaNorm].registros.push(reg);
-    });
-
-    const placas = Object.keys(conteoPlacas).map(function (placa) {
-      return conteoPlacas[placa];
-    });
-
-    const dominantes = placas.filter(function (item) {
-      return item.cantidad >= MIN_REGISTROS_PARA_CORREGIR;
-    });
-
-    const sospechosas = placas.filter(function (item) {
-      return item.cantidad <= MAX_REGISTROS_PLACA_SOSPECHOSA;
-    });
-
-    sospechosas.forEach(function (sospechosa) {
-      let mejorCandidato = null;
-
-      dominantes.forEach(function (dominante) {
-        if (sospechosa.placa === dominante.placa) return;
-
-        const distancia = distanciaPlacas_(sospechosa.placa, dominante.placa);
-        const tipoSimilitud = obtenerTipoSimilitudPlaca_(sospechosa.placa, dominante.placa);
-
-        const baseDescartado = {
-          apartamento: sospechosa.registros[0].apto,
-          tipoVehiculo: sospechosa.registros[0].tipoVehiculoNorm,
-          placaActual: sospechosa.placa,
-          placaComparada: dominante.placa,
-          registrosPlacaActual: sospechosa.cantidad,
-          registrosPlacaComparada: dominante.cantidad,
-          distancia: distancia,
-          tipoSimilitud: tipoSimilitud,
-          filas: sospechosa.registros.map(function (reg) {
-            return reg.sheetRow;
-          }).join(", ")
-        };
-
-
-
-
-        if (
-          distancia > MAX_DISTANCIA_PLACA_SIMILAR &&
-          tipoSimilitud !== "TRANSPOSICION_SIMPLE"
-        ) {
-          if (
-            MOSTRAR_PLACAS_SIMILARES_DESCARTADAS &&
-            distancia <= MAX_DISTANCIA_DESCARTADA_PARA_ANALISIS
-          ) {
-            descartados.push(Object.assign({}, baseDescartado, {
-              motivoDescarte: "Distancia supera el máximo permitido: " + distancia + " > " + MAX_DISTANCIA_PLACA_SIMILAR
-            }));
-          }
-          return;
-        }
-
-
-
-        const regexSospechosa = getTipoVehiculoEsperadoPorRegexPlaca_(sospechosa.placa);
-        const regexDominante = getTipoVehiculoEsperadoPorRegexPlaca_(dominante.placa);
-
-        if (!regexSospechosa.ok || !regexDominante.ok) {
-          descartados.push(Object.assign({}, baseDescartado, {
-            motivoDescarte: "Una de las placas no cumple formato colombiano reconocido."
-          }));
-          return;
-        }
-
-        if (regexSospechosa.tipo !== regexDominante.tipo) {
-          descartados.push(Object.assign({}, baseDescartado, {
-            motivoDescarte: "El tipo esperado por regex no coincide: " + regexSospechosa.tipo + " vs " + regexDominante.tipo
-          }));
-          return;
-        }
-
-        const confianza = dominante.cantidad / (dominante.cantidad + sospechosa.cantidad);
-
-        const candidato = {
-          apartamento: sospechosa.registros[0].apto,
-          apartamentoNorm: sospechosa.registros[0].aptoNorm,
-          tipoVehiculo: sospechosa.registros[0].tipoVehiculoNorm,
-          placaActual: sospechosa.placa,
-          placaSugerida: dominante.placa,
-          registrosPlacaActual: sospechosa.cantidad,
-          registrosPlacaSugerida: dominante.cantidad,
-          distancia: distancia,
-          tipoSimilitud: tipoSimilitud,
-          confianza: confianza,
-          filas: sospechosa.registros.map(function (reg) {
-            return reg.sheetRow;
-          }),
-          motivo: "Placa poco frecuente muy similar a placa dominante del mismo apartamento y tipo."
-        };
-
-        if (
-          !mejorCandidato ||
-          candidato.distancia < mejorCandidato.distancia ||
-          candidato.registrosPlacaSugerida > mejorCandidato.registrosPlacaSugerida
-        ) {
-          mejorCandidato = candidato;
-        }
-      });
-
-      if (mejorCandidato) {
-        const motivoNoCorreccion = obtenerMotivoNoCorreccionPlacaSimilar_(mejorCandidato);
-
-        const puedeCorregirAuto =
-          !motivoNoCorreccion &&
-          mejorCandidato.confianza >= UMBRAL_MAYORIA &&
-          mejorCandidato.registrosPlacaSugerida >= MIN_REGISTROS_PARA_CORREGIR &&
-          (
-            mejorCandidato.tipoSimilitud === "TRANSPOSICION_SIMPLE" ||
-            mejorCandidato.tipoSimilitud === "DIFERENCIA_BAJA"
-          );
-
-        mejorCandidato.decisionAuto = puedeCorregirAuto ? "CORREGIR_AUTO" : "SOLO_REVISION";
-        mejorCandidato.estadoEjecucion = aplicarCorrecciones
-          ? (puedeCorregirAuto ? "CORREGIDA" : "NO_CORREGIDA")
-          : "DRY_RUN_NO_APLICA";
-
-        mejorCandidato.motivoNoCorreccion = motivoNoCorreccion || (
-          aplicarCorrecciones
-            ? ""
-            : "DRY_RUN activo. No se aplican cambios físicos."
-        );
-
-        candidatos.push(mejorCandidato);
-
-        if (aplicarCorrecciones && puedeCorregirAuto) {
-          sospechosa.registros.forEach(function (reg) {
-            sheet.getRange(reg.sheetRow, IDX.placa + 1)
-              .setValue(mejorCandidato.placaSugerida)
-              .setBackground("#fff2cc");
-
-            reg.placa = mejorCandidato.placaSugerida;
-            reg.placaNorm = mejorCandidato.placaSugerida;
-          });
-        }
-      }
-    });
-  });
-
-  escribirRevisionPlacasSimilares_(candidatos);
-
-  Logger.log("=== REVISION PLACAS SIMILARES ===");
-  Logger.log("Candidatos encontrados: " + candidatos.length);
-
-  candidatos.slice(0, 50).forEach(function (item, index) {
-    Logger.log(
-      [
-        index + 1,
-        "Apto: " + item.apartamento,
-        "Tipo: " + item.tipoVehiculo,
-        "Corregir: " + item.placaActual + " → " + item.placaSugerida,
-        "Actual: " + item.registrosPlacaActual,
-        "Dominante: " + item.registrosPlacaSugerida,
-        "Distancia: " + item.distancia,
-        "Similitud: " + item.tipoSimilitud,
-        "Confianza: " + Math.round(item.confianza * 10000) / 100 + "%",
-        "DecisionAuto: " + item.decisionAuto,
-        "Estado: " + item.estadoEjecucion,
-        "MotivoNoCorreccion: " + item.motivoNoCorreccion,
-        "Filas: " + item.filas.join(", ")
-      ].join(" | ")
-    );
-  });
-
-  const noCorregidas = candidatos.filter(function (item) {
-    return item.decisionAuto !== "CORREGIR_AUTO";
-  });
-
-  Logger.log("=== CANDIDATOS NO CORREGIDOS AUTOMATICAMENTE ===");
-  Logger.log("Total candidatos solo revisión: " + noCorregidas.length);
-
-  noCorregidas.slice(0, 30).forEach(function (item, index) {
-    Logger.log(
-      [
-        index + 1,
-        "Apto: " + item.apartamento,
-        "Tipo: " + item.tipoVehiculo,
-        "Placa: " + item.placaActual + " → " + item.placaSugerida,
-        "Distancia: " + item.distancia,
-        "Similitud: " + item.tipoSimilitud,
-        "Confianza: " + Math.round(item.confianza * 10000) / 100 + "%",
-        "Motivo: " + item.motivoNoCorreccion,
-        "Filas: " + item.filas.join(", ")
-      ].join(" | ")
-    );
-  });
-
-  if (MOSTRAR_PLACAS_SIMILARES_DESCARTADAS) {
-    Logger.log("=== POSIBLES PLACAS SIMILARES DESCARTADAS ===");
-    Logger.log("Total descartadas para análisis: " + descartados.length);
-
-    descartados.slice(0, LIMITE_PLACAS_SIMILARES_DESCARTADAS).forEach(function (item, index) {
-      Logger.log(
-        [
-          index + 1,
-          "Apto: " + item.apartamento,
-          "Tipo: " + item.tipoVehiculo,
-          "Comparación: " + item.placaActual + " vs " + item.placaComparada,
-          "Actual: " + item.registrosPlacaActual,
-          "Comparada: " + item.registrosPlacaComparada,
-          "Distancia: " + item.distancia,
-          "Similitud: " + item.tipoSimilitud,
-          "MotivoDescarte: " + item.motivoDescarte,
-          "Filas: " + item.filas
-        ].join(" | ")
-      );
-    });
-
-    if (descartados.length > LIMITE_PLACAS_SIMILARES_DESCARTADAS) {
-      Logger.log("Más descartadas no mostradas: " + (descartados.length - LIMITE_PLACAS_SIMILARES_DESCARTADAS));
-    }
-  }
-
-  return candidatos;
-}
-
-function escribirRevisionPlacasSimilares_(candidatos) {
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const nombreHoja = "revision_placas_similares";
-
-  let sheet = ss.getSheetByName(nombreHoja);
-
-  if (!sheet) {
-    sheet = ss.insertSheet(nombreHoja);
-  }
-
-  sheet.clear();
-
-  sheet.getRange(1, 1, 1, 14).setValues([[
-    "Apartamento",
-    "TipoVehiculo",
-    "PlacaActual",
-    "PlacaSugerida",
-    "RegistrosPlacaActual",
-    "RegistrosPlacaSugerida",
-    "Distancia",
-    "Similitud",
-    "Confianza",
-    "DecisionAuto",
-    "EstadoEjecucion",
-    "MotivoNoCorreccion",
-    "Filas",
-    "DecisionManual"
-  ]]);
-
-  sheet.getRange(1, 1, 1, 14)
-    .setFontWeight("bold")
-    .setBackground("#fff2cc");
-
-  if (candidatos.length === 0) {
-    return;
-  }
-
-  const values = candidatos.map(function (item) {
-    return [
-      item.apartamento,
-      item.tipoVehiculo,
-      item.placaActual,
-      item.placaSugerida,
-      item.registrosPlacaActual,
-      item.registrosPlacaSugerida,
-      item.distancia,
-      item.tipoSimilitud,
-      Math.round(item.confianza * 10000) / 100 + "%",
-      item.decisionAuto || "",
-      item.estadoEjecucion || "",
-      item.motivoNoCorreccion || "",
-      item.filas.join(", "),
-      ""
-    ];
-  });
-
-  sheet.getRange(2, 1, values.length, 14).setValues(values);
-  sheet.autoResizeColumns(1, 14);
-}
-function obtenerTipoSimilitudPlaca_(placaActual, placaSugerida) {
-  if (placaActual === placaSugerida) return "IGUAL";
-
-  if (esTransposicionSimple_(placaActual, placaSugerida)) {
-    return "TRANSPOSICION_SIMPLE";
-  }
-
-  const distancia = distanciaPlacas_(placaActual, placaSugerida);
-
-  if (distancia <= 50) return "DIFERENCIA_BAJA";
-  if (distancia <= 120) return "DIFERENCIA_MEDIA";
-
-  return "DIFERENCIA_ALTA";
-}
-
-function esTransposicionSimple_(a, b) {
-  const placaA = normalizePlaca_(a);
-  const placaB = normalizePlaca_(b);
-
-  if (!placaA || !placaB) return false;
-  if (placaA.length !== placaB.length) return false;
-
-  const diferencias = [];
-
-  for (var i = 0; i < placaA.length; i++) {
-    if (placaA[i] !== placaB[i]) {
-      diferencias.push(i);
-    }
-  }
-
-  // Solo aplica si hay exactamente 2 diferencias
-  if (diferencias.length !== 2) return false;
-
-  const pos1 = diferencias[0];
-  const pos2 = diferencias[1];
-
-  // Las diferencias deben estar juntas
-  if (pos2 !== pos1 + 1) return false;
-
-  // Valida que sea intercambio directo:
-  // CZW11D vs CWZ11D
-  // posiciones Z/W invertidas
-  return (
-    placaA[pos1] === placaB[pos2] &&
-    placaA[pos2] === placaB[pos1]
-  );
-}
-
-function obtenerMotivoNoCorreccionPlacaSimilar_(item) {
-  if (item.confianza < UMBRAL_MAYORIA) {
-    return "Confianza menor al mínimo requerido: " +
-      Math.round(item.confianza * 10000) / 100 + "%";
-  }
-
-  if (item.registrosPlacaSugerida < MIN_REGISTROS_PARA_CORREGIR) {
-    return "La placa dominante no tiene suficientes registros.";
-  }
-
-  if (
-    item.tipoSimilitud !== "TRANSPOSICION_SIMPLE" &&
-    item.tipoSimilitud !== "DIFERENCIA_BAJA"
-  ) {
-    return "Similitud no permitida para corrección automática: " + item.tipoSimilitud;
-  }
-
-  return "";
-}
-
-function contarDestinatariosCorreo_(to, cc, bcc) {
-  return [to, cc, bcc]
-    .filter(Boolean)
-    .join(",")
-    .split(/[,;]/)
-    .map(function (item) {
-      return safeTrim_(item);
-    })
-    .filter(function (item) {
-      return item;
-    }).length;
-}
-
-function verCuotaEmailActual() {
-  const cuota = MailApp.getRemainingDailyQuota();
-  Logger.log("Cuota restante de destinatarios hoy: " + cuota);
-}
-
-function getOrCreateHojaLogConsultas_(ss) {
-  let sheet = ss.getSheetByName(SHEET_LOG_CONSULTAS_SANCIONES);
-
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_LOG_CONSULTAS_SANCIONES);
-
-    sheet.getRange(1, 1, 1, 11).setValues([[
-      "FechaHora",
-      "Action",
-      "ApartamentoInput",
-      "PlacaInput",
-      "ApartamentoNormalizado",
-      "PlacaNormalizada",
-      "Resultado",
-      "Mensaje",
-      "CantidadSanciones",
-      "PlacasDevueltas",
-      "Parametros"
-    ]]);
-
-    sheet.getRange(1, 1, 1, 11)
-      .setFontWeight("bold")
-      .setBackground("#d9ead3");
-
-    sheet.setFrozenRows(1);
-  }
-
-  return sheet;
-}
-
-function registrarConsultaSanciones_(data) {
-  try {
-    const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-    const sheet = getOrCreateHojaLogConsultas_(ss);
-
-    sheet.appendRow([
-      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
-      data.action || "",
-      data.aptoInput || "",
-      data.placaInput || "",
-      data.aptoNorm || "",
-      data.placaNorm || "",
-      data.resultado || "",
-      data.mensaje || "",
-      data.cantidadSanciones || 0,
-      data.placasDevueltas || "",
-      data.parametros ? JSON.stringify(data.parametros) : ""
-    ]);
-  } catch (error) {
-    Logger.log("ERROR registrando consulta sanciones: " + error.message);
-  }
-}
+/***************************************
+ * 09. NOTIFICACIONES DE DEBIDO PROCESO
+ ***************************************/
 
 function getOrCreateHojaResumenNotificacionesDebidoProceso_(ss) {
   let sheet = ss.getSheetByName(SHEET_RESUMEN_NOTIFICACIONES_DEBIDO_PROCESO);
@@ -6391,26 +6551,9 @@ function leerMapaApartamentosYaNotificadosDebidoProceso_(ss) {
   return mapa;
 }
 
-const TRIGGERS_OPERATIVOS_SANCIONES = [
-  {
-    funcion: "enviarCorreosResumenSanciones",
-    descripcion: "1. Enviar notificaciones de sanciones",
-    hora: 6,
-    minuto: 0
-  },
-  {
-    funcion: "prepararResumenNotificacionesDebidoProceso",
-    descripcion: "2. Generar resumen de notificaciones de debido proceso",
-    hora: 10,
-    minuto: 0
-  },
-  {
-    funcion: "enviarNotificacionesDebidoProceso",
-    descripcion: "3. Enviar notificaciones de debido proceso",
-    hora: 11,
-    minuto: 0
-  }
-];
+/***************************************
+ * 10. TRIGGERS OPERATIVOS
+ ***************************************/
 
 function reinstalarTriggersOperativosSanciones() {
   const lock = LockService.getScriptLock();
@@ -6511,317 +6654,214 @@ function formatoHoraTrigger_(hora, minuto) {
   return String(hora).padStart(2, "0") + ":" + String(minuto).padStart(2, "0");
 }
 
-function leerMapaConsultasOkSancionesPorPlaca_(ss) {
-  const sheet = ss.getSheetByName(SHEET_LOG_CONSULTAS_SANCIONES);
-  const mapa = {};
+/***************************************
+ * 11. HELPERS GENERALES
+ ***************************************/
 
-  if (!sheet) {
-    Logger.log("No existe hoja de log de consultas: " + SHEET_LOG_CONSULTAS_SANCIONES);
-    return mapa;
+/***************************************
+ * HELPERS DE BÚSQUEDA DE COLUMNAS
+ ***************************************/
+
+// Retorna el índice de la primera columna encontrada según una lista de nombres posibles
+function findColIdx_(colMap, names) {
+  for (var i = 0; i < names.length; i++) {
+    if (colMap[names[i]] !== undefined) return colMap[names[i]];
+  }
+  return -1;
+}
+
+/***************************************
+ * HELPERS DE FORMATO
+ ***************************************/
+
+function formatFecha_(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+  }
+  return safeTrim_(String(value));
+}
+
+function parseFechaParaOrdenDesc_(value) {
+  var texto = safeTrim_(value);
+
+  if (!texto) return 0;
+
+  var partes = texto.split('/');
+  if (partes.length === 3) {
+    var dia = Number(partes[0]);
+    var mes = Number(partes[1]) - 1;
+    var anio = Number(partes[2]);
+
+    if (!isNaN(dia) && !isNaN(mes) && !isNaN(anio)) {
+      return new Date(anio, mes, dia).getTime();
+    }
   }
 
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
+  var timestamp = Date.parse(texto);
+  return isNaN(timestamp) ? 0 : timestamp;
+}
 
-  if (lastRow < 2) {
-    return mapa;
-  }
+/***************************************
+ * HELPERS GENERALES
+ ***************************************/
 
-  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+function getParam_(e, key) {
+  if (!e || !e.parameter) return null;
+  return e.parameter[key] || null;
+}
 
-  const headers = data[0].map(function (h) {
-    return normalizeHeader_(h);
-  });
+function jsonOutput_(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
-  const colMap = {};
-  headers.forEach(function (h, i) {
-    colMap[h] = i;
-  });
+function safeTrim_(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
 
-  const idxFecha = colMap["fechahora"];
-  const idxAptoNorm = colMap["apartamentonormalizado"];
-  const idxPlacaNorm = colMap["placanormalizada"];
-  const idxResultado = colMap["resultado"];
+// Normaliza texto para comparación: minúsculas y sin espacios extras
+function normalizeText_(value) {
+  return safeTrim_(value).toLowerCase().replace(/\s+/g, ' ');
+}
 
-  if (
-    idxAptoNorm === undefined ||
-    idxPlacaNorm === undefined ||
-    idxResultado === undefined
-  ) {
-    throw new Error("El log de consultas no tiene las columnas requeridas.");
-  }
+// Normaliza un número de apartamento: aplica normalizeText_ y elimina ceros a la izquierda.
+// "0226" → "226", "1127" → "1127", "  0430  " → "430"
+function normalizeApto_(value) {
+  return normalizeText_(value).replace(/^0+(\d)/, '$1');
+}
 
-  data.slice(1).forEach(function (row) {
-    const resultado = safeTrim_(row[idxResultado]).toUpperCase();
+function normalizeHeader_(value) {
+  return safeTrim_(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quita tildes
+    .replace(/\s+/g, ' ')            // quita saltos de línea y espacios dobles
+    .trim();
+}
 
-    // Solo usamos consultas exitosas.
-    if (resultado !== "OK") return;
+function normalizePlaca_(value) {
+  return safeTrim_(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
 
-    const placa = normalizePlaca_(row[idxPlacaNorm]);
-    const aptoNorm = normalizeApto_(row[idxAptoNorm]);
+function formatCOP_(value) {
+  const number = Number(value) || 0;
+  return "$" + number.toLocaleString("es-CO");
+}
 
-    if (!placa || !aptoNorm) return;
+function escapeHtml_(value) {
+  return safeTrim_(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
-    if (!mapa[placa]) {
-      mapa[placa] = {
-        placa: placa,
-        totalConsultasOk: 0,
-        aptos: {},
-        aptoMayor: "",
-        cantidadMayor: 0,
-        porcentajeMayor: 0,
-        ultimaFecha: ""
-      };
-    }
-
-    if (!mapa[placa].aptos[aptoNorm]) {
-      mapa[placa].aptos[aptoNorm] = {
-        aptoNorm: aptoNorm,
-        cantidad: 0,
-        ultimaFecha: ""
-      };
-    }
-
-    mapa[placa].totalConsultasOk++;
-    mapa[placa].aptos[aptoNorm].cantidad++;
-
-    const fecha = idxFecha !== undefined ? safeTrim_(row[idxFecha]) : "";
-
-    if (fecha) {
-      mapa[placa].aptos[aptoNorm].ultimaFecha = fecha;
-      mapa[placa].ultimaFecha = fecha;
-    }
-  });
-
-  Object.keys(mapa).forEach(function (placa) {
-    const item = mapa[placa];
-
-    Object.keys(item.aptos).forEach(function (aptoNorm) {
-      const aptoItem = item.aptos[aptoNorm];
-
-      if (aptoItem.cantidad > item.cantidadMayor) {
-        item.aptoMayor = aptoNorm;
-        item.cantidadMayor = aptoItem.cantidad;
+function buscarColumnaPorNombres_(headers, nombres) {
+  for (var i = 0; i < headers.length; i++) {
+    for (var j = 0; j < nombres.length; j++) {
+      if (headers[i] === normalizeHeader_(nombres[j])) {
+        return i;
       }
-    });
-
-    item.porcentajeMayor = item.totalConsultasOk > 0
-      ? item.cantidadMayor / item.totalConsultasOk
-      : 0;
-  });
-
-  return mapa;
-}
-
-function revisarMaestraContraLogConsultasSancionesDryRun() {
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const hojaMaestra = getOrCreateHojaMaestra_(ss);
-
-  revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, false);
-}
-
-function revisarMaestraContraLogConsultasSancionesAplicar() {
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const hojaMaestra = getOrCreateHojaMaestra_(ss);
-
-  revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, true);
-}
-
-function revisarMaestraContraLogConsultasSanciones_(ss, hojaMaestra, aplicarCambios) {
-  const lastRow = hojaMaestra.getLastRow();
-
-  if (lastRow < 2) {
-    Logger.log("La hoja maestra no tiene registros.");
-    return {
-      conflictos: 0,
-      revisados: 0
-    };
-  }
-
-  const mapaConsultas = leerMapaConsultasOkSancionesPorPlaca_(ss);
-
-  const range = hojaMaestra.getRange(2, 1, lastRow - 1, 9);
-  const values = range.getValues();
-
-  const now = Utilities.formatDate(
-    new Date(),
-    Session.getScriptTimeZone(),
-    "yyyy-MM-dd HH:mm"
-  );
-
-  let revisados = 0;
-  let conflictos = 0;
-  const filasConflicto = [];
-
-  values.forEach(function (row, index) {
-    const sheetRow = index + 2;
-
-    const placa = normalizePlaca_(row[0]);
-    const aptoMaestra = safeTrim_(row[1]);
-    const aptoNormMaestra = normalizeApto_(aptoMaestra);
-
-    if (!placa || !aptoNormMaestra) return;
-
-    revisados++;
-
-    const infoConsulta = mapaConsultas[placa];
-
-    if (!infoConsulta) return;
-
-    if (infoConsulta.totalConsultasOk < MIN_CONSULTAS_OK_PARA_ALERTA_MAESTRA) {
-      return;
     }
+  }
 
-    const aptoReportadoConsulta = infoConsulta.aptoMayor;
+  return -1;
+}
 
-    if (!aptoReportadoConsulta) return;
+function normalizarApartamentoDesdeCorreo_(value) {
+  const raw = safeTrim_(value).toUpperCase();
 
-    // Si coincide, no se toca la maestra.
-    if (aptoReportadoConsulta === aptoNormMaestra) {
-      return;
+  if (!raw) return "";
+
+  // Ejemplos:
+  // APT-4-1127 → 1127
+  // APT-4-0430 → 430
+  // 1127 → 1127
+  const match = raw.match(/(\d{2,5})$/);
+
+  if (!match) return "";
+
+  return quitarCerosIzquierda_(match[1]);
+}
+
+function quitarCerosIzquierda_(value) {
+  const limpio = safeTrim_(value).replace(/^0+/, "");
+  return limpio || "0";
+}
+
+function esEmailValido_(email) {
+  const e = safeTrim_(email).toLowerCase();
+
+  if (!e) return false;
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
+
+function contarDestinatariosCorreo_(to, cc, bcc) {
+  return [to, cc, bcc]
+    .filter(Boolean)
+    .join(",")
+    .split(/[,;]/)
+    .map(function (item) {
+      return safeTrim_(item);
+    })
+    .filter(function (item) {
+      return item;
+    }).length;
+}
+
+function verCuotaEmailActual() {
+  const cuota = MailApp.getRemainingDailyQuota();
+  Logger.log("Cuota restante de destinatarios hoy: " + cuota);
+}
+
+function obtenerFechaComunicacion_() {
+  const meses = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+  ];
+
+  const fecha = new Date();
+  const dia = fecha.getDate();
+  const mes = meses[fecha.getMonth()];
+  const anio = fecha.getFullYear();
+
+  return dia + " de " + mes + " de " + anio;
+}
+
+function logResumen_(msg) {
+  if (LOG_LEVEL === "RESUMEN" || LOG_LEVEL === "DETALLE") {
+    Logger.log(msg);
+  }
+}
+
+function logDetalle_(msg) {
+  if (LOG_LEVEL === "DETALLE") {
+    Logger.log(msg);
+  }
+}
+
+function logJsonDetalle_(label, obj) {
+  if (LOG_LEVEL === "DETALLE") {
+    Logger.log(label);
+    Logger.log(JSON.stringify(obj, null, 2));
+  }
+}
+
+function logMuestra_(label, arr, limite) {
+  if (LOG_LEVEL === "RESUMEN" || LOG_LEVEL === "DETALLE") {
+    const max = limite || 20;
+    Logger.log(label + " total: " + arr.length);
+    Logger.log(JSON.stringify(arr.slice(0, max), null, 2));
+
+    if (arr.length > max) {
+      Logger.log("Más registros no mostrados: " + (arr.length - max));
     }
-
-    conflictos++;
-
-    const confianzaAnterior = Number(row[3]) || 1;
-    const nuevaConfianza = Math.min(
-      confianzaAnterior,
-      CONFIANZA_MAX_CONFLICTO_CONSULTA
-    );
-
-    const notaConflicto =
-      "[" + now + "] Conflicto con consulta web. " +
-      "Maestra indica apto " + aptoNormMaestra +
-      ", pero consulta(s) OK del residente reportan apto " + aptoReportadoConsulta +
-      " para la placa " + placa +
-      ". Dato requiere verificación manual antes de corrección automática.";
-
-    Logger.log(
-      "CONFLICTO MAESTRA VS CONSULTA | Placa: " + placa +
-      " | Maestra apto: " + aptoNormMaestra +
-      " | Consulta apto: " + aptoReportadoConsulta +
-      " | Confianza anterior: " + confianzaAnterior +
-      " | Nueva confianza: " + nuevaConfianza +
-      " | Total consultas OK: " + infoConsulta.totalConsultasOk
-    );
-
-    if (aplicarCambios) {
-      row[3] = nuevaConfianza; // ConfianzaApto
-      row[6] = now;            // FechaActualizacion
-      row[7] = ESTADO_MAESTRA_REQUIERE_VERIFICACION; // Estado
-      row[8] = safeTrim_(row[8])
-        ? safeTrim_(row[8]) + " | " + notaConflicto
-        : notaConflicto;
-
-      filasConflicto.push(sheetRow);
-    }
-  });
-
-  if (aplicarCambios) {
-    range.setValues(values);
-
-    filasConflicto.forEach(function (rowNumber) {
-      hojaMaestra
-        .getRange(rowNumber, 1, 1, 9)
-        .setBackground("#fff2cc");
-    });
   }
-
-  Logger.log("=== REVISIÓN MAESTRA VS CONSULTAS WEB ===");
-  Logger.log("Registros maestra revisados: " + revisados);
-  Logger.log("Conflictos detectados: " + conflictos);
-  Logger.log("Aplicar cambios: " + aplicarCambios);
-
-  return {
-    conflictos: conflictos,
-    revisados: revisados
-  };
-}
-
-function maestraEsConfiableParaCorreccion_(master) {
-  if (!master) return false;
-
-  const estado = safeTrim_(master.estado).toUpperCase();
-  const confianza = Number(master.confianzaApto) || 0;
-
-  if (estado.indexOf("REQUIERE_VERIFICACION") !== -1) {
-    return false;
-  }
-
-  if (confianza < UMBRAL_MAYORIA) {
-    return false;
-  }
-
-  return true;
-}
-
-function reiniciarSoloGeneracionImagenes() {
-  const props = PropertiesService.getScriptProperties();
-
-  eliminarTriggersGenerarImagenes_();
-
-  props.setProperty(
-    PROP_GENERAR_IMAGENES_ESTADO,
-    "EN_PROCESO"
-  );
-
-  props.setProperty(
-    PROP_GENERAR_IMAGENES_SIGUIENTE_FILA,
-    "2"
-  );
-
-  props.setProperty(
-    PROP_GENERAR_IMAGENES_RESUMEN,
-    JSON.stringify(crearResumenInicialGeneracionImagenes_())
-  );
-
-  props.setProperty(
-    PROP_GENERAR_IMAGENES_ERRORES_CONSECUTIVOS,
-    "0"
-  );
-
-  // Permite volver a corregir URLs completas a texto "Full size".
-  props.deleteProperty(
-    PROP_GENERAR_IMAGENES_TEXTO_REPARADO
-  );
-
-  const resultado = {
-    ok: true,
-    estado: "EN_PROCESO",
-    siguienteFila: 2,
-    mensaje:
-      "Se reinició únicamente la generación de enlaces. " +
-      "El índice de imágenes se conserva."
-  };
-
-  Logger.log(JSON.stringify(resultado, null, 2));
-  return resultado;
-}
-
-function diagnosticarIndiceImagenesSanciones() {
-  const props = PropertiesService.getScriptProperties();
-  const ss = SpreadsheetApp.openById(SHEET_ID_SANCIONES);
-  const sheet = ss.getSheetByName(SHEET_INDICE_IMAGENES_SANCIONES);
-
-  const resultado = {
-    versionEsperada: GENERAR_IMAGENES_INDICE_VERSION,
-    versionGuardada: safeTrim_(
-      props.getProperty(PROP_GENERAR_IMAGENES_INDICE_VERSION)
-    ),
-    estadoIndice: safeTrim_(
-      props.getProperty(PROP_PREPARAR_INDICE_ESTADO)
-    ),
-    existeHojaIndice: !!sheet,
-    filasIndice: sheet ? Math.max(0, sheet.getLastRow() - 1) : 0,
-    valido: false
-  };
-
-  resultado.valido =
-    resultado.versionGuardada === resultado.versionEsperada &&
-    resultado.estadoIndice === "COMPLETADO" &&
-    resultado.existeHojaIndice &&
-    resultado.filasIndice > 0;
-
-  Logger.log(JSON.stringify(resultado, null, 2));
-  return resultado;
 }
