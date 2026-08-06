@@ -103,41 +103,19 @@
   <main class="container py-4" style="max-width:1040px">
     <div id="alert" class="alert hidden" aria-live="polite"></div>
 
-    <section id="login" class="surface p-4 p-lg-5 mx-auto" style="max-width:680px">
-      <h2 class="section-title h4">Acceso de vigilancia</h2>
-      <p>
-        Solo usuarios activos con rol
-        <strong>VIGILANCIA</strong> pueden ingresar.
-      </p>
+    <section id="login" class="surface p-4 p-lg-5 mx-auto" style="max-width:520px">
+      <h2 class="section-title h4 mb-3">Acceso de vigilancia</h2>
       <form id="loginForm" class="row g-3">
         <div class="col-12">
-          <label class="form-label" for="email">Correo autorizado</label>
+          <label class="form-label" for="email">Correo</label>
           <input id="email" type="email" class="form-control" required>
         </div>
+        <div class="col-12">
+          <label class="form-label" for="password">Contraseña</label>
+          <input id="password" type="password" class="form-control" required>
+        </div>
         <div class="col-12 d-grid">
-          <button id="sendBtn" class="btn btn-primary btn-lg">
-            Enviar código
-          </button>
-        </div>
-      </form>
-    </section>
-
-    <section id="otp" class="surface p-4 mx-auto hidden" style="max-width:680px">
-      <h2 class="section-title h4">Código de verificación</h2>
-      <p id="otpText"></p>
-      <form id="otpForm" class="row g-3">
-        <div class="col-md-7">
-          <input
-            id="code"
-            class="form-control form-control-lg text-center"
-            maxlength="6"
-            inputmode="numeric"
-            required>
-        </div>
-        <div class="col-md-5 d-grid">
-          <button id="verifyBtn" class="btn btn-primary btn-lg">
-            Ingresar
-          </button>
+          <button id="loginBtn" class="btn btn-primary btn-lg" type="submit">Ingresar</button>
         </div>
       </form>
     </section>
@@ -196,13 +174,9 @@
               <i class="bi bi-person-badge me-2"></i>
               Registrar residente principal
             </h3>
-            <p class="mb-1">
+            <p class="mb-0">
               Registra a la persona responsable de la ocupación del apartamento.
-            </p>
-            <p class="small-note mb-0">
-              Después podrá ingresar a Datos personales, actualizar las personas
-              con quienes vive y los vehículos autorizados para ese apartamento. Los cambios
-              posteriores quedarán pendientes de aprobación administrativa.
+              El registro queda activo de inmediato.
             </p>
           </div>
 
@@ -231,8 +205,8 @@
             <div class="col-md-4">
               <label class="form-label" for="newDocumentType">Tipo de documento</label>
               <select id="newDocumentType" class="form-select" required>
-                <option value="CEDULA">Cédula de ciudadanía</option>
-                <option value="CEDULA_EXTRANJERIA">Cédula de extranjería</option>
+                <option value="CC">Cédula de ciudadanía</option>
+                <option value="CE">Cédula de extranjería</option>
                 <option value="PASAPORTE">Pasaporte</option>
                 <option value="OTRO">Otro</option>
               </select>
@@ -257,36 +231,22 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label" for="newEmail">Correo personal</label>
+              <label class="form-label" for="newEmail">Correo (opcional)</label>
               <input
                 id="newEmail"
                 type="email"
                 class="form-control"
-                autocomplete="email"
-                required>
-              <div class="form-text">
-                Será utilizado para la pregunta de seguridad del portal.
-              </div>
+                autocomplete="email">
             </div>
 
             <div class="col-md-6">
-              <label class="form-label" for="newPhone">Celular</label>
+              <label class="form-label" for="newPhone">Celular (opcional)</label>
               <input
                 id="newPhone"
                 type="tel"
                 class="form-control"
                 maxlength="30"
                 autocomplete="tel">
-            </div>
-
-            <div class="col-12">
-              <label class="form-label" for="newNotes">Observaciones</label>
-              <textarea
-                id="newNotes"
-                class="form-control"
-                rows="3"
-                maxlength="800"
-                placeholder="Ej.: contrato de arrendamiento verificado en portería."></textarea>
             </div>
 
             <div class="col-12">
@@ -320,7 +280,7 @@
             </div>
 
             <div class="col-12 d-grid d-md-flex justify-content-md-end">
-              <button id="registerBtn" class="btn btn-primary btn-lg">
+              <button id="registerBtn" class="btn btn-primary btn-lg" type="submit">
                 <i class="bi bi-person-check me-2"></i>
                 Registrar residente
               </button>
@@ -333,35 +293,33 @@
     </section>
   </main>
 
-  <script src="{{ "js/portal-bv-client.js" | relURL }}?v={{ default "20260718-8" .Site.Params.portalClientVersion }}"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script>
     (function () {
       'use strict';
 
-      const URL = {{ .Site.Params.portalWebAppUrl | default "" | jsonify | safeJS }};
-      const PERSONAL_DATA_URL = "{{ "datos-personales/" | absURL }}";
-      const client = new PortalBVClient(URL);
+      var API_BASE = {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }};
 
-      let token = '';
-      let email = '';
+      firebase.initializeApp({
+        apiKey: {{ .Site.Params.apiFirebaseApiKey | default "" | jsonify | safeJS }},
+        authDomain: {{ .Site.Params.apiFirebaseAuthDomain | default "" | jsonify | safeJS }},
+        projectId: {{ .Site.Params.apiFirebaseProjectId | default "" | jsonify | safeJS }}
+      });
 
-      const $ = id => document.getElementById(id);
-      const esc = value => String(value == null ? '' : value).replace(
-        /[&<>"']/g,
-        character => ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#039;'
-        }[character])
-      );
+      var $ = function (id) { return document.getElementById(id); };
 
-      function msg(text, type = 'danger') {
-        const alert = $('alert');
-        alert.className = 'alert alert-' + type;
-        alert.textContent = text;
-        alert.classList.remove('hidden');
+      function esc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character];
+        });
+      }
+
+      function msg(text, type) {
+        var alertBox = $('alert');
+        alertBox.className = 'alert alert-' + (type || 'danger');
+        alertBox.textContent = text;
+        alertBox.classList.remove('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
@@ -370,30 +328,24 @@
       }
 
       function panel(id) {
-        ['login', 'otp', 'app'].forEach(
-          panelId => $(panelId).classList.toggle(
-            'hidden',
-            panelId !== id
-          )
-        );
+        ['login', 'app'].forEach(function (panelId) {
+          $(panelId).classList.toggle('hidden', panelId !== id);
+        });
       }
 
       function busy(button, active, label) {
         if (active) {
           button.dataset.old = button.innerHTML;
           button.disabled = true;
-          button.innerHTML =
-            '<span class="spinner-border spinner-border-sm me-2"></span>' +
-            label;
+          button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + label;
         } else {
           button.disabled = false;
-          button.innerHTML =
-            button.dataset.old || label;
+          button.innerHTML = button.dataset.old || label;
         }
       }
 
       function mode(name) {
-        const registration = name === 'registration';
+        var registration = name === 'registration';
         $('searchView').classList.toggle('hidden', registration);
         $('registrationView').classList.toggle('hidden', !registration);
         $('showSearch').classList.toggle('active', !registration);
@@ -406,85 +358,84 @@
         }
       }
 
-      $('showSearch').addEventListener('click', () => mode('search'));
-      $('showRegistration').addEventListener(
-        'click',
-        () => mode('registration')
-      );
+      $('showSearch').addEventListener('click', function () { mode('search'); });
+      $('showRegistration').addEventListener('click', function () { mode('registration'); });
 
-      $('loginForm').addEventListener('submit', async event => {
+      function apiFetch(path, idToken, options) {
+        options = options || {};
+        var headers = { Authorization: 'Bearer ' + idToken };
+        var fetchOptions = { method: options.method || 'GET', headers: headers };
+
+        if (options.body !== undefined) {
+          headers['Content-Type'] = 'application/json';
+          fetchOptions.body = JSON.stringify(options.body);
+        }
+
+        return fetch(API_BASE + path, fetchOptions).then(function (response) {
+          if (response.status === 204) return {};
+
+          return response.json().then(function (body) {
+            if (!response.ok) {
+              throw new Error((body.error && body.error.message) || 'Error ' + response.status);
+            }
+            return body;
+          });
+        });
+      }
+
+      function withIdToken(fn) {
+        return firebase.auth().currentUser.getIdToken().then(fn);
+      }
+
+      $('loginForm').addEventListener('submit', function (event) {
         event.preventDefault();
         hideMsg();
-        email = $('email').value.trim();
-        busy($('sendBtn'), true, 'Enviando…');
 
-        try {
-          const response = await client.call('solicitarCodigo', {
-            role: 'VIGILANCIA',
-            email
+        var button = $('loginBtn');
+        busy(button, true, 'Ingresando…');
+
+        firebase.auth().signInWithEmailAndPassword($('email').value.trim(), $('password').value)
+          .then(function () {
+            panel('app');
+            mode('search');
+          })
+          .catch(function (error) {
+            msg(error.message);
+          })
+          .finally(function () {
+            busy(button, false, 'Ingresar');
           });
-          $('otpText').textContent = response.message;
-          panel('otp');
-        } catch (error) {
-          msg(error.message);
-        } finally {
-          busy($('sendBtn'), false, 'Enviar código');
-        }
       });
 
-      $('otpForm').addEventListener('submit', async event => {
-        event.preventDefault();
-        busy($('verifyBtn'), true, 'Ingresando…');
-
-        try {
-          const response = await client.call('validarCodigo', {
-            role: 'VIGILANCIA',
-            email,
-            code: $('code').value
-          });
-          token = response.token;
-          sessionStorage.setItem('bvVigilanciaToken', token);
-          $('userText').textContent = email;
-          panel('app');
-          mode('search');
-        } catch (error) {
-          msg(error.message);
-        } finally {
-          busy($('verifyBtn'), false, 'Ingresar');
-        }
+      $('logout').addEventListener('click', function () {
+        firebase.auth().signOut().then(function () {
+          panel('login');
+        });
       });
 
-      $('logout').addEventListener('click', async () => {
-        try {
-          await client.call('cerrarSesion', { token });
-        } catch (error) {
-          // La sesión se limpia de todas formas.
-        }
-
-        token = '';
-        sessionStorage.removeItem('bvVigilanciaToken');
-        panel('login');
-      });
-
-      $('searchForm').addEventListener('submit', async event => {
+      $('searchForm').addEventListener('submit', function (event) {
         event.preventDefault();
         hideMsg();
         busy($('searchBtn'), true, 'Consultando…');
 
-        try {
-          const response = await client.call('buscarVigilancia', {
-            token,
-            query: $('query').value
-          });
-          render(response.resultados || []);
-        } catch (error) {
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/vigilancia/buscar?q=' + encodeURIComponent($('query').value.trim()), idToken)
+            .then(function (body) {
+              var unidades = (body.data && body.data.unidades) || [];
+              return Promise.all(unidades.map(function (unidad) {
+                return apiFetch('/api/v1/vigilancia/unidades/' + unidad.id + '/perfil', idToken);
+              }));
+            });
+        }).then(function (perfiles) {
+          render(perfiles.map(function (p) { return p.data; }));
+        }).catch(function (error) {
           msg(error.message);
-        } finally {
+        }).finally(function () {
           busy($('searchBtn'), false, 'Consultar');
-        }
+        });
       });
 
-      $('registrationForm').addEventListener('submit', async event => {
+      $('registrationForm').addEventListener('submit', function (event) {
         event.preventDefault();
         hideMsg();
 
@@ -495,104 +446,77 @@
 
         busy($('registerBtn'), true, 'Registrando…');
 
-        try {
-          const response = await client.call(
-            'registrarResidenteVigilancia',
-            {
-              token,
-              apartamento: $('newApartment').value,
-              nombreCompleto: $('newName').value,
-              tipoDocumento: $('newDocumentType').value,
-              numeroDocumento: $('newDocument').value,
-              email: $('newEmail').value,
-              celular: $('newPhone').value,
-              rol: $('newRole').value,
-              retirarResidentesAnteriores:
-                $('retirePrevious').checked,
-              observaciones: $('newNotes').value
-            }
-          );
+        var payload = {
+          apartamento: $('newApartment').value.trim(),
+          nombreCompleto: $('newName').value.trim(),
+          tipoDocumento: $('newDocumentType').value,
+          numeroDocumento: $('newDocument').value.trim(),
+          rol: $('newRole').value,
+          correo: $('newEmail').value.trim() || undefined,
+          telefono: $('newPhone').value.trim() || undefined,
+          retirarResidentesAnteriores: $('retirePrevious').checked
+        };
 
-          renderRegistrationResult(response);
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/vigilancia/registrar-residente', idToken, { method: 'POST', body: payload });
+        }).then(function (body) {
+          renderRegistrationResult(body.data);
           $('registrationForm').reset();
-          $('newDocumentType').value = 'CEDULA';
+          $('newDocumentType').value = 'CC';
           $('newRole').value = 'ARRENDATARIO PRINCIPAL';
-          msg(
-            'El residente principal fue registrado correctamente.',
-            'success'
-          );
-        } catch (error) {
+          msg('El residente principal fue registrado correctamente.', 'success');
+        }).catch(function (error) {
           msg(error.message);
-        } finally {
+        }).finally(function () {
           busy($('registerBtn'), false, 'Registrar residente');
-        }
+        });
       });
 
       function render(items) {
         $('results').innerHTML = items.length
-          ? items.map(profile => {
-              const unitId =
-                profile.unidad.unidadId || '';
-
+          ? items.map(function (unit) {
               return (
                 '<article class="surface unit-card p-4 mb-3">' +
                 '<div class="d-flex flex-wrap justify-content-between align-items-start gap-2">' +
                 '<div>' +
-                '<h3 class="section-title h4 mb-1">' +
-                esc(unitId) +
-                '</h3>' +
-                '<div class="small-note">Estado: ' +
-                esc(profile.unidad.estadoUnidad || '') +
+                '<h3 class="section-title h4 mb-1">' + esc(unit.codigoOficial) + '</h3>' +
+                '<div class="small-note">Estado: ' + esc(unit.estadoUnidad || '') + '</div>' +
                 '</div>' +
-                '</div>' +
-                '<div class="d-flex gap-2">' +
-                '<span class="badge text-bg-success align-self-center">Verificado</span>' +
-                '<button type="button" class="btn btn-sm btn-outline-success register-unit" data-unit="' +
-                esc(profile.unidad.apartamento || '') +
-                '">' +
+                '<button type="button" class="btn btn-sm btn-outline-success register-unit" data-apartment="' +
+                esc((unit.codigoOficial || '').split('-')[0]) + '">' +
                 '<i class="bi bi-person-plus me-1"></i>Registrar residente' +
                 '</button>' +
-                '</div>' +
                 '</div>' +
                 '<div class="row g-4 mt-1">' +
                 '<div class="col-md-4">' +
                 '<h4 class="h6 fw-bold"><i class="bi bi-people me-1"></i>Residentes</h4>' +
-                list(
-                  profile.residentes,
-                  item =>
-                    '<strong>' + esc(item.nombre) + '</strong>' +
-                    '<div class="small-note">' + esc(item.rol) + '</div>'
-                ) +
+                list(unit.residentes, function (item) {
+                  return '<strong>' + esc(item.persona.nombreCompleto) + '</strong>' +
+                    '<div class="small-note">' + esc(item.tipoRelacion) + '</div>';
+                }) +
                 '</div>' +
                 '<div class="col-md-4">' +
                 '<h4 class="h6 fw-bold"><i class="bi bi-car-front me-1"></i>Vehículos</h4>' +
-                list(
-                  profile.vehiculos,
-                  item =>
-                    '<span class="plate">' + esc(item.placa) + '</span>' +
-                    '<div class="small-note">' + esc(item.tipo) + '</div>'
-                ) +
+                list(unit.vehiculos, function (item) {
+                  return '<span class="plate">' + esc(item.vehiculo.placa) + '</span>' +
+                    '<div class="small-note">' + esc(item.vehiculo.tipoVehiculo || '') + '</div>';
+                }) +
                 '</div>' +
                 '<div class="col-md-4">' +
                 '<h4 class="h6 fw-bold"><i class="bi bi-p-square me-1"></i>Parqueaderos</h4>' +
-                list(
-                  profile.parqueaderos,
-                  item =>
-                    '<strong>' + esc(item.codigoOficial) + '</strong>' +
-                    '<div class="small-note">' + esc(item.subtipo) + '</div>'
-                ) +
+                list(unit.parqueaderos, function (item) {
+                  return '<strong>' + esc(item.codigo) + '</strong>' +
+                    '<div class="small-note">' + esc(item.tipoParqueadero || '') + '</div>';
+                }) +
                 '</div>' +
                 '</div>' +
                 (
-                  profile.emergencia &&
-                  profile.emergencia.nombre
+                  unit.emergencia && unit.emergencia[0]
                     ? '<div class="alert alert-light border mt-3 mb-0">' +
                       '<strong>Contacto de emergencia:</strong> ' +
-                      esc(profile.emergencia.nombre) +
-                      ' · ' +
-                      esc(profile.emergencia.parentesco) +
-                      ' · ' +
-                      esc(profile.emergencia.celular) +
+                      esc(unit.emergencia[0].nombre) + ' · ' +
+                      esc(unit.emergencia[0].parentesco) + ' · ' +
+                      esc(unit.emergencia[0].telefono) +
                       '</div>'
                     : ''
                 ) +
@@ -602,92 +526,43 @@
           : '<div class="surface p-4"><p class="text-muted mb-0">No se encontraron coincidencias.</p></div>';
       }
 
-      $('results').addEventListener('click', event => {
-        const button = event.target.closest('.register-unit');
+      $('results').addEventListener('click', function (event) {
+        var button = event.target.closest('.register-unit');
         if (!button) return;
 
-        $('newApartment').value = button.dataset.unit || '';
+        $('newApartment').value = button.dataset.apartment || '';
         mode('registration');
         $('newName').focus();
       });
 
-      function renderRegistrationResult(response) {
-        const warnings =
-          response.otrasUnidadesActivas &&
-          response.otrasUnidadesActivas.length
-            ? '<div class="alert alert-warning mt-3 mb-0">' +
-              'La persona también aparece con vínculo activo en: ' +
-              esc(response.otrasUnidadesActivas.join(', ')) +
-              '. La administración debe verificar si corresponde cerrarlo.' +
-              '</div>'
-            : '';
-
+      function renderRegistrationResult(data) {
         $('registrationResult').innerHTML =
           '<article class="surface registration-result p-4">' +
           '<h3 class="h5 text-success fw-bold">' +
           '<i class="bi bi-check-circle-fill me-2"></i>' +
           'Registro completado' +
           '</h3>' +
-          '<p class="mb-2"><strong>' +
-          esc(response.nombre) +
-          '</strong> quedó registrado en la unidad <strong>' +
-          esc(response.unidadId) +
-          '</strong> como ' +
-          esc(response.rol) +
-          '.</p>' +
-          '<p class="mb-3">Ya puede ingresar con el apartamento y su documento. Desde allí podrá solicitar cambios de convivientes y vehículos autorizados.</p>' +
-          '<a class="btn btn-outline-success" href="' +
-          esc(PERSONAL_DATA_URL) +
-          '" target="_blank" rel="noopener">' +
-          '<i class="bi bi-box-arrow-up-right me-1"></i>' +
-          'Abrir Datos personales' +
-          '</a>' +
-          (
-            response.residentesRetirados
-              ? '<div class="small-note mt-3">Residentes anteriores retirados: ' +
-                esc(response.residentesRetirados) +
-                '.</div>'
-              : ''
-          ) +
-          warnings +
+          '<p class="mb-0"><strong>' + esc(data.nombreCompleto) + '</strong> quedó registrado en la unidad ' +
+          '<strong>' + esc(data.codigoOficial) + '</strong> como ' + esc(data.rol) + '.</p>' +
           '</article>';
       }
 
       function list(items, formatter) {
         return items && items.length
-          ? items.map(
-              item =>
-                '<div class="border rounded p-2 mb-2">' +
-                formatter(item) +
-                '</div>'
-            ).join('')
-          : '<p class="small-note">Sin registros aprobados.</p>';
+          ? items.map(function (item) {
+              return '<div class="border rounded p-2 mb-2">' + formatter(item) + '</div>';
+            }).join('')
+          : '<p class="small-note">Sin registros.</p>';
       }
 
-      const saved =
-        sessionStorage.getItem('bvVigilanciaToken');
-
-      if (saved) {
-        token = saved;
-        panel('app');
-        $('userText').textContent = 'Sesión recuperada';
-
-        client.call('buscarVigilancia', {
-          token,
-          query: '__VALIDATE__'
-        }).catch(error => {
-          if (
-            /sesión|permisos|autorizado/i
-              .test(error.message)
-          ) {
-            sessionStorage.removeItem(
-              'bvVigilanciaToken'
-            );
-            token = '';
-            panel('login');
-          }
-        });
-      }
+      firebase.auth().onAuthStateChanged(function (user) {
+        if (user) {
+          panel('app');
+          mode('search');
+        } else {
+          panel('login');
+        }
+      });
     }());
   </script>
 </body>

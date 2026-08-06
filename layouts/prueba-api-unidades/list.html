@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.LanguageCode | default "es" }}">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .Title }} - {{ .Site.Title }}</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ "images/favicon-32x32.png" | relURL }}">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --p: #2c5f2d;
+      --s: #4a8c4b;
+      --l: #e8f5e9;
+      --b: #d8e6d9;
+    }
+
+    body {
+      font-family: Montserrat, sans-serif;
+      background: var(--l);
+    }
+
+    .navbar,
+    .btn-primary {
+      background: var(--p) !important;
+      border-color: var(--p) !important;
+    }
+
+    .surface {
+      background: #fff;
+      border: 1px solid var(--b);
+      border-radius: 1rem;
+      box-shadow: 0 5px 18px rgba(44, 95, 45, .08);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .json-box {
+      white-space: pre-wrap;
+      font-family: ui-monospace, monospace;
+      font-size: .8rem;
+      background: #f5f7f5;
+      border-radius: .6rem;
+      padding: .8rem;
+      max-height: 320px;
+      overflow: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-dark">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="{{ .Site.Home.RelPermalink }}">
+        <i class="bi bi-tree-fill me-2"></i>{{ .Site.Title }}
+      </a>
+      <span class="navbar-text text-white">Piloto bulevar-verde-api</span>
+    </div>
+  </nav>
+
+  <main class="container py-4" style="max-width:960px">
+    <div class="alert alert-warning">
+      <strong>Página de prueba, no enlazada en el menú.</strong>
+      Esta vista habla directamente con <code>bulevar-verde-api</code> (Firebase Auth + Data Connect),
+      no con el puente de Apps Script que usa el resto del sitio.
+    </div>
+
+    <div id="alert" class="alert hidden" aria-live="polite"></div>
+
+    <section id="login" class="surface p-4 p-lg-5 mx-auto" style="max-width:520px">
+      <h2 class="h4 mb-3">Iniciar sesión</h2>
+      <form id="loginForm" class="row g-3">
+        <div class="col-12">
+          <label class="form-label" for="email">Correo</label>
+          <input id="email" type="email" class="form-control" required>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="password">Contraseña</label>
+          <input id="password" type="password" class="form-control" required>
+        </div>
+        <div class="col-12 d-grid">
+          <button id="loginBtn" class="btn btn-primary btn-lg" type="submit">Ingresar</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="app" class="hidden">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div id="userText" class="fw-semibold"></div>
+        <button id="logout" class="btn btn-outline-secondary btn-sm">Salir</button>
+      </div>
+
+      <div class="surface p-4 mb-4">
+        <h3 class="h5">Mi sesión (<code>GET /api/v1/usuarios/me</code>)</h3>
+        <div id="meBox" class="json-box">Cargando…</div>
+      </div>
+
+      <div class="surface p-4 mb-4">
+        <h3 class="h5">Métricas (<code>GET /api/v1/dashboard/metricas</code>)</h3>
+        <div id="metricasBox" class="row g-3">Cargando…</div>
+      </div>
+
+      <div class="surface p-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h3 class="h5 mb-0">Unidades (<code>GET /api/v1/unidades</code>)</h3>
+          <button id="refreshUnidades" class="btn btn-outline-success btn-sm">Actualizar</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Torre</th>
+                <th>Apartamento</th>
+                <th>Código oficial</th>
+                <th>Estado</th>
+                <th>Activo</th>
+              </tr>
+            </thead>
+            <tbody id="unidadesBody">
+              <tr><td colspan="5" class="text-muted">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="surface p-4 mt-4">
+        <h3 class="h5">Buscar (<code>GET /api/v1/unidades/buscar</code>)</h3>
+        <form id="searchForm" class="input-group mb-3">
+          <input id="searchQuery" class="form-control" placeholder="Código de unidad, placa, correo, documento o nombre">
+          <button class="btn btn-primary" type="submit">Buscar</button>
+        </form>
+        <div id="searchResults" class="text-muted">Sin búsquedas todavía.</div>
+      </div>
+
+      <div class="surface p-4 mt-4">
+        <h3 class="h5">Perfil de unidad (<code>GET /api/v1/unidades/:id/perfil</code>)</h3>
+        <div id="perfilBox" class="text-muted">Selecciona un resultado de la búsqueda.</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var API_BASE = {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }};
+
+      firebase.initializeApp({
+        apiKey: {{ .Site.Params.apiFirebaseApiKey | default "" | jsonify | safeJS }},
+        authDomain: {{ .Site.Params.apiFirebaseAuthDomain | default "" | jsonify | safeJS }},
+        projectId: {{ .Site.Params.apiFirebaseProjectId | default "" | jsonify | safeJS }}
+      });
+
+      var $ = function (id) { return document.getElementById(id); };
+
+      function esc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character];
+        });
+      }
+
+      function msg(text, type) {
+        var alertBox = $('alert');
+        alertBox.className = 'alert alert-' + (type || 'danger');
+        alertBox.textContent = text;
+        alertBox.classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      function hideMsg() {
+        $('alert').classList.add('hidden');
+      }
+
+      function panel(id) {
+        ['login', 'app'].forEach(function (panelId) {
+          $(panelId).classList.toggle('hidden', panelId !== id);
+        });
+      }
+
+      function apiFetch(path, idToken, options) {
+        options = options || {};
+        var headers = { Authorization: 'Bearer ' + idToken };
+        var fetchOptions = { method: options.method || 'GET', headers: headers };
+
+        if (options.body !== undefined) {
+          headers['Content-Type'] = 'application/json';
+          fetchOptions.body = JSON.stringify(options.body);
+        }
+
+        return fetch(API_BASE + path, fetchOptions).then(function (response) {
+          if (response.status === 204) return {};
+
+          return response.json().then(function (body) {
+            if (!response.ok) {
+              throw new Error((body.error && body.error.message) || 'Error ' + response.status);
+            }
+            return body;
+          });
+        });
+      }
+
+      function loadMetricas(idToken) {
+        var box = $('metricasBox');
+        box.textContent = 'Cargando…';
+
+        return apiFetch('/api/v1/dashboard/metricas', idToken).then(function (body) {
+          var metricas = body.data;
+          var items = [
+            ['Unidades', metricas.unidades],
+            ['Personas', metricas.personas],
+            ['Vehículos', metricas.vehiculos],
+            ['Parqueaderos', metricas.parqueaderos]
+          ];
+
+          box.innerHTML = items.map(function (item) {
+            return '<div class="col-6 col-md-3">' +
+              '<div class="border rounded p-3 text-center">' +
+              '<div class="fs-4 fw-bold">' + esc(item[1]) + '</div>' +
+              '<div class="small text-muted">' + esc(item[0]) + '</div>' +
+              '</div></div>';
+          }).join('');
+        }).catch(function (error) {
+          box.innerHTML = '<p class="text-danger mb-0">Error: ' + esc(error.message) + '</p>';
+        });
+      }
+
+      function loadMe(idToken) {
+        $('meBox').textContent = 'Cargando…';
+        return apiFetch('/api/v1/usuarios/me', idToken).then(function (body) {
+          $('meBox').textContent = JSON.stringify(body.data, null, 2);
+          $('userText').textContent = body.data.email + ' · roles: ' + (body.data.roles || []).join(', ');
+        }).catch(function (error) {
+          $('meBox').textContent = 'Error: ' + error.message;
+        });
+      }
+
+      function loadUnidades(idToken) {
+        var body = $('unidadesBody');
+        body.innerHTML = '<tr><td colspan="5" class="text-muted">Cargando…</td></tr>';
+
+        return apiFetch('/api/v1/unidades?limit=50&offset=0', idToken).then(function (result) {
+          var unidades = (result.data && result.data.unidades) || [];
+
+          if (!unidades.length) {
+            body.innerHTML = '<tr><td colspan="5" class="text-muted">Sin unidades.</td></tr>';
+            return;
+          }
+
+          body.innerHTML = unidades.map(function (unidad) {
+            return '<tr>' +
+              '<td>' + esc(unidad.torre) + '</td>' +
+              '<td>' + esc(unidad.apartamento) + '</td>' +
+              '<td>' + esc(unidad.codigoOficial) + '</td>' +
+              '<td>' + esc(unidad.estadoUnidad) + '</td>' +
+              '<td>' + (unidad.activo ? 'Sí' : 'No') + '</td>' +
+              '</tr>';
+          }).join('');
+        }).catch(function (error) {
+          body.innerHTML = '<tr><td colspan="5" class="text-danger">Error: ' + esc(error.message) + '</td></tr>';
+        });
+      }
+
+      function withIdToken(fn) {
+        return firebase.auth().currentUser.getIdToken().then(fn);
+      }
+
+      function renderCoincidencias(coincidencias) {
+        return coincidencias.map(function (c) {
+          return esc(c.tipo) + ': ' + esc(c.detalle);
+        }).join(' · ');
+      }
+
+      $('searchForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        hideMsg();
+
+        var termino = $('searchQuery').value.trim();
+        var results = $('searchResults');
+        if (!termino) return;
+
+        results.textContent = 'Buscando…';
+
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/unidades/buscar?q=' + encodeURIComponent(termino), idToken);
+        }).then(function (body) {
+          var resultados = (body.data && body.data.resultados) || [];
+
+          if (!resultados.length) {
+            results.innerHTML = '<p class="text-muted mb-0">Sin resultados.</p>';
+            return;
+          }
+
+          results.innerHTML = resultados.map(function (item) {
+            return '<button type="button" class="btn btn-outline-success w-100 text-start mb-2 unit-result" data-unit-id="' +
+              esc(item.unidad.id) + '">' +
+              '<strong>' + esc(item.unidad.codigoOficial) + '</strong>' +
+              '<div class="small text-muted">' + renderCoincidencias(item.coincidencias) + '</div>' +
+              '</button>';
+          }).join('');
+        }).catch(function (error) {
+          results.innerHTML = '<p class="text-danger mb-0">Error: ' + esc(error.message) + '</p>';
+        });
+      });
+
+      $('searchResults').addEventListener('click', function (event) {
+        var button = event.target.closest('.unit-result');
+        if (button) loadPerfil(button.dataset.unitId);
+      });
+
+      var currentUnidadId = null;
+
+      function loadPerfil(unidadId) {
+        currentUnidadId = unidadId;
+        var box = $('perfilBox');
+        box.textContent = 'Cargando…';
+
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/unidades/' + unidadId + '/perfil', idToken);
+        }).then(function (body) {
+          var perfil = body.data;
+
+          var propietarios = (perfil.vinculosPersona || []).map(function (v) {
+            return '<li class="mb-1">' + esc(v.persona.nombreCompleto) + ' — ' + esc(v.tipoRelacion) +
+              ' (' + esc(v.persona.tipoDocumento) + ' ' + esc(v.persona.numeroDocumento) + ')' +
+              (v.persona.correo ? ' · ' + esc(v.persona.correo) : '') +
+              (v.activo
+                ? ' <button type="button" class="btn btn-outline-danger btn-sm ms-2 retirar-propietario" data-vinculo-id="' + esc(v.id) + '">Retirar</button>'
+                : ' <span class="badge text-bg-secondary">retirado</span>') +
+              '</li>';
+          }).join('') || '<li class="text-muted">Sin registros.</li>';
+
+          var vehiculos = (perfil.vinculosVehiculo || []).map(function (v) {
+            return '<li>' + esc(v.vehiculo.placa) + ' — ' + esc(v.vehiculo.tipoVehiculo || '') +
+              ' (' + esc(v.tipoVinculo) + ', ' + esc(v.estadoVinculo) + ')</li>';
+          }).join('') || '<li class="text-muted">Sin registros.</li>';
+
+          var parqueaderos = (perfil.parqueaderos || []).map(function (p) {
+            return '<li>' + esc(p.codigo) + ' — ' + esc(p.tipoParqueadero || '') + '</li>';
+          }).join('') || '<li class="text-muted">Sin registros.</li>';
+
+          var estadoCuenta = perfil.estadoCuenta
+            ? esc(perfil.estadoCuenta.estadoCuenta || '') + ' · Saldo: ' + esc(perfil.estadoCuenta.saldoActual || '')
+            : 'Sin información.';
+
+          box.innerHTML =
+            '<h5>' + esc(perfil.codigoOficial) + ' <span class="text-muted small">(' + esc(perfil.estadoUnidad) + ')</span></h5>' +
+
+            '<h6 class="mt-3">Editar unidad (<code>PATCH /api/v1/unidades/:id</code>)</h6>' +
+            '<form id="editUnidadForm" class="row g-2 align-items-end">' +
+            '<div class="col-md-5"><label class="form-label small">Estado</label>' +
+            '<select id="editEstadoUnidad" class="form-select form-select-sm">' +
+            ['NO_ENTREGADA', 'ENTREGADA'].map(function (estado) {
+              return '<option value="' + estado + '"' + (estado === perfil.estadoUnidad ? ' selected' : '') + '>' + estado + '</option>';
+            }).join('') +
+            '</select></div>' +
+            '<div class="col-md-5"><label class="form-label small">Fecha de entrega</label>' +
+            '<input id="editFechaEntrega" type="date" class="form-control form-control-sm" value="' + esc((perfil.fechaEntrega || '').slice(0, 10)) + '"></div>' +
+            '<div class="col-md-2 d-grid"><button type="submit" class="btn btn-primary btn-sm">Guardar</button></div>' +
+            '</form>' +
+
+            '<h6 class="mt-3">Propietarios y residentes</h6><ul>' + propietarios + '</ul>' +
+
+            '<form id="addPropietarioForm" class="row g-2 align-items-end border-top pt-3">' +
+            '<div class="col-md-2"><label class="form-label small">Tipo doc.</label>' +
+            '<input id="addTipoDocumento" class="form-control form-control-sm" value="CC" required></div>' +
+            '<div class="col-md-3"><label class="form-label small">Número doc.</label>' +
+            '<input id="addNumeroDocumento" class="form-control form-control-sm" required></div>' +
+            '<div class="col-md-4"><label class="form-label small">Nombre completo</label>' +
+            '<input id="addNombreCompleto" class="form-control form-control-sm" required></div>' +
+            '<div class="col-md-3"><label class="form-label small">Relación</label>' +
+            '<select id="addTipoRelacion" class="form-select form-select-sm">' +
+            '<option value="PROPIETARIO">PROPIETARIO</option>' +
+            '<option value="RESIDENTE">RESIDENTE</option>' +
+            '</select></div>' +
+            '<div class="col-md-4"><label class="form-label small">Correo (opcional)</label>' +
+            '<input id="addCorreo" type="email" class="form-control form-control-sm"></div>' +
+            '<div class="col-md-3"><label class="form-label small">Teléfono (opcional)</label>' +
+            '<input id="addTelefono" class="form-control form-control-sm"></div>' +
+            '<div class="col-md-3 d-grid"><button type="submit" class="btn btn-outline-success btn-sm">Agregar</button></div>' +
+            '</form>' +
+
+            '<h6 class="mt-3">Vehículos</h6><ul>' + vehiculos + '</ul>' +
+            '<h6 class="mt-3">Parqueaderos</h6><ul>' + parqueaderos + '</ul>' +
+            '<h6 class="mt-3">Estado de cuenta</h6><p>' + estadoCuenta + '</p>';
+        }).catch(function (error) {
+          box.innerHTML = '<p class="text-danger mb-0">Error: ' + esc(error.message) + '</p>';
+        });
+      }
+
+      $('perfilBox').addEventListener('submit', function (event) {
+        if (event.target.id === 'editUnidadForm') {
+          event.preventDefault();
+          hideMsg();
+
+          var payload = {
+            estadoUnidad: $('editEstadoUnidad').value,
+            fechaEntrega: $('editFechaEntrega').value || undefined
+          };
+
+          withIdToken(function (idToken) {
+            return apiFetch('/api/v1/unidades/' + currentUnidadId, idToken, { method: 'PATCH', body: payload });
+          }).then(function () {
+            msg('Unidad actualizada.', 'success');
+            loadPerfil(currentUnidadId);
+          }).catch(function (error) {
+            msg(error.message);
+          });
+        }
+
+        if (event.target.id === 'addPropietarioForm') {
+          event.preventDefault();
+          hideMsg();
+
+          var payload = {
+            tipoDocumento: $('addTipoDocumento').value.trim(),
+            numeroDocumento: $('addNumeroDocumento').value.trim(),
+            nombreCompleto: $('addNombreCompleto').value.trim(),
+            tipoRelacion: $('addTipoRelacion').value,
+            correo: $('addCorreo').value.trim() || undefined,
+            telefono: $('addTelefono').value.trim() || undefined
+          };
+
+          withIdToken(function (idToken) {
+            return apiFetch('/api/v1/unidades/' + currentUnidadId + '/propietarios', idToken, { method: 'POST', body: payload });
+          }).then(function () {
+            msg('Propietario/residente agregado.', 'success');
+            loadPerfil(currentUnidadId);
+          }).catch(function (error) {
+            msg(error.message);
+          });
+        }
+      });
+
+      $('perfilBox').addEventListener('click', function (event) {
+        var button = event.target.closest('.retirar-propietario');
+        if (!button) return;
+
+        if (!confirm('¿Retirar este vínculo?')) return;
+
+        withIdToken(function (idToken) {
+          return apiFetch(
+            '/api/v1/unidades/' + currentUnidadId + '/propietarios/' + button.dataset.vinculoId,
+            idToken,
+            { method: 'DELETE' }
+          );
+        }).then(function () {
+          msg('Vínculo retirado.', 'success');
+          loadPerfil(currentUnidadId);
+        }).catch(function (error) {
+          msg(error.message);
+        });
+      });
+
+      $('loginForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        hideMsg();
+
+        var button = $('loginBtn');
+        button.disabled = true;
+
+        firebase.auth().signInWithEmailAndPassword($('email').value.trim(), $('password').value)
+          .then(function () {
+            panel('app');
+            return refreshAll();
+          })
+          .catch(function (error) {
+            msg(error.message);
+          })
+          .finally(function () {
+            button.disabled = false;
+          });
+      });
+
+      $('logout').addEventListener('click', function () {
+        firebase.auth().signOut().then(function () {
+          panel('login');
+        });
+      });
+
+      function refreshAll() {
+        return firebase.auth().currentUser.getIdToken().then(function (idToken) {
+          return Promise.all([loadMe(idToken), loadMetricas(idToken), loadUnidades(idToken)]);
+        });
+      }
+
+      $('refreshUnidades').addEventListener('click', function () {
+        hideMsg();
+        refreshAll().catch(function (error) { msg(error.message); });
+      });
+
+      firebase.auth().onAuthStateChanged(function (user) {
+        if (user) {
+          panel('app');
+          refreshAll().catch(function (error) { msg(error.message); });
+        } else {
+          panel('login');
+        }
+      });
+    }());
+  </script>
+</body>
+
+</html>

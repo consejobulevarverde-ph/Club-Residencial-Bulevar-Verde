@@ -1,0 +1,71 @@
+# Perfil completo de una unidad: propietarios/residentes, vehículos,
+# parqueaderos y estado de cuenta, equivalente a "perfilAdmin" de Apps Script.
+query ObtenerPerfilUnidad(
+  $id: UUID!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la consulta.") {
+  unidad(id: $id) {
+    id
+    torre
+    apartamento
+    codigoOficial
+    areaPrivada
+    coeficiente
+    presupuestoAnual
+    fechaEntrega
+    estadoUnidad
+    activo
+    vinculosPersona: vinculos_unidad_persona_on_unidad(where: { activo: { eq: true } }) {
+      id
+      tipoRelacion
+      fechaInicio
+      fechaFin
+      activo
+      persona {
+        id
+        tipoDocumento
+        numeroDocumento
+        nombreCompleto
+        correo
+        telefono
+        activo
+      }
+    }
+    vinculosVehiculo: vinculos_vehiculo_unidad_on_unidad(where: { esActual: { eq: true } }) {
+      id
+      tipoVinculo
+      estadoVinculo
+      vigenteDesde
+      vigenteHasta
+      vehiculo {
+        id
+        placa
+        tipoVehiculo
+        marca
+        modelo
+        color
+        estadoVehiculo
+      }
+    }
+    parqueaderos: parqueaderos_on_unidad {
+      id
+      codigo
+      tipoParqueadero
+      torre
+      activo
+    }
+    estadoCuenta: estado_cuenta_on_unidad {
+      id
+      fechaCorte
+      saldoAnterior
+      saldoActual
+      estadoCuenta
+      elegibleReservas
+      presupuestoUnidad
+      porcentajeMaximoMora
+      maximoMoraElegible
+      excesoMora
+      fechaActualizacion
+    }
+  }
+}

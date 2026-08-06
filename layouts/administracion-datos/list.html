@@ -60,33 +60,6 @@
       display: none !important;
     }
 
-    .request-card,
-    .owner-card {
-      border: 1px solid var(--b);
-      border-radius: .8rem;
-      padding: 1rem;
-    }
-
-    .owner-card.retired {
-      opacity: .65;
-      background: #f6f6f6;
-    }
-
-    .json-box {
-      white-space: pre-wrap;
-      font-family: ui-monospace, monospace;
-      font-size: .8rem;
-      background: #f5f7f5;
-      border-radius: .6rem;
-      padding: .8rem;
-      max-height: 280px;
-      overflow: auto;
-    }
-
-    .protected-field {
-      background: #f5f7f5;
-    }
-
     .sticky-panel {
       top: 1rem;
     }
@@ -109,8 +82,7 @@
         <i class="bi bi-database-lock me-2"></i>Gestión de datos maestros
       </h1>
       <p class="mb-0">
-        Consulta, actualización directa de apartamentos y propietarios,
-        y revisión de solicitudes.
+        Consulta, actualización directa de apartamentos y propietarios.
       </p>
     </div>
   </header>
@@ -118,41 +90,19 @@
   <main class="container py-4" style="max-width:1400px">
     <div id="alert" class="alert hidden" aria-live="polite"></div>
 
-    <section id="login" class="surface p-4 p-lg-5 mx-auto" style="max-width:720px">
-      <h2 class="section-title h4">Acceso administrativo</h2>
-      <p>
-        El correo debe estar activo con rol
-        <strong>ADMIN</strong> en <code>Usuarios_Portal</code>.
-      </p>
+    <section id="login" class="surface p-4 p-lg-5 mx-auto" style="max-width:520px">
+      <h2 class="section-title h4 mb-3">Acceso administrativo</h2>
       <form id="loginForm" class="row g-3">
         <div class="col-12">
-          <label class="form-label" for="email">Correo autorizado</label>
+          <label class="form-label" for="email">Correo</label>
           <input id="email" type="email" class="form-control" required>
         </div>
+        <div class="col-12">
+          <label class="form-label" for="password">Contraseña</label>
+          <input id="password" type="password" class="form-control" required>
+        </div>
         <div class="col-12 d-grid">
-          <button id="sendBtn" class="btn btn-primary btn-lg">
-            Enviar código
-          </button>
-        </div>
-      </form>
-    </section>
-
-    <section id="otp" class="surface p-4 mx-auto hidden" style="max-width:720px">
-      <h2 class="section-title h4">Código de verificación</h2>
-      <p id="otpText"></p>
-      <form id="otpForm" class="row g-3">
-        <div class="col-md-7">
-          <input
-            id="code"
-            class="form-control form-control-lg text-center"
-            maxlength="6"
-            inputmode="numeric"
-            required>
-        </div>
-        <div class="col-md-5 d-grid">
-          <button id="verifyBtn" class="btn btn-primary btn-lg">
-            Ingresar
-          </button>
+          <button id="loginBtn" class="btn btn-primary btn-lg" type="submit">Ingresar</button>
         </div>
       </form>
     </section>
@@ -170,39 +120,16 @@
 
       <div class="row g-4">
         <div class="col-xl-4">
-          <div class="surface p-4 mb-4">
+          <div class="surface p-4">
             <h3 class="section-title h5">Buscar unidad o persona</h3>
             <form id="searchForm" class="input-group">
               <input
                 id="query"
                 class="form-control"
-                placeholder="1029-T4, placa, parqueadero, correo o nombre">
+                placeholder="Código, placa, correo, documento o nombre">
               <button class="btn btn-primary">Buscar</button>
             </form>
-            <div id="searchResults" class="mt-3"></div>
-          </div>
-
-          <div class="surface p-4">
-            <div class="d-flex justify-content-between align-items-center">
-              <h3 class="section-title h5 mb-0">Solicitudes pendientes</h3>
-              <button id="refreshRequests" class="btn btn-outline-success btn-sm">
-                Actualizar
-              </button>
-            </div>
-            <div id="requests" class="mt-3"></div>
-          </div>
-
-          <div class="surface p-4 mt-4">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <h3 class="section-title h5 mb-0">Bien 9999</h3>
-                <div class="small-note">Placas pendientes de identificación.</div>
-              </div>
-              <button id="refreshUnidentified" class="btn btn-outline-success btn-sm">
-                Actualizar
-              </button>
-            </div>
-            <div id="unidentifiedVehicles" class="mt-3"></div>
+            <div id="searchResults" class="mt-3 text-muted">Sin búsquedas todavía.</div>
           </div>
         </div>
 
@@ -220,35 +147,34 @@
     </section>
   </main>
 
-  <script src="{{ "js/portal-bv-client.js" | relURL }}?v={{ default "20260718-8" .Site.Params.portalClientVersion }}"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script>
     (function () {
       'use strict';
 
-      const URL = {{ .Site.Params.portalWebAppUrl | default "" | jsonify | safeJS }};
-      const client = new PortalBVClient(URL);
+      var API_BASE = {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }};
 
-      let token = '';
-      let email = '';
-      let currentProfile = null;
+      firebase.initializeApp({
+        apiKey: {{ .Site.Params.apiFirebaseApiKey | default "" | jsonify | safeJS }},
+        authDomain: {{ .Site.Params.apiFirebaseAuthDomain | default "" | jsonify | safeJS }},
+        projectId: {{ .Site.Params.apiFirebaseProjectId | default "" | jsonify | safeJS }}
+      });
 
-      const $ = id => document.getElementById(id);
-      const esc = value => String(value == null ? '' : value).replace(
-        /[&<>"']/g,
-        character => ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#039;'
-        }[character])
-      );
+      var $ = function (id) { return document.getElementById(id); };
+      var currentUnidadId = null;
 
-      function msg(text, type = 'danger') {
-        const alert = $('alert');
-        alert.className = 'alert alert-' + type;
-        alert.textContent = text;
-        alert.classList.remove('hidden');
+      function esc(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character];
+        });
+      }
+
+      function msg(text, type) {
+        var alertBox = $('alert');
+        alertBox.className = 'alert alert-' + (type || 'danger');
+        alertBox.textContent = text;
+        alertBox.classList.remove('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
@@ -257,717 +183,300 @@
       }
 
       function panel(id) {
-        ['login', 'otp', 'app'].forEach(
-          panelId => $(panelId).classList.toggle(
-            'hidden',
-            panelId !== id
-          )
-        );
+        ['login', 'app'].forEach(function (panelId) {
+          $(panelId).classList.toggle('hidden', panelId !== id);
+        });
       }
 
       function busy(button, active, text) {
         if (active) {
           button.dataset.old = button.innerHTML;
           button.disabled = true;
-          button.innerHTML =
-            '<span class="spinner-border spinner-border-sm me-2"></span>' +
-            text;
+          button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + text;
         } else {
           button.disabled = false;
           button.innerHTML = button.dataset.old || text;
         }
       }
 
-      $('loginForm').addEventListener('submit', async event => {
-        event.preventDefault();
-        hideMsg();
-        email = $('email').value.trim();
-        busy($('sendBtn'), true, 'Enviando…');
+      function apiFetch(path, idToken, options) {
+        options = options || {};
+        var headers = { Authorization: 'Bearer ' + idToken };
+        var fetchOptions = { method: options.method || 'GET', headers: headers };
 
-        try {
-          const response = await client.call('solicitarCodigo', {
-            role: 'ADMIN',
-            email
+        if (options.body !== undefined) {
+          headers['Content-Type'] = 'application/json';
+          fetchOptions.body = JSON.stringify(options.body);
+        }
+
+        return fetch(API_BASE + path, fetchOptions).then(function (response) {
+          if (response.status === 204) return {};
+
+          return response.json().then(function (body) {
+            if (!response.ok) {
+              throw new Error((body.error && body.error.message) || 'Error ' + response.status);
+            }
+            return body;
           });
-          $('otpText').textContent = response.message;
-          panel('otp');
-        } catch (error) {
-          msg(error.message);
-        } finally {
-          busy($('sendBtn'), false, 'Enviar código');
-        }
-      });
-
-      $('otpForm').addEventListener('submit', async event => {
-        event.preventDefault();
-        busy($('verifyBtn'), true, 'Ingresando…');
-
-        try {
-          const response = await client.call('validarCodigo', {
-            role: 'ADMIN',
-            email,
-            code: $('code').value
-          });
-          token = response.token;
-          sessionStorage.setItem('bvAdminToken', token);
-          await loadDashboard();
-          panel('app');
-        } catch (error) {
-          msg(error.message);
-        } finally {
-          busy($('verifyBtn'), false, 'Ingresar');
-        }
-      });
-
-      $('logout').addEventListener('click', async () => {
-        try {
-          await client.call('cerrarSesion', { token });
-        } catch (error) {
-          // La sesión local se limpia de todas formas.
-        }
-
-        token = '';
-        currentProfile = null;
-        sessionStorage.removeItem('bvAdminToken');
-        panel('login');
-      });
-
-      async function loadDashboard() {
-        const dashboard = await client.call('dashboardAdmin', { token });
-        $('userText').textContent = dashboard.usuario.email;
-
-        const metrics = dashboard.metricas;
-        const cards = [
-          ['Unidades', metrics.unidades, 'bi-buildings'],
-          ['Personas', metrics.personas, 'bi-people'],
-          ['Vehículos', metrics.vehiculos, 'bi-car-front'],
-          ['Bien 9999', metrics.vehiculosSinIdentificar, 'bi-question-circle'],
-          ['Parqueaderos', metrics.parqueaderos, 'bi-p-square'],
-          ['Solicitudes', metrics.solicitudesPendientes, 'bi-inbox'],
-          ['Conflictos', metrics.conflictosAbiertos, 'bi-exclamation-triangle']
-        ];
-
-        $('metrics').innerHTML = cards.map(item =>
-          '<div class="col-6 col-lg-3 col-xl">' +
-          '<div class="surface metric p-3 h-100">' +
-          '<i class="bi ' + item[2] + '"></i>' +
-          '<div class="fs-4 fw-bold">' + esc(item[1]) + '</div>' +
-          '<div class="small-note">' + esc(item[0]) + '</div>' +
-          '</div></div>'
-        ).join('');
-
-        await Promise.all([
-          loadRequests(),
-          loadUnidentifiedVehicles()
-        ]);
+        });
       }
 
-      $('searchForm').addEventListener('submit', async event => {
+      function withIdToken(fn) {
+        return firebase.auth().currentUser.getIdToken().then(fn);
+      }
+
+      $('loginForm').addEventListener('submit', function (event) {
         event.preventDefault();
         hideMsg();
 
-        try {
-          const response = await client.call('buscarAdmin', {
-            token,
-            query: $('query').value
-          });
+        var button = $('loginBtn');
+        busy(button, true, 'Ingresando…');
 
-          $('searchResults').innerHTML = response.resultados.length
-            ? response.resultados.map(result =>
-                '<button type="button" class="btn btn-outline-success w-100 text-start mb-2 unit-result" data-unit="' +
-                esc(result.unidadId) + '">' +
-                '<strong>' + esc(result.unidadId) + '</strong>' +
-                '<div class="small-note">' +
-                esc((result.coincidencias || []).map(
-                  match => match.tipo + ': ' + match.detalle
-                ).join(' · ')) +
-                '</div></button>'
-              ).join('')
-            : '<p class="text-muted">Sin resultados.</p>';
-        } catch (error) {
-          msg(error.message);
-        }
+        firebase.auth().signInWithEmailAndPassword($('email').value.trim(), $('password').value)
+          .then(function () {
+            panel('app');
+            return loadDashboard();
+          })
+          .catch(function (error) {
+            msg(error.message);
+          })
+          .finally(function () {
+            busy(button, false, 'Ingresar');
+          });
       });
 
-      $('searchResults').addEventListener('click', event => {
-        const button = event.target.closest('.unit-result');
-        if (button) {
-          loadProfile(button.dataset.unit);
-        }
+      $('logout').addEventListener('click', function () {
+        firebase.auth().signOut().then(function () {
+          panel('login');
+        });
       });
 
-      async function loadProfile(unitId) {
-        $('profile').innerHTML = '<p>Cargando…</p>';
-
-        try {
-          const profile = await client.call('perfilAdmin', {
-            token,
-            unidadId: unitId
+      function loadDashboard() {
+        return withIdToken(function (idToken) {
+          return apiFetch('/api/v1/usuarios/me', idToken).then(function (me) {
+            $('userText').textContent = me.data.email;
+            return apiFetch('/api/v1/dashboard/metricas', idToken);
           });
+        }).then(function (body) {
+          var metricas = body.data;
+          var cards = [
+            ['Unidades', metricas.unidades, 'bi-buildings'],
+            ['Personas', metricas.personas, 'bi-people'],
+            ['Vehículos', metricas.vehiculos, 'bi-car-front'],
+            ['Parqueaderos', metricas.parqueaderos, 'bi-p-square']
+          ];
 
-          if (!profile || !profile.unidad) {
-            throw new Error(
-              'El servicio no devolvió el perfil de la unidad. ' +
-              'Verifica la versión publicada de Apps Script.'
-            );
-          }
-
-          currentProfile = profile;
-          renderProfile(profile);
-        } catch (error) {
+          $('metrics').innerHTML = cards.map(function (item) {
+            return '<div class="col-6 col-lg-3 col-xl">' +
+              '<div class="surface metric p-3 h-100">' +
+              '<i class="bi ' + item[2] + '"></i>' +
+              '<div class="fs-4 fw-bold">' + esc(item[1]) + '</div>' +
+              '<div class="small-note">' + esc(item[0]) + '</div>' +
+              '</div></div>';
+          }).join('');
+        }).catch(function (error) {
           msg(error.message);
-        }
+        });
       }
 
-      function renderProfile(profile) {
-        const unit = profile.unidad || {};
-        const editable = profile.camposUnidadEditables || {};
-        const protectedData = profile.camposUnidadProtegidos || {};
-        const account = profile.estadoCuenta || {};
+      function renderCoincidencias(coincidencias) {
+        return coincidencias.map(function (c) {
+          return esc(c.tipo) + ': ' + esc(c.detalle);
+        }).join(' · ');
+      }
+
+      $('searchForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        hideMsg();
+
+        var termino = $('query').value.trim();
+        var results = $('searchResults');
+        if (!termino) return;
+
+        results.textContent = 'Buscando…';
+
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/unidades/buscar?q=' + encodeURIComponent(termino), idToken);
+        }).then(function (body) {
+          var resultados = (body.data && body.data.resultados) || [];
+
+          results.innerHTML = resultados.length
+            ? resultados.map(function (item) {
+                return '<button type="button" class="btn btn-outline-success w-100 text-start mb-2 unit-result" data-unit-id="' +
+                  esc(item.unidad.id) + '">' +
+                  '<strong>' + esc(item.unidad.codigoOficial) + '</strong>' +
+                  '<div class="small-note">' + renderCoincidencias(item.coincidencias) + '</div>' +
+                  '</button>';
+              }).join('')
+            : '<p class="text-muted mb-0">Sin resultados.</p>';
+        }).catch(function (error) {
+          results.innerHTML = '<p class="text-danger mb-0">Error: ' + esc(error.message) + '</p>';
+        });
+      });
+
+      $('searchResults').addEventListener('click', function (event) {
+        var button = event.target.closest('.unit-result');
+        if (button) loadProfile(button.dataset.unitId);
+      });
+
+      function loadProfile(unidadId) {
+        currentUnidadId = unidadId;
+        var box = $('profile');
+        box.innerHTML = '<p>Cargando…</p>';
+
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/unidades/' + unidadId + '/perfil', idToken);
+        }).then(function (body) {
+          renderProfile(body.data);
+        }).catch(function (error) {
+          box.innerHTML = '<p class="text-danger mb-0">Error: ' + esc(error.message) + '</p>';
+        });
+      }
+
+      function renderProfile(perfil) {
+        var propietarios = (perfil.vinculosPersona || []).map(function (v) {
+          return '<li class="mb-1">' + esc(v.persona.nombreCompleto) + ' — ' + esc(v.tipoRelacion) +
+            ' (' + esc(v.persona.tipoDocumento) + ' ' + esc(v.persona.numeroDocumento) + ')' +
+            (v.persona.correo ? ' · ' + esc(v.persona.correo) : '') +
+            (v.activo
+              ? ' <button type="button" class="btn btn-outline-danger btn-sm ms-2 retirar-propietario" data-vinculo-id="' + esc(v.id) + '">Retirar</button>'
+              : ' <span class="badge text-bg-secondary">retirado</span>') +
+            '</li>';
+        }).join('') || '<li class="text-muted">Sin registros.</li>';
+
+        var vehiculos = (perfil.vinculosVehiculo || []).map(function (v) {
+          return '<li>' + esc(v.vehiculo.placa) + ' — ' + esc(v.vehiculo.tipoVehiculo || '') +
+            ' (' + esc(v.tipoVinculo) + ', ' + esc(v.estadoVinculo) + ')</li>';
+        }).join('') || '<li class="text-muted">Sin registros.</li>';
+
+        var parqueaderos = (perfil.parqueaderos || []).map(function (p) {
+          return '<li>' + esc(p.codigo) + ' — ' + esc(p.tipoParqueadero || '') + '</li>';
+        }).join('') || '<li class="text-muted">Sin registros.</li>';
+
+        var estadoCuenta = perfil.estadoCuenta
+          ? esc(perfil.estadoCuenta.estadoCuenta || '') + ' · Saldo: ' + esc(perfil.estadoCuenta.saldoActual || '')
+          : 'Sin información.';
 
         $('profile').innerHTML =
-          '<form id="unitAdminForm">' +
           '<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">' +
-          '<div><h4 class="mb-1">' + esc(unit.UnidadID) + '</h4>' +
-          '<div class="small-note">Actualización directa y auditada por administración.</div></div>' +
-          '<span class="badge text-bg-success">ADMIN</span>' +
+          '<h4 class="mb-0">' + esc(perfil.codigoOficial) + '</h4>' +
+          '<span class="badge text-bg-success">' + esc(perfil.estadoUnidad) + '</span>' +
           '</div>' +
 
-          '<div class="alert alert-light border">' +
-          '<strong>Campos protegidos:</strong> torre, apartamento, área, coeficiente, presupuesto, parqueaderos y cartera solo se muestran para consulta.' +
-          '</div>' +
-
-          '<h5 class="section-title mt-4">Información del apartamento</h5>' +
-          '<div class="row g-3">' +
-          protectedField('Unidad', protectedData.unidadId) +
-          protectedField('Código oficial', protectedData.codigoOficial) +
-          protectedField('Área privada', protectedData.areaPrivadaConstruidaM2, ' m²') +
-          protectedField('Coeficiente', protectedData.coeficienteCopropiedad) +
-          protectedField('Presupuesto', protectedData.valorPresupuesto2026) +
-
-          '<div class="col-md-4"><label class="form-label">Estado de la unidad</label>' +
-          '<select id="adminUnitState" class="form-select">' +
-          option('ACTIVA', editable.estadoUnidad) +
-          option('PENDIENTE_ENTREGA', editable.estadoUnidad) +
-          option('INACTIVA', editable.estadoUnidad) +
-          preserveOption(editable.estadoUnidad, ['ACTIVA', 'PENDIENTE_ENTREGA', 'INACTIVA']) +
+          '<h5 class="section-title">Editar unidad</h5>' +
+          '<form id="editUnidadForm" class="row g-2 align-items-end mb-4">' +
+          '<div class="col-md-5"><label class="form-label small">Estado</label>' +
+          '<select id="editEstadoUnidad" class="form-select form-select-sm">' +
+          ['NO_ENTREGADA', 'ENTREGADA'].map(function (estado) {
+            return '<option value="' + estado + '"' + (estado === perfil.estadoUnidad ? ' selected' : '') + '>' + estado + '</option>';
+          }).join('') +
           '</select></div>' +
+          '<div class="col-md-5"><label class="form-label small">Fecha de entrega</label>' +
+          '<input id="editFechaEntrega" type="date" class="form-control form-control-sm" value="' + esc((perfil.fechaEntrega || '').slice(0, 10)) + '"></div>' +
+          '<div class="col-md-2 d-grid"><button type="submit" class="btn btn-primary btn-sm">Guardar</button></div>' +
+          '</form>' +
 
-          '<div class="col-md-4"><label class="form-label">Fecha de entrega</label>' +
-          '<input id="adminDeliveryDate" type="date" class="form-control" value="' +
-          esc(editable.fechaEntregaApartamento || '') + '"></div>' +
+          '<h5 class="section-title">Propietarios y residentes</h5>' +
+          '<ul>' + propietarios + '</ul>' +
 
-          '<div class="col-md-4"><label class="form-label">Estado de entrega</label>' +
-          '<select id="adminDeliveryState" class="form-select">' +
-          option('ENTREGADO', editable.estadoEntregaApartamento) +
-          option('PENDIENTE', editable.estadoEntregaApartamento) +
-          option('NO_REGISTRADO', editable.estadoEntregaApartamento) +
-          preserveOption(editable.estadoEntregaApartamento, ['ENTREGADO', 'PENDIENTE', 'NO_REGISTRADO']) +
+          '<form id="addPropietarioForm" class="row g-2 align-items-end border-top pt-3 mb-4">' +
+          '<div class="col-md-2"><label class="form-label small">Tipo doc.</label>' +
+          '<input id="addTipoDocumento" class="form-control form-control-sm" value="CC" required></div>' +
+          '<div class="col-md-3"><label class="form-label small">Número doc.</label>' +
+          '<input id="addNumeroDocumento" class="form-control form-control-sm" required></div>' +
+          '<div class="col-md-4"><label class="form-label small">Nombre completo</label>' +
+          '<input id="addNombreCompleto" class="form-control form-control-sm" required></div>' +
+          '<div class="col-md-3"><label class="form-label small">Relación</label>' +
+          '<select id="addTipoRelacion" class="form-select form-select-sm">' +
+          '<option value="PROPIETARIO">PROPIETARIO</option>' +
+          '<option value="RESIDENTE">RESIDENTE</option>' +
           '</select></div>' +
-          '</div>' +
+          '<div class="col-md-4"><label class="form-label small">Correo (opcional)</label>' +
+          '<input id="addCorreo" type="email" class="form-control form-control-sm"></div>' +
+          '<div class="col-md-3"><label class="form-label small">Teléfono (opcional)</label>' +
+          '<input id="addTelefono" class="form-control form-control-sm"></div>' +
+          '<div class="col-md-3 d-grid"><button type="submit" class="btn btn-outline-success btn-sm">Agregar</button></div>' +
+          '</form>' +
 
-          '<div class="d-flex justify-content-between align-items-center mt-4">' +
-          '<div><h5 class="section-title mb-0">Propietarios</h5>' +
-          '<div class="small-note">Los cambios se aplican en Personas y Vinculos_Unidad. Los vínculos retirados quedan históricos.</div></div>' +
-          '<button id="addOwner" type="button" class="btn btn-outline-success btn-sm">' +
-          '<i class="bi bi-person-plus me-1"></i>Agregar propietario</button>' +
-          '</div>' +
-
-          '<div id="ownersEditor" class="mt-3"></div>' +
-
-          '<h5 class="section-title mt-4">Otros residentes y ocupantes</h5>' +
-          list(profile.otrasPersonas, person =>
-            '<strong>' + esc(person.nombreCompleto) + '</strong>' +
-            '<div class="small-note">' +
-            esc(person.rol) + ' · ' +
-            esc(person.tipoDocumento || '') + ' ' +
-            esc(person.numeroDocumento || '') + '<br>' +
-            esc(person.correoPrincipal || '') + ' · ' +
-            esc(person.celularPrincipal || '') +
-            '</div>'
-          ) +
-
-          '<h5 class="section-title mt-4">Vehículos</h5>' +
-          list(profile.vehiculos, vehicle =>
-            '<strong>' + esc(vehicle.placa) + '</strong> · ' +
-            esc(vehicle.tipoVehiculo)
-          ) +
-
-          '<h5 class="section-title mt-4">Parqueaderos</h5>' +
-          list(profile.parqueaderos, parking =>
-            '<strong>' + esc(parking.codigoOficial) + '</strong> · ' +
-            esc(parking.subtipo) + ' · ' +
-            esc(parking.areaPrivadaConstruidaM2) + ' m²'
-          ) +
-
-          '<h5 class="section-title mt-4">Estado de cuenta</h5>' +
-          '<div class="border rounded p-3 protected-field">' +
-          esc(account.EstadoCuenta || 'Sin información') +
-          ' · Saldo: ' + esc(account.SaldoActual || '') +
-          ' · Reservas: ' + esc(account.ElegibleReservas || '') +
-          '</div>' +
-
-          '<div class="border-top mt-4 pt-4">' +
-          '<label class="form-label" for="adminReason">Motivo de la actualización</label>' +
-          '<textarea id="adminReason" class="form-control" rows="3" maxlength="1000" required placeholder="Ej.: escritura de compraventa revisada y datos de contacto confirmados."></textarea>' +
-          '<div class="form-check mt-3">' +
-          '<input id="adminConfirm" class="form-check-input" type="checkbox" required>' +
-          '<label class="form-check-label" for="adminConfirm">' +
-          'Confirmo que revisé los soportes y autorizo la actualización directa de los datos maestros.' +
-          '</label></div>' +
-          '<div class="d-grid d-md-flex justify-content-md-end mt-3">' +
-          '<button id="saveAdminUnit" class="btn btn-primary btn-lg">' +
-          '<i class="bi bi-save me-2"></i>Guardar información del apartamento' +
-          '</button></div>' +
-          '</div>' +
-          '</form>';
-
-        const owners = profile.propietarios || [];
-        owners.forEach(owner => addOwnerRow(owner));
-
-        if (!owners.length) {
-          addOwnerRow({});
-        }
-
-        $('addOwner').addEventListener('click', () => addOwnerRow({}));
-        $('unitAdminForm').addEventListener('submit', saveAdminUnit);
+          '<h5 class="section-title">Vehículos</h5><ul>' + vehiculos + '</ul>' +
+          '<h5 class="section-title">Parqueaderos</h5><ul>' + parqueaderos + '</ul>' +
+          '<h5 class="section-title">Estado de cuenta</h5><p>' + estadoCuenta + '</p>';
       }
 
-      function protectedField(label, value, suffix = '') {
-        return (
-          '<div class="col-md-4"><label class="form-label">' +
-          esc(label) +
-          '</label><div class="form-control protected-field">' +
-          esc(value == null || value === '' ? 'Sin información' : value) +
-          esc(suffix) +
-          '</div></div>'
-        );
-      }
+      $('profile').addEventListener('submit', function (event) {
+        if (event.target.id === 'editUnidadForm') {
+          event.preventDefault();
+          hideMsg();
 
-      function option(value, current) {
-        return '<option value="' + esc(value) + '"' +
-          (String(value) === String(current) ? ' selected' : '') +
-          '>' + esc(value.replace(/_/g, ' ')) + '</option>';
-      }
+          var payload = {
+            estadoUnidad: $('editEstadoUnidad').value,
+            fechaEntrega: $('editFechaEntrega').value || undefined
+          };
 
-      function preserveOption(current, known) {
-        if (!current || known.indexOf(current) !== -1) {
-          return '';
-        }
-
-        return '<option value="' + esc(current) + '" selected>' +
-          esc(current) + '</option>';
-      }
-
-      function addOwnerRow(owner = {}) {
-        const editor = $('ownersEditor');
-        const card = document.createElement('div');
-
-        card.className = 'owner-card mb-3';
-        card.dataset.personaId = owner.personaId || '';
-        card.dataset.vinculoId = owner.vinculoId || '';
-
-        card.innerHTML =
-          '<div class="d-flex justify-content-between align-items-start gap-2 mb-3">' +
-          '<div><strong class="owner-title">' +
-          esc(owner.nombreCompleto || 'Nuevo propietario') +
-          '</strong><div class="small-note">' +
-          esc(owner.personaId || 'Se creará o reutilizará por documento') +
-          '</div></div>' +
-          '<div class="form-check form-switch">' +
-          '<input class="form-check-input owner-active" type="checkbox"' +
-          (owner.personaId ? ' checked' : ' checked') + '>' +
-          '<label class="form-check-label">Activo</label>' +
-          '</div></div>' +
-
-          '<div class="row g-3">' +
-          '<div class="col-md-4"><label class="form-label">Tipo de persona</label>' +
-          '<select class="form-select owner-person-type">' +
-          option('PERSONA_NATURAL', owner.tipoPersona || 'PERSONA_NATURAL') +
-          option('PERSONA_JURIDICA', owner.tipoPersona || '') +
-          '</select></div>' +
-
-          '<div class="col-md-4"><label class="form-label">Tipo de documento</label>' +
-          '<select class="form-select owner-document-type">' +
-          option('CEDULA', owner.tipoDocumento || 'CEDULA') +
-          option('CEDULA_EXTRANJERIA', owner.tipoDocumento || '') +
-          option('PASAPORTE', owner.tipoDocumento || '') +
-          option('NIT', owner.tipoDocumento || '') +
-          option('OTRO', owner.tipoDocumento || '') +
-          '</select></div>' +
-
-          '<div class="col-md-4"><label class="form-label">Número de documento</label>' +
-          '<input class="form-control owner-document" maxlength="30" value="' +
-          esc(owner.numeroDocumento || '') + '" required></div>' +
-
-          '<div class="col-12"><label class="form-label">Nombre completo o razón social</label>' +
-          '<input class="form-control owner-name text-uppercase" maxlength="180" value="' +
-          esc(owner.nombreCompleto || '') + '" required></div>' +
-
-          '<div class="col-md-6"><label class="form-label">Correo principal</label>' +
-          '<input type="email" class="form-control owner-email" value="' +
-          esc(owner.correoPrincipal || '') + '"></div>' +
-
-          '<div class="col-md-6"><label class="form-label">Correos alternos</label>' +
-          '<input class="form-control owner-alt-emails" value="' +
-          esc(owner.correosAlternos || '') + '" placeholder="Separados por coma"></div>' +
-
-          '<div class="col-md-6"><label class="form-label">Celular principal</label>' +
-          '<input class="form-control owner-phone" maxlength="30" value="' +
-          esc(owner.celularPrincipal || '') + '"></div>' +
-
-          '<div class="col-md-6"><label class="form-label">Teléfonos alternos</label>' +
-          '<input class="form-control owner-alt-phones" value="' +
-          esc(owner.telefonosAlternos || '') + '" placeholder="Separados por coma"></div>' +
-
-          '<div class="col-md-4"><label class="form-label">Rol</label>' +
-          '<select class="form-select owner-role">' +
-          option('PROPIETARIO', owner.rol || 'PROPIETARIO') +
-          option('COPROPIETARIO', owner.rol || '') +
-          '</select></div>' +
-
-          '<div class="col-md-4 d-flex align-items-end">' +
-          '<div class="form-check mb-2"><input class="form-check-input owner-primary" type="radio" name="primaryOwner"' +
-          (String(owner.esContactoPrincipal).toUpperCase() === 'SI' ? ' checked' : '') +
-          '><label class="form-check-label">Contacto principal</label></div></div>' +
-
-          '<div class="col-md-4 d-flex align-items-end">' +
-          '<div class="form-check mb-2"><input class="form-check-input owner-notifications" type="checkbox"' +
-          (String(owner.recibeNotificaciones).toUpperCase() !== 'NO' ? ' checked' : '') +
-          '><label class="form-check-label">Recibe notificaciones</label></div></div>' +
-          '</div>' +
-
-          '<div class="d-flex justify-content-end mt-3">' +
-          '<button type="button" class="btn btn-outline-danger btn-sm retire-owner">' +
-          '<i class="bi bi-person-x me-1"></i>Retirar vínculo de propietario' +
-          '</button></div>';
-
-        editor.appendChild(card);
-
-        card.querySelector('.owner-name').addEventListener('input', event => {
-          card.querySelector('.owner-title').textContent =
-            event.target.value || 'Nuevo propietario';
-        });
-
-        card.querySelector('.owner-active').addEventListener('change', () => {
-          toggleOwnerCard(card);
-        });
-
-        card.querySelector('.retire-owner').addEventListener('click', () => {
-          card.querySelector('.owner-active').checked = false;
-          toggleOwnerCard(card);
-        });
-
-        card.querySelector('.owner-person-type').addEventListener('change', event => {
-          if (event.target.value === 'PERSONA_JURIDICA') {
-            card.querySelector('.owner-document-type').value = 'NIT';
-          }
-        });
-
-        toggleOwnerCard(card);
-      }
-
-      function toggleOwnerCard(card) {
-        const active = card.querySelector('.owner-active').checked;
-        card.classList.toggle('retired', !active);
-
-        card.querySelectorAll(
-          'input:not(.owner-active), select, button.retire-owner'
-        ).forEach(element => {
-          element.disabled = !active;
-        });
-
-        if (!active) {
-          card.querySelector('.owner-primary').checked = false;
-        }
-      }
-
-      function collectOwners() {
-        return Array.from(
-          document.querySelectorAll('.owner-card')
-        ).map(card => ({
-          personaId: card.dataset.personaId || '',
-          vinculoId: card.dataset.vinculoId || '',
-          activo: card.querySelector('.owner-active').checked,
-          tipoPersona: card.querySelector('.owner-person-type').value,
-          tipoDocumento: card.querySelector('.owner-document-type').value,
-          numeroDocumento: card.querySelector('.owner-document').value,
-          nombreCompleto: card.querySelector('.owner-name').value,
-          correoPrincipal: card.querySelector('.owner-email').value,
-          correosAlternos: card.querySelector('.owner-alt-emails').value,
-          celularPrincipal: card.querySelector('.owner-phone').value,
-          telefonosAlternos: card.querySelector('.owner-alt-phones').value,
-          rol: card.querySelector('.owner-role').value,
-          esContactoPrincipal: card.querySelector('.owner-primary').checked,
-          recibeNotificaciones: card.querySelector('.owner-notifications').checked
-        }));
-      }
-
-      async function saveAdminUnit(event) {
-        event.preventDefault();
-        hideMsg();
-
-        if (!currentProfile || !currentProfile.unidad) {
-          msg('No hay una unidad seleccionada.');
-          return;
-        }
-
-        if (!$('adminConfirm').checked) {
-          msg('Debes confirmar la actualización.', 'warning');
-          return;
-        }
-
-        const owners = collectOwners();
-
-        if (!owners.some(owner => owner.activo)) {
-          msg('El apartamento debe conservar al menos un propietario activo.', 'warning');
-          return;
-        }
-
-        const button = $('saveAdminUnit');
-        busy(button, true, 'Guardando…');
-
-        try {
-          const response = await client.call(
-            'actualizarApartamentoAdmin',
-            {
-              token,
-              unidadId: currentProfile.unidad.UnidadID,
-              unidad: {
-                estadoUnidad: $('adminUnitState').value,
-                fechaEntregaApartamento: $('adminDeliveryDate').value,
-                estadoEntregaApartamento: $('adminDeliveryState').value
-              },
-              propietarios: owners,
-              motivo: $('adminReason').value,
-              confirmarCambios: true
-            }
-          );
-
-          currentProfile = response.perfil;
-          renderProfile(currentProfile);
-          msg(response.message, 'success');
-          await loadDashboard();
-        } catch (error) {
-          msg(error.message);
-        } finally {
-          if (document.body.contains(button)) {
-            busy(button, false, 'Guardar información del apartamento');
-          }
-        }
-      }
-
-      function list(items, formatter) {
-        return items && items.length
-          ? items.map(item =>
-              '<div class="border rounded p-2 mb-2">' +
-              formatter(item) +
-              '</div>'
-            ).join('')
-          : '<p class="small-note">Sin registros.</p>';
-      }
-
-      async function loadRequests() {
-        try {
-          const response = await client.call('listarSolicitudes', {
-            token,
-            estado: 'PENDIENTE'
+          withIdToken(function (idToken) {
+            return apiFetch('/api/v1/unidades/' + currentUnidadId, idToken, { method: 'PATCH', body: payload });
+          }).then(function () {
+            msg('Unidad actualizada.', 'success');
+            loadProfile(currentUnidadId);
+            loadDashboard();
+          }).catch(function (error) {
+            msg(error.message);
           });
-
-          $('requests').innerHTML = response.solicitudes.length
-            ? response.solicitudes.map(renderRequest).join('')
-            : '<p class="text-muted">No hay solicitudes pendientes.</p>';
-        } catch (error) {
-          msg(error.message);
-        }
-      }
-
-      function renderRequest(request) {
-        return (
-          '<div class="request-card mb-3">' +
-          '<div class="d-flex justify-content-between">' +
-          '<strong>' + esc(request.unidadId) + '</strong>' +
-          '<span class="badge text-bg-warning">' + esc(request.estado) + '</span>' +
-          '</div>' +
-          '<div class="small-note">' +
-          esc(request.solicitudId) + ' · ' +
-          esc(request.fechaSolicitud) + '<br>' +
-          esc(request.emailAutenticado) + ' · ' +
-          esc(request.secciones) +
-          '</div>' +
-          '<details class="mt-2"><summary>Ver cambios</summary>' +
-          '<div class="small-note mt-2">Anterior</div>' +
-          '<div class="json-box">' +
-          esc(JSON.stringify(request.datosAnteriores, null, 2)) +
-          '</div><div class="small-note mt-2">Propuesto</div>' +
-          '<div class="json-box">' +
-          esc(JSON.stringify(request.datosPropuestos, null, 2)) +
-          '</div></details>' +
-          '<textarea class="form-control mt-2 decision-note" rows="2" placeholder="Observaciones de la decisión"></textarea>' +
-          '<div class="d-flex gap-2 mt-2">' +
-          '<button class="btn btn-success btn-sm decision" data-id="' +
-          esc(request.solicitudId) +
-          '" data-decision="APROBADA">Aprobar</button>' +
-          '<button class="btn btn-outline-danger btn-sm decision" data-id="' +
-          esc(request.solicitudId) +
-          '" data-decision="RECHAZADA">Rechazar</button>' +
-          '<button class="btn btn-outline-secondary btn-sm open-unit" data-unit="' +
-          esc(request.unidadId) +
-          '">Ver unidad</button></div></div>'
-        );
-      }
-
-      $('requests').addEventListener('click', async event => {
-        const open = event.target.closest('.open-unit');
-
-        if (open) {
-          loadProfile(open.dataset.unit);
-          return;
         }
 
-        const button = event.target.closest('.decision');
+        if (event.target.id === 'addPropietarioForm') {
+          event.preventDefault();
+          hideMsg();
+
+          var payload = {
+            tipoDocumento: $('addTipoDocumento').value.trim(),
+            numeroDocumento: $('addNumeroDocumento').value.trim(),
+            nombreCompleto: $('addNombreCompleto').value.trim(),
+            tipoRelacion: $('addTipoRelacion').value,
+            correo: $('addCorreo').value.trim() || undefined,
+            telefono: $('addTelefono').value.trim() || undefined
+          };
+
+          withIdToken(function (idToken) {
+            return apiFetch('/api/v1/unidades/' + currentUnidadId + '/propietarios', idToken, { method: 'POST', body: payload });
+          }).then(function () {
+            msg('Propietario/residente agregado.', 'success');
+            loadProfile(currentUnidadId);
+            loadDashboard();
+          }).catch(function (error) {
+            msg(error.message);
+          });
+        }
+      });
+
+      $('profile').addEventListener('click', function (event) {
+        var button = event.target.closest('.retirar-propietario');
         if (!button) return;
 
-        const card = button.closest('.request-card');
+        if (!confirm('¿Retirar este vínculo?')) return;
 
-        if (!confirm('¿Confirmas esta decisión?')) {
-          return;
-        }
-
-        button.disabled = true;
-
-        try {
-          await client.call('resolverSolicitud', {
-            token,
-            solicitudId: button.dataset.id,
-            decision: button.dataset.decision,
-            observaciones:
-              card.querySelector('.decision-note').value
-          });
-
-          msg(
-            'Solicitud ' +
-            button.dataset.decision.toLowerCase() +
-            '.',
-            'success'
+        withIdToken(function (idToken) {
+          return apiFetch(
+            '/api/v1/unidades/' + currentUnidadId + '/propietarios/' + button.dataset.vinculoId,
+            idToken,
+            { method: 'DELETE' }
           );
-          await loadDashboard();
-        } catch (error) {
+        }).then(function () {
+          msg('Vínculo retirado.', 'success');
+          loadProfile(currentUnidadId);
+        }).catch(function (error) {
           msg(error.message);
-        } finally {
-          button.disabled = false;
-        }
+        });
       });
 
-      $('refreshRequests').addEventListener('click', loadRequests);
-
-      async function loadUnidentifiedVehicles() {
-        try {
-          const response = await client.call(
-            'listarVehiculosSinIdentificar',
-            { token }
-          );
-          const items = response.vehiculos || [];
-
-          $('unidentifiedVehicles').innerHTML = items.length
-            ? items.map(renderUnidentifiedVehicle).join('')
-            : '<p class="text-muted">No hay placas pendientes de identificación.</p>';
-        } catch (error) {
-          msg(error.message);
-        }
-      }
-
-      function renderUnidentifiedVehicle(vehicle) {
-        return (
-          '<div class="request-card mb-3 unidentified-card" data-plate="' +
-          esc(vehicle.placa) +
-          '"><div class="d-flex justify-content-between">' +
-          '<strong>' + esc(vehicle.placa) + '</strong>' +
-          '<span class="badge text-bg-secondary">9999</span></div>' +
-          '<div class="small-note">' +
-          esc(vehicle.tipoVehiculo || '') + ' · ' +
-          esc(vehicle.fuentesRespaldo || vehicle.fuente || '') + '<br>' +
-          esc(vehicle.estadoRevision || 'PENDIENTE_IDENTIFICACION') +
-          '</div><div class="row g-2 mt-2">' +
-          '<div class="col-md-7"><input class="form-control destination-unit" placeholder="Apartamento destino, ej. 1029-T4"></div>' +
-          '<div class="col-md-5"><select class="form-select destination-relation">' +
-          '<option value="PROPIO">Propio/residente</option>' +
-          '<option value="VISITANTE_AUTORIZADO">Visitante autorizado</option>' +
-          '</select></div>' +
-          '<div class="col-12"><input class="form-control admin-vehicle-note" placeholder="Motivo u observación"></div>' +
-          '</div><div class="d-flex gap-2 mt-2">' +
-          '<button class="btn btn-success btn-sm reassign-vehicle">Reasignar</button>' +
-          '<button class="btn btn-outline-danger btn-sm delete-vehicle">Eliminar registro</button>' +
-          '</div></div>'
-        );
-      }
-
-      $('unidentifiedVehicles').addEventListener('click', async event => {
-        const card = event.target.closest('.unidentified-card');
-        if (!card) return;
-
-        const reassign = event.target.closest('.reassign-vehicle');
-        const remove = event.target.closest('.delete-vehicle');
-        if (!reassign && !remove) return;
-
-        const action = reassign ? 'REASIGNAR' : 'ELIMINAR';
-
-        if (!confirm(
-          action === 'ELIMINAR'
-            ? '¿Eliminar el registro operativo? La evidencia histórica se conservará.'
-            : '¿Reasignar esta placa al apartamento indicado?'
-        )) {
-          return;
-        }
-
-        const button = reassign || remove;
-        button.disabled = true;
-
-        try {
-          await client.call('gestionarVehiculoSinIdentificar', {
-            token,
-            placa: card.dataset.plate,
-            accion: action,
-            unidadDestinoId:
-              card.querySelector('.destination-unit').value,
-            reconocimiento:
-              card.querySelector('.destination-relation').value,
-            motivo:
-              card.querySelector('.admin-vehicle-note').value
-          });
-
-          msg(
-            action === 'ELIMINAR'
-              ? 'Registro eliminado del bien 9999.'
-              : 'Placa reasignada.',
-            'success'
-          );
-          await loadDashboard();
-        } catch (error) {
-          msg(error.message);
-        } finally {
-          button.disabled = false;
+      firebase.auth().onAuthStateChanged(function (user) {
+        if (user) {
+          panel('app');
+          loadDashboard();
+        } else {
+          panel('login');
         }
       });
-
-      $('refreshUnidentified').addEventListener(
-        'click',
-        loadUnidentifiedVehicles
-      );
-
-      const saved =
-        sessionStorage.getItem('bvAdminToken');
-
-      if (saved) {
-        token = saved;
-
-        loadDashboard()
-          .then(() => panel('app'))
-          .catch(() => {
-            sessionStorage.removeItem('bvAdminToken');
-            token = '';
-          });
-      }
     }());
   </script>
 </body>

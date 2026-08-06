@@ -1,0 +1,79 @@
+# Edición administrativa de unidad y gestión de propietarios/residentes,
+# equivalente a "actualizarApartamentoAdmin" de Apps Script.
+
+mutation ActualizarUnidad(
+  $id: UUID!
+  $estadoUnidad: String
+  $fechaEntrega: Date
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la mutación.")
+@transaction {
+  unidad_update(
+    id: $id
+    data: { estadoUnidad: $estadoUnidad, fechaEntrega: $fechaEntrega }
+  )
+}
+
+query BuscarPersonaPorDocumento(
+  $tipoDocumento: String!
+  $numeroDocumento: String!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la consulta.") {
+  personas(
+    where: { tipoDocumento: { eq: $tipoDocumento }, numeroDocumento: { eq: $numeroDocumento } }
+    limit: 1
+  ) {
+    id
+    nombreCompleto
+    correo
+    telefono
+    activo
+  }
+}
+
+mutation CrearPersona(
+  $input: Persona_Data!
+    @allow(
+      fields: """
+        tipoDocumento
+        numeroDocumento
+        nombreCompleto
+        correo
+        telefono
+        activo
+      """
+    )
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la mutación.")
+@transaction {
+  persona_insert(data: $input)
+}
+
+mutation CrearVinculoUnidadPersona(
+  $input: VinculoUnidadPersona_Data!
+    @allow(
+      fields: """
+        personaId
+        unidadId
+        tipoRelacion
+        fechaInicio
+        activo
+      """
+    )
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la mutación.")
+@transaction {
+  vinculo_unidad_persona_insert(data: $input)
+}
+
+mutation RetirarVinculoUnidadPersona(
+  $id: UUID!
+  $fechaFin: Date!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la mutación.")
+@transaction {
+  vinculo_unidad_persona_updateMany(
+    where: { id: { eq: $id } }
+    data: { activo: false, fechaFin: $fechaFin }
+  )
+}

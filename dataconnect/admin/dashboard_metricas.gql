@@ -1,0 +1,18 @@
+# Métricas para el panel administrativo, equivalente a "dashboardAdmin".
+# Data Connect no expone agregación COUNT en esta versión, así que se listan
+# los ids activos (con un límite generoso) y el conteo se hace en la API.
+query DashboardMetricas
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la consulta.") {
+  unidadesActivas: unidades(where: { activo: { eq: true } }, limit: 20000) {
+    id
+  }
+  personasActivas: personas(where: { activo: { eq: true } }, limit: 20000) {
+    id
+  }
+  vehiculosActivos: vehiculos(where: { activo: { eq: true } }, limit: 20000) {
+    id
+  }
+  parqueaderosActivos: parqueaderos(where: { activo: { eq: true } }, limit: 20000) {
+    id
+  }
+}

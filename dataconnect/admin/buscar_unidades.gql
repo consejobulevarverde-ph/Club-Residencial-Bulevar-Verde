@@ -1,0 +1,56 @@
+# Búsqueda administrativa por código de unidad, placa, parqueadero,
+# correo, documento o nombre. Equivalente a "buscarAdmin" de Apps Script.
+query BuscarUnidades(
+  $termino: String!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la consulta.") {
+  porCodigoUnidad: unidades(where: { codigoOficial: { contains: $termino } }) {
+    id
+    codigoOficial
+  }
+  porPlaca: vehiculos(where: { placa: { contains: $termino } }) {
+    placa
+    vinculos: vinculos_vehiculo_unidad_on_vehiculo(where: { esActual: { eq: true } }) {
+      unidad {
+        id
+        codigoOficial
+      }
+    }
+  }
+  porParqueadero: parqueaderos(where: { codigo: { contains: $termino } }) {
+    codigo
+    unidad {
+      id
+      codigoOficial
+    }
+  }
+  porCorreo: personas(where: { correo: { contains: $termino } }) {
+    nombreCompleto
+    correo
+    vinculos: vinculos_unidad_persona_on_persona(where: { activo: { eq: true } }) {
+      unidad {
+        id
+        codigoOficial
+      }
+    }
+  }
+  porDocumento: personas(where: { numeroDocumento: { contains: $termino } }) {
+    nombreCompleto
+    numeroDocumento
+    vinculos: vinculos_unidad_persona_on_persona(where: { activo: { eq: true } }) {
+      unidad {
+        id
+        codigoOficial
+      }
+    }
+  }
+  porNombre: personas(where: { nombreCompleto: { contains: $termino } }) {
+    nombreCompleto
+    vinculos: vinculos_unidad_persona_on_persona(where: { activo: { eq: true } }) {
+      unidad {
+        id
+        codigoOficial
+      }
+    }
+  }
+}
