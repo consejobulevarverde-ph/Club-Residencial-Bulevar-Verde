@@ -1,0 +1,257 @@
+# Operaciones de servicio (sin impersonación de Firebase) para el portal de
+# autoservicio de residentes ("Mis datos personales"). La autenticación y
+# autorización de estas operaciones las hace bulevar-verde-api con su propio
+# token de sesión firmado, no Firebase Auth ni los niveles @auth de
+# Data Connect — por eso todas quedan en NO_ACCESS y se invocan con
+# executeAdminQuery/executeAdminMutation.
+
+query ObtenerUnidadPorApartamentoAdmin(
+  $apartamento: String!
+)
+@auth(level: NO_ACCESS) {
+  unidades(where: { apartamento: { eq: $apartamento } }, limit: 5) {
+    id
+    torre
+    apartamento
+    codigoOficial
+    areaPrivada
+    coeficiente
+    presupuestoAnual
+    estadoUnidad
+    fechaEntrega
+  }
+}
+
+query ObtenerPerfilUnidadAdmin(
+  $id: UUID!
+)
+@auth(level: NO_ACCESS) {
+  unidad(id: $id) {
+    id
+    torre
+    apartamento
+    codigoOficial
+    areaPrivada
+    coeficiente
+    presupuestoAnual
+    fechaEntrega
+    estadoUnidad
+    activo
+    vinculosPersona: vinculos_unidad_persona_on_unidad(where: { activo: { eq: true } }) {
+      id
+      tipoRelacion
+      fechaInicio
+      fechaFin
+      activo
+      persona {
+        id
+        tipoDocumento
+        numeroDocumento
+        nombreCompleto
+        correo
+        telefono
+        activo
+      }
+    }
+    vinculosVehiculo: vinculos_vehiculo_unidad_on_unidad(where: { esActual: { eq: true } }) {
+      id
+      tipoVinculo
+      estadoVinculo
+      vehiculo {
+        id
+        placa
+        tipoVehiculo
+      }
+    }
+    parqueaderos: parqueaderos_on_unidad {
+      codigo
+      tipoParqueadero
+    }
+    estadoCuenta: estado_cuenta_on_unidad {
+      estadoCuenta
+      elegibleReservas
+      fechaCorte
+    }
+    mascotas: mascotas_on_unidad(where: { activo: { eq: true } }) {
+      id
+      nombre
+      especie
+      raza
+    }
+    emergencia: contactos_emergencia_on_unidad(where: { activo: { eq: true } }, limit: 1) {
+      id
+      nombre
+      parentesco
+      telefono
+    }
+  }
+}
+
+mutation ActualizarPersonaContactoAdmin(
+  $id: UUID!
+  $correo: String
+  $telefono: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  persona_update(id: $id, data: { correo: $correo, telefono: $telefono })
+}
+
+mutation CrearPersonaAdmin(
+  $input: Persona_Data!
+    @allow(
+      fields: """
+        tipoDocumento
+        numeroDocumento
+        nombreCompleto
+        correo
+        telefono
+        activo
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  persona_insert(data: $input)
+}
+
+mutation CrearVinculoUnidadPersonaAdmin(
+  $input: VinculoUnidadPersona_Data!
+    @allow(
+      fields: """
+        personaId
+        unidadId
+        tipoRelacion
+        fechaInicio
+        activo
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  vinculo_unidad_persona_insert(data: $input)
+}
+
+mutation RetirarVinculoUnidadPersonaAdmin(
+  $id: UUID!
+  $fechaFin: Date!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  vinculo_unidad_persona_updateMany(
+    where: { id: { eq: $id } }
+    data: { activo: false, fechaFin: $fechaFin }
+  )
+}
+
+query BuscarVehiculoPorPlacaAdmin(
+  $placa: String!
+)
+@auth(level: NO_ACCESS) {
+  vehiculos(where: { placa: { eq: $placa } }, limit: 1) {
+    id
+  }
+}
+
+mutation CrearVehiculoAdmin(
+  $input: Vehiculo_Data!
+    @allow(
+      fields: """
+        placa
+        tipoVehiculo
+        estadoVehiculo
+        activo
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  vehiculo_insert(data: $input)
+}
+
+mutation CrearVinculoVehiculoUnidadAdmin(
+  $input: VinculoVehiculoUnidad_Data!
+    @allow(
+      fields: """
+        vehiculoId
+        unidadId
+        tipoVinculo
+        estadoVinculo
+        esActual
+        vigenteDesde
+        origenRegistro
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  vinculo_vehiculo_unidad_insert(data: $input)
+}
+
+mutation RetirarVinculoVehiculoUnidadAdmin(
+  $id: UUID!
+  $vigenteHasta: Timestamp!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  vinculo_vehiculo_unidad_updateMany(
+    where: { id: { eq: $id } }
+    data: { esActual: false, estadoVinculo: "RETIRADO", vigenteHasta: $vigenteHasta }
+  )
+}
+
+mutation CrearMascotaAdmin(
+  $input: Mascota_Data!
+    @allow(
+      fields: """
+        unidadId
+        nombre
+        especie
+        raza
+        activo
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  mascota_insert(data: $input)
+}
+
+mutation RetirarMascotaAdmin(
+  $id: UUID!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  mascota_updateMany(where: { id: { eq: $id } }, data: { activo: false })
+}
+
+mutation CrearContactoEmergenciaAdmin(
+  $input: ContactoEmergencia_Data!
+    @allow(
+      fields: """
+        unidadId
+        nombre
+        parentesco
+        telefono
+        activo
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  contacto_emergencia_insert(data: $input)
+}
+
+mutation ActualizarContactoEmergenciaAdmin(
+  $id: UUID!
+  $nombre: String
+  $parentesco: String
+  $telefono: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  contacto_emergencia_update(
+    id: $id
+    data: { nombre: $nombre, parentesco: $parentesco, telefono: $telefono }
+  )
+}
