@@ -597,7 +597,7 @@ function leerPlanillaConvivencia_() {
 
 function obtenerIdxPlanillaConvivencia_(rawHeaders) {
   const headers = rawHeaders.map(function (h) {
-    return normalizeHeader_(h);
+    return normalizeHeaderConvivencia_(h);
   });
 
   const colMap = {};
@@ -606,22 +606,22 @@ function obtenerIdxPlanillaConvivencia_(rawHeaders) {
   });
 
   return {
-    id: findColIdx_(colMap, ['id', 'caseid']),
-    fecha: findColIdx_(colMap, ['fecha', 'fecharegistro']),
-    apto: findColIdx_(colMap, ['apto', 'apartamento', 'apt']),
-    motivo: findColIdx_(colMap, ['motivo']),
-    descripcion: findColIdx_(colMap, ['descripcion']),
-    razonNotificacion: findColIdx_(colMap, ['razonnotificacion', 'razon']),
-    severidad: findColIdx_(colMap, ['severidad']),
-    cuotasEquivalentes: findColIdx_(colMap, ['cuotasequivalentes', 'cuotas']),
-    evidencias: findColIdx_(colMap, ['evidencias', 'fotos']),
-    notificadorAdmin: findColIdx_(colMap, ['notificadoradmin', 'notificador']),
-    estado: findColIdx_(colMap, ['estado']),
-    descargosResidente: findColIdx_(colMap, ['descargosresidente', 'descargos']),
-    evidenciasDescargos: findColIdx_(colMap, ['evidenciasdescargos', 'evidenciadescargos']),
-    fechaDescargos: findColIdx_(colMap, ['fechadescargos']),
-    resolucion: findColIdx_(colMap, ['resolucion']),
-    notasAdmin: findColIdx_(colMap, ['notasadmin', 'notas'])
+    id: findColIdxConvivencia_(colMap, ['id', 'caseid']),
+    fecha: findColIdxConvivencia_(colMap, ['fecha', 'fecharegistro']),
+    apto: findColIdxConvivencia_(colMap, ['apto', 'apartamento', 'apt']),
+    motivo: findColIdxConvivencia_(colMap, ['motivo']),
+    descripcion: findColIdxConvivencia_(colMap, ['descripcion', 'descripciondeloshechos', 'hechos']),
+    razonNotificacion: findColIdxConvivencia_(colMap, ['razonnotificacion', 'razondelanotificacion', 'razon', 'motivonotificacion']),
+    severidad: findColIdxConvivencia_(colMap, ['severidad']),
+    cuotasEquivalentes: findColIdxConvivencia_(colMap, ['cuotasequivalentes', 'cuotas']),
+    evidencias: findColIdxConvivencia_(colMap, ['evidencias', 'fotos']),
+    notificadorAdmin: findColIdxConvivencia_(colMap, ['notificadoradmin', 'notificador']),
+    estado: findColIdxConvivencia_(colMap, ['estado']),
+    descargosResidente: findColIdxConvivencia_(colMap, ['descargosresidente', 'descargos']),
+    evidenciasDescargos: findColIdxConvivencia_(colMap, ['evidenciasdescargos', 'evidenciadescargos']),
+    fechaDescargos: findColIdxConvivencia_(colMap, ['fechadescargos']),
+    resolucion: findColIdxConvivencia_(colMap, ['resolucion']),
+    notasAdmin: findColIdxConvivencia_(colMap, ['notasadmin', 'notas'])
   };
 }
 
@@ -637,7 +637,7 @@ function construirRegistrosConvivencia_(contexto) {
     return {
       sheetRow: sheetRow,
       id: IDX.id !== -1 ? safeTrim_(row[IDX.id]) : '',
-      fechaRegistro: IDX.fecha !== -1 ? formatFecha_(row[IDX.fecha]) : '',
+      fechaRegistro: IDX.fecha !== -1 ? formatFechaConvivencia_(row[IDX.fecha]) : '',
       apto: IDX.apto !== -1 ? safeTrim_(row[IDX.apto]) : '',
       aptoNorm: IDX.apto !== -1 ? normalizeApto_(row[IDX.apto]) : '',
       motivo: IDX.motivo !== -1 ? safeTrim_(row[IDX.motivo]) : '',
@@ -673,8 +673,8 @@ function crearCasoConvivencia(params) {
   const evidenciasArray = params.evidencias || [];
   const notificador = safeTrim_(params.notificador);
 
-  if (!apto || !motivo || !descripcion || !severidad) {
-    throw new Error('Apto, motivo, descripción y severidad son obligatorios.');
+  if (!apto || !motivo || !descripcion || !razonNotificacion || !severidad) {
+    throw new Error('Apto, motivo, descripción de los hechos, razón de la notificación y severidad son obligatorios.');
   }
 
   const severidadConfig = obtenerConfigSeveridad_(severidad);
@@ -692,6 +692,7 @@ function crearCasoConvivencia(params) {
 
     const contexto = leerPlanillaConvivencia_();
     const IDX = contexto.IDX;
+    validarColumnasPlanillaConvivencia_(IDX);
 
     const filaData = new Array(Math.max(IDX.notasAdmin + 1, 17)).fill('');
 
@@ -717,6 +718,8 @@ function crearCasoConvivencia(params) {
       mensaje: 'Caso creado exitosamente.',
       apto: apto,
       motivo: motivo,
+      descripcion: descripcion,
+      razonNotificacion: razonNotificacion,
       severidad: severidad,
       cuotasEquivalentes: severidadConfig.cuotas
     };
@@ -916,18 +919,19 @@ function normalizeApto_(value) {
     .toUpperCase();
 }
 
-function normalizeHeader_(value) {
+function normalizeHeaderConvivencia_(value) {
   return safeTrim_(value)
     .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/[^\w]/g, '');
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
 }
 
-function findColIdx_(colMap, searchTerms) {
+function findColIdxConvivencia_(colMap, searchTerms) {
   if (!colMap || !searchTerms || searchTerms.length === 0) return -1;
 
   for (let i = 0; i < searchTerms.length; i++) {
-    const term = normalizeHeader_(searchTerms[i]);
+    const term = normalizeHeaderConvivencia_(searchTerms[i]);
     if (colMap[term] !== undefined) {
       return colMap[term];
     }
@@ -936,7 +940,38 @@ function findColIdx_(colMap, searchTerms) {
   return -1;
 }
 
-function formatFecha_(value) {
+function validarColumnasPlanillaConvivencia_(IDX) {
+  if (!IDX) {
+    throw new Error('No fue posible leer los encabezados de PLANILLA_CONVIVENCIA.');
+  }
+
+  const requeridas = [
+    ['ID', 'id'],
+    ['Fecha', 'fecha'],
+    ['Apartamento', 'apto'],
+    ['Motivo', 'motivo'],
+    ['Descripción', 'descripcion'],
+    ['Razón de Notificación', 'razonNotificacion'],
+    ['Severidad', 'severidad'],
+    ['Cuotas Equivalentes', 'cuotasEquivalentes'],
+    ['Evidencias', 'evidencias'],
+    ['Notificador Admin', 'notificadorAdmin'],
+    ['Estado', 'estado']
+  ];
+
+  const faltantes = requeridas
+    .filter(function (item) { return IDX[item[1]] === -1; })
+    .map(function (item) { return item[0]; });
+
+  if (faltantes.length > 0) {
+    throw new Error(
+      'PLANILLA_CONVIVENCIA no tiene todas las columnas requeridas. Faltan: ' +
+      faltantes.join(', ') + '.'
+    );
+  }
+}
+
+function formatFechaConvivencia_(value) {
   if (!value) return '';
 
   if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {

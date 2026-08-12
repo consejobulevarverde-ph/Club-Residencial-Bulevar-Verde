@@ -155,8 +155,8 @@
             <i class="bi bi-exclamation-triangle me-1"></i>Razón de la Notificación
             <small class="text-muted">(por qué se le notifica)</small>
           </label>
-          <textarea id="razonNotificacion" class="form-control" rows="3"
-            placeholder="Explica por qué se le está notificando (cumplimiento de reglamento, quejas previas, etc.)"></textarea>
+          <textarea id="razonNotificacion" class="form-control" rows="3" maxlength="1000"
+            placeholder="Explica por qué se le está notificando (norma presuntamente incumplida, afectación o motivo del llamado)." required></textarea>
           <small class="text-muted d-block mt-1">Información sobre debido proceso y posibilidad de descargos</small>
         </div>
         <div class="mb-3">
@@ -342,6 +342,7 @@
       const apto = document.getElementById('apto').value.trim();
       const motivo = motivoSeleccionado || document.getElementById('motivoCustom').value.trim();
       const descripcion = document.getElementById('descripcion').value.trim();
+      const razonNotificacion = document.getElementById('razonNotificacion').value.trim();
       const notificador = document.getElementById('notificador').value.trim();
 
       if (paso === 1 && (!apto || !notificador)) {
@@ -352,8 +353,8 @@
         showAlert('Selecciona o especifica un motivo y una severidad');
         return false;
       }
-      if (paso === 3 && !descripcion) {
-        showAlert('La descripción es obligatoria');
+      if (paso === 3 && (!descripcion || !razonNotificacion)) {
+        showAlert('La descripción de los hechos y la razón de la notificación son obligatorias');
         return false;
       }
       return true;
@@ -370,7 +371,7 @@
       document.getElementById('reviewMotivo').textContent = motivo;
       document.getElementById('reviewNotificador').textContent = notificador;
       document.getElementById('reviewDescripcion').textContent = descripcion;
-      document.getElementById('reviewRazon').textContent = razonNotificacion || '(No especificada)';
+      document.getElementById('reviewRazon').textContent = razonNotificacion;
       document.getElementById('reviewFecha').textContent = new Date().toLocaleDateString('es-CO');
       document.getElementById('charCountReview').textContent = descripcion.length;
 
