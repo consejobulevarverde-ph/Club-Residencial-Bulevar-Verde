@@ -180,6 +180,7 @@ const LOG_LEVEL = "RESUMEN";
  * 01. WEB APP Y CONSULTAS
  ***************************************/
 
+
 /***************************************
  * WEB APP - ENDPOINT PRINCIPAL
  * GET ?action=consultar&apto=101&placa=ABC123
@@ -189,6 +190,12 @@ function doGet(e) {
   const aptoConsultado = getParam_(e, 'apto') || '';
   const placaConsultada = getParam_(e, 'placa') || '';
   const periodoConsultado = getParam_(e, 'periodo') || '';
+
+  // Delegar acciones de convivencia al módulo correspondiente
+  const ACCIONES_CONVIVENCIA = ['listarConfig', 'listarCategorias', 'consultarCasosApto', 'consultarCasosDetalle'];
+  if (ACCIONES_CONVIVENCIA.indexOf(action) !== -1) {
+    return doGetConvivencia(e);
+  }
 
   try {
     Logger.log('=== CONSULTA WEB APP SANCIONES ===');
@@ -272,6 +279,21 @@ function doGet(e) {
 
     return jsonOutput_({ ok: false, error: error.message || String(error) });
   }
+}
+
+/***************************************
+ * POST - DELEGAR A CONVIVENCIA SI ES NECESARIO
+ ***************************************/
+function doPost(e) {
+  const action = getParam_(e, 'action');
+
+  // Delegar acciones POST de convivencia al módulo correspondiente
+  const ACCIONES_POST_CONVIVENCIA = ['subirEvidenciaConvivencia', 'crearCasoConvivencia', 'guardarDescargos'];
+  if (ACCIONES_POST_CONVIVENCIA.indexOf(action) !== -1) {
+    return doPostConvivencia(e);
+  }
+
+  return jsonOutput_({ ok: false, error: 'Acción POST no permitida.' });
 }
 
 /***************************************

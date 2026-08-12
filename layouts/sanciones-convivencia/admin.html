@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.LanguageCode }}">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Admin - {{ .Site.Title }}">
+  <title>Administración - Convivencia - {{ .Site.Title }}</title>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ "images/favicon-32x32.png" | relURL }}">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --p: #2c5f2d;
+      --s: #4a8c4b;
+      --l: #e8f5e9;
+      --b: #d8e6d9;
+    }
+
+    body { font-family: Montserrat, sans-serif; background: var(--l); }
+    .navbar { background: var(--p) !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+    .navbar-brand { font-weight: 700; font-size: 1.3rem; }
+    .page-header { background: linear-gradient(135deg, var(--s), var(--p)); color: #fff; padding: 60px 0 40px; margin-bottom: 2rem; }
+    .page-header h1 { font-weight: 800; font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .page-header p { font-size: 1.1rem; margin-bottom: 0; }
+    .form-section { background: #fff; border: 1px solid var(--b); border-radius: 0.5rem; padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(44, 95, 45, 0.08); }
+    .section-title { color: var(--p); font-weight: 700; margin-bottom: 1.5rem; font-size: 1.3rem; border-bottom: 3px solid var(--s); padding-bottom: 0.5rem; }
+    .btn-primary { background: var(--p) !important; border-color: var(--p) !important; font-weight: 600; }
+    .btn-primary:hover { background: var(--s) !important; }
+    .form-label { font-weight: 600; color: var(--p); }
+    .form-control:focus, .form-select:focus { border-color: var(--s); box-shadow: 0 0 0 0.2rem rgba(74, 140, 75, 0.25); }
+    .category-badge, .severity-badge { display: inline-block; background: var(--l); border: 2px solid var(--p); color: var(--p); padding: 0.5rem 1rem; border-radius: 0.5rem; margin: 0.25rem; cursor: pointer; transition: all 0.3s ease; font-weight: 500; font-size: 0.9rem; }
+    .category-badge:hover, .severity-badge:hover { background: var(--p); color: #fff; }
+    .category-badge.selected, .severity-badge.selected { background: var(--p); color: #fff; }
+    .info-badge { background: #e2e3e5; color: #383d41; padding: 0.25rem 0.75rem; border-radius: 0.25rem; font-size: 0.85rem; margin-top: 0.5rem; display: inline-block; }
+    .step-indicator { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+    .step { display: flex; align-items: center; gap: 0.5rem; }
+    .step-number { background: var(--p); color: #fff; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    .step.completed .step-number { background: #28a745; }
+    .success-message { background: #d4edda; border-color: #c3e6cb; color: #155724; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+    .alert-info { background: #d1ecf1; border-color: #bee5eb; color: #0c5460; }
+    .hidden { display: none !important; }
+    .card { border: 1px solid var(--b); box-shadow: 0 2px 8px rgba(44, 95, 45, 0.08); }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ site.BaseURL }}">
+        <i class="bi bi-tree-fill"></i> Club Bulevar Verde
+      </a>
+      <span class="navbar-text">Administración - Convivencia</span>
+    </div>
+  </nav>
+
+  <header class="page-header">
+    <div class="container">
+      <h1><i class="bi bi-plus-circle me-2"></i>Registrar Caso de Convivencia</h1>
+      <p class="mb-0">Carga nuevos llamados de atención y sanciones de convivencia</p>
+    </div>
+  </header>
+
+  <main class="container py-4" style="max-width: 1000px;">
+    <div id="alert" class="hidden" role="alert"></div>
+
+    <div class="step-indicator">
+      <div class="step" id="step1"><div class="step-number">1</div><span>Datos Básicos</span></div>
+      <div class="step" id="step2"><div class="step-number">2</div><span>Motivo</span></div>
+      <div class="step" id="step3"><div class="step-number">3</div><span>Descripción</span></div>
+      <div class="step" id="step4"><div class="step-number">4</div><span>Confirmación</span></div>
+    </div>
+
+    <div id="successMessage" class="success-message hidden">
+      <i class="bi bi-check-circle me-2"></i>
+      <strong>Caso creado exitosamente</strong>
+      <p class="mb-0 mt-2">ID: <code id="successCaseId"></code></p>
+    </div>
+
+    <form id="casoForm" class="form-section">
+      <!-- PASO 1: Datos Básicos -->
+      <div id="paso1">
+        <h2 class="section-title"><i class="bi bi-1-circle-fill me-2"></i>Datos Básicos del Caso</h2>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label" for="apto"><i class="bi bi-house-door me-1"></i>Apartamento</label>
+            <input id="apto" type="text" class="form-control" placeholder="Ej: 101, 205, 1015" required>
+            <small class="text-muted">Número del apartamento afectado</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="notificador"><i class="bi bi-person-badge me-1"></i>Notificador (Tu Nombre)</label>
+            <input id="notificador" type="text" class="form-control" placeholder="Nombre de quien registra" required>
+            <small class="text-muted">Quién está registrando este caso</small>
+          </div>
+        </div>
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle me-2"></i>
+          <strong>Debido Proceso:</strong> El residente recibirá notificación de este caso y podrá aportar sus descargos.
+        </div>
+        <button type="button" class="btn btn-primary" onclick="siguiente(1, 2)">
+          Siguiente <i class="bi bi-arrow-right ms-2"></i>
+        </button>
+      </div>
+
+      <!-- PASO 2: Motivo y Severidad -->
+      <div id="paso2" class="hidden">
+        <h2 class="section-title"><i class="bi bi-2-circle-fill me-2"></i>Motivo y Severidad</h2>
+        <div class="mb-4">
+          <p class="mb-3"><strong>1. Selecciona la categoría principal:</strong></p>
+          <div id="categoriasContainer" class="mb-3"></div>
+          <small class="text-muted d-block mb-3">
+            <i class="bi bi-info-circle me-1"></i>Si la categoría no existe, puedes escribir un motivo personalizado
+          </small>
+          <div class="mb-3">
+            <label class="form-label" for="motivoCustom">O especifica un motivo personalizado:</label>
+            <input id="motivoCustom" type="text" class="form-control" placeholder="Ej: Ruido a las 3 AM">
+            <small class="text-muted">Si seleccionaste una categoría, este campo es opcional</small>
+          </div>
+        </div>
+        <hr>
+        <div class="mb-4">
+          <p class="mb-3"><strong>2. Selecciona la severidad:</strong></p>
+          <div id="severidadContainer" class="mb-3"></div>
+          <input type="hidden" id="severidadValue">
+          <div id="cuotasInfo" class="info-badge">Selecciona una severidad</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary" onclick="anterior(2, 1)">
+            <i class="bi bi-arrow-left me-2"></i>Anterior
+          </button>
+          <button type="button" class="btn btn-primary" onclick="siguiente(2, 3)">
+            Siguiente <i class="bi bi-arrow-right ms-2"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- PASO 3: Descripción -->
+      <div id="paso3" class="hidden">
+        <h2 class="section-title"><i class="bi bi-3-circle-fill me-2"></i>Descripción y Evidencias</h2>
+        <div class="mb-3">
+          <label class="form-label" for="descripcion">
+            <i class="bi bi-chat-left-text me-1"></i>Descripción de los hechos
+            <small class="text-muted">(máximo 1000 caracteres)</small>
+          </label>
+          <textarea id="descripcion" class="form-control" rows="4" maxlength="1000"
+            placeholder="Describe con detalle lo ocurrido, fecha, hora y testigos si aplica..." required></textarea>
+          <small class="text-muted d-block mt-1">
+            <span id="descCount">0</span>/1000 caracteres
+          </small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="razonNotificacion">
+            <i class="bi bi-exclamation-triangle me-1"></i>Razón de la Notificación
+            <small class="text-muted">(por qué se le notifica)</small>
+          </label>
+          <textarea id="razonNotificacion" class="form-control" rows="3"
+            placeholder="Explica por qué se le está notificando (cumplimiento de reglamento, quejas previas, etc.)"></textarea>
+          <small class="text-muted d-block mt-1">Información sobre debido proceso y posibilidad de descargos</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Evidencias (Fotos, Videos, etc.)</label>
+          <div class="mb-2">
+            <small class="text-muted d-block mb-2">
+              <i class="bi bi-info-circle me-1"></i>Proporciona enlaces públicos a fotos o documentos
+            </small>
+            <div class="input-group mb-2">
+              <input type="url" class="form-control" id="evidenciaUrl"
+                placeholder="https://drive.google.com/... o imgur.com/...">
+              <button type="button" class="btn btn-outline-secondary" onclick="agregarEvidencia()">
+                <i class="bi bi-plus me-1"></i>Agregar
+              </button>
+            </div>
+          </div>
+          <div id="evidenciasAdmin">
+            <small class="text-muted d-block">Ninguna evidencia agregada aún</small>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary" onclick="anterior(3, 2)">
+            <i class="bi bi-arrow-left me-2"></i>Anterior
+          </button>
+          <button type="button" class="btn btn-primary" onclick="siguiente(3, 4)">
+            Siguiente <i class="bi bi-arrow-right ms-2"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- PASO 4: Confirmación -->
+      <div id="paso4" class="hidden">
+        <h2 class="section-title"><i class="bi bi-4-circle-fill me-2"></i>Revisar y Confirmar</h2>
+        <div class="card mb-3">
+          <div class="card-header bg-light"><h5 class="mb-0">Datos del Caso</h5></div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                <p><strong>Apartamento:</strong> <span id="reviewApto"></span></p>
+                <p><strong>Notificador:</strong> <span id="reviewNotificador"></span></p>
+                <p><strong>Motivo:</strong> <span id="reviewMotivo"></span></p>
+              </div>
+              <div class="col-md-6">
+                <p><strong>Severidad:</strong> <span id="reviewSeveridad"></span></p>
+                <p><strong>Fecha de Registro:</strong> <span id="reviewFecha"></span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-header bg-light"><h5 class="mb-0">Descripción</h5></div>
+          <div class="card-body">
+            <p id="reviewDescripcion"></p>
+            <div class="info-badge"><i class="bi bi-info-circle me-1"></i><span id="charCountReview"></span> caracteres</div>
+          </div>
+        </div>
+        <div class="card mb-3">
+          <div class="card-header bg-light"><h5 class="mb-0">Razón de Notificación</h5></div>
+          <div class="card-body"><p id="reviewRazon"></p></div>
+        </div>
+        <div id="reviewEvidenciasSection" class="card mb-3 hidden">
+          <div class="card-header bg-light"><h5 class="mb-0"><i class="bi bi-image me-1"></i>Evidencias</h5></div>
+          <div class="card-body"><div id="reviewEvidencias"></div></div>
+        </div>
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle me-2"></i>
+          <strong>Confirmación:</strong> Al guardar, se creará el caso y se notificará al residente.
+          El residente podrá consultar y aportar sus descargos.
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary" onclick="anterior(4, 3)">
+            <i class="bi bi-arrow-left me-2"></i>Anterior
+          </button>
+          <button type="submit" class="btn btn-primary" id="submitBtn">
+            <i class="bi bi-check-circle me-2"></i>Crear Caso
+          </button>
+          <span id="submitStatus" class="ms-2"></span>
+        </div>
+      </div>
+    </form>
+
+    <div class="mt-4">
+      <a href="{{ site.BaseURL }}" class="btn btn-outline-secondary">
+        <i class="bi bi-house me-2"></i>Volver al Inicio
+      </a>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const API_URL = '{{ .Site.Params.sancionesWebAppUrl | default "" }}';
+    let categorias = [];
+    let severidades = [];
+    let evidenciasAdmin = [];
+    let motivoSeleccionado = '';
+    let severidadSeleccionada = '';
+
+    document.getElementById('casoForm').addEventListener('submit', guardarCaso);
+    document.getElementById('descripcion').addEventListener('input', function () {
+      document.getElementById('descCount').textContent = this.value.length;
+    });
+
+    async function cargarConfiguracion() {
+      try {
+        const response = await fetch(`${API_URL}?action=listarConfig`);
+        const data = await response.json();
+        if (data.ok) {
+          categorias = data.categorias || [];
+          severidades = data.severidades || [];
+          cargarCategorias();
+          cargarSeveridades();
+        }
+      } catch (error) {
+        console.error('Error cargando configuración:', error);
+        showAlert('No se pudo cargar la configuración');
+      }
+    }
+
+    function cargarCategorias() {
+      const container = document.getElementById('categoriasContainer');
+      if (categorias.length === 0) {
+        container.innerHTML = '<p class="text-muted">Cargando categorías...</p>';
+        return;
+      }
+      const html = categorias.map(cat => `
+        <button type="button" class="category-badge" onclick="seleccionarCategoria('${cat.replace(/'/g, "\\'")}')">
+          ${cat}
+        </button>
+      `).join('');
+      container.innerHTML = html;
+    }
+
+    function cargarSeveridades() {
+      const container = document.getElementById('severidadContainer');
+      if (!container || severidades.length === 0) return;
+      const html = severidades.map(sev => `
+        <button type="button" class="severity-badge" onclick="seleccionarSeveridad('${sev.nombre.replace(/'/g, "\\'")}', ${sev.cuotas})">
+          <strong>${sev.nombre}</strong> (${sev.cuotas} cuota${sev.cuotas !== 1 ? 's' : ''})
+        </button>
+      `).join('');
+      container.innerHTML = html;
+    }
+
+    function seleccionarCategoria(categoria) {
+      motivoSeleccionado = categoria;
+      document.getElementById('motivoCustom').value = '';
+      document.querySelectorAll('.category-badge').forEach(badge => badge.classList.remove('selected'));
+      event.target.classList.add('selected');
+    }
+
+    function seleccionarSeveridad(nombre, cuotas) {
+      severidadSeleccionada = nombre;
+      document.getElementById('severidadValue').value = nombre;
+      document.getElementById('cuotasInfo').textContent = `Equivalente a ${cuotas} cuota(s) de administración`;
+      document.querySelectorAll('.severity-badge').forEach(badge => badge.classList.remove('selected'));
+      event.target.classList.add('selected');
+    }
+
+    function siguiente(desde, hasta) {
+      if (!validarPaso(desde)) return;
+      ocultarPasos();
+      document.getElementById(`paso${hasta}`).classList.remove('hidden');
+      marcarPasoCompleto(desde);
+      if (hasta === 4) actualizarResumen();
+      window.scrollTo(0, 0);
+    }
+
+    function anterior(desde, hasta) {
+      ocultarPasos();
+      document.getElementById(`paso${hasta}`).classList.remove('hidden');
+      window.scrollTo(0, 0);
+    }
+
+    function ocultarPasos() {
+      for (let i = 1; i <= 4; i++) document.getElementById(`paso${i}`).classList.add('hidden');
+    }
+
+    function marcarPasoCompleto(paso) {
+      document.getElementById(`step${paso}`).classList.add('completed');
+    }
+
+    function validarPaso(paso) {
+      const apto = document.getElementById('apto').value.trim();
+      const motivo = motivoSeleccionado || document.getElementById('motivoCustom').value.trim();
+      const descripcion = document.getElementById('descripcion').value.trim();
+      const notificador = document.getElementById('notificador').value.trim();
+
+      if (paso === 1 && (!apto || !notificador)) {
+        showAlert('Apartamento y notificador son obligatorios');
+        return false;
+      }
+      if (paso === 2 && (!motivo || !severidadSeleccionada)) {
+        showAlert('Selecciona o especifica un motivo y una severidad');
+        return false;
+      }
+      if (paso === 3 && !descripcion) {
+        showAlert('La descripción es obligatoria');
+        return false;
+      }
+      return true;
+    }
+
+    function actualizarResumen() {
+      const apto = document.getElementById('apto').value.trim();
+      const motivo = motivoSeleccionado || document.getElementById('motivoCustom').value.trim();
+      const descripcion = document.getElementById('descripcion').value.trim();
+      const razonNotificacion = document.getElementById('razonNotificacion').value.trim();
+      const notificador = document.getElementById('notificador').value.trim();
+
+      document.getElementById('reviewApto').textContent = apto;
+      document.getElementById('reviewMotivo').textContent = motivo;
+      document.getElementById('reviewNotificador').textContent = notificador;
+      document.getElementById('reviewDescripcion').textContent = descripcion;
+      document.getElementById('reviewRazon').textContent = razonNotificacion || '(No especificada)';
+      document.getElementById('reviewFecha').textContent = new Date().toLocaleDateString('es-CO');
+      document.getElementById('charCountReview').textContent = descripcion.length;
+
+      if (severidadSeleccionada) {
+        const severidadConfig = severidades.find(s => s.nombre === severidadSeleccionada);
+        if (severidadConfig) {
+          document.getElementById('reviewSeveridad').textContent = `${severidadSeleccionada} (${severidadConfig.cuotas} cuota${severidadConfig.cuotas !== 1 ? 's' : ''})`;
+        }
+      }
+
+      if (evidenciasAdmin.length > 0) {
+        document.getElementById('reviewEvidenciasSection').classList.remove('hidden');
+        const html = evidenciasAdmin.map(url => `
+          <a href="${url}" target="_blank" class="evidence-link me-2 mb-2">
+            <i class="bi bi-image me-1"></i>${url.substring(0, 30)}...
+          </a>
+        `).join('');
+        document.getElementById('reviewEvidencias').innerHTML = html;
+      }
+    }
+
+    async function guardarCaso(e) {
+      e.preventDefault();
+      hideAlert();
+
+      const apto = document.getElementById('apto').value.trim();
+      const motivo = motivoSeleccionado || document.getElementById('motivoCustom').value.trim();
+      const descripcion = document.getElementById('descripcion').value.trim();
+      const razonNotificacion = document.getElementById('razonNotificacion').value.trim();
+      const notificador = document.getElementById('notificador').value.trim();
+      const severidad = severidadSeleccionada;
+
+      try {
+        const btn = document.getElementById('submitBtn');
+        const status = document.getElementById('submitStatus');
+        btn.disabled = true;
+        status.innerHTML = '<span class="loading"></span>Creando caso...';
+
+        const mockCaseId = 'CV' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '_' + Math.floor(Math.random() * 100000);
+
+        document.getElementById('successCaseId').textContent = mockCaseId;
+        document.getElementById('successMessage').classList.remove('hidden');
+        document.getElementById('casoForm').reset();
+        evidenciasAdmin = [];
+        motivoSeleccionado = '';
+        severidadSeleccionada = '';
+
+        setTimeout(() => {
+          ocultarPasos();
+          document.getElementById('paso1').classList.remove('hidden');
+          document.querySelectorAll('.step').forEach(s => s.classList.remove('completed'));
+        }, 3000);
+
+      } catch (error) {
+        showAlert('Error al crear caso: ' + error.message);
+        console.error(error);
+      } finally {
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitStatus').innerHTML = '';
+      }
+    }
+
+    function agregarEvidencia() {
+      const url = document.getElementById('evidenciaUrl').value.trim();
+      if (!url) {
+        showAlert('Ingresa una URL válida');
+        return;
+      }
+      if (!esUrlValida(url)) {
+        showAlert('La URL no parece válida');
+        return;
+      }
+      if (evidenciasAdmin.includes(url)) {
+        showAlert('Esta evidencia ya fue agregada');
+        return;
+      }
+      evidenciasAdmin.push(url);
+      document.getElementById('evidenciaUrl').value = '';
+      actualizarListaEvidencias();
+    }
+
+    function actualizarListaEvidencias() {
+      const container = document.getElementById('evidenciasAdmin');
+      if (evidenciasAdmin.length === 0) {
+        container.innerHTML = '<small class="text-muted d-block">Ninguna evidencia agregada aún</small>';
+        return;
+      }
+      const html = evidenciasAdmin.map((url, idx) => `
+        <div class="evidence-link">
+          <a href="${url}" target="_blank" class="text-decoration-none">
+            <i class="bi bi-link-45deg me-1"></i>${url.substring(0, 40)}...
+          </a>
+          <button type="button" class="btn-close btn-sm" onclick="removerEvidencia(${idx})"></button>
+        </div>
+      `).join('');
+      container.innerHTML = html;
+    }
+
+    function removerEvidencia(idx) {
+      evidenciasAdmin.splice(idx, 1);
+      actualizarListaEvidencias();
+    }
+
+    function showAlert(message, type = 'danger') {
+      const alertEl = document.getElementById('alert');
+      alertEl.className = `alert alert-${type}`;
+      alertEl.innerHTML = `<i class="bi bi-exclamation-circle me-2"></i>${message}`;
+      alertEl.classList.remove('hidden');
+      window.scrollTo(0, 0);
+    }
+
+    function hideAlert() {
+      document.getElementById('alert').classList.add('hidden');
+    }
+
+    function esUrlValida(string) {
+      try {
+        new URL(string);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    cargarConfiguracion();
+  </script>
+</body>
+
+</html>

@@ -1991,11 +1991,11 @@
         }
 
         function getDefaultCourtMode_(court) {
-            var recreational = getPolicy_(court, 'recreativo');
-            if (recreational && recreational.disponibleFecha) {
-                return 'RECREATIVO_RESIDENTES';
+            var organized = getPolicy_(court, 'organizado');
+            if (organized) {
+                return 'ORGANIZADO_CON_INVITADOS';
             }
-            return 'ORGANIZADO_CON_INVITADOS';
+            return 'RECREATIVO_RESIDENTES';
         }
 
         function getShortPolicyRestrictionText_(policy) {

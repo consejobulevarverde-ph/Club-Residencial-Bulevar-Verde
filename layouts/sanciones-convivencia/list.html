@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.LanguageCode }}">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Convivencia - {{ .Site.Title }}">
+  <title>{{ .Title }} - {{ .Site.Title }}</title>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ "images/favicon-32x32.png" | relURL }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ "images/favicon-16x16.png" | relURL }}">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --p: #2c5f2d;
+      --s: #4a8c4b;
+      --l: #e8f5e9;
+      --b: #d8e6d9;
+    }
+
+    body {
+      font-family: Montserrat, sans-serif;
+      background: var(--l);
+    }
+
+    .navbar {
+      background: var(--p) !important;
+    }
+
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.3rem;
+    }
+
+    .page-header {
+      background: linear-gradient(135deg, var(--s), var(--p));
+      color: #fff;
+      padding: 2.5rem 0;
+      margin-bottom: 2rem;
+    }
+
+    .page-header h1 {
+      font-weight: 800;
+      font-size: 2rem;
+    }
+
+    .card {
+      border: 1px solid var(--b);
+      box-shadow: 0 2px 8px rgba(44, 95, 45, 0.08);
+    }
+
+    .btn-primary {
+      background: var(--p) !important;
+      border-color: var(--p) !important;
+    }
+
+    .btn-primary:hover {
+      background: var(--s) !important;
+    }
+
+    .badge-pending { background: #ffc107; color: #333; }
+    .badge-resolved { background: #28a745; color: #fff; }
+    .badge-with-response { background: #17a2b8; color: #fff; }
+
+    .form-section {
+      background: #fff;
+      border: 1px solid var(--b);
+      border-radius: 0.5rem;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .section-title {
+      color: var(--p);
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      font-size: 1.3rem;
+    }
+
+    .case-item {
+      background: #fff;
+      border-left: 5px solid var(--p);
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .case-item:hover {
+      box-shadow: 0 4px 12px rgba(44, 95, 45, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .evidence-link {
+      display: inline-block;
+      margin: 0.5rem 0.5rem 0.5rem 0;
+      padding: 0.5rem 1rem;
+      background: #f0f0f0;
+      border-radius: 0.25rem;
+      text-decoration: none;
+      color: var(--p);
+      font-size: 0.9rem;
+    }
+
+    .evidence-link:hover { background: #e0e0e0; }
+
+    .evidence-preview-link {
+      vertical-align: top;
+      max-width: 190px;
+      text-align: center;
+    }
+
+    .evidence-preview-thumb {
+      width: 150px;
+      height: 150px;
+      display: block;
+      margin: 0 auto 0.5rem;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 2px solid var(--p);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .evidence-preview-thumb:hover {
+      transform: scale(1.04);
+      box-shadow: 0 4px 12px rgba(44, 95, 45, 0.25);
+    }
+
+    .hidden { display: none !important; }
+
+    .timeline-item {
+      position: relative;
+      padding-left: 3rem;
+      margin-bottom: 2rem;
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0;
+      width: 20px; height: 20px;
+      background: var(--p);
+      border-radius: 50%;
+      border: 3px solid #fff;
+      box-shadow: 0 0 0 3px var(--p);
+    }
+
+    .timeline-item:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 8px; top: 20px;
+      bottom: -2rem;
+      width: 2px;
+      background: var(--b);
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ "/" | relURL }}">
+        <i class="bi bi-tree-fill"></i> Club Bulevar Verde
+      </a>
+      <span class="navbar-text">Convivencia</span>
+    </div>
+  </nav>
+
+  <header class="page-header">
+    <div class="container">
+      <h1><i class="bi bi-exclamation-circle me-2"></i>{{ .Title }}</h1>
+      <p class="mb-0">{{ .Params.subtitle | default "Consulta notificaciones de convivencia y aporta tus descargos" }}</p>
+    </div>
+  </header>
+
+  <main class="container py-4" style="max-width: 1000px;">
+    <div id="alert" class="alert hidden" role="alert"></div>
+
+    <!-- PASO 1: CONSULTA DE APARTAMENTO -->
+    <section id="paso1" class="form-section">
+      <h2 class="section-title"><i class="bi bi-1-circle-fill me-2"></i>Consultar Apartamento</h2>
+      <form id="consultaForm" class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="apto">Número de Apartamento</label>
+          <input id="apto" type="text" class="form-control" placeholder="Ej: 101, 205, 1015" required>
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-search me-2"></i>Consultar
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- PASO 2: LISTADO DE CASOS -->
+    <section id="paso2" class="form-section hidden">
+      <h2 class="section-title"><i class="bi bi-2-circle-fill me-2"></i>Tus Notificaciones</h2>
+      <div id="casosList" class="row"></div>
+      <div id="sinCasos" class="alert alert-info hidden">
+        <i class="bi bi-info-circle me-2"></i>No hay notificaciones de convivencia para este apartamento.
+      </div>
+    </section>
+
+    <!-- PASO 3: DETALLE Y DESCARGOS -->
+    <section id="paso3" class="form-section hidden">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="section-title mb-0"><i class="bi bi-3-circle-fill me-2"></i>Detalle del Caso</h2>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="regresarAlListado()">
+          <i class="bi bi-arrow-left me-1"></i>Volver
+        </button>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="row mb-2">
+            <div class="col-md-6">
+              <p><strong>Caso ID:</strong> <span id="detailCaseId"></span></p>
+              <p><strong>Apartamento:</strong> <span id="detailApto"></span></p>
+              <p><strong>Motivo:</strong> <span id="detailMotivo"></span></p>
+              <p><strong>Severidad:</strong> <span id="detailSeveridad" class="badge bg-warning"></span></p>
+            </div>
+            <div class="col-md-6">
+              <p><strong>Fecha:</strong> <span id="detailFecha"></span></p>
+              <p><strong>Estado:</strong> <span id="detailEstado"></span></p>
+              <p><strong>Notificador:</strong> <span id="detailNotificador"></span></p>
+              <p><strong>Equivalencia:</strong> <span id="detailCuotas"></span> cuota(s) de administración</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Descripción de la Notificación</h5>
+        </div>
+        <div class="card-body">
+          <p id="detailDescripcion" class="mb-2"></p>
+          <div id="detailRazonNotificacion" class="alert alert-warning mb-0"></div>
+        </div>
+      </div>
+
+      <div id="evidenciasSection" class="card mb-3 hidden">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="bi bi-image me-2"></i>Evidencias Adjuntas</h5>
+        </div>
+        <div class="card-body">
+          <div id="detailEvidencias"></div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="bi bi-chat-left-text me-2"></i>Línea de Tiempo</h5>
+        </div>
+        <div class="card-body">
+          <div id="casoTimeline"></div>
+        </div>
+      </div>
+
+      <div id="descargosSection" class="card mb-3 hidden">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Aportar Tus Descargos</h5>
+        </div>
+        <div class="card-body">
+          <form id="descargosForm" class="row g-3">
+            <div class="col-12">
+              <label class="form-label" for="descargosTexto">
+                Escribe tus descargos y explicación
+                <small class="text-muted">(máximo 2000 caracteres)</small>
+              </label>
+              <textarea id="descargosTexto" class="form-control" rows="5" maxlength="2000"
+                placeholder="Explica tu versión de los hechos..."></textarea>
+              <small class="text-muted d-block mt-1">
+                <span id="charCount">0</span>/2000 caracteres
+              </small>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Evidencias fotográficas</label>
+              <div class="mb-2">
+                <small class="text-muted d-block mb-2">
+                  <i class="bi bi-camera me-1"></i>Toma una foto o selecciona una imagen de tu teléfono
+                </small>
+                <div class="d-flex gap-2 mb-3 flex-wrap">
+                  <button type="button" class="btn btn-outline-secondary" id="openDescargoCameraBtn">
+                    <i class="bi bi-camera me-1"></i>Cámara
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary" id="openDescargoGalleryBtn">
+                    <i class="bi bi-image me-1"></i>Galería
+                  </button>
+                </div>
+                <input type="file" id="descargoCameraInput" accept="image/*" capture="environment" hidden>
+                <input type="file" id="descargoGalleryInput" accept="image/*" hidden>
+              </div>
+              <div id="evidenciasAportadas">
+                <small class="text-muted d-block">Ninguna evidencia seleccionada</small>
+              </div>
+              <div id="descargosUploadStatus" class="mt-2"></div>
+              <small class="text-muted d-block mt-2">
+                Las fotografías se comprimen antes de enviarse y se almacenan con las evidencias de sanciones.
+              </small>
+            </div>
+
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary" id="guardarDescargosBtn">
+                <i class="bi bi-check-circle me-2"></i>Guardar Descargos
+              </button>
+              <span id="descargosStatus" class="ms-2"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div id="descargosExistentes" class="card mb-3 hidden">
+        <div class="card-header bg-light">
+          <h5 class="mb-0"><i class="bi bi-check-circle me-2"></i>Tus Descargos Registrados</h5>
+        </div>
+        <div class="card-body">
+          <p><strong>Fecha de Descargos:</strong> <span id="fechaDescargosRegistrados"></span></p>
+          <p><strong>Tu Explicación:</strong></p>
+          <div id="descargosTextoRegistrados" class="bg-light p-3 rounded"></div>
+
+          <div id="evidenciasDescargosSection" class="mt-3 hidden">
+            <p><strong>Tus Evidencias:</strong></p>
+            <div id="evidenciasDescargosRegistradas"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const API_URL = '{{ .Site.Params.sancionesWebAppUrl | default "" }}';
+    let currentCase = null;
+    let evidenciasAportadas = [];
+
+    document.getElementById('consultaForm').addEventListener('submit', consultarCasos);
+    document.getElementById('descargosForm').addEventListener('submit', guardarDescargos);
+    setupDescargoEvidenceHandlers();
+    document.getElementById('descargosTexto').addEventListener('input', function () {
+      document.getElementById('charCount').textContent = this.value.length;
+    });
+
+    function showAlert(message, type = 'danger') {
+      const alertEl = document.getElementById('alert');
+      alertEl.className = `alert alert-${type}`;
+      alertEl.innerHTML = `<i class="bi bi-exclamation-circle me-2"></i>${message}`;
+      alertEl.classList.remove('hidden');
+      window.scrollTo(0, 0);
+    }
+
+    function hideAlert() {
+      document.getElementById('alert').classList.add('hidden');
+    }
+
+    async function consultarCasos(e) {
+      e.preventDefault();
+      hideAlert();
+
+      const apto = document.getElementById('apto').value.trim();
+
+      if (!apto) {
+        showAlert('Ingresa el número de apartamento');
+        return;
+      }
+
+      try {
+        document.getElementById('consultaForm').disabled = true;
+
+        const response = await fetch(`${API_URL}?action=consultarCasosApto&apto=${encodeURIComponent(apto)}`);
+        const data = await response.json();
+
+        if (!data.ok) {
+          showAlert(data.error || 'Error al consultar casos');
+          return;
+        }
+
+        mostrarListadoCasos(data.casos, apto);
+
+      } catch (error) {
+        showAlert('Error de conexión: ' + error.message);
+        console.error(error);
+      } finally {
+        document.getElementById('consultaForm').disabled = false;
+      }
+    }
+
+    function mostrarListadoCasos(casos, apto) {
+      document.getElementById('paso1').classList.add('hidden');
+      document.getElementById('paso2').classList.remove('hidden');
+      document.getElementById('paso3').classList.add('hidden');
+
+      const casosList = document.getElementById('casosList');
+      const sinCasos = document.getElementById('sinCasos');
+
+      casosList.innerHTML = '';
+
+      if (!casos || casos.length === 0) {
+        sinCasos.classList.remove('hidden');
+        return;
+      }
+
+      sinCasos.classList.add('hidden');
+
+      casos.forEach(caso => {
+        const estado = obtenerBadgeEstado(caso.estado);
+        const html = `
+          <div class="col-12 mb-2">
+            <div class="case-item" onclick="verDetalleCase('${caso.id}', '${apto}')">
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <h5 class="mb-2">${caso.motivo}</h5>
+                  <p class="mb-1"><small class="text-muted">Caso: ${caso.id}</small></p>
+                  <p class="mb-0"><small class="text-muted">Fecha: ${caso.fechaRegistro}</small></p>
+                </div>
+                <div class="text-end">
+                  ${estado}
+                  ${caso.tieneDescargos ? '<span class="badge badge-with-response ms-2">Con Descargos</span>' : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        casosList.insertAdjacentHTML('beforeend', html);
+      });
+    }
+
+    function obtenerBadgeEstado(estado) {
+      const badges = {
+        'PENDIENTE_DESCARGOS': '<span class="badge badge-pending">Pendiente de Descargos</span>',
+        'CON_DESCARGOS': '<span class="badge badge-with-response">Descargos Recibidos</span>',
+        'RESUELTO': '<span class="badge badge-resolved">Resuelto</span>',
+        'ARCHIVADO': '<span class="badge bg-secondary">Archivado</span>'
+      };
+      return badges[estado] || `<span class="badge bg-secondary">${estado}</span>`;
+    }
+
+    async function verDetalleCase(caseId, apto) {
+      hideAlert();
+
+      try {
+        const response = await fetch(`${API_URL}?action=consultarCasosDetalle&caseId=${encodeURIComponent(caseId)}&apto=${encodeURIComponent(apto)}`);
+        const data = await response.json();
+
+        if (!data.ok) {
+          showAlert(data.error || 'Error al cargar detalles');
+          return;
+        }
+
+        currentCase = data.caso;
+        renderizarDetalleCase(data.caso);
+        document.getElementById('paso2').classList.add('hidden');
+        document.getElementById('paso3').classList.remove('hidden');
+        window.scrollTo(0, 0);
+
+      } catch (error) {
+        showAlert('Error de conexión: ' + error.message);
+        console.error(error);
+      }
+    }
+
+    function renderizarDetalleCase(caso) {
+      document.getElementById('detailCaseId').textContent = caso.id;
+      document.getElementById('detailApto').textContent = caso.apto;
+      document.getElementById('detailMotivo').textContent = caso.motivo;
+      document.getElementById('detailSeveridad').textContent = caso.severidad || 'No especificada';
+      document.getElementById('detailCuotas').textContent = Number(caso.cuotasEquivalentes || 0);
+      document.getElementById('detailFecha').textContent = caso.fechaRegistro || 'Sin fecha';
+      document.getElementById('detailEstado').innerHTML = obtenerBadgeEstado(caso.estado || 'PENDIENTE_DESCARGOS');
+      document.getElementById('detailNotificador').textContent = caso.notificadorAdmin || 'Administración';
+      document.getElementById('detailDescripcion').textContent = caso.descripcion || 'Sin descripción';
+      document.getElementById('detailRazonNotificacion').textContent = caso.razonNotificacion || 'Sin información adicional';
+
+      if (Array.isArray(caso.evidencias) && caso.evidencias.length > 0) {
+        document.getElementById('evidenciasSection').classList.remove('hidden');
+        document.getElementById('detailEvidencias').innerHTML = renderEvidenceGallery_(caso.evidencias, 'Evidencia');
+      } else {
+        document.getElementById('evidenciasSection').classList.add('hidden');
+        document.getElementById('detailEvidencias').innerHTML = '';
+      }
+
+      const timeline = [];
+      timeline.push({
+        fecha: caso.fechaRegistro,
+        titulo: 'Notificación Registrada',
+        contenido: caso.motivo
+      });
+
+      if (caso.fechaDescargos) {
+        timeline.push({
+          fecha: caso.fechaDescargos,
+          titulo: 'Descargos Aportados',
+          contenido: caso.descargosResidente.substring(0, 100) + '...'
+        });
+      }
+
+      renderizarTimeline(timeline);
+
+      if (caso.descargosResidente) {
+        document.getElementById('descargosSection').classList.add('hidden');
+        document.getElementById('descargosExistentes').classList.remove('hidden');
+        document.getElementById('fechaDescargosRegistrados').textContent = caso.fechaDescargos;
+        document.getElementById('descargosTextoRegistrados').textContent = caso.descargosResidente;
+
+        if (Array.isArray(caso.evidenciasDescargos) && caso.evidenciasDescargos.length > 0) {
+          document.getElementById('evidenciasDescargosSection').classList.remove('hidden');
+          document.getElementById('evidenciasDescargosRegistradas').innerHTML = renderEvidenceGallery_(caso.evidenciasDescargos, 'Evidencia de descargo');
+        } else {
+          document.getElementById('evidenciasDescargosSection').classList.add('hidden');
+          document.getElementById('evidenciasDescargosRegistradas').innerHTML = '';
+        }
+      } else {
+        document.getElementById('descargosSection').classList.remove('hidden');
+        document.getElementById('descargosExistentes').classList.add('hidden');
+        limpiarFormDescargos();
+      }
+    }
+
+    function renderizarTimeline(eventos) {
+      const timelineHtml = eventos.map(evento => `
+        <div class="timeline-item">
+          <div style="font-weight: 600; color: var(--p); font-size: 0.9rem;">${evento.fecha}</div>
+          <div style="background: #f9f9f9; padding: 1rem; border-radius: 0.5rem; margin-top: 0.5rem;">
+            <strong>${evento.titulo}</strong>
+            <p class="mb-0 mt-2">${evento.contenido}</p>
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('casoTimeline').innerHTML = timelineHtml;
+    }
+
+    function renderEvidenceGallery_(urls, labelPrefix) {
+      return urls.map(function (url, index) {
+        return buildEvidenceHtml_(url, (labelPrefix || 'Evidencia') + ' ' + (index + 1));
+      }).join('');
+    }
+
+    // Reutiliza la misma estrategia de visualización usada por la página de
+    // sanciones: Google Drive thumbnail -> googleusercontent -> URL original.
+    function buildEvidenceHtml_(value, label) {
+      const originalUrl = normalizeMediaUrl_(value);
+      if (!originalUrl) return '';
+
+      const displayUrls = buildMediaDisplayUrls_(originalUrl);
+      const initialUrl = displayUrls.shift() || originalUrl;
+      const fallbackUrls = encodeURIComponent(JSON.stringify(displayUrls));
+
+      return `
+        <a href="${escapeHtml_(originalUrl)}" target="_blank" rel="noopener noreferrer" class="evidence-link evidence-preview-link">
+          <img
+            src="${escapeHtml_(initialUrl)}"
+            data-original-url="${escapeHtml_(originalUrl)}"
+            data-fallback-urls="${escapeHtml_(fallbackUrls)}"
+            alt="${escapeHtml_(label)}"
+            class="evidence-preview-thumb"
+            loading="eager"
+            decoding="async"
+            referrerpolicy="no-referrer"
+            onerror="window.handleConvivenciaEvidenceError_(this)">
+          <span><i class="bi bi-image me-1"></i>${escapeHtml_(label)}</span>
+        </a>`;
+    }
+
+    window.handleConvivenciaEvidenceError_ = function (img) {
+      if (!img) return;
+
+      let fallbackUrls = [];
+      try {
+        fallbackUrls = JSON.parse(decodeURIComponent(img.getAttribute('data-fallback-urls') || ''));
+      } catch (error) {
+        fallbackUrls = [];
+      }
+
+      if (fallbackUrls.length > 0) {
+        const nextUrl = fallbackUrls.shift();
+        img.setAttribute('data-fallback-urls', encodeURIComponent(JSON.stringify(fallbackUrls)));
+        img.src = nextUrl;
+        return;
+      }
+
+      // Si no se puede incrustar (por ejemplo, un PDF), se conserva el enlace
+      // clicable y se oculta únicamente la miniatura rota.
+      img.style.display = 'none';
+    };
+
+    function buildMediaDisplayUrls_(url) {
+      const normalizedUrl = normalizeMediaUrl_(url);
+      if (!normalizedUrl) return [];
+
+      const driveInfo = parseGoogleDriveMediaUrl_(normalizedUrl);
+      if (!driveInfo) return [normalizedUrl];
+
+      const resourceKeyQuery = driveInfo.resourceKey
+        ? '&resourcekey=' + encodeURIComponent(driveInfo.resourceKey)
+        : '';
+
+      return uniqueStrings_([
+        'https://drive.google.com/thumbnail?id=' + encodeURIComponent(driveInfo.fileId) + resourceKeyQuery + '&sz=w1200',
+        'https://lh3.googleusercontent.com/d/' + encodeURIComponent(driveInfo.fileId) + '=w1200',
+        normalizedUrl
+      ]);
+    }
+
+    function parseGoogleDriveMediaUrl_(url) {
+      const value = String(url || '').trim();
+      if (!value || value.indexOf('drive.google.com') === -1) return null;
+
+      let fileId = '';
+      let resourceKey = '';
+
+      try {
+        const parsed = new URL(value, window.location.href);
+        fileId = parsed.searchParams.get('id') || '';
+        resourceKey = parsed.searchParams.get('resourcekey') || '';
+
+        if (!fileId) {
+          const pathMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/i);
+          fileId = pathMatch && pathMatch[1] ? pathMatch[1] : '';
+        }
+      } catch (error) {
+        const idMatch = value.match(/[?&]id=([^&#]+)/i);
+        const keyMatch = value.match(/[?&]resourcekey=([^&#]+)/i);
+        const pathMatchFallback = value.match(/\/file\/d\/([^/?#]+)/i);
+
+        fileId = idMatch && idMatch[1]
+          ? decodeURIComponent(idMatch[1])
+          : pathMatchFallback && pathMatchFallback[1]
+            ? decodeURIComponent(pathMatchFallback[1])
+            : '';
+        resourceKey = keyMatch && keyMatch[1] ? decodeURIComponent(keyMatch[1]) : '';
+      }
+
+      return fileId ? { fileId: fileId, resourceKey: resourceKey } : null;
+    }
+
+    function uniqueStrings_(values) {
+      const seen = {};
+      return values.filter(function (value) {
+        const key = String(value || '').trim();
+        if (!key || seen[key]) return false;
+        seen[key] = true;
+        return true;
+      });
+    }
+
+    function normalizeMediaUrl_(value) {
+      if (!value) return '';
+      const normalized = String(value).trim();
+      if (normalized.indexOf('http://') === 0 || normalized.indexOf('https://') === 0) return normalized;
+      if (normalized.indexOf('drive.google.com') !== -1) return 'https://' + normalized;
+      return '';
+    }
+
+    function escapeHtml_(text) {
+      const div = document.createElement('div');
+      div.appendChild(document.createTextNode(String(text)));
+      return div.innerHTML;
+    }
+
+    function limpiarFormDescargos() {
+      document.getElementById('descargosForm').reset();
+      document.getElementById('charCount').textContent = '0';
+      document.getElementById('descargosUploadStatus').innerHTML = '';
+      evidenciasAportadas = [];
+      actualizarListaEvidencias();
+    }
+
+    function setupDescargoEvidenceHandlers() {
+      document.getElementById('openDescargoCameraBtn').addEventListener('click', function () {
+        document.getElementById('descargoCameraInput').click();
+      });
+      document.getElementById('openDescargoGalleryBtn').addEventListener('click', function () {
+        document.getElementById('descargoGalleryInput').click();
+      });
+      document.getElementById('descargoCameraInput').addEventListener('change', handleDescargoEvidenceSelection);
+      document.getElementById('descargoGalleryInput').addEventListener('change', handleDescargoEvidenceSelection);
+    }
+
+    async function handleDescargoEvidenceSelection(event) {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+
+      if (!/^image\//i.test(file.type)) {
+        showAlert('Solo se permiten archivos de imagen');
+        return;
+      }
+
+      try {
+        const compressedData = await compressDescargoImage_(file);
+        evidenciasAportadas.push(compressedData);
+        actualizarListaEvidencias();
+      } catch (error) {
+        showAlert('Error al procesar la imagen: ' + error.message);
+      }
+    }
+
+    async function compressDescargoImage_(file) {
+      return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+
+        reader.onerror = function () {
+          reject(new Error('No fue posible leer la imagen seleccionada.'));
+        };
+
+        reader.onload = function (event) {
+          const img = new Image();
+
+          img.onerror = function () {
+            reject(new Error('El archivo seleccionado no es una imagen válida.'));
+          };
+
+          img.onload = function () {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxDim = 1600;
+
+            if (Math.max(width, height) > maxDim) {
+              const ratio = maxDim / Math.max(width, height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(function (blob) {
+              if (!blob) {
+                reject(new Error('No fue posible comprimir la imagen.'));
+                return;
+              }
+
+              const compressedReader = new FileReader();
+              compressedReader.onerror = function () {
+                reject(new Error('No fue posible preparar la imagen para enviarla.'));
+              };
+              compressedReader.onload = function () {
+                resolve({
+                  name: file.name || 'evidencia.jpg',
+                  size: blob.size,
+                  dataUrl: compressedReader.result
+                });
+              };
+              compressedReader.readAsDataURL(blob);
+            }, 'image/jpeg', 0.82);
+          };
+
+          img.src = event.target.result;
+        };
+
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function actualizarListaEvidencias() {
+      const container = document.getElementById('evidenciasAportadas');
+
+      if (evidenciasAportadas.length === 0) {
+        container.innerHTML = '<small class="text-muted d-block">Ninguna evidencia seleccionada</small>';
+        return;
+      }
+
+      const html = evidenciasAportadas.map(function (evidence, idx) {
+        return `
+          <div class="card mb-2">
+            <div class="card-body p-2">
+              <div class="d-flex gap-3 align-items-center">
+                <img src="${escapeHtml_(evidence.dataUrl)}"
+                  alt="Evidencia ${idx + 1}"
+                  style="width: 72px; height: 72px; object-fit: cover; border-radius: 8px;">
+                <div class="flex-grow-1 overflow-hidden">
+                  <strong class="d-block text-truncate">${escapeHtml_(evidence.name)}</strong>
+                  <small class="text-muted">${(evidence.size / 1024).toFixed(1)} KB</small>
+                </div>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removerEvidencia(${idx})"
+                  aria-label="Eliminar evidencia">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = html;
+    }
+
+    function removerEvidencia(idx) {
+      evidenciasAportadas.splice(idx, 1);
+      actualizarListaEvidencias();
+    }
+
+    async function uploadDescargoEvidenceToGoogle_(evidence) {
+      const response = await fetch(`${API_URL}?action=subirEvidenciaConvivencia`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=UTF-8'
+        },
+        body: JSON.stringify({
+          name: evidence.name,
+          mimeType: 'image/jpeg',
+          dataUrl: evidence.dataUrl,
+          contexto: 'descargo_residente',
+          caseId: currentCase ? currentCase.id : '',
+          apto: currentCase ? currentCase.apto : ''
+        }),
+        mode: 'cors',
+        credentials: 'omit'
+      });
+
+      const result = await response.json();
+      if (!result.ok) {
+        throw new Error(result.error || 'No fue posible subir la evidencia.');
+      }
+      return result;
+    }
+
+    async function guardarDescargos(e) {
+      e.preventDefault();
+      hideAlert();
+
+      const descargos = document.getElementById('descargosTexto').value.trim();
+
+      if (!descargos) {
+        showAlert('Escribe tus descargos');
+        return;
+      }
+
+      if (descargos.length < 20) {
+        showAlert('Los descargos deben tener al menos 20 caracteres');
+        return;
+      }
+
+      try {
+        const btn = document.getElementById('guardarDescargosBtn');
+        const status = document.getElementById('descargosStatus');
+        const uploadStatus = document.getElementById('descargosUploadStatus');
+        btn.disabled = true;
+
+        const evidenceUrls = [];
+        for (let i = 0; i < evidenciasAportadas.length; i++) {
+          uploadStatus.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Subiendo evidencia ${i + 1}/${evidenciasAportadas.length}...`;
+          const uploadResult = await uploadDescargoEvidenceToGoogle_(evidenciasAportadas[i]);
+          evidenceUrls.push(uploadResult.url);
+        }
+
+        uploadStatus.innerHTML = '';
+        status.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando descargos...';
+
+        const params = new URLSearchParams();
+        params.append('action', 'guardarDescargos');
+        params.append('caseId', currentCase.id);
+        params.append('apto', currentCase.apto);
+        params.append('descargos', descargos);
+        params.append('evidencias', JSON.stringify(evidenceUrls));
+
+        const response = await fetch(`${API_URL}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+          },
+          body: params.toString(),
+          mode: 'cors',
+          credentials: 'omit'
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+          showAlert(data.error || 'Error al guardar descargos');
+          return;
+        }
+
+        showAlert('Descargos guardados exitosamente. Gracias por tu respuesta.', 'success');
+        setTimeout(() => {
+          regresarAlListado();
+        }, 2000);
+
+      } catch (error) {
+        showAlert('Error de conexión: ' + error.message);
+        console.error(error);
+      } finally {
+        document.getElementById('guardarDescargosBtn').disabled = false;
+        document.getElementById('descargosStatus').innerHTML = '';
+        document.getElementById('descargosUploadStatus').innerHTML = '';
+      }
+    }
+
+    function regresarAlListado() {
+      document.getElementById('paso1').classList.add('hidden');
+      document.getElementById('paso2').classList.remove('hidden');
+      document.getElementById('paso3').classList.add('hidden');
+    }
+
+  </script>
+</body>
+
+</html>
