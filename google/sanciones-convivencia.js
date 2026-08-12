@@ -414,9 +414,11 @@ function consultarCasoConvivenciaDetalle_(caseId, aptoVerificacion, e) {
       aptoNorm: caso.aptoNorm,
       motivo: caso.motivo,
       descripcion: caso.descripcion,
-      razonNotificacion: caso.razonNotificacion,
+      justificacion: caso.justificacion,
+      razonNotificacion: caso.justificacion,
       severidad: caso.severidad,
-      cuotasEquivalentes: caso.cuotasEquivalentes,
+      sancionEquivalente: caso.sancionEquivalente,
+      cuotasEquivalentes: caso.sancionEquivalente,
       evidencias: caso.evidencias ? caso.evidencias.split(';').map(function (x) { return x.trim(); }).filter(Boolean) : [],
       estado: caso.estado,
       fechaRegistro: caso.fechaRegistro,
@@ -611,9 +613,9 @@ function obtenerIdxPlanillaConvivencia_(rawHeaders) {
     apto: findColIdxConvivencia_(colMap, ['apto', 'apartamento', 'apt']),
     motivo: findColIdxConvivencia_(colMap, ['motivo']),
     descripcion: findColIdxConvivencia_(colMap, ['descripcion', 'descripciondeloshechos', 'hechos']),
-    razonNotificacion: findColIdxConvivencia_(colMap, ['razonnotificacion', 'razondelanotificacion', 'razon', 'motivonotificacion']),
+    justificacion: findColIdxConvivencia_(colMap, ['justificacion', 'razonnotificacion', 'razondelanotificacion', 'razon', 'motivonotificacion']),
     severidad: findColIdxConvivencia_(colMap, ['severidad']),
-    cuotasEquivalentes: findColIdxConvivencia_(colMap, ['cuotasequivalentes', 'cuotas']),
+    sancionEquivalente: findColIdxConvivencia_(colMap, ['sancionequivalente', 'cuotasequivalentes', 'cuotas']),
     evidencias: findColIdxConvivencia_(colMap, ['evidencias', 'fotos']),
     notificadorAdmin: findColIdxConvivencia_(colMap, ['notificadoradmin', 'notificador']),
     estado: findColIdxConvivencia_(colMap, ['estado']),
@@ -642,9 +644,11 @@ function construirRegistrosConvivencia_(contexto) {
       aptoNorm: IDX.apto !== -1 ? normalizeApto_(row[IDX.apto]) : '',
       motivo: IDX.motivo !== -1 ? safeTrim_(row[IDX.motivo]) : '',
       descripcion: IDX.descripcion !== -1 ? safeTrim_(row[IDX.descripcion]) : '',
-      razonNotificacion: IDX.razonNotificacion !== -1 ? safeTrim_(row[IDX.razonNotificacion]) : '',
+      justificacion: IDX.justificacion !== -1 ? safeTrim_(row[IDX.justificacion]) : '',
+      razonNotificacion: IDX.justificacion !== -1 ? safeTrim_(row[IDX.justificacion]) : '',
       severidad: IDX.severidad !== -1 ? safeTrim_(row[IDX.severidad]) : '',
-      cuotasEquivalentes: IDX.cuotasEquivalentes !== -1 ? Number(row[IDX.cuotasEquivalentes]) || 0 : 0,
+      sancionEquivalente: IDX.sancionEquivalente !== -1 ? Number(row[IDX.sancionEquivalente]) || 0 : 0,
+      cuotasEquivalentes: IDX.sancionEquivalente !== -1 ? Number(row[IDX.sancionEquivalente]) || 0 : 0,
       evidencias: IDX.evidencias !== -1 ? safeTrim_(row[IDX.evidencias]) : '',
       notificadorAdmin: IDX.notificadorAdmin !== -1 ? safeTrim_(row[IDX.notificadorAdmin]) : '',
       estado: IDX.estado !== -1 ? (safeTrim_(row[IDX.estado]) || ESTADO_CASO_PENDIENTE_DESCARGOS) : ESTADO_CASO_PENDIENTE_DESCARGOS,
@@ -668,13 +672,13 @@ function crearCasoConvivencia(params) {
   const apto = safeTrim_(params.apto);
   const motivo = safeTrim_(params.motivo);
   const descripcion = safeTrim_(params.descripcion);
-  const razonNotificacion = safeTrim_(params.razonNotificacion);
+  const justificacion = safeTrim_(params.justificacion || params.razonNotificacion);
   const severidad = safeTrim_(params.severidad);
   const evidenciasArray = params.evidencias || [];
   const notificador = safeTrim_(params.notificador);
 
-  if (!apto || !motivo || !descripcion || !razonNotificacion || !severidad) {
-    throw new Error('Apto, motivo, descripción de los hechos, razón de la notificación y severidad son obligatorios.');
+  if (!apto || !motivo || !descripcion || !justificacion || !severidad) {
+    throw new Error('Apto, motivo, descripción de los hechos, justificación y severidad son obligatorios.');
   }
 
   const severidadConfig = obtenerConfigSeveridad_(severidad);
@@ -694,16 +698,16 @@ function crearCasoConvivencia(params) {
     const IDX = contexto.IDX;
     validarColumnasPlanillaConvivencia_(IDX);
 
-    const filaData = new Array(Math.max(IDX.notasAdmin + 1, 17)).fill('');
+    const filaData = new Array(Math.max(contexto.lastCol || 0, IDX.notasAdmin + 1, 16)).fill('');
 
     if (IDX.id !== -1) filaData[IDX.id] = caseId;
     if (IDX.fecha !== -1) filaData[IDX.fecha] = ahora;
     if (IDX.apto !== -1) filaData[IDX.apto] = apto;
     if (IDX.motivo !== -1) filaData[IDX.motivo] = motivo;
     if (IDX.descripcion !== -1) filaData[IDX.descripcion] = descripcion;
-    if (IDX.razonNotificacion !== -1) filaData[IDX.razonNotificacion] = razonNotificacion;
+    if (IDX.justificacion !== -1) filaData[IDX.justificacion] = justificacion;
     if (IDX.severidad !== -1) filaData[IDX.severidad] = severidad;
-    if (IDX.cuotasEquivalentes !== -1) filaData[IDX.cuotasEquivalentes] = severidadConfig.cuotas;
+    if (IDX.sancionEquivalente !== -1) filaData[IDX.sancionEquivalente] = severidadConfig.cuotas;
     if (IDX.evidencias !== -1) filaData[IDX.evidencias] = evidenciasStr;
     if (IDX.notificadorAdmin !== -1) filaData[IDX.notificadorAdmin] = notificador;
     if (IDX.estado !== -1) filaData[IDX.estado] = ESTADO_CASO_PENDIENTE_DESCARGOS;
@@ -719,8 +723,10 @@ function crearCasoConvivencia(params) {
       apto: apto,
       motivo: motivo,
       descripcion: descripcion,
-      razonNotificacion: razonNotificacion,
+      justificacion: justificacion,
+      razonNotificacion: justificacion,
       severidad: severidad,
+      sancionEquivalente: severidadConfig.cuotas,
       cuotasEquivalentes: severidadConfig.cuotas
     };
 
@@ -781,19 +787,19 @@ function getOrCreatePlanillaConvivencia_(ss) {
     const headers = [
       'ID',
       'Fecha',
-      'Apartamento',
+      'Apto',
       'Motivo',
-      'Descripción',
-      'Razón de Notificación',
+      'Descripcion',
+      'Justificacion',
       'Severidad',
-      'Cuotas Equivalentes',
+      'Sancion Equivalente',
       'Evidencias',
       'Notificador Admin',
       'Estado',
       'Descargos Residente',
       'Evidencias Descargos',
       'Fecha Descargos',
-      'Resolución',
+      'Resolucion',
       'Notas Admin'
     ];
 
@@ -948,15 +954,20 @@ function validarColumnasPlanillaConvivencia_(IDX) {
   const requeridas = [
     ['ID', 'id'],
     ['Fecha', 'fecha'],
-    ['Apartamento', 'apto'],
+    ['Apto', 'apto'],
     ['Motivo', 'motivo'],
-    ['Descripción', 'descripcion'],
-    ['Razón de Notificación', 'razonNotificacion'],
+    ['Descripcion', 'descripcion'],
+    ['Justificacion', 'justificacion'],
     ['Severidad', 'severidad'],
-    ['Cuotas Equivalentes', 'cuotasEquivalentes'],
+    ['Sancion Equivalente', 'sancionEquivalente'],
     ['Evidencias', 'evidencias'],
     ['Notificador Admin', 'notificadorAdmin'],
-    ['Estado', 'estado']
+    ['Estado', 'estado'],
+    ['Descargos Residente', 'descargosResidente'],
+    ['Evidencias Descargos', 'evidenciasDescargos'],
+    ['Fecha Descargos', 'fechaDescargos'],
+    ['Resolucion', 'resolucion'],
+    ['Notas Admin', 'notasAdmin']
   ];
 
   const faltantes = requeridas

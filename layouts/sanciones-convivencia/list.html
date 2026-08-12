@@ -227,7 +227,7 @@
               <p><strong>Fecha:</strong> <span id="detailFecha"></span></p>
               <p><strong>Estado:</strong> <span id="detailEstado"></span></p>
               <p><strong>Notificador:</strong> <span id="detailNotificador"></span></p>
-              <p><strong>Equivalencia:</strong> <span id="detailCuotas"></span> cuota(s) de administración</p>
+              <p><strong>Sanción equivalente:</strong> <span id="detailCuotas"></span> cuota(s) de administración</p>
             </div>
           </div>
         </div>
@@ -241,7 +241,7 @@
           <h6 class="fw-bold mb-1">Hechos reportados</h6>
           <p id="detailDescripcion" class="mb-3"></p>
 
-          <h6 class="fw-bold mb-1">Razón de la notificación</h6>
+          <h6 class="fw-bold mb-1">Justificación de la notificación</h6>
           <div id="detailRazonNotificacion" class="alert alert-warning mb-0"></div>
         </div>
       </div>
@@ -472,12 +472,12 @@
       document.getElementById('detailApto').textContent = caso.apto;
       document.getElementById('detailMotivo').textContent = caso.motivo;
       document.getElementById('detailSeveridad').textContent = caso.severidad || 'No especificada';
-      document.getElementById('detailCuotas').textContent = Number(caso.cuotasEquivalentes || 0);
+      document.getElementById('detailCuotas').textContent = Number(caso.sancionEquivalente ?? caso.cuotasEquivalentes ?? 0);
       document.getElementById('detailFecha').textContent = caso.fechaRegistro || 'Sin fecha';
       document.getElementById('detailEstado').innerHTML = obtenerBadgeEstado(caso.estado || 'PENDIENTE_DESCARGOS');
       document.getElementById('detailNotificador').textContent = caso.notificadorAdmin || 'Administración';
       document.getElementById('detailDescripcion').textContent = caso.descripcion || 'No se registraron los hechos en este caso.';
-      document.getElementById('detailRazonNotificacion').textContent = caso.razonNotificacion || 'No se registró la razón de la notificación en este caso.';
+      document.getElementById('detailRazonNotificacion').textContent = caso.justificacion || caso.razonNotificacion || 'No se registró la justificación de la notificación en este caso.';
 
       if (Array.isArray(caso.evidencias) && caso.evidencias.length > 0) {
         document.getElementById('evidenciasSection').classList.remove('hidden');
