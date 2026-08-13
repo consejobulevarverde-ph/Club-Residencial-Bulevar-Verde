@@ -120,13 +120,7 @@
 </head>
 
 <body>
-  <nav class="navbar navbar-dark">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="{{ "/" | relURL }}">
-        <i class="bi bi-tree-fill me-2"></i>{{ .Site.Title }}
-      </a>
-    </div>
-  </nav>
+  {{ partial "header" . }}
 
   <header class="page-header">
     <div class="container">

@@ -104,6 +104,34 @@
             cursor: not-allowed;
         }
 
+        .btn-outline-primary {
+            color: var(--color-primary);
+            border-color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+        }
+        .btn-outline-primary:hover,
+        .btn-outline-primary:focus {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+            color: var(--color-white);
+        }
+        .historical-query-panel {
+            max-width: 760px;
+            margin-left: auto;
+            margin-right: auto;
+            padding: 22px;
+            border: 2px solid var(--color-tertiary);
+            border-radius: 10px;
+            background-color: #f8fbf8;
+        }
+        .historical-query-panel h5 {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+        }
+        #historical-period-status {
+            min-height: 1.5rem;
+        }
+
         footer {
             background-color: var(--color-primary);
             color: var(--color-light);
@@ -293,26 +321,7 @@
     </style>
 </head>
 <body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{{ "/" | relURL }}">
-                <i class="bi bi-houses-fill"></i> Club Bulevar Verde
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    {{ range .Site.Menus.main }}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ .URL }}">{{ .Name }}</a>
-                    </li>
-                    {{ end }}
-                </ul>
-            </div>
-        </div>
-    </nav>
+    {{ partial "header" . }}
 
     <!-- Page Header -->
     <section class="page-header text-center">
@@ -336,6 +345,15 @@
                     <li>El sistema verificará la información y mostrará las sanciones registradas.</li>
                     <li>Si deseas controvertir alguna sanción, usa el formulario al final del listado.</li>
                 </ol>
+            </div>
+
+            <!-- Sanciones de Convivencia -->
+            <div class="info-card" style="border-left-color: var(--color-secondary); background-color: #f0f8f1;">
+                <h5><i class="bi bi-chat-dots"></i> Sanciones de Convivencia</h5>
+                <p class="mb-2">¿Buscas consultar sanciones relacionadas con el reglamento de convivencia?</p>
+                <a href="{{ site.BaseURL }}sanciones-convivencia/" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-arrow-right"></i> Ver sanciones de convivencia
+                </a>
             </div>
 
             <!-- Formulario de búsqueda -->
@@ -365,10 +383,51 @@
                 </div>
             </div>
 
-            <div class="text-center mb-4">
+            <div class="d-flex flex-wrap justify-content-center gap-2 mb-4">
                 <button id="btn-consultar" class="btn btn-primary btn-lg" onclick="consultarSanciones()">
                     <i class="bi bi-search"></i> Consultar sanciones
                 </button>
+
+                <button id="btn-meses-anteriores"
+                        class="btn btn-outline-primary btn-lg"
+                        type="button"
+                        aria-expanded="false"
+                        aria-controls="historical-query-panel"
+                        onclick="toggleMesesAnteriores()">
+                    <i class="bi bi-calendar3"></i> Consultar meses anteriores
+                </button>
+            </div>
+
+            <div id="historical-query-panel" class="historical-query-panel d-none mb-4">
+                <h5 class="mb-2">
+                    <i class="bi bi-clock-history"></i> Sanciones de meses anteriores
+                </h5>
+                <p class="text-muted small mb-3">
+                    Selecciona uno de los meses cerrados disponibles. La consulta utiliza el mismo apartamento y placa ingresados arriba.
+                </p>
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-7">
+                        <label for="select-periodo-historico" class="form-label fw-bold">
+                            Mes a consultar
+                        </label>
+                        <select id="select-periodo-historico" class="form-select form-select-lg" disabled>
+                            <option value="">Cargando meses disponibles...</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-5 d-grid">
+                        <button id="btn-consultar-historico"
+                                class="btn btn-primary btn-lg"
+                                type="button"
+                                onclick="consultarSancionesHistoricas()"
+                                disabled>
+                            <i class="bi bi-search"></i> Consultar mes seleccionado
+                        </button>
+                    </div>
+                </div>
+
+                <div id="historical-period-status" class="small text-muted mt-2" aria-live="polite"></div>
             </div>
 
             <!-- Spinner de carga -->
@@ -391,6 +450,7 @@
                 <h4 class="mb-1" style="color: var(--color-primary);">
                     <i class="bi bi-list-check"></i>
                     Sanciones del Apto <span id="display-apto" class="fw-bold"></span>
+                    <span id="display-periodo" class="badge rounded-pill text-bg-secondary ms-2 d-none"></span>
                 </h4>
                 <p id="sanciones-count" class="text-muted small mb-4"></p>
 
@@ -454,23 +514,7 @@
         </div>
     </div>
 
-    <!-- Footer -->
-    <footer>
-        <div class="container text-center">
-            <p>&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</p>
-            <p class="mt-2">
-                {{ with .Site.Params.facebook }}
-                <a href="{{ . }}" target="_blank" class="me-3"><i class="bi bi-facebook"></i></a>
-                {{ end }}
-                {{ with .Site.Params.instagram }}
-                <a href="{{ . }}" target="_blank" class="me-3"><i class="bi bi-instagram"></i></a>
-                {{ end }}
-                {{ with .Site.Params.whatsappComunidad }}
-                <a href="{{ . }}" target="_blank"><i class="bi bi-whatsapp"></i></a>
-                {{ end }}
-            </p>
-        </div>
-    </footer>
+    {{ partial "footer" . }}
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -489,11 +533,19 @@
         // V6 Sanciones https://script.google.com/macros/s/AKfycbwBCQ9UrUWWaIJMEzB3U36LZ38atGyrEwSai6wPBq-e7eg3T8WqM71-Bi3Fxd9FSZ6-dA/exec
         // V7 Sanciones https://script.google.com/macros/s/AKfycbxdFVfEtJDXT8msK5jfzZO31opGIDjoGnHGHVTd7sVdmfxuj0DZbmqQU7o-oKb0A1Bpjg/exec
         // V8 Sanciones https://script.google.com/macros/s/AKfycbyz2vTiOvwHKQe5xtjNqWrjiPtTy4oF-zivnmEdcBWlYSxhB_twv2wBWByTWRcKJp8Jiw/exec
-        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyz2vTiOvwHKQe5xtjNqWrjiPtTy4oF-zivnmEdcBWlYSxhB_twv2wBWByTWRcKJp8Jiw/exec';
+        // V10 Sanciones https://script.google.com/macros/s/AKfycbwXBHPiLRwHCZB6aYc-MMWvJUClHB_AyUOcYU4DpLjjoxoHR0AvAnUNyrzxG08Gv27zUA/exec
+        // V11 Sanciones https://script.google.com/macros/s/AKfycbwVMBuVMH3GOaElmE9CE5kMEgLMpTA2Th6A6g9v6Beb7Up4PcmVf9rqks7rR3oV48Vf/exec
+        // V12 Sanciones https://script.google.com/macros/s/AKfycbyyrV6kX6OwPJlxERYLN3r_Da-LYKOZjBcxYNc3bhSsMNT5AVhKV1dr5Nt9FPGVmHcWJw/exec
+        //V14 Sanciones https://script.google.com/macros/s/AKfycbzQs8yx04g0XfWUL0jsJPJPASxCRimmm2R94VuXrcC1Bz4_1gz8VC_xOituVEH2deV3/exec
+        const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzQs8yx04g0XfWUL0jsJPJPASxCRimmm2R94VuXrcC1Bz4_1gz8VC_xOituVEH2deV3/exec';
 
         var currentApto = '';
+        var currentPeriodoLabel = '';
         var selectedIds = [];
         var loadingCountdownTimer = null;
+        var historicalPeriodsLoaded = false;
+        var historicalPeriodsLoading = false;
+        var consultaEnCurso = false;
 
         document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('input-apto').addEventListener('keydown', handleEnter_);
@@ -502,6 +554,10 @@
             // Forzar mayúsculas en placa mientras escribe
             document.getElementById('input-placa').addEventListener('input', function () {
                 this.value = this.value.toUpperCase();
+            });
+
+            document.getElementById('select-periodo-historico').addEventListener('change', function () {
+                updateHistoricalQueryButton_();
             });
         });
 
@@ -514,6 +570,125 @@
         // ========== CONSULTA ==========
 
         window.consultarSanciones = function () {
+            ejecutarConsulta_({
+                historico: false,
+                periodo: '',
+                periodoLabel: ''
+            });
+        };
+
+        window.toggleMesesAnteriores = function () {
+            var panel = document.getElementById('historical-query-panel');
+            var toggleButton = document.getElementById('btn-meses-anteriores');
+            var isOpening = panel.classList.contains('d-none');
+
+            panel.classList.toggle('d-none', !isOpening);
+            toggleButton.setAttribute('aria-expanded', isOpening ? 'true' : 'false');
+
+            if (isOpening && !historicalPeriodsLoaded && !historicalPeriodsLoading) {
+                loadHistoricalPeriods_();
+            }
+        };
+
+        window.consultarSancionesHistoricas = function () {
+            var select = document.getElementById('select-periodo-historico');
+            var periodo = select.value;
+            var selectedOption = select.options[select.selectedIndex];
+            var periodoLabel = selectedOption ? selectedOption.textContent : '';
+
+            if (!periodo) {
+                showError_('Selecciona el mes anterior que deseas consultar.');
+                select.focus();
+                return;
+            }
+
+            ejecutarConsulta_({
+                historico: true,
+                periodo: periodo,
+                periodoLabel: periodoLabel
+            });
+        };
+
+        function loadHistoricalPeriods_() {
+            var select = document.getElementById('select-periodo-historico');
+            var status = document.getElementById('historical-period-status');
+
+            historicalPeriodsLoading = true;
+            select.disabled = true;
+            select.innerHTML = '<option value="">Cargando meses disponibles...</option>';
+            status.textContent = 'Consultando el archivo histórico...';
+            updateHistoricalQueryButton_();
+
+            fetch(WEBAPP_URL + '?action=listarPeriodosHistoricos', { cache: 'no-store' })
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (data) {
+                    if (!data.ok) {
+                        throw new Error(data.error || 'No fue posible cargar los meses anteriores.');
+                    }
+
+                    select.innerHTML = '';
+
+                    var emptyOption = document.createElement('option');
+                    emptyOption.value = '';
+                    emptyOption.textContent = 'Seleccione un mes...';
+                    select.appendChild(emptyOption);
+
+                    (data.periodos || []).forEach(function (item) {
+                        var option = document.createElement('option');
+                        option.value = item.periodo;
+                        option.textContent = item.label;
+                        select.appendChild(option);
+                    });
+
+                    historicalPeriodsLoaded = true;
+                    select.disabled = false;
+
+                    if (!data.periodos || data.periodos.length === 0) {
+                        status.textContent = 'No hay meses históricos disponibles.';
+                    } else {
+                        status.textContent =
+                            data.periodos.length +
+                            ' mes(es) histórico(s) disponible(s).';
+                    }
+                })
+                .catch(function (error) {
+                    historicalPeriodsLoaded = false;
+                    select.innerHTML = '<option value="">No fue posible cargar los meses</option>';
+                    select.disabled = true;
+                    status.textContent = error.message || 'Error cargando el archivo histórico.';
+                })
+                .then(function () {
+                    historicalPeriodsLoading = false;
+                    updateHistoricalQueryButton_();
+                });
+        }
+
+        function updateHistoricalQueryButton_() {
+            var select = document.getElementById('select-periodo-historico');
+            var button = document.getElementById('btn-consultar-historico');
+
+            button.disabled =
+                consultaEnCurso ||
+                select.disabled ||
+                !select.value;
+        }
+
+        function setConsultButtonsDisabled_(disabled) {
+            consultaEnCurso = disabled === true;
+
+            var currentButton = document.getElementById('btn-consultar');
+
+            if (currentButton) {
+                currentButton.disabled = consultaEnCurso;
+            }
+
+            updateHistoricalQueryButton_();
+        }
+
+        function ejecutarConsulta_(options) {
+            var opts = options || {};
             var apto = document.getElementById('input-apto').value.trim();
             var placa = document.getElementById('input-placa').value.trim().toUpperCase();
 
@@ -522,6 +697,7 @@
                 document.getElementById('input-apto').focus();
                 return;
             }
+
             if (!placa) {
                 showError_('Por favor ingrese la placa del vehículo.');
                 document.getElementById('input-placa').focus();
@@ -529,29 +705,34 @@
             }
 
             currentApto = apto;
-            var consultButton = document.getElementById('btn-consultar');
-            if (consultButton) {
-                consultButton.disabled = true;
-            }
+            currentPeriodoLabel = opts.historico ? String(opts.periodoLabel || '') : '';
+
+            setConsultButtonsDisabled_(true);
             startLoadingCountdown_();
 
             document.getElementById('loading-spinner').classList.add('show');
             document.getElementById('consulta-error').classList.add('d-none');
             document.getElementById('sanciones-result').classList.add('d-none');
 
+            var action = opts.historico ? 'consultarHistorico' : 'consultar';
             var url = WEBAPP_URL +
-                '?action=consultar' +
+                '?action=' + encodeURIComponent(action) +
                 '&apto=' + encodeURIComponent(apto) +
                 '&placa=' + encodeURIComponent(placa);
 
-            fetch(url)
-                .then(function (r) { return r.json(); })
+            if (opts.historico) {
+                url += '&periodo=' + encodeURIComponent(opts.periodo || '');
+            }
+
+            fetch(url, { cache: 'no-store' })
+                .then(function (response) {
+                    return response.json();
+                })
                 .then(function (data) {
                     stopLoadingCountdown_();
                     document.getElementById('loading-spinner').classList.remove('show');
-                    if (consultButton) {
-                        consultButton.disabled = false;
-                    }
+                    setConsultButtonsDisabled_(false);
+
                     if (data.ok) {
                         renderSanciones_(data);
                     } else {
@@ -561,12 +742,10 @@
                 .catch(function () {
                     stopLoadingCountdown_();
                     document.getElementById('loading-spinner').classList.remove('show');
-                    if (consultButton) {
-                        consultButton.disabled = false;
-                    }
+                    setConsultButtonsDisabled_(false);
                     showError_('Error de conexión. Verifique su internet e intente de nuevo.');
                 });
-        };
+        }
 
         function startLoadingCountdown_() {
             stopLoadingCountdown_();
@@ -613,7 +792,19 @@
             var listEl = document.getElementById('sanciones-list');
             var countEl = document.getElementById('sanciones-count');
 
+            var periodoEl = document.getElementById('display-periodo');
+
             document.getElementById('display-apto').textContent = data.apto;
+            currentPeriodoLabel = data.historico ? String(data.periodoLabel || '') : '';
+
+            if (currentPeriodoLabel) {
+                periodoEl.textContent = currentPeriodoLabel;
+                periodoEl.classList.remove('d-none');
+            } else {
+                periodoEl.textContent = '';
+                periodoEl.classList.add('d-none');
+            }
+
             listEl.innerHTML = '';
 
             // Reiniciar formulario de controversia
@@ -630,13 +821,20 @@
                     '<div class="alert alert-success">' +
                     '<i class="bi bi-check-circle-fill"></i> ' +
                     'No se encontraron sanciones registradas para el Apto ' +
-                    escapeHtml_(data.apto) + '.' +
+                    escapeHtml_(data.apto) +
+                    (currentPeriodoLabel ? ' en ' + escapeHtml_(currentPeriodoLabel) : '') +
+                    '.' +
                     '</div>';
                 resultEl.classList.remove('d-none');
                 return;
             }
 
-            countEl.textContent = 'Se encontraron ' + data.sanciones.length + ' registro(s) de sanción.';
+            countEl.textContent =
+                'Se encontraron ' +
+                data.sanciones.length +
+                ' registro(s) de sanción' +
+                (currentPeriodoLabel ? ' en ' + currentPeriodoLabel : '') +
+                '.';
 
             data.sanciones.forEach(function (s, idx) {
                 var card = buildSancionCard_(s, idx);
@@ -752,21 +950,153 @@
                 return '';
             }
 
-            var url = normalizeMediaUrl_(rawValue);
+            var originalUrl = normalizeMediaUrl_(rawValue);
 
-            if (!url) return '';
+            if (!originalUrl) return '';
+
+            var displayUrls = buildMediaDisplayUrls_(originalUrl);
+            var initialUrl = displayUrls.shift() || originalUrl;
+            var fallbackUrls = encodeURIComponent(JSON.stringify(displayUrls));
 
             return '' +
-                '<a href="' + escapeHtml_(url) + '" target="_blank" rel="noopener noreferrer">' +
+                '<a href="' + escapeHtml_(originalUrl) + '" target="_blank" rel="noopener noreferrer">' +
                     '<img ' +
-                        'src="' + escapeHtml_(url) + '" ' +
+                        'src="' + escapeHtml_(initialUrl) + '" ' +
+                        'data-original-url="' + escapeHtml_(originalUrl) + '" ' +
+                        'data-fallback-urls="' + escapeHtml_(fallbackUrls) + '" ' +
                         'alt="Foto de la sanción" ' +
                         'class="sancion-photo-thumb" ' +
                         'loading="lazy" ' +
+                        'decoding="async" ' +
                         'referrerpolicy="no-referrer" ' +
-                        'onerror="this.style.display=\'none\'; this.parentElement.insertAdjacentHTML(\'afterend\', \'<a class=&quot;media-link&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot; href=&quot;' + escapeHtml_(url) + '&quot;><i class=&quot;bi bi-camera-fill&quot;></i> Abrir foto</a>\');"' +
+                        'onerror="window.handleSancionPhotoError_(this)"' +
                     '>' +
                 '</a>';
+        }
+
+        window.handleSancionPhotoError_ = function (img) {
+            if (!img) return;
+
+            var fallbackUrls = [];
+
+            try {
+                fallbackUrls = JSON.parse(
+                    decodeURIComponent(img.getAttribute('data-fallback-urls') || '')
+                );
+            } catch (error) {
+                fallbackUrls = [];
+            }
+
+            if (fallbackUrls.length > 0) {
+                var nextUrl = fallbackUrls.shift();
+                img.setAttribute(
+                    'data-fallback-urls',
+                    encodeURIComponent(JSON.stringify(fallbackUrls))
+                );
+                img.src = nextUrl;
+                return;
+            }
+
+            var originalUrl = img.getAttribute('data-original-url') || '';
+            var parent = img.parentElement;
+
+            img.style.display = 'none';
+
+            if (!parent || !originalUrl) return;
+            if (parent.nextElementSibling && parent.nextElementSibling.classList.contains('media-link')) {
+                return;
+            }
+
+            var link = document.createElement('a');
+            link.className = 'media-link';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.href = originalUrl;
+            link.innerHTML = '<i class="bi bi-camera-fill"></i> Abrir foto';
+            parent.insertAdjacentElement('afterend', link);
+        };
+
+        function buildMediaDisplayUrls_(url) {
+            var normalizedUrl = normalizeMediaUrl_(url);
+
+            if (!normalizedUrl) return [];
+
+            var driveInfo = parseGoogleDriveMediaUrl_(normalizedUrl);
+
+            // Compatibilidad anterior: las URLs firmadas de AppSheet y otras
+            // URLs HTTP continúan utilizándose sin transformación.
+            if (!driveInfo) {
+                return [normalizedUrl];
+            }
+
+            var resourceKeyQuery = driveInfo.resourceKey
+                ? '&resourcekey=' + encodeURIComponent(driveInfo.resourceKey)
+                : '';
+
+            // El endpoint /uc puede responder 403 al cargarse como recurso
+            // embebido. Para la miniatura se intenta primero el endpoint
+            // thumbnail y luego dos alternativas, conservando /uc como enlace.
+            return uniqueStrings_([
+                'https://drive.google.com/thumbnail?id=' +
+                    encodeURIComponent(driveInfo.fileId) +
+                    resourceKeyQuery +
+                    '&sz=w1200',
+                'https://lh3.googleusercontent.com/d/' +
+                    encodeURIComponent(driveInfo.fileId) +
+                    '=w1200',
+                normalizedUrl
+            ]);
+        }
+
+        function parseGoogleDriveMediaUrl_(url) {
+            var value = String(url || '').trim();
+
+            if (!value || value.indexOf('drive.google.com') === -1) {
+                return null;
+            }
+
+            var fileId = '';
+            var resourceKey = '';
+
+            try {
+                var parsed = new URL(value, window.location.href);
+                fileId = parsed.searchParams.get('id') || '';
+                resourceKey = parsed.searchParams.get('resourcekey') || '';
+
+                if (!fileId) {
+                    var pathMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/i);
+                    fileId = pathMatch && pathMatch[1] ? pathMatch[1] : '';
+                }
+            } catch (error) {
+                var idMatch = value.match(/[?&]id=([^&#]+)/i);
+                var keyMatch = value.match(/[?&]resourcekey=([^&#]+)/i);
+                var pathMatchFallback = value.match(/\/file\/d\/([^/?#]+)/i);
+
+                fileId = idMatch && idMatch[1]
+                    ? decodeURIComponent(idMatch[1])
+                    : pathMatchFallback && pathMatchFallback[1]
+                        ? decodeURIComponent(pathMatchFallback[1])
+                        : '';
+                resourceKey = keyMatch && keyMatch[1]
+                    ? decodeURIComponent(keyMatch[1])
+                    : '';
+            }
+
+            return fileId
+                ? { fileId: fileId, resourceKey: resourceKey }
+                : null;
+        }
+
+        function uniqueStrings_(values) {
+            var seen = {};
+
+            return values.filter(function (value) {
+                var key = String(value || '').trim();
+
+                if (!key || seen[key]) return false;
+                seen[key] = true;
+                return true;
+            });
         }
 
 
@@ -830,12 +1160,22 @@
 
             var to = 'bulevarverdeadmon@gmail.com';
 
-            var subject = 'Controversia de sanciones - Apto ' + currentApto;
+            var periodoSubject = currentPeriodoLabel
+                ? ' - ' + currentPeriodoLabel
+                : '';
+
+            var subject =
+                'Controversia de sanciones - Apto ' +
+                currentApto +
+                periodoSubject;
 
             var body =
                 'Cordial saludo,\n\n' +
                 'Quiero controvertir las siguientes sanciones:\n\n' +
                 'Apartamento: ' + currentApto + '\n' +
+                (currentPeriodoLabel
+                    ? 'Periodo consultado: ' + currentPeriodoLabel + '\n'
+                    : '') +
                 'IDs de sanciones: ' + ids + '\n\n' +
                 'Motivo de la controversia:\n' +
                 msg + '\n\n' +

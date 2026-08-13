@@ -80,14 +80,7 @@
 </head>
 
 <body>
-  <nav class="navbar navbar-dark">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="{{ .Site.Home.RelPermalink }}">
-        <i class="bi bi-tree-fill me-2"></i>{{ .Site.Title }}
-      </a>
-      <span class="navbar-text text-white">Vigilancia</span>
-    </div>
-  </nav>
+  {{ partial "header" . }}
 
   <header class="header">
     <div class="container">
@@ -565,6 +558,8 @@
       });
     }());
   </script>
+
+  {{ partial "footer" . }}
 </body>
 
 </html>

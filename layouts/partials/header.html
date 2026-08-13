@@ -1,0 +1,19 @@
+<nav class="navbar navbar-expand-lg navbar-dark" style="background-color: var(--p, #2c5f2d) !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+  <div class="container">
+    <a class="navbar-brand" href="{{ .Site.Home.RelPermalink }}" style="font-weight: 800; font-size: 1.5rem; color: #ffffff !important;">
+      <i class="bi bi-houses-fill"></i> Club Bulevar Verde
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+        {{ range .Site.Menus.main }}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ .URL }}" style="color: #e8f5e9 !important; font-weight: 600;">{{ .Name }}</a>
+        </li>
+        {{ end }}
+      </ul>
+    </div>
+  </div>
+</nav>

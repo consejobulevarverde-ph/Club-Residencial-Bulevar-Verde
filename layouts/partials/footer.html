@@ -1,0 +1,8 @@
+<footer style="background-color: var(--p); color: var(--l); padding: 40px 0; margin-top: 60px;">
+  <div class="container text-center">
+    <p>&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</p>
+    {{ with .Site.Params.facebook }}<a href="{{ . }}" target="_blank" class="me-3"><i class="bi bi-facebook"></i></a>{{ end }}
+    {{ with .Site.Params.instagram }}<a href="{{ . }}" target="_blank" class="me-3"><i class="bi bi-instagram"></i></a>{{ end }}
+    {{ with .Site.Params.whatsappComunidad }}<a href="{{ . }}" target="_blank"><i class="bi bi-whatsapp"></i></a>{{ end }}
+  </div>
+</footer>

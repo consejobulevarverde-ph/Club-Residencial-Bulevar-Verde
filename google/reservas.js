@@ -5,7 +5,7 @@ const SHEET_RESPUESTAS = 'Respuestas de formulario 1';
 const SHEET_BIENES = 'Bienes';
 const SHEET_CONFIG = 'Config';
 
-const RESERVAS_VERSION = '13.1.3-mensaje-mora-correo-no-bloqueante';
+const RESERVAS_VERSION = '15.1.0-flujo-formulario';
 
 // Esta es la única fuente autorizada para datos de unidades, personas,
 // vínculos y estado de cuenta utilizados por el módulo de reservas.
@@ -24,15 +24,56 @@ const COPROPIEDAD_SHEET_ESTADO_CUENTA = 'Estado_Cuenta';
 const RESERVATION_REQUEST_CACHE_SECONDS = 900;
 
 // Estados válidos del sistema
-const ESTADO_PENDIENTE = 'Pendiente';        // Estado inicial - requiere verificación de pago
-// const ESTADO_APROBADA = 'Aprobada';        // DEPRECADO - Ya no se usa en el flujo
-const ESTADO_CONFIRMADA = 'Confirmado';       // Después de verificar pago manualmente
+const ESTADO_PENDIENTE = 'Pendiente';
+const ESTADO_CONFIRMADA = 'Confirmado';
 const ESTADO_RECHAZADA_REGLA = 'Rechazada por regla';
 const ESTADO_RECHAZADA_CONFLICTO = 'Rechazada por conflicto';
 const ESTADO_CANCELADA = 'Cancelada';
 
-// Estado que NO bloquea disponibilidad (solo Cancelada)
-const ESTADO_NO_BLOQUEANTE = ESTADO_CANCELADA;
+// Modalidades de uso de las canchas.
+const MODALIDAD_USO_RECREATIVO = 'RECREATIVO_RESIDENTES';
+const MODALIDAD_USO_ORGANIZADO = 'ORGANIZADO_CON_INVITADOS';
+
+// Toda la configuración funcional se obtiene exclusivamente de las pestañas
+// Bienes y Config. No se crean hojas adicionales de configuración y no se
+// fuerzan activaciones, horarios, duraciones ni precios desde el código.
+// La elegibilidad financiera y las restricciones de la unidad se conservan
+// para TODAS las modalidades y se validan en validateReservationAccess_().
+const RESERVAS_BIEN_HEADERS_REQUERIDOS = [
+  'BienID',
+  'Tipo',
+  'Descripcion',
+  'HoraApertura',
+  'HoraCierre',
+  'DuracionMin',
+  'DuracionMax',
+  'Activo',
+  'CostoReserva',
+  'DepositoGarantia',
+  'RequierePago',
+  'RequiereAprobacion',
+  'AnticipacionMinHabiles',
+  'AnticipacionMaxDias'
+];
+
+const RESERVAS_CONFIG_KEYS_REQUERIDAS = [
+  'dias_anticipacion_max',
+  'duracion_min_horas',
+  'duracion_max_horas',
+  'hora_apertura',
+  'hora_cierre',
+  'requiere_pago',
+  'requiere_aprobacion',
+  'max_reservas_activas_por_apto',
+  'max_reservas_recreativas_dia_por_apto',
+  'max_reservas_recreativas_semana_por_apto',
+  'dias_agenda_publica',
+  'cancha_recreativa_costo',
+  'cancha_recreativa_requiere_pago',
+  'cancha_recreativa_requiere_aprobacion',
+  'cancha_recreativa_anticipacion_min_habiles',
+  'cancha_recreativa_anticipacion_max_dias'
+];
 
 // Origenes de reserva
 const ORIGEN_GOOGLE_FORM = 'GOOGLE_FORM';
@@ -66,9 +107,15 @@ function doGet(e) {
       });
     }
 
-    // Disponibilidad de todos los bienes para una fecha
+    // Disponibilidad de todos los bienes para una fecha.
     if (action === 'availability') {
       return handleAvailabilityQuery_(e);
+    }
+
+    // Agenda pública resumida de canchas para los próximos días.
+    // No expone nombres, apartamentos, correos ni identificadores de reserva.
+    if (action === 'agenda') {
+      return handlePublicAgendaQuery_(e);
     }
 
     // Verificar si una reserva existe por requestId
@@ -88,6 +135,12 @@ function doGet(e) {
           exists: true,
           idReserva: reservation.idReserva,
           estado: reservation.estado,
+          modalidadUso: reservation.modalidadUso,
+          requierePago: reservation.requierePago,
+          requiereAprobacion: reservation.requiereAprobacion,
+          confirmacionAutomatica: reservation.confirmacionAutomatica,
+          precioReserva: reservation.precioReserva,
+          depositoGarantia: reservation.depositoGarantia,
           rowIndex: reservation.rowIndex
         });
       }
@@ -137,7 +190,7 @@ function doGet(e) {
       });
     }
 
-    if (!toBoolean_(bien.Activo)) {
+    if (!isBienEnabled_(bien)) {
       return jsonOutput_({
         ok: false,
         error: `El bien ${bienId} no está activo`
@@ -153,7 +206,7 @@ function doGet(e) {
       });
     }
 
-    const validacionFecha = validateAdvanceDays_(fecha, config);
+    const validacionFecha = validateAvailabilityDate_(fecha, config);
     if (!validacionFecha.ok) {
       return jsonOutput_({
         ok: false,
@@ -169,6 +222,7 @@ function doGet(e) {
       descripcion: bien.Descripcion,
       fecha: formatDateYMD_(fecha),
       requiereAprobacion: normalizeYesNo_(config.requiere_aprobacion) === 'SI',
+      politicas: getPublicReservationPolicies_(bien, fecha, config),
       slots: slots
     });
   } catch (error) {
@@ -252,49 +306,73 @@ function doPost(e) {
       });
     }
 
-    const existingReservation =
-      findReservationByRequestId_(
-        payload.requestId
-      );
-
-    if (existingReservation) {
-      saveReservationRequestStatus_(
-        payload.requestId,
-        {
-          status: 'CREATED',
-          idReserva:
-            existingReservation.idReserva
-        }
-      );
-
-      return jsonOutput_({
-        ok: true,
-        idReserva:
-          existingReservation.idReserva,
-        mensaje:
-          'Reserva ya existe (duplicado evitado)',
-        rowIndex:
-          existingReservation.rowIndex
-      });
-    }
-
-    ensureReservationTechnicalColumns_();
-
-    const result = createReservation_(payload);
-
-    if (!result.ok) {
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(30000)) {
       saveReservationRequestStatus_(
         payload.requestId,
         {
           status: 'REJECTED',
-          code: result.code ||
-            'RESERVA_RECHAZADA',
-          error: result.error ||
-            'La solicitud no cumple los requisitos.'
+          code: 'SISTEMA_OCUPADO',
+          error:
+            'El sistema está procesando otra reserva. Intenta nuevamente en unos segundos.'
         }
       );
 
-      return jsonOutput_(result);
+      return jsonOutput_({
+        ok: false,
+        code: 'SISTEMA_OCUPADO',
+        error:
+          'El sistema está procesando otra reserva. Intenta nuevamente en unos segundos.'
+      });
+    }
+
+    let result;
+    try {
+      const existingReservation =
+        findReservationByRequestId_(
+          payload.requestId
+        );
+
+      if (existingReservation) {
+        saveReservationRequestStatus_(
+          payload.requestId,
+          {
+            status: 'CREATED',
+            idReserva:
+              existingReservation.idReserva
+          }
+        );
+
+        return jsonOutput_({
+          ok: true,
+          idReserva:
+            existingReservation.idReserva,
+          mensaje:
+            'Reserva ya existe (duplicado evitado)',
+          rowIndex:
+            existingReservation.rowIndex
+        });
+      }
+
+      ensureReservationTechnicalColumns_();
+      result = createReservation_(payload);
+
+      if (!result.ok) {
+        saveReservationRequestStatus_(
+          payload.requestId,
+          {
+            status: 'REJECTED',
+            code: result.code ||
+              'RESERVA_RECHAZADA',
+            error: result.error ||
+              'La solicitud no cumple los requisitos.'
+          }
+        );
+
+        return jsonOutput_(result);
+      }
+    } finally {
+      lock.releaseLock();
     }
 
     const notification =
@@ -317,6 +395,9 @@ function doPost(e) {
       idReserva: result.idReserva,
       estado: result.estado,
       observaciones: result.observaciones,
+      modalidadUso: result.modalidadUso,
+      requierePago: result.requierePago,
+      confirmacionAutomatica: result.confirmacionAutomatica,
       rowIndex: result.rowIndex,
       unidadId: result.unidadId,
       notificacionAdmin:
@@ -414,7 +495,7 @@ function notifyAdminReservation_(
       'Request ID: ' + payload.requestId + '\n' +
       'Unidad: ' + result.unidadId + '\n\n' +
       'Datos declarados por el solicitante:\n' +
-      'Nombre: ' + result.nombreSolicitante + '\n' +
+      'Nombre del adulto responsable: ' + result.nombreSolicitante + '\n' +
       'Identidad registrada validada: NO\n' +
       'Correo electrónico: ' +
         result.emailSolicitante + '\n\n' +
@@ -422,7 +503,14 @@ function notifyAdminReservation_(
       'Inmueble: ' + descripcionBien + '\n' +
       'Asunto: ' + payload.asunto + '\n' +
       'Fecha: ' + payload.fecha + '\n' +
-      'Horario: ' + payload.horario + '\n\n' +
+      'Horario: ' + payload.horario + '\n' +
+      'Modalidad: ' + getReservationModeLabel_(result.modalidadUso) + '\n' +
+      'Costo de reserva: ' + result.precioReserva + '\n' +
+      'Depósito de garantía: ' + result.depositoGarantia + '\n' +
+      'Requiere pago: ' + (result.requierePago ? 'SI' : 'NO') + '\n' +
+      'Requiere aprobación: ' + (result.requiereAprobacion ? 'SI' : 'NO') + '\n' +
+      'Adulto responsable: ' +
+        (payload.adultoResponsable || payload.nombre || '') + '\n\n' +
       'Elegibilidad financiera de la unidad verificada: SI\n' +
       'Estado: ' + result.estado + '\n' +
       'Observaciones: ' +
@@ -581,7 +669,7 @@ function onFormSubmit(e) {
 
     // Escribir observaciones con ID
     const observacionesCol = getColumnIndex_(headers, 'Observaciones');
-    sheet.getRange(rowIndex, observacionesCol).setValue(idReserva + ' - Pendiente de confirmación de pago');
+    sheet.getRange(rowIndex, observacionesCol).setValue(idReserva + ' - Pendiente de validación administrativa');
 
     // Enviar correo
     const asuntoEmail = '[Bulevar Verde] Nueva Reserva - ' + idReserva;
@@ -598,7 +686,7 @@ function onFormSubmit(e) {
       'Asunto: ' + asunto + '\n' +
       'Fecha: ' + fechaStr + '\n' +
       'Horario: ' + horarioStr + '\n\n' +
-      'Estado: Pendiente de confirmación de pago\n\n' +
+      'Estado: Pendiente de validación administrativa\n\n' +
       'Fecha de recepción: ' + Utilities.formatDate(fecha, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') + '\n\n' +
       'Este correo fue generado automáticamente desde el sistema de reservas de Bulevar Verde.';
 
@@ -700,6 +788,14 @@ function processReservationRow_(rowIndex) {
     torre: safeTrim_(rowObj['Torre']),
     apto: safeTrim_(rowObj['Apto']),
     nombre: safeTrim_(rowObj['Nombre']),
+    modalidadUso: safeTrim_(rowObj['ModalidadUso']),
+    numeroParticipantes: rowObj['NumeroParticipantes'],
+    numeroInvitados: rowObj['NumeroInvitados'],
+    confirmaSoloResidentes:
+      normalizeYesNo_(rowObj['ConfirmaSoloResidentes']) === 'SI',
+    participanMenores14:
+      normalizeYesNo_(rowObj['ParticipanMenores14']) === 'SI',
+    adultoResponsable: safeTrim_(rowObj['AdultoResponsable']),
     estadoActual: safeTrim_(rowObj['Estado']),
     observacionesActual:
       safeTrim_(rowObj['Observaciones'])
@@ -778,8 +874,8 @@ function validateReservation_(
     );
   }
 
-  // Esta validación aplica a cualquier bien o zona común.
-  // Se realiza antes de las reglas particulares del espacio.
+  // Se conserva la validación obligatoria de acceso, cartera,
+  // sanciones y elegibilidad para cualquier modalidad.
   const access = validateReservationAccess_(
     reservation.torre,
     reservation.apto,
@@ -804,12 +900,22 @@ function validateReservation_(
     );
   }
 
-  if (!toBoolean_(bien.Activo)) {
+  if (!isBienEnabled_(bien)) {
     return failValidation_(
       ESTADO_RECHAZADA_REGLA,
       `El bien ${reservation.bienId} no está activo.`
     );
   }
+
+  const modalidad = resolveReservationMode_(
+    bien,
+    reservation.modalidadUso
+  );
+  const policy = getReservationPolicy_(
+    bien,
+    modalidad,
+    config
+  );
 
   const fechaReserva = normalizeSheetDate_(
     reservation.fechaReservaRaw
@@ -823,7 +929,8 @@ function validateReservation_(
 
   const advanceCheck = validateAdvanceDays_(
     fechaReserva,
-    config
+    config,
+    policy
   );
   if (!advanceCheck.ok) {
     return failValidation_(
@@ -832,13 +939,22 @@ function validateReservation_(
     );
   }
 
-  const slot = parseHorario_(
-    reservation.horario
-  );
+  const slot = parseHorario_(reservation.horario);
   if (!slot.ok) {
     return failValidation_(
       ESTADO_RECHAZADA_REGLA,
       slot.message
+    );
+  }
+
+  const pastSlotCheck = validateSlotNotPast_(
+    fechaReserva,
+    slot
+  );
+  if (!pastSlotCheck.ok) {
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      pastSlotCheck.message
     );
   }
 
@@ -850,13 +966,26 @@ function validateReservation_(
       slot,
       durationHours,
       bien,
-      config
+      config,
+      policy
     );
 
   if (!ruleCheck.ok) {
     return failValidation_(
       ESTADO_RECHAZADA_REGLA,
       ruleCheck.message
+    );
+  }
+
+  const participantCheck = validateCourtParticipants_(
+    bien,
+    modalidad,
+    reservation
+  );
+  if (!participantCheck.ok) {
+    return failValidation_(
+      ESTADO_RECHAZADA_REGLA,
+      participantCheck.message
     );
   }
 
@@ -872,6 +1001,21 @@ function validateReservation_(
       ESTADO_RECHAZADA_REGLA,
       aptoCheck.message
     );
+  }
+
+  if (modalidad === MODALIDAD_USO_RECREATIVO) {
+    const frequencyCheck = validateRecreationalFrequency_(
+      access.apartment,
+      fechaReserva,
+      currentRowIndex
+    );
+
+    if (!frequencyCheck.ok) {
+      return failValidation_(
+        ESTADO_RECHAZADA_REGLA,
+        frequencyCheck.message
+      );
+    }
   }
 
   const conflict = hasConflict_(
@@ -891,12 +1035,24 @@ function validateReservation_(
     );
   }
 
+  const estado = policy.autoConfirm
+    ? ESTADO_CONFIRMADA
+    : ESTADO_PENDIENTE;
+
   return {
     ok: true,
-    estado: ESTADO_PENDIENTE,
-    observaciones:
-      'Reserva válida. Elegibilidad financiera ' +
-      'verificada. Pendiente de confirmación de pago.',
+    estado: estado,
+    observaciones: policy.autoConfirm
+      ? 'Reserva confirmada automáticamente. ' +
+        'Elegibilidad de la unidad verificada.'
+      : 'Reserva válida. Elegibilidad financiera verificada. ' +
+        getPendingReservationMessage_(policy),
+    modalidadUso: modalidad,
+    requierePago: policy.requiresPayment,
+    requiereAprobacion: policy.requiresApproval,
+    confirmacionAutomatica: policy.autoConfirm,
+    precioReserva: policy.price,
+    depositoGarantia: policy.deposit,
     access: access
   };
 }
@@ -905,40 +1061,74 @@ function validateReservation_(
  * DISPONIBILIDAD
  ***************************************/
 function buildAvailabilitySlots_(bien, fecha, config) {
-  const openMinutes = parseTimeToMinutes_(bien.HoraApertura || config.hora_apertura);
-  const closeMinutes = parseTimeToMinutes_(bien.HoraCierre || config.hora_cierre);
+  const openMinutes = parseTimeToMinutes_(
+    bien.HoraApertura || config.hora_apertura
+  );
+  const closeMinutes = parseTimeToMinutes_(
+    bien.HoraCierre || config.hora_cierre
+  );
 
-  if (openMinutes == null || closeMinutes == null || closeMinutes <= openMinutes) {
-    throw new Error(`Configuración de horario inválida para ${bien.BienID}`);
+  if (
+    openMinutes == null ||
+    closeMinutes == null ||
+    closeMinutes <= openMinutes
+  ) {
+    throw new Error(
+      `Configuración de horario inválida para ${bien.BienID}`
+    );
   }
 
-  let minDuration = toNumber_(bien.DuracionMin);
-  let maxDuration = toNumber_(bien.DuracionMax);
+  const durationRange = getBienDurationRange_(bien, config);
+  const minDuration = durationRange.minHours;
+  const maxDuration = durationRange.maxHours;
 
-  if (!minDuration) minDuration = toNumber_(config.duracion_min_horas);
-  if (!maxDuration) maxDuration = toNumber_(config.duracion_max_horas);
-
-  if (!minDuration || !maxDuration) {
-    throw new Error(`Configuración de duración inválida para ${bien.BienID}`);
-  }
-
-  const reservations = getBlockingReservationsForBienAndDate_(bien.BienID, fecha);
-  logBlockingReservations_(bien.BienID, fecha, reservations);
+  const reservations =
+    getBlockingReservationsForBienAndDate_(
+      bien.BienID,
+      fecha
+    );
+  logBlockingReservations_(
+    bien.BienID,
+    fecha,
+    reservations
+  );
 
   const slots = [];
-  for (let duration = minDuration; duration <= maxDuration; duration++) {
+  for (
+    let duration = minDuration;
+    duration <= maxDuration;
+    duration++
+  ) {
     const durationMinutes = duration * 60;
 
-    for (let start = openMinutes; start + durationMinutes <= closeMinutes; start += 60) {
+    for (
+      let start = openMinutes;
+      start + durationMinutes <= closeMinutes;
+      start += 60
+    ) {
       const end = start + durationMinutes;
-      const available = !reservations.some(r => rangesOverlap_(start, end, r.startMinutes, r.endMinutes));
+      const occupied = reservations.some(function (r) {
+        return rangesOverlap_(
+          start,
+          end,
+          r.startMinutes,
+          r.endMinutes
+        );
+      });
+      const past = isSlotPast_(fecha, start);
 
       slots.push({
         inicio: minutesToHHmm_(start),
         fin: minutesToHHmm_(end),
-        label: `${minutesToHHmm_(start)} - ${minutesToHHmm_(end)}`,
+        label:
+          minutesToHHmm_(start) +
+          ' - ' +
+          minutesToHHmm_(end),
         duracionHoras: duration,
-        disponible: available
+        disponible: !occupied && !past,
+        motivoNoDisponible: past
+          ? 'Horario finalizado'
+          : (occupied ? 'Horario reservado' : '')
       });
     }
   }
@@ -947,18 +1137,337 @@ function buildAvailabilitySlots_(bien, fecha, config) {
 }
 
 /***************************************
- * REGLAS
+ * POLÍTICAS Y REGLAS DE RESERVA
  ***************************************/
-function validateAdvanceDays_(fechaReserva, config) {
-  const maxDays = toNumber_(config.dias_anticipacion_max);
-  if (!maxDays) {
-    return { ok: true };
+function normalizeBienType_(value) {
+  return safeTrim_(value).toUpperCase() || 'CANCHA';
+}
+
+function normalizeReservationMode_(value) {
+  const mode = safeTrim_(value).toUpperCase();
+
+  if (mode === MODALIDAD_USO_RECREATIVO) {
+    return MODALIDAD_USO_RECREATIVO;
   }
 
+  if (mode === MODALIDAD_USO_ORGANIZADO) {
+    return MODALIDAD_USO_ORGANIZADO;
+  }
+
+  return '';
+}
+
+function resolveReservationMode_(bien, requestedMode) {
+  if (normalizeBienType_(bien.Tipo) !== 'CANCHA') {
+    return MODALIDAD_USO_ORGANIZADO;
+  }
+
+  // Las integraciones antiguas que no envían modalidad conservan
+  // el flujo pagado y sujeto a aprobación.
+  return normalizeReservationMode_(requestedMode) ||
+    MODALIDAD_USO_ORGANIZADO;
+}
+
+function getReservationModeLabel_(mode) {
+  return normalizeReservationMode_(mode) ===
+    MODALIDAD_USO_RECREATIVO
+    ? 'Uso recreativo de Bulevar Verde'
+    : 'Uso organizado y/o con visitantes';
+}
+
+function getPendingReservationMessage_(policy) {
+  if (policy.requiresPayment && policy.requiresApproval) {
+    return 'Pendiente de pago y aprobación de la administración.';
+  }
+  if (policy.requiresPayment) {
+    return 'Pendiente de confirmación de pago.';
+  }
+  if (policy.requiresApproval) {
+    return 'Pendiente de aprobación de la administración.';
+  }
+  return 'Pendiente de confirmación.';
+}
+
+function getNumericBienValue_(bien, header, fallback) {
+  const value = toNumber_(bien && bien[header]);
+  return value == null || isNaN(value)
+    ? fallback
+    : value;
+}
+
+function getBooleanBienValue_(bien, header, fallback) {
+  const raw = safeTrim_(bien && bien[header]);
+  if (!raw) return !!fallback;
+  return normalizeYesNo_(raw) === 'SI';
+}
+
+function getRequiredConfigNumber_(config, key) {
+  const value = toNumber_(config && config[key]);
+  if (value == null || isNaN(value)) {
+    throw new Error(
+      'Falta configurar la clave "' + key + '" en la pestaña Config.'
+    );
+  }
+  return value;
+}
+
+function getRequiredConfigBoolean_(config, key) {
+  const raw = safeTrim_(config && config[key]);
+  if (!raw) {
+    throw new Error(
+      'Falta configurar la clave "' + key + '" en la pestaña Config.'
+    );
+  }
+  return normalizeYesNo_(raw) === 'SI';
+}
+
+function getBienDurationRange_(bien, config) {
+  const minHours = getNumericBienValue_(
+    bien,
+    'DuracionMin',
+    toNumber_(config && config.duracion_min_horas)
+  );
+  const maxHours = getNumericBienValue_(
+    bien,
+    'DuracionMax',
+    toNumber_(config && config.duracion_max_horas)
+  );
+
+  if (
+    minHours == null ||
+    maxHours == null ||
+    minHours <= 0 ||
+    maxHours < minHours
+  ) {
+    throw new Error(
+      'Configuración de duración inválida para ' +
+      safeTrim_(bien && bien.BienID) +
+      '. Revisa DuracionMin y DuracionMax en Bienes.'
+    );
+  }
+
+  return {
+    minHours: minHours,
+    maxHours: maxHours,
+    fixed: minHours === maxHours
+  };
+}
+
+function getBaseBienPolicy_(bien, config) {
+  const price = getNumericBienValue_(bien, 'CostoReserva', null);
+  const deposit = getNumericBienValue_(bien, 'DepositoGarantia', null);
+
+  if (price == null || price < 0) {
+    throw new Error(
+      'Configura CostoReserva para ' + safeTrim_(bien.BienID) +
+      ' en la pestaña Bienes.'
+    );
+  }
+
+  if (deposit == null || deposit < 0) {
+    throw new Error(
+      'Configura DepositoGarantia para ' + safeTrim_(bien.BienID) +
+      ' en la pestaña Bienes.'
+    );
+  }
+
+  const requiresPayment = getBooleanBienValue_(
+    bien,
+    'RequierePago',
+    normalizeYesNo_(config.requiere_pago) === 'SI'
+  );
+  const requiresApproval = getBooleanBienValue_(
+    bien,
+    'RequiereAprobacion',
+    normalizeYesNo_(config.requiere_aprobacion) === 'SI'
+  );
+  const minBusinessDays = getNumericBienValue_(
+    bien,
+    'AnticipacionMinHabiles',
+    0
+  );
+  const maxCalendarDays = getNumericBienValue_(
+    bien,
+    'AnticipacionMaxDias',
+    toNumber_(config.dias_anticipacion_max)
+  );
+  const durationRange = getBienDurationRange_(bien, config);
+
+  if (
+    minBusinessDays == null ||
+    minBusinessDays < 0 ||
+    maxCalendarDays == null ||
+    maxCalendarDays < minBusinessDays
+  ) {
+    throw new Error(
+      'Configuración de anticipación inválida para ' +
+      safeTrim_(bien.BienID) +
+      '. Revisa AnticipacionMinHabiles y AnticipacionMaxDias en Bienes.'
+    );
+  }
+
+  return {
+    requiresPayment: requiresPayment,
+    requiresApproval: requiresApproval,
+    autoConfirm: !requiresPayment && !requiresApproval,
+    price: price,
+    deposit: deposit,
+    minBusinessDays: minBusinessDays,
+    maxCalendarDays: maxCalendarDays,
+    durationMinHours: durationRange.minHours,
+    durationMaxHours: durationRange.maxHours,
+    durationHours: durationRange.fixed
+      ? durationRange.minHours
+      : null
+  };
+}
+
+function getReservationPolicy_(bien, mode, config) {
+  const tipo = normalizeBienType_(bien.Tipo);
+  const basePolicy = getBaseBienPolicy_(bien, config);
+
+  if (
+    tipo === 'CANCHA' &&
+    mode === MODALIDAD_USO_RECREATIVO
+  ) {
+    const requiresPayment = getRequiredConfigBoolean_(
+      config,
+      'cancha_recreativa_requiere_pago'
+    );
+    const requiresApproval = getRequiredConfigBoolean_(
+      config,
+      'cancha_recreativa_requiere_aprobacion'
+    );
+
+    return {
+      mode: MODALIDAD_USO_RECREATIVO,
+      requiresPayment: requiresPayment,
+      requiresApproval: requiresApproval,
+      autoConfirm: !requiresPayment && !requiresApproval,
+      price: getRequiredConfigNumber_(
+        config,
+        'cancha_recreativa_costo'
+      ),
+      deposit: 0,
+      minBusinessDays: getRequiredConfigNumber_(
+        config,
+        'cancha_recreativa_anticipacion_min_habiles'
+      ),
+      maxCalendarDays: getRequiredConfigNumber_(
+        config,
+        'cancha_recreativa_anticipacion_max_dias'
+      ),
+      durationMinHours: basePolicy.durationMinHours,
+      durationMaxHours: basePolicy.durationMaxHours,
+      durationHours: basePolicy.durationHours
+    };
+  }
+
+  return Object.assign({}, basePolicy, {
+    mode: MODALIDAD_USO_ORGANIZADO
+  });
+}
+
+function getPublicReservationPolicies_(bien, fecha, config) {
+  const tipo = normalizeBienType_(bien.Tipo);
+
+  if (tipo !== 'CANCHA') {
+    const policy = getReservationPolicy_(
+      bien,
+      MODALIDAD_USO_ORGANIZADO,
+      config
+    );
+    const check = validateAdvanceDays_(
+      fecha,
+      config,
+      policy
+    );
+
+    return {
+      organizado: publicPolicyDto_(policy, check)
+    };
+  }
+
+  const recreationalPolicy = getReservationPolicy_(
+    bien,
+    MODALIDAD_USO_RECREATIVO,
+    config
+  );
+  const organizedPolicy = getReservationPolicy_(
+    bien,
+    MODALIDAD_USO_ORGANIZADO,
+    config
+  );
+
+  return {
+    recreativo: publicPolicyDto_(
+      recreationalPolicy,
+      validateAdvanceDays_(
+        fecha,
+        config,
+        recreationalPolicy
+      )
+    ),
+    organizado: publicPolicyDto_(
+      organizedPolicy,
+      validateAdvanceDays_(
+        fecha,
+        config,
+        organizedPolicy
+      )
+    )
+  };
+}
+
+function publicPolicyDto_(policy, dateCheck) {
+  return {
+    modalidadUso: policy.mode,
+    etiqueta: getReservationModeLabel_(policy.mode),
+    requierePago: policy.requiresPayment,
+    requiereAprobacion: policy.requiresApproval,
+    confirmacionAutomatica: policy.autoConfirm,
+    precio: policy.price,
+    depositoGarantia: policy.deposit,
+    duracionHoras: policy.durationHours,
+    duracionMinHoras: policy.durationMinHours,
+    duracionMaxHoras: policy.durationMaxHours,
+    anticipacionMinHabiles: policy.minBusinessDays,
+    anticipacionMaxDias: policy.maxCalendarDays,
+    disponibleFecha: !!dateCheck.ok,
+    mensajeFecha: dateCheck.ok ? '' : dateCheck.message
+  };
+}
+
+function getMaximumConfiguredAdvanceDays_(config) {
+  let maxDays = toNumber_(config && config.dias_anticipacion_max) || 0;
+
+  const recreationalMax = toNumber_(
+    config && config.cancha_recreativa_anticipacion_max_dias
+  );
+  if (recreationalMax != null) {
+    maxDays = Math.max(maxDays, recreationalMax);
+  }
+
+  const sheet = getSheetByNameOrThrow_(SHEET_BIENES);
+  const headers = getHeaders_(sheet);
+  const data = getDataObjects_(sheet, headers);
+
+  data.filter(isBienEnabled_).forEach(function (bien) {
+    const bienMax = toNumber_(bien.AnticipacionMaxDias);
+    if (bienMax != null) {
+      maxDays = Math.max(maxDays, bienMax);
+    }
+  });
+
+  return maxDays;
+}
+
+function validateAvailabilityDate_(fechaReserva, config) {
   const today = stripTime_(new Date());
   const target = stripTime_(fechaReserva);
-
-  const diffDays = Math.floor((target.getTime() - today.getTime()) / 86400000);
+  const diffDays = Math.floor(
+    (target.getTime() - today.getTime()) / 86400000
+  );
 
   if (diffDays < 0) {
     return {
@@ -967,60 +1476,201 @@ function validateAdvanceDays_(fechaReserva, config) {
     };
   }
 
-  if (diffDays > maxDays) {
+  const maxDays = getMaximumConfiguredAdvanceDays_(config);
+  if (maxDays > 0 && diffDays > maxDays) {
     return {
       ok: false,
-      message: `La fecha supera el máximo de ${maxDays} días de anticipación.`
+      message:
+        `La fecha supera el máximo configurado de ${maxDays} días de anticipación.`
     };
   }
 
-  return { ok: true };
+  return { ok: true, diffDays: diffDays };
 }
 
-function validateReservationAgainstBienRules_(slot, durationHours, bien, config) {
-  const openMinutes = parseTimeToMinutes_(bien.HoraApertura || config.hora_apertura);
-  const closeMinutes = parseTimeToMinutes_(bien.HoraCierre || config.hora_cierre);
+function validateAdvanceDays_(
+  fechaReserva,
+  config,
+  policy
+) {
+  const baseCheck = validateAvailabilityDate_(
+    fechaReserva,
+    config
+  );
+  if (!baseCheck.ok) return baseCheck;
 
-  if (slot.startMinutes < openMinutes || slot.endMinutes > closeMinutes) {
+  const effectivePolicy = policy || {
+    minBusinessDays: 0,
+    maxCalendarDays:
+      toNumber_(config.dias_anticipacion_max) || 0
+  };
+
+  if (
+    effectivePolicy.maxCalendarDays != null &&
+    baseCheck.diffDays > effectivePolicy.maxCalendarDays
+  ) {
     return {
       ok: false,
-      message: `El horario solicitado está fuera del rango permitido para ${bien.BienID}.`
+      message:
+        'Esta modalidad permite reservar máximo con ' +
+        effectivePolicy.maxCalendarDays +
+        ' día(s) calendario de anticipación.'
     };
   }
 
-  // CRÍTICO: Los salones se reservan por día completo, NO requieren validación de duración
-  // Solo validar duración para canchas (reservas por horas)
-  const tipo = safeTrim_(bien.Tipo) || 'CANCHA';
-  if (tipo === 'SALON') {
+  const minBusinessDays =
+    Number(effectivePolicy.minBusinessDays) || 0;
+  if (minBusinessDays > 0) {
+    const availableBusinessDays = countBusinessDaysUntil_(
+      stripTime_(new Date()),
+      stripTime_(fechaReserva)
+    );
+
+    if (availableBusinessDays < minBusinessDays) {
+      return {
+        ok: false,
+        message:
+          'Esta modalidad requiere mínimo ' +
+          minBusinessDays +
+          ' día(s) hábil(es) de anticipación.'
+      };
+    }
+  }
+
+  return { ok: true, diffDays: baseCheck.diffDays };
+}
+
+function countBusinessDaysUntil_(startDate, targetDate) {
+  let count = 0;
+  const cursor = new Date(startDate.getTime());
+
+  while (cursor < targetDate) {
+    cursor.setDate(cursor.getDate() + 1);
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) count++;
+  }
+
+  return count;
+}
+
+function validateSlotNotPast_(fechaReserva, slot) {
+  if (!isSlotPast_(fechaReserva, slot.startMinutes)) {
     return { ok: true };
   }
 
-  // Validación de duración solo para CANCHAS
-  let minDuration = toNumber_(bien.DuracionMin);
-  let maxDuration = toNumber_(bien.DuracionMax);
+  return {
+    ok: false,
+    message: 'El horario seleccionado ya inició o finalizó.'
+  };
+}
 
-  if (!minDuration) minDuration = toNumber_(config.duracion_min_horas);
-  if (!maxDuration) maxDuration = toNumber_(config.duracion_max_horas);
+function isSlotPast_(fechaReserva, startMinutes) {
+  const today = stripTime_(new Date());
+  const target = stripTime_(fechaReserva);
 
-  if (durationHours < minDuration) {
+  if (target.getTime() !== today.getTime()) {
+    return target < today;
+  }
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  return startMinutes <= currentMinutes;
+}
+
+function validateReservationAgainstBienRules_(
+  slot,
+  durationHours,
+  bien,
+  config,
+  policy
+) {
+  const openMinutes = parseTimeToMinutes_(
+    bien.HoraApertura || config.hora_apertura
+  );
+  const closeMinutes = parseTimeToMinutes_(
+    bien.HoraCierre || config.hora_cierre
+  );
+
+  if (
+    slot.startMinutes < openMinutes ||
+    slot.endMinutes > closeMinutes
+  ) {
     return {
       ok: false,
-      message: `La duración mínima para ${bien.BienID} es ${minDuration} hora(s).`
+      message:
+        `El horario solicitado está fuera del rango permitido para ${bien.BienID}.`
     };
   }
 
-  if (durationHours > maxDuration) {
+  const durationRange = getBienDurationRange_(bien, config);
+  const tolerance = 1 / 60;
+
+  if (
+    durationHours + tolerance < durationRange.minHours ||
+    durationHours - tolerance > durationRange.maxHours
+  ) {
     return {
       ok: false,
-      message: `La duración máxima para ${bien.BienID} es ${maxDuration} hora(s).`
+      message:
+        'La duración permitida para ' + safeTrim_(bien.BienID) +
+        ' es entre ' + durationRange.minHours + ' y ' +
+        durationRange.maxHours + ' hora(s), según la pestaña Bienes.'
     };
   }
 
   return { ok: true };
 }
 
-function validateMaxActiveReservationsPerApto_(apto, currentRowIndex, config) {
-  const maxActivas = toNumber_(config.max_reservas_activas_por_apto);
+function validateCourtParticipants_(bien, mode, reservation) {
+  if (normalizeBienType_(bien.Tipo) !== 'CANCHA') {
+    return { ok: true };
+  }
+
+  const hasStructuredUseData =
+    !!normalizeReservationMode_(reservation.modalidadUso) ||
+    reservation.confirmaSoloResidentes !== undefined ||
+    reservation.participanMenores14 !== undefined ||
+    reservation.adultoResponsable !== undefined;
+
+  // Compatibilidad con registros históricos que no capturaban
+  // modalidad ni condiciones específicas de uso de la cancha.
+  if (!hasStructuredUseData) {
+    return { ok: true };
+  }
+
+  if (
+    mode === MODALIDAD_USO_RECREATIVO &&
+    !reservation.confirmaSoloResidentes
+  ) {
+    return {
+      ok: false,
+      message:
+        'Para el uso recreativo debes confirmar que será exclusivo para residentes de Bulevar Verde.'
+    };
+  }
+
+  const adultName = safeTrim_(
+    reservation.adultoResponsable || reservation.nombre
+  );
+
+  if (reservation.participanMenores14 && !adultName) {
+    return {
+      ok: false,
+      message:
+        'Debes registrar el nombre completo del adulto responsable.'
+    };
+  }
+
+  return { ok: true };
+}
+
+function validateMaxActiveReservationsPerApto_(
+  apto,
+  currentRowIndex,
+  config
+) {
+  const maxActivas =
+    toNumber_(config.max_reservas_activas_por_apto);
   if (!maxActivas) {
     return { ok: true };
   }
@@ -1028,25 +1678,105 @@ function validateMaxActiveReservationsPerApto_(apto, currentRowIndex, config) {
   const sheet = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
   const headers = getHeaders_(sheet);
   const data = getDataObjects_(sheet, headers);
+  const today = stripTime_(new Date());
 
-  const activeCount = data.filter((row, idx) => {
-    const rowNumber = idx + 2; // data inicia en fila 2
+  const activeCount = data.filter(function (row, idx) {
+    const rowNumber = idx + 2;
     if (rowNumber === currentRowIndex) return false;
 
     const rowApto = safeTrim_(row['Apto']);
     const estado = safeTrim_(row['Estado']);
+    const rowDate = normalizeSheetDate_(row['FechaReserva']);
 
-    return rowApto === apto && estado !== ESTADO_CANCELADA;
+    if (!rowDate || stripTime_(rowDate) < today) {
+      return false;
+    }
+
+    return rowApto === apto &&
+      isBlockingReservationState_(estado);
   }).length;
 
   if (activeCount >= maxActivas) {
     return {
       ok: false,
-      message: `El apartamento ${apto} ya tiene el máximo de reservas activas permitido (${maxActivas}).`
+      message:
+        `El apartamento ${apto} ya tiene el máximo de reservas futuras activas permitido (${maxActivas}).`
     };
   }
 
   return { ok: true };
+}
+
+function validateRecreationalFrequency_(
+  apto,
+  targetDate,
+  currentRowIndex,
+  config
+) {
+  const sheet = getSheetByNameOrThrow_(SHEET_RESPUESTAS);
+  const headers = getHeaders_(sheet);
+  const data = getDataObjects_(sheet, headers);
+  const targetYmd = formatDateYMD_(targetDate);
+  const weekStart = startOfWeekMonday_(targetDate);
+  const weekEnd = new Date(weekStart.getTime());
+  weekEnd.setDate(weekEnd.getDate() + 6);
+
+  let sameDay = 0;
+  let sameWeek = 0;
+
+  data.forEach(function (row, idx) {
+    const rowNumber = idx + 2;
+    if (rowNumber === currentRowIndex) return;
+    if (safeTrim_(row['Apto']) !== apto) return;
+    if (!isBlockingReservationState_(row['Estado'])) return;
+
+    const mode = normalizeReservationMode_(
+      row['ModalidadUso']
+    );
+    if (mode !== MODALIDAD_USO_RECREATIVO) return;
+
+    const rowDate = normalizeSheetDate_(row['FechaReserva']);
+    if (!rowDate) return;
+
+    const rowDay = stripTime_(rowDate);
+    if (formatDateYMD_(rowDay) === targetYmd) sameDay++;
+    if (rowDay >= weekStart && rowDay <= weekEnd) sameWeek++;
+  });
+
+  const maxPerDay = toNumber_(
+    config && config.max_reservas_recreativas_dia_por_apto
+  ) || 0;
+  const maxPerWeek = toNumber_(
+    config && config.max_reservas_recreativas_semana_por_apto
+  ) || 0;
+
+  if (maxPerDay > 0 && sameDay >= maxPerDay) {
+    return {
+      ok: false,
+      message:
+        'El apartamento ya tiene una reserva recreativa para ese día.'
+    };
+  }
+
+  if (maxPerWeek > 0 && sameWeek >= maxPerWeek) {
+    return {
+      ok: false,
+      message:
+        'El apartamento alcanzó el máximo de ' +
+        maxPerWeek +
+        ' reservas recreativas durante esa semana.'
+    };
+  }
+
+  return { ok: true };
+}
+
+function startOfWeekMonday_(date) {
+  const result = stripTime_(date);
+  const day = result.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  result.setDate(result.getDate() + diff);
+  return result;
 }
 
 /***************************************
@@ -1087,12 +1817,8 @@ function getBlockingReservationsForBienAndDate_(bienId, fechaReserva) {
 
       if (!rowFecha) return null;
       
-      // LÓGICA DE BLOQUEO DE DISPONIBILIDAD:
-      // - Estado "Cancelada" → NO bloquea (disponible)
-      // - Estado "Pendiente" → SÍ bloquea (no disponible)
-      // - Estado "Confirmado" → SÍ bloquea (no disponible)
-      // - Cualquier otro estado → SÍ bloquea
-      if (estado === ESTADO_CANCELADA) return null;
+      // Solo los estados activos bloquean disponibilidad.
+      if (!isBlockingReservationState_(estado)) return null;
       
       if (formatDateYMD_(rowFecha) !== targetDate) return null;
 
@@ -1127,6 +1853,28 @@ function getBlockingReservationsForBienAndDate_(bienId, fechaReserva) {
       };
     })
     .filter(Boolean);
+}
+
+function isBlockingReservationState_(estado) {
+  const normalized = safeTrim_(estado)
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_-]+/g, ' ');
+
+  return [
+    'PENDIENTE',
+    'PAGO EN REVISION',
+    'EN REVISION',
+    'RESERVADA',
+    'RESERVADO',
+    'APROBADA',
+    'APROBADO',
+    'CONFIRMADA',
+    'CONFIRMADO',
+    'CONFIRMADA AUTOMATICA',
+    'CONFIRMADO AUTOMATICAMENTE'
+  ].indexOf(normalized) !== -1;
 }
 
 // DEBUG: Función auxiliar para logging de disponibilidad
@@ -1164,19 +1912,34 @@ function getBienById_(bienId) {
   return data.find(row => safeTrim_(row['BienID']) === bienId) || null;
 }
 
+function isBienEnabled_(bien) {
+  // La columna Activo de la pestaña Bienes es la única autoridad.
+  // El código no fuerza la activación de canchas ni salones.
+  return toBoolean_(bien && bien.Activo);
+}
+
 function listActiveBienes_() {
   const sheet = getSheetByNameOrThrow_(SHEET_BIENES);
   const headers = getHeaders_(sheet);
   const data = getDataObjects_(sheet, headers);
+  const config = getConfigMap_();
+  const today = stripTime_(new Date());
 
   return data
-    .filter(row => toBoolean_(row['Activo']))
-    .map(row => ({
-      BienID: safeTrim_(row['BienID']),
-      Descripcion: safeTrim_(row['Descripcion']),
-      Tipo: safeTrim_(row['Tipo']) || 'CANCHA',
-      Activo: true
-    }));
+    .filter(isBienEnabled_)
+    .map(function (row) {
+      return {
+        BienID: safeTrim_(row['BienID']),
+        Descripcion: safeTrim_(row['Descripcion']),
+        Tipo: normalizeBienType_(row['Tipo']),
+        Activo: true,
+        politicas: getPublicReservationPolicies_(
+          row,
+          today,
+          config
+        )
+      };
+    });
 }
 
 /***************************************
@@ -1185,19 +1948,30 @@ function listActiveBienes_() {
 function handleAvailabilityQuery_(e) {
   const fechaStr = getParam_(e, 'fecha');
   if (!fechaStr) {
-    return jsonOutput_({ ok: false, error: 'Parámetro requerido: fecha' });
+    return jsonOutput_({
+      ok: false,
+      error: 'Parámetro requerido: fecha'
+    });
   }
 
   const fecha = parseDateInput_(fechaStr);
   if (!fecha) {
-    return jsonOutput_({ ok: false, error: 'Fecha inválida. Usa formato YYYY-MM-DD' });
+    return jsonOutput_({
+      ok: false,
+      error: 'Fecha inválida. Usa formato YYYY-MM-DD'
+    });
   }
 
   const config = getConfigMap_();
-
-  const validacionFecha = validateAdvanceDays_(fecha, config);
+  const validacionFecha = validateAvailabilityDate_(
+    fecha,
+    config
+  );
   if (!validacionFecha.ok) {
-    return jsonOutput_({ ok: false, error: validacionFecha.message });
+    return jsonOutput_({
+      ok: false,
+      error: validacionFecha.message
+    });
   }
 
   const sheet = getSheetByNameOrThrow_(SHEET_BIENES);
@@ -1205,73 +1979,237 @@ function handleAvailabilityQuery_(e) {
   const data = getDataObjects_(sheet, headers);
 
   const bienes = data
-    .filter(row => toBoolean_(row['Activo']))
-    .map(row => {
+    .filter(isBienEnabled_)
+    .map(function (row) {
       const bienId = safeTrim_(row['BienID']);
-      const tipo = safeTrim_(row['Tipo']) || 'CANCHA';
+      const tipo = normalizeBienType_(row['Tipo']);
       const descripcion = safeTrim_(row['Descripcion']);
+      const politicas = getPublicReservationPolicies_(
+        row,
+        fecha,
+        config
+      );
 
       if (tipo === 'SALON') {
-        const reservations = getBlockingReservationsForBienAndDate_(bienId, fecha);
-        logBlockingReservations_(bienId, fecha, reservations);
-        const openMin = parseTimeToMinutes_(row['HoraApertura'] || config.hora_apertura);
-        const closeMin = parseTimeToMinutes_(row['HoraCierre'] || config.hora_cierre);
-        
-        // Validar que los horarios sean válidos
+        const reservations =
+          getBlockingReservationsForBienAndDate_(
+            bienId,
+            fecha
+          );
+        logBlockingReservations_(
+          bienId,
+          fecha,
+          reservations
+        );
+        const openMin = parseTimeToMinutes_(
+          row['HoraApertura'] || config.hora_apertura
+        );
+        const closeMin = parseTimeToMinutes_(
+          row['HoraCierre'] || config.hora_cierre
+        );
+
         let horarioFinal;
-        if (openMin !== null && closeMin !== null && closeMin > openMin) {
-          horarioFinal = minutesToHHmm_(openMin) + '-' + minutesToHHmm_(closeMin);
+        if (
+          openMin !== null &&
+          closeMin !== null &&
+          closeMin > openMin
+        ) {
+          horarioFinal =
+            minutesToHHmm_(openMin) +
+            '-' +
+            minutesToHHmm_(closeMin);
         } else {
-          // Fallback seguro: 6 horas (máximo común para salones)
-          Logger.log('ADVERTENCIA: ' + bienId + ' no tiene horarios válidos, usando fallback 08:00-14:00');
+          Logger.log(
+            'ADVERTENCIA: ' + bienId +
+            ' no tiene horarios válidos, usando fallback 08:00-14:00'
+          );
           horarioFinal = '08:00-14:00';
         }
-        
+
         return {
           BienID: bienId,
           Descripcion: descripcion,
           Tipo: tipo,
-          disponible: reservations.length === 0,
+          disponible:
+            reservations.length === 0 &&
+            politicas.organizado.disponibleFecha,
           horario: horarioFinal,
-          reservadoPor: reservations.length > 0 ? 'Reservado' : null
-        };
-      } else {
-        const slots = buildAvailabilitySlots_(row, fecha, config);
-        return {
-          BienID: bienId,
-          Descripcion: descripcion,
-          Tipo: tipo,
-          slots: slots
+          reservadoPor:
+            reservations.length > 0 ? 'Reservado' : null,
+          politicas: politicas
         };
       }
+
+      return {
+        BienID: bienId,
+        Descripcion: descripcion,
+        Tipo: tipo,
+        slots: buildAvailabilitySlots_(row, fecha, config),
+        politicas: politicas
+      };
     });
 
   return jsonOutput_({
     ok: true,
     fecha: formatDateYMD_(fecha),
-    requiereAprobacion: normalizeYesNo_(config.requiere_aprobacion) === 'SI',
+    requiereAprobacion:
+      normalizeYesNo_(config.requiere_aprobacion) === 'SI',
     bienes: bienes
   });
+}
+
+function handlePublicAgendaQuery_(e) {
+  const desdeStr = getParam_(e, 'desde');
+  const config = getConfigMap_();
+  const configuredDays = Math.max(
+    1,
+    Math.min(
+      toNumber_(config.dias_agenda_publica) || 1,
+      31
+    )
+  );
+  const requestedDays = Number(
+    getParam_(e, 'dias') || configuredDays
+  );
+  const days = Math.max(
+    1,
+    Math.min(requestedDays, configuredDays, 31)
+  );
+  const startDate = desdeStr
+    ? parseDateInput_(desdeStr)
+    : stripTime_(new Date());
+
+  if (!startDate) {
+    return jsonOutput_({
+      ok: false,
+      error: 'Fecha inicial inválida.'
+    });
+  }
+
+  const dateCheck = validateAvailabilityDate_(
+    startDate,
+    config
+  );
+  if (!dateCheck.ok) {
+    return jsonOutput_({
+      ok: false,
+      error: dateCheck.message
+    });
+  }
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey =
+    'agenda-canchas-' +
+    formatDateYMD_(startDate) +
+    '-' + days;
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return jsonOutput_(JSON.parse(cached));
+  }
+
+  const bienesSheet = getSheetByNameOrThrow_(SHEET_BIENES);
+  const headers = getHeaders_(bienesSheet);
+  const canchas = getDataObjects_(bienesSheet, headers)
+    .filter(function (row) {
+      return isBienEnabled_(row) &&
+        normalizeBienType_(row.Tipo) === 'CANCHA';
+    });
+
+  const resultDays = [];
+  for (let offset = 0; offset < days; offset++) {
+    const date = new Date(startDate.getTime());
+    date.setDate(date.getDate() + offset);
+
+    const courtSummary = canchas.map(function (court) {
+      const slots = buildAvailabilitySlots_(
+        court,
+        date,
+        config
+      );
+      const available = slots.filter(function (slot) {
+        return slot.disponible;
+      }).length;
+
+      return {
+        BienID: safeTrim_(court.BienID),
+        Descripcion: safeTrim_(court.Descripcion),
+        disponibles: available,
+        ocupados: slots.length - available,
+        total: slots.length
+      };
+    });
+
+    resultDays.push({
+      fecha: formatDateYMD_(date),
+      canchas: courtSummary
+    });
+  }
+
+  const response = {
+    ok: true,
+    desde: formatDateYMD_(startDate),
+    cantidadDias: days,
+    dias: resultDays
+  };
+  cache.put(cacheKey, JSON.stringify(response), 120);
+
+  return jsonOutput_(response);
 }
 
 function getConfigMap_() {
   const sheet = getSheetByNameOrThrow_(SHEET_CONFIG);
   const values = sheet.getDataRange().getValues();
 
-  if (values.length < 2) return {};
+  if (values.length < 2) return getDefaultReservationConfig_();
 
   const result = {};
   for (let i = 1; i < values.length; i++) {
-    const key = safeTrim_(values[i][0]);
+    const key = normalizeReservationConfigKey_(values[i][0]);
     const value = values[i][1];
-    if (key) {
-      result[key] = value;
-    }
+    if (key) result[key] = value;
   }
+
+  const defaults = getDefaultReservationConfig_();
+  Object.keys(defaults).forEach(function (key) {
+    if (
+      result[key] === undefined ||
+      result[key] === null ||
+      result[key] === ''
+    ) {
+      result[key] = defaults[key];
+    }
+  });
 
   return result;
 }
 
+function normalizeReservationConfigKey_(value) {
+  const raw = safeTrim_(value).toLowerCase();
+  if (!raw) return '';
+
+  // Corrige filas existentes como "dias_anticipacion_max 30".
+  // Las claves oficiales usan guiones bajos y no contienen espacios.
+  return raw.split(/\s+/)[0];
+}
+
+function getDefaultReservationConfig_() {
+  // Valores generales de compatibilidad. Las reglas de costos y la modalidad
+  // recreativa se exigen expresamente en la pestaña Config y no se completan
+  // silenciosamente desde el código.
+  return {
+    dias_anticipacion_max: 30,
+    duracion_min_horas: 1,
+    duracion_max_horas: 8,
+    hora_apertura: '08:00',
+    hora_cierre: '22:00',
+    requiere_pago: 'SI',
+    requiere_aprobacion: 'SI',
+    max_reservas_activas_por_apto: 1,
+    max_reservas_recreativas_dia_por_apto: 1,
+    max_reservas_recreativas_semana_por_apto: 3,
+    dias_agenda_publica: 7
+  };
+}
 
 /***************************************
  * DATOS OFICIALES DE COPROPIEDAD
@@ -1480,7 +2418,7 @@ function validateReservationAccess_(
   if (!declaredName) {
     return reservationAccessFailure_(
       'NOMBRE_INVALIDO',
-      'Ingresa el nombre de la persona que realiza la reserva.',
+      'Ingresa el nombre completo del adulto responsable.',
       'Nombre vacío.',
       unitId
     );
@@ -2253,8 +3191,8 @@ function pintarCalendarioReservas_(hoja, data, anio, mes, filaInicio) {
 
     const estado = safeTrim_(row['Estado']);
 
-    // No mostrar canceladas
-    if (estado === ESTADO_CANCELADA) return;
+    // El calendario operativo solo muestra reservas activas.
+    if (!isBlockingReservationState_(estado)) return;
 
     const dia = fechaReserva.getDate();
 
@@ -2262,10 +3200,12 @@ function pintarCalendarioReservas_(hoja, data, anio, mes, filaInicio) {
       reservasPorDia[dia] = [];
     }
 
-    const horarioMinutos = parseTimeToMinutes_(row['Horario']);
+    const horarioRaw = row['Horario'];
+    const horarioMinutos = parseTimeToMinutes_(horarioRaw);
+    const horarioOrdenMinutos = getHoraInicioCalendario_(horarioRaw);
     const horario = horarioMinutos !== null
       ? minutesToHHmm_(horarioMinutos)
-      : safeTrim_(row['Horario']);
+      : safeTrim_(horarioRaw);
 
     const inmueble = safeTrim_(row['Inmueble']);
     const torre = safeTrim_(row['Torre']);
@@ -2273,13 +3213,25 @@ function pintarCalendarioReservas_(hoja, data, anio, mes, filaInicio) {
     const nombre = safeTrim_(row['Nombre']);
     const observaciones = safeTrim_(row['Observaciones']);
 
-    let textoReserva = `${horario} - ${getInmuebleCorto_(inmueble)}\n${torre}-${apto} | ${nombre}`;
+    const iconoTipoUso = getIconoTipoUsoCancha_(row, inmueble);
+
+    let textoReserva =
+      `${horario} - ${getInmuebleCorto_(inmueble)}${iconoTipoUso}` +
+      `\n${torre}-${apto} | ${nombre}`;
 
     if (observaciones) {
       textoReserva += `\n📝 ${observaciones}`;
     }
 
-    reservasPorDia[dia].push(textoReserva);
+    reservasPorDia[dia].push({
+      texto: textoReserva,
+      ordenTipoBien: getOrdenTipoBienCalendario_(inmueble),
+      ordenBien: getOrdenBienCalendario_(inmueble),
+      horarioMinutos: horarioOrdenMinutos !== null
+        ? horarioOrdenMinutos
+        : 9999,
+      inmueble: inmueble
+    });
   });
 
   // Título
@@ -2307,10 +3259,31 @@ function pintarCalendarioReservas_(hoja, data, anio, mes, filaInicio) {
   let fila = filaInicio + 2;
 
   for (let dia = 1; dia <= ultimoDiaMes.getDate(); dia++) {
-    const reservas = reservasPorDia[dia] || [];
+    const reservas = (reservasPorDia[dia] || [])
+      .slice()
+      .sort(function (a, b) {
+        if (a.ordenTipoBien !== b.ordenTipoBien) {
+          return a.ordenTipoBien - b.ordenTipoBien;
+        }
+
+        if (a.horarioMinutos !== b.horarioMinutos) {
+          return a.horarioMinutos - b.horarioMinutos;
+        }
+
+        if (a.ordenBien !== b.ordenBien) {
+          return a.ordenBien - b.ordenBien;
+        }
+
+        return safeTrim_(a.inmueble).localeCompare(
+          safeTrim_(b.inmueble),
+          'es'
+        );
+      });
 
     const textoCelda = reservas.length
-      ? `${dia}\n\n${reservas.join('\n\n')}`
+      ? `${dia}\n\n${reservas.map(function (reserva) {
+          return reserva.texto;
+        }).join('\n\n')}`
       : String(dia);
 
     const celda = hoja.getRange(fila, columna);
@@ -2379,6 +3352,137 @@ function eliminarTriggersCalendarioReservas_() {
 }
 
 /***************************************
+ * ICONO DE TIPO DE USO PARA CANCHAS
+ * 💵 = reserva paga
+ * 👪 = reserva gratuita
+ ***************************************/
+function getIconoTipoUsoCancha_(row, inmueble) {
+  const inmuebleNormalizado = safeTrim_(inmueble).toLowerCase();
+
+  if (!inmuebleNormalizado.includes('cancha')) {
+    return '';
+  }
+
+  // Los registros nuevos almacenan explícitamente si requieren pago.
+  const requierePagoRaw = safeTrim_(row['RequierePago']);
+  if (requierePagoRaw) {
+    return normalizeYesNo_(requierePagoRaw) === 'SI' ? '💵' : '👪';
+  }
+
+  // Respaldo para registros creados con modalidad o precio, pero sin
+  // la columna RequierePago diligenciada.
+  const modalidad = normalizeReservationMode_(row['ModalidadUso']);
+  if (modalidad === MODALIDAD_USO_ORGANIZADO) {
+    return '💵';
+  }
+
+  if (modalidad === MODALIDAD_USO_RECREATIVO) {
+    return '👪';
+  }
+
+  const precioReserva = toNumber_(row['PrecioReserva']);
+  if (precioReserva !== null && precioReserva > 0) {
+    return '💵';
+  }
+
+  // Compatibilidad con reservas históricas que no tienen las columnas
+  // técnicas. Si el texto menciona pago, cobro o visitantes se considera
+  // paga; en ausencia de evidencia se conserva como uso gratuito.
+  const textoHistorico = [
+    row['Asunto'],
+    row['Observaciones']
+  ]
+    .map(function (value) {
+      return safeTrim_(value);
+    })
+    .join(' ')
+    .toLowerCase();
+
+  if (/pago|pagado|cobro|visitante/.test(textoHistorico)) {
+    return '💵';
+  }
+
+  return '👪';
+}
+
+/***************************************
+ * HORA INICIAL PARA ORDENAR EL CALENDARIO
+ * Admite horas simples y rangos, por ejemplo:
+ * 08:00, 10:00-11:00, 16:00 – 18:00.
+ ***************************************/
+function getHoraInicioCalendario_(horario) {
+  if (horario === null || horario === undefined || horario === '') {
+    return null;
+  }
+
+  if (
+    Object.prototype.toString.call(horario) === '[object Date]' &&
+    !isNaN(horario.getTime())
+  ) {
+    return parseTimeToMinutes_(horario);
+  }
+
+  const texto = safeTrim_(horario);
+  if (!texto) return null;
+
+  // Toma únicamente la hora inicial. También admite guion corto,
+  // guion medio y guion largo como separadores del rango.
+  const match = texto.match(
+    /^(\d{1,2}:\d{2}(?:\s*(?:am|pm))?)(?:\s*[-–—]\s*.*)?$/i
+  );
+
+  if (!match) return null;
+
+  return parseTimeToMinutes_(match[1]);
+}
+
+/***************************************
+ * ORDEN DE BIENES EN EL CALENDARIO
+ * 1. Salones sociales
+ * 2. Canchas
+ * 3. Otros bienes
+ ***************************************/
+function getOrdenTipoBienCalendario_(inmueble) {
+  const value = safeTrim_(inmueble).toLowerCase();
+
+  if (value.includes('salon social') || value.includes('salón social')) {
+    return 1;
+  }
+
+  if (value.includes('cancha')) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function getOrdenBienCalendario_(inmueble) {
+  const value = safeTrim_(inmueble).toLowerCase();
+
+  if (value.includes('salon social 1') || value.includes('salón social 1')) {
+    return 1;
+  }
+
+  if (value.includes('salon social 2') || value.includes('salón social 2')) {
+    return 2;
+  }
+
+  if (value.includes('salon social 3') || value.includes('salón social 3')) {
+    return 3;
+  }
+
+  if (value.includes('cancha sintetica 1') || value.includes('cancha sintética 1')) {
+    return 1;
+  }
+
+  if (value.includes('cancha sintetica 2') || value.includes('cancha sintética 2')) {
+    return 2;
+  }
+
+  return 99;
+}
+
+/***************************************
  * NOMBRE CORTO PARA CALENDARIO
  ***************************************/
 function getInmuebleCorto_(inmueble) {
@@ -2410,7 +3514,7 @@ function getInmuebleCorto_(inmueble) {
 /**
  * Crea una reserva desde payload POST
  * Mantiene compatibilidad total con estructura histórica A:K
- * Agrega columnas técnicas L:Q
+ * Agrega columnas técnicas al final de la hoja
  */
 function createReservation_(payload) {
   const sheet =
@@ -2427,30 +3531,37 @@ function createReservation_(payload) {
     };
   }
 
-  if (!toBoolean_(bien.Activo)) {
+  if (!isBienEnabled_(bien)) {
     return {
       ok: false,
       code: 'BIEN_INACTIVO',
-      error:
-        `El bien ${payload.bienId} no está activo`
+      error: `El bien ${payload.bienId} no está activo`
     };
   }
 
-  const fechaReserva = parseDateInput_(
-    payload.fecha
+  const modalidad = resolveReservationMode_(
+    bien,
+    payload.modalidadUso
   );
+  const policy = getReservationPolicy_(
+    bien,
+    modalidad,
+    config
+  );
+
+  const fechaReserva = parseDateInput_(payload.fecha);
   if (!fechaReserva) {
     return {
       ok: false,
       code: 'FECHA_INVALIDA',
-      error:
-        'Fecha inválida. Usa formato YYYY-MM-DD'
+      error: 'Fecha inválida. Usa formato YYYY-MM-DD'
     };
   }
 
   const advanceCheck = validateAdvanceDays_(
     fechaReserva,
-    config
+    config,
+    policy
   );
   if (!advanceCheck.ok) {
     return {
@@ -2461,20 +3572,18 @@ function createReservation_(payload) {
   }
 
   const torre = normalizeTorre_(payload.torre);
-  const apto = normalizeReservationApartment_(
-    payload.apto
-  );
+  const apto = normalizeReservationApartment_(payload.apto);
 
   if (!torre || !apto) {
     return {
       ok: false,
       code: 'UNIDAD_INVALIDA',
-      error:
-        'La torre o el apartamento no son válidos.'
+      error: 'La torre o el apartamento no son válidos.'
     };
   }
 
-  // Obligatoria para todos los bienes, salones y canchas.
+  // Obligatoria para salones, canchas gratuitas y canchas pagadas.
+  // No se elimina ni flexibiliza ninguna restricción de la unidad.
   const access = validateReservationAccess_(
     torre,
     apto,
@@ -2497,9 +3606,7 @@ function createReservation_(payload) {
     };
   }
 
-  const slotParsed = parseHorario_(
-    payload.horario
-  );
+  const slotParsed = parseHorario_(payload.horario);
   if (!slotParsed.ok) {
     return {
       ok: false,
@@ -2508,18 +3615,28 @@ function createReservation_(payload) {
     };
   }
 
+  const pastSlotCheck = validateSlotNotPast_(
+    fechaReserva,
+    slotParsed
+  );
+  if (!pastSlotCheck.ok) {
+    return {
+      ok: false,
+      code: 'HORARIO_FINALIZADO',
+      error: pastSlotCheck.message
+    };
+  }
+
   const durationHours =
-    (
-      slotParsed.endMinutes -
-      slotParsed.startMinutes
-    ) / 60;
+    (slotParsed.endMinutes - slotParsed.startMinutes) / 60;
 
   const ruleCheck =
     validateReservationAgainstBienRules_(
       slotParsed,
       durationHours,
       bien,
-      config
+      config,
+      policy
     );
 
   if (!ruleCheck.ok) {
@@ -2530,12 +3647,24 @@ function createReservation_(payload) {
     };
   }
 
-  const aptoCheck =
-    validateMaxActiveReservationsPerApto_(
-      access.apartment,
-      null,
-      config
-    );
+  const participantCheck = validateCourtParticipants_(
+    bien,
+    modalidad,
+    payload
+  );
+  if (!participantCheck.ok) {
+    return {
+      ok: false,
+      code: 'PARTICIPANTES_INVALIDOS',
+      error: participantCheck.message
+    };
+  }
+
+  const aptoCheck = validateMaxActiveReservationsPerApto_(
+    access.apartment,
+    null,
+    config
+  );
 
   if (!aptoCheck.ok) {
     return {
@@ -2543,6 +3672,22 @@ function createReservation_(payload) {
       code: 'MAXIMO_RESERVAS_ACTIVAS',
       error: aptoCheck.message
     };
+  }
+
+  if (modalidad === MODALIDAD_USO_RECREATIVO) {
+    const frequencyCheck = validateRecreationalFrequency_(
+      access.apartment,
+      fechaReserva,
+      null,
+      config
+    );
+    if (!frequencyCheck.ok) {
+      return {
+        ok: false,
+        code: 'FRECUENCIA_RECREATIVA',
+        error: frequencyCheck.message
+      };
+    }
   }
 
   const conflict = hasConflict_(
@@ -2557,22 +3702,25 @@ function createReservation_(payload) {
       ok: false,
       code: 'CONFLICTO_HORARIO',
       error:
-        `Ya existe una reserva en ese horario para ` +
-        `${bien.Descripcion}.`,
+        `Ya existe una reserva en ese horario para ${bien.Descripcion}.`,
       estado: ESTADO_RECHAZADA_CONFLICTO
     };
   }
 
   const idReserva = generateReservationId_();
   const ahora = new Date();
-  const estadoFinal = ESTADO_PENDIENTE;
-  const observacionesFinal =
-    idReserva +
-    ' - Elegibilidad verificada. ' +
-    'Pendiente de confirmación de pago';
+  const estadoFinal = policy.autoConfirm
+    ? ESTADO_CONFIRMADA
+    : ESTADO_PENDIENTE;
+  const observacionesFinal = policy.autoConfirm
+    ? idReserva +
+      ' - Reserva confirmada automáticamente. ' +
+      'Elegibilidad verificada.'
+    : idReserva +
+      ' - Elegibilidad verificada. ' +
+      getPendingReservationMessage_(policy);
 
   const newRowData = [];
-
   newRowData.push(ahora);
   newRowData.push(access.person.email);
   newRowData.push(bien.Descripcion);
@@ -2593,37 +3741,44 @@ function createReservation_(payload) {
     AceptaReglamento:
       payload.aceptaReglamento ? 'SI' : 'NO',
     AceptaTratamientoDatos:
-      payload.aceptaTratamientoDatos
-        ? 'SI'
-        : 'NO',
+      payload.aceptaTratamientoDatos ? 'SI' : 'NO',
     UnidadID: access.unitId,
     PersonaID: access.person.personId,
     RolSolicitante: access.person.role,
     ElegibleReservasAlCrear: 'SI',
-    FechaValidacionElegibilidad:
-      access.account.checkedAt,
-    FuenteDatosCopropiedad:
-      COPROPIEDAD_DATA_SPREADSHEET_ID,
+    FechaValidacionElegibilidad: access.account.checkedAt,
+    FuenteDatosCopropiedad: COPROPIEDAD_DATA_SPREADSHEET_ID,
     CorreoRegistradoValidado: 'NO',
-    VersionReservas: RESERVAS_VERSION
+    VersionReservas: RESERVAS_VERSION,
+    ModalidadUso: modalidad,
+    RequierePago: policy.requiresPayment ? 'SI' : 'NO',
+    RequiereAprobacion: policy.requiresApproval ? 'SI' : 'NO',
+    ConfirmacionAutomatica: policy.autoConfirm ? 'SI' : 'NO',
+    PrecioReserva: policy.price,
+    DepositoGarantia: policy.deposit,
+    NumeroParticipantes: payload.numeroParticipantes == null
+      ? ''
+      : (Number(payload.numeroParticipantes) || ''),
+    NumeroInvitados: payload.numeroInvitados == null
+      ? ''
+      : (Number(payload.numeroInvitados) || 0),
+    ConfirmaSoloResidentes:
+      payload.confirmaSoloResidentes ? 'SI' : 'NO',
+    ParticipanMenores14:
+      payload.participanMenores14 ? 'SI' : 'NO',
+    AdultoResponsable:
+      safeTrim_(payload.adultoResponsable || payload.nombre)
   };
 
-  Object.keys(technicalValues).forEach(
-    function (header) {
-      const index = headers.indexOf(header);
-      if (index >= 0) {
-        newRowData[index] =
-          technicalValues[header];
-      }
-    }
-  );
+  Object.keys(technicalValues).forEach(function (header) {
+    const index = headers.indexOf(header);
+    if (index >= 0) newRowData[index] = technicalValues[header];
+  });
 
   const newRowIndex = sheet.getLastRow() + 1;
   const numCols = Math.max(11, headers.length);
 
-  while (newRowData.length < numCols) {
-    newRowData.push('');
-  }
+  while (newRowData.length < numCols) newRowData.push('');
 
   sheet.getRange(
     newRowIndex,
@@ -2633,10 +3788,10 @@ function createReservation_(payload) {
   ).setValues([newRowData.slice(0, numCols)]);
 
   Logger.log(
-    'Reserva creada: ' +
-    idReserva +
-    ' | Unidad=' +
-    access.unitId +
+    'Reserva creada: ' + idReserva +
+    ' | Unidad=' + access.unitId +
+    ' | Modalidad=' + modalidad +
+    ' | Estado=' + estadoFinal +
     ' | Elegible=SI'
   );
 
@@ -2645,6 +3800,12 @@ function createReservation_(payload) {
     idReserva: idReserva,
     estado: estadoFinal,
     observaciones: observacionesFinal,
+    modalidadUso: modalidad,
+    requierePago: policy.requiresPayment,
+    requiereAprobacion: policy.requiresApproval,
+    confirmacionAutomatica: policy.autoConfirm,
+    precioReserva: policy.price,
+    depositoGarantia: policy.deposit,
     rowIndex: newRowIndex,
     unidadId: access.unitId,
     nombreSolicitante: access.person.name,
@@ -2652,6 +3813,248 @@ function createReservation_(payload) {
     rolSolicitante: access.person.role,
     correoRegistradoValidado: false
   };
+}
+
+/***************************************
+ * VALIDACIÓN DE CONFIGURACIÓN
+ * Fuentes exclusivas: Bienes y Config.
+ * No crea hojas, columnas ni valores automáticamente.
+ ***************************************/
+function reservasValidarConfiguracion() {
+  const errores = [];
+  const advertencias = [];
+
+  const bienesSheet = getSheetByNameOrThrow_(SHEET_BIENES);
+  const bienesHeaders = getHeaders_(bienesSheet);
+  const missingBienHeaders = RESERVAS_BIEN_HEADERS_REQUERIDOS.filter(
+    function (header) {
+      return bienesHeaders.indexOf(header) === -1;
+    }
+  );
+
+  if (missingBienHeaders.length > 0) {
+    errores.push(
+      'Bienes: faltan columnas: ' + missingBienHeaders.join(', ')
+    );
+  }
+
+  const bienes = getDataObjects_(bienesSheet, bienesHeaders);
+  const ids = {};
+  let activeCourts = 0;
+
+  bienes.forEach(function (bien, index) {
+    const rowNumber = index + 2;
+    const id = safeTrim_(bien.BienID);
+    const type = normalizeBienType_(bien.Tipo);
+    const prefix = 'Bienes fila ' + rowNumber +
+      (id ? ' [' + id + ']' : '');
+
+    if (!id) {
+      errores.push(prefix + ': BienID es obligatorio.');
+    } else if (ids[id]) {
+      errores.push(prefix + ': BienID duplicado.');
+    } else {
+      ids[id] = true;
+    }
+
+    if (['SALON', 'CANCHA'].indexOf(type) === -1) {
+      errores.push(prefix + ': Tipo debe ser SALON o CANCHA.');
+    }
+
+    const openMinutes = parseTimeToMinutes_(bien.HoraApertura);
+    const closeMinutes = parseTimeToMinutes_(bien.HoraCierre);
+    if (
+      openMinutes == null ||
+      closeMinutes == null ||
+      closeMinutes <= openMinutes
+    ) {
+      errores.push(
+        prefix + ': HoraApertura/HoraCierre no forman un rango válido.'
+      );
+    }
+
+    const minDuration = toNumber_(bien.DuracionMin);
+    const maxDuration = toNumber_(bien.DuracionMax);
+    if (
+      minDuration == null ||
+      maxDuration == null ||
+      minDuration <= 0 ||
+      maxDuration < minDuration
+    ) {
+      errores.push(
+        prefix + ': DuracionMin/DuracionMax son inválidas.'
+      );
+    }
+
+    if (!isExplicitBooleanValue_(bien.Activo)) {
+      errores.push(prefix + ': Activo debe ser TRUE/FALSE o SI/NO.');
+    }
+
+    const cost = toNumber_(bien.CostoReserva);
+    const deposit = toNumber_(bien.DepositoGarantia);
+    if (cost == null || cost < 0) {
+      errores.push(prefix + ': CostoReserva debe ser 0 o un valor positivo.');
+    }
+    if (deposit == null || deposit < 0) {
+      errores.push(prefix + ': DepositoGarantia debe ser 0 o un valor positivo.');
+    }
+
+    if (!isExplicitBooleanValue_(bien.RequierePago)) {
+      errores.push(prefix + ': RequierePago debe ser TRUE/FALSE o SI/NO.');
+    }
+    if (!isExplicitBooleanValue_(bien.RequiereAprobacion)) {
+      errores.push(
+        prefix + ': RequiereAprobacion debe ser TRUE/FALSE o SI/NO.'
+      );
+    }
+
+    const minAdvance = toNumber_(bien.AnticipacionMinHabiles);
+    const maxAdvance = toNumber_(bien.AnticipacionMaxDias);
+    if (
+      minAdvance == null ||
+      maxAdvance == null ||
+      minAdvance < 0 ||
+      maxAdvance < minAdvance
+    ) {
+      errores.push(
+        prefix + ': AnticipacionMinHabiles/AnticipacionMaxDias son inválidas.'
+      );
+    }
+
+    if (type === 'CANCHA' && isBienEnabled_(bien)) {
+      activeCourts++;
+    }
+  });
+
+  if (activeCourts === 0) {
+    advertencias.push(
+      'No hay canchas activas. Activa las necesarias desde la columna Activo de Bienes.'
+    );
+  }
+
+  const configSheet = getSheetByNameOrThrow_(SHEET_CONFIG);
+  const configValues = configSheet.getDataRange().getValues();
+  const config = {};
+  const configRows = {};
+
+  for (let i = 1; i < configValues.length; i++) {
+    const key = normalizeReservationConfigKey_(configValues[i][0]);
+    if (!key) continue;
+
+    if (configRows[key]) {
+      errores.push(
+        'Config: clave duplicada "' + key + '" en filas ' +
+        configRows[key] + ' y ' + (i + 1) + '.'
+      );
+      continue;
+    }
+
+    configRows[key] = i + 1;
+    config[key] = configValues[i][1];
+  }
+
+  RESERVAS_CONFIG_KEYS_REQUERIDAS.forEach(function (key) {
+    if (
+      config[key] === undefined ||
+      config[key] === null ||
+      safeTrim_(config[key]) === ''
+    ) {
+      errores.push('Config: falta la clave "' + key + '".');
+    }
+  });
+
+  [
+    'requiere_pago',
+    'requiere_aprobacion',
+    'cancha_recreativa_requiere_pago',
+    'cancha_recreativa_requiere_aprobacion'
+  ].forEach(function (key) {
+    if (
+      config[key] !== undefined &&
+      !isExplicitBooleanValue_(config[key])
+    ) {
+      errores.push(
+        'Config: "' + key + '" debe usar SI/NO o TRUE/FALSE.'
+      );
+    }
+  });
+
+  [
+    'dias_anticipacion_max',
+    'duracion_min_horas',
+    'duracion_max_horas',
+    'max_reservas_activas_por_apto',
+    'max_reservas_recreativas_dia_por_apto',
+    'max_reservas_recreativas_semana_por_apto',
+    'dias_agenda_publica',
+    'cancha_recreativa_costo',
+    'cancha_recreativa_anticipacion_min_habiles',
+    'cancha_recreativa_anticipacion_max_dias'
+  ].forEach(function (key) {
+    if (config[key] === undefined) return;
+    const value = toNumber_(config[key]);
+    if (value == null || value < 0) {
+      errores.push(
+        'Config: "' + key + '" debe ser un número igual o mayor que 0.'
+      );
+    }
+  });
+
+  const defaultMinDuration = toNumber_(config.duracion_min_horas);
+  const defaultMaxDuration = toNumber_(config.duracion_max_horas);
+  if (
+    defaultMinDuration != null &&
+    defaultMaxDuration != null &&
+    (
+      defaultMinDuration <= 0 ||
+      defaultMaxDuration < defaultMinDuration
+    )
+  ) {
+    errores.push(
+      'Config: duracion_min_horas/duracion_max_horas no forman un rango válido.'
+    );
+  }
+
+  const configOpen = parseTimeToMinutes_(config.hora_apertura);
+  const configClose = parseTimeToMinutes_(config.hora_cierre);
+  if (
+    configOpen == null ||
+    configClose == null ||
+    configClose <= configOpen
+  ) {
+    errores.push(
+      'Config: hora_apertura/hora_cierre no forman un rango válido.'
+    );
+  }
+
+  const result = {
+    ok: errores.length === 0,
+    hojasConfiguracion: [SHEET_BIENES, SHEET_CONFIG],
+    bienesRevisados: bienes.length,
+    canchasActivas: activeCourts,
+    errores: errores,
+    advertencias: advertencias,
+    elegibilidadUnidadSeConserva: true
+  };
+
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function isExplicitBooleanValue_(value) {
+  if (typeof value === 'boolean') return true;
+  const normalized = safeTrim_(value).toUpperCase();
+  return [
+    'TRUE', 'FALSE',
+    'SI', 'SÍ', 'NO',
+    'YES', '1', '0'
+  ].indexOf(normalized) !== -1;
+}
+
+// Compatibilidad con la función indicada en despliegues anteriores.
+// Ya no modifica Bienes ni crea columnas: solamente valida las dos hojas.
+function reservasAplicarPoliticaCanchas() {
+  return reservasValidarConfiguracion();
 }
 
 /**
@@ -2690,9 +4093,24 @@ function findReservationByRequestId_(requestId) {
       // Obtener IdReserva y Estado de esa fila
       const colIdReserva = headers.indexOf('IdReserva');
       const colEstado = headers.indexOf('Estado');
-      
+      const colModalidad = headers.indexOf('ModalidadUso');
+      const colRequierePago = headers.indexOf('RequierePago');
+      const colRequiereAprobacion =
+        headers.indexOf('RequiereAprobacion');
+      const colConfirmacionAutomatica =
+        headers.indexOf('ConfirmacionAutomatica');
+      const colPrecioReserva = headers.indexOf('PrecioReserva');
+      const colDepositoGarantia =
+        headers.indexOf('DepositoGarantia');
+
       let idReserva = 'UNKNOWN';
       let estado = 'UNKNOWN';
+      let modalidadUso = '';
+      let requierePago = false;
+      let requiereAprobacion = false;
+      let confirmacionAutomatica = false;
+      let precioReserva = 0;
+      let depositoGarantia = 0;
       
       if (colIdReserva >= 0) {
         const idReservaValue = sheet.getRange(rowIndex, colIdReserva + 1).getValue();
@@ -2704,9 +4122,57 @@ function findReservationByRequestId_(requestId) {
         estado = safeTrim_(estadoValue);
       }
 
+      if (colModalidad >= 0) {
+        modalidadUso = safeTrim_(
+          sheet.getRange(rowIndex, colModalidad + 1).getValue()
+        );
+      }
+
+      if (colRequierePago >= 0) {
+        requierePago = normalizeYesNo_(
+          sheet.getRange(rowIndex, colRequierePago + 1).getValue()
+        ) === 'SI';
+      }
+
+      if (colRequiereAprobacion >= 0) {
+        requiereAprobacion = normalizeYesNo_(
+          sheet.getRange(
+            rowIndex,
+            colRequiereAprobacion + 1
+          ).getValue()
+        ) === 'SI';
+      }
+
+      if (colConfirmacionAutomatica >= 0) {
+        confirmacionAutomatica = normalizeYesNo_(
+          sheet.getRange(
+            rowIndex,
+            colConfirmacionAutomatica + 1
+          ).getValue()
+        ) === 'SI';
+      }
+
+      if (colPrecioReserva >= 0) {
+        precioReserva = toNumber_(
+          sheet.getRange(rowIndex, colPrecioReserva + 1).getValue()
+        ) || 0;
+      }
+
+      if (colDepositoGarantia >= 0) {
+        depositoGarantia = toNumber_(
+          sheet.getRange(rowIndex, colDepositoGarantia + 1).getValue()
+        ) || 0;
+      }
+
       return {
         idReserva: idReserva,
         estado: estado,
+        modalidadUso: modalidadUso,
+        requierePago: requierePago,
+        requiereAprobacion: requiereAprobacion,
+        confirmacionAutomatica: confirmacionAutomatica,
+        precioReserva: precioReserva,
+        depositoGarantia: depositoGarantia,
         rowIndex: rowIndex
       };
     }
@@ -2741,7 +4207,18 @@ function ensureReservationTechnicalColumns_() {
     'NotificacionAdmin',
     'FechaIntentoNotificacion',
     'DetalleNotificacionAdmin',
-    'VersionReservas'
+    'VersionReservas',
+    'ModalidadUso',
+    'RequierePago',
+    'RequiereAprobacion',
+    'ConfirmacionAutomatica',
+    'PrecioReserva',
+    'DepositoGarantia',
+    'NumeroParticipantes',
+    'NumeroInvitados',
+    'ConfirmaSoloResidentes',
+    'ParticipanMenores14',
+    'AdultoResponsable'
   ];
 
   const missingColumns = requiredTechnicalColumns.filter(col => !headers.includes(col));

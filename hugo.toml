@@ -29,9 +29,16 @@ title = 'Club Residencial Bulevar Verde'
   # Redes sociales
   facebook = ''
   instagram = ''
-  portalClientVersion = "20260718-8"
+
+  
+  portalClientVersion = "20260723-13-path-fix"
   portalWebAppUrl = "https://script.google.com/macros/s/AKfycby3_c1PhF_tVZ2t3L59QATP9PawpF7EnSRAMVr69zUdcdSCHE4FYZ__GNRfSo2NjQ4vSw/exec"
-  reservasWebAppUrl = "https://script.google.com/macros/s/AKfycbywtGpeya1SKIDKChYU3k5WK_lhPpeqXnuWiCz07cpxCLf4xxR5L_Gzj6NBGOQYOC-l/exec"
+  # Completar después de desplegar google/pqrs.js como Web App.
+  pqrsWebAppUrl = "https://script.google.com/macros/s/AKfycbxWdqXm8t0K3mkUuslAm6OAHGYvwZa96LPMgZOoQlFceizAoDlEGPnV2wa0t_A7fvsJxA/exec"
+  pqrsMaintenanceVersion = "20260723-8-path-fix"
+  pqrsGestionVersion = "20260724-7-link-evidence"
+  reservasWebAppUrl = "https://script.google.com/macros/s/AKfycbz2SCWn0SNBMummGS-X4qF4INN8LkHe_2WDOq1jDQi_7egg71q9zotgaARctjxk6EnW/exec"
+  sancionesWebAppUrl = "https://script.google.com/macros/s/AKfycbxk69LDxXyh8TgMb2CUjmKuzQ_hWI8hjEwzNjmXHSwxoXsSwrBv-Tiffv8h3BGUwDVx/exec"
 
   # Piloto de migración a bulevar-verde-api (Cloud Run + Firebase Auth + Data Connect).
   # apiBaseUrl debe apuntar al API en ejecución (por defecto, el servidor local `npm run dev`).
@@ -64,4 +71,4 @@ title = 'Club Residencial Bulevar Verde'
   [[menu.main]]
     name = 'Datos'
     pageRef = '/datos-personales'
-    weight = 5
+    weight = 6
