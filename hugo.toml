@@ -29,6 +29,8 @@ title = 'Club Residencial Bulevar Verde'
   # Redes sociales
   facebook = ''
   instagram = ''
+
+  
   portalClientVersion = "20260723-13-path-fix"
   portalWebAppUrl = "https://script.google.com/macros/s/AKfycby3_c1PhF_tVZ2t3L59QATP9PawpF7EnSRAMVr69zUdcdSCHE4FYZ__GNRfSo2NjQ4vSw/exec"
   # Completar después de desplegar google/pqrs.js como Web App.

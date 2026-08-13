@@ -58,7 +58,6 @@
       evidenceCameraButton: $('managementOpenEvidenceCameraButton'),
       evidenceGalleryButton: $('managementOpenEvidenceGalleryButton'),
       evidenceRemoveButton: $('managementRemoveEvidenceButton'),
-      evidenceCameraInput: $('managementEvidenceCameraInput'),
       evidenceGalleryInput: $('managementEvidenceGalleryInput'),
       evidencePreviewContainer: $('managementEvidencePreviewContainer'),
       evidencePreview: $('managementEvidencePreview'),
@@ -78,13 +77,10 @@
     elements.statusFilter.addEventListener('change', renderReports);
     elements.reportList.addEventListener('click', handleReportClick);
     elements.closureForm.addEventListener('submit', handleCloseReport);
-    elements.evidenceCameraButton.addEventListener('click', function () {
-      elements.evidenceCameraInput.click();
-    });
+    elements.evidenceCameraButton.addEventListener('click', captureClosureEvidence);
     elements.evidenceGalleryButton.addEventListener('click', function () {
       elements.evidenceGalleryInput.click();
     });
-    elements.evidenceCameraInput.addEventListener('change', handleClosureEvidenceSelection);
     elements.evidenceGalleryInput.addEventListener('change', handleClosureEvidenceSelection);
     elements.evidenceRemoveButton.addEventListener('click', resetClosureEvidence);
 
@@ -459,12 +455,60 @@
     }
   }
 
+  async function captureClosureEvidence() {
+    if (!window.BVEvidenceCamera) {
+      showAlert('danger', 'No fue posible abrir la cámara. Recarga la página e intenta nuevamente.');
+      return;
+    }
+
+    if (!selectedReport) {
+      showAlert('warning', 'Selecciona primero el reporte que estás atendiendo.');
+      return;
+    }
+
+    elements.evidenceCameraButton.disabled = true;
+
+    try {
+      var evidence = await window.BVEvidenceCamera.capture({
+        contextLabel: 'Evidencia de atención PQRS',
+        detailLines: [
+          'Reporte: ' + selectedReport.reportId,
+          selectedReport.ubicacion ? 'Ubicación reportada: ' + selectedReport.ubicacion : ''
+        ].filter(Boolean),
+        filePrefix: 'pqrs-cierre-' + selectedReport.reportId,
+        maxDimension: 1600,
+        quality: 0.84
+      });
+
+      var file = evidence.file || new File([evidence.blob], evidence.name, {
+        type: 'image/jpeg',
+        lastModified: Date.now()
+      });
+
+      setClosureEvidenceFile(file, 'Cámara');
+      log('info', 'Evidencia de cierre tomada con el módulo compartido.', {
+        reportId: selectedReport.reportId,
+        name: file.name,
+        sizeBytes: file.size,
+        accuracy: evidence.captureMetadata && evidence.captureMetadata.accuracy
+      });
+    } catch (error) {
+      if (error && error.name === 'AbortError') return;
+      showAlert('danger', 'No fue posible tomar la fotografía: ' + (error.message || error));
+    } finally {
+      elements.evidenceCameraButton.disabled = false;
+    }
+  }
+
   function handleClosureEvidenceSelection(event) {
     var input = event.target;
     var file = input && input.files && input.files[0];
     input.value = '';
-
     if (!file) return;
+    setClosureEvidenceFile(file, 'Galería');
+  }
+
+  function setClosureEvidenceFile(file, source) {
     if (!/^image\//i.test(file.type || '')) {
       showAlert('warning', 'Selecciona un archivo de imagen válido.');
       return;
@@ -480,6 +524,7 @@
       name: file.name || 'evidencia.jpg',
       type: file.type || 'image/jpeg',
       originalBytes: file.size || 0,
+      source: source || 'Dispositivo',
       clientEvidenceId: createClientEvidenceId()
     };
 
@@ -495,6 +540,7 @@
       name: selectedClosureEvidence.name,
       type: selectedClosureEvidence.type,
       originalBytes: selectedClosureEvidence.originalBytes,
+      source: selectedClosureEvidence.source,
       clientEvidenceId: selectedClosureEvidence.clientEvidenceId
     });
   }
@@ -512,7 +558,6 @@
     elements.evidenceRemoveButton.hidden = true;
     elements.evidenceInfo.textContent = '';
     elements.evidenceStatus.textContent = 'La imagen se comprimirá antes de almacenarse.';
-    elements.evidenceCameraInput.value = '';
     elements.evidenceGalleryInput.value = '';
   }
 

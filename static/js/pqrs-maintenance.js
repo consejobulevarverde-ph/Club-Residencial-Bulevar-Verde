@@ -116,7 +116,6 @@
     elements.description = byId('maintenanceDescription');
     elements.cameraButton = byId('maintenanceOpenCameraButton');
     elements.galleryButton = byId('maintenanceOpenGalleryButton');
-    elements.cameraInput = byId('maintenanceCameraInput');
     elements.galleryInput = byId('maintenanceGalleryInput');
     elements.previews = byId('maintenancePhotoPreviews');
     elements.photoSelectionStatus = byId('maintenancePhotoSelectionStatus');
@@ -236,24 +235,16 @@
 
   function bindPhotoSelectors() {
     if (!elements.cameraButton || !elements.galleryButton ||
-        !elements.cameraInput || !elements.galleryInput || !elements.previews) {
+        !elements.galleryInput || !elements.previews) {
       log('error', 'No se encontraron todos los controles de cámara y galería.');
       return;
     }
 
-    elements.cameraButton.addEventListener('click', function () {
-      log('debug', 'Abriendo cámara del dispositivo.');
-      elements.cameraInput.click();
-    });
+    elements.cameraButton.addEventListener('click', captureMaintenancePhoto);
 
     elements.galleryButton.addEventListener('click', function () {
       log('debug', 'Abriendo galería o selector de archivos.');
       elements.galleryInput.click();
-    });
-
-    elements.cameraInput.addEventListener('change', function (event) {
-      addSelectedPhotos(event.target.files, 'Cámara');
-      event.target.value = '';
     });
 
     elements.galleryInput.addEventListener('change', function (event) {
@@ -262,6 +253,49 @@
     });
 
     renderSelectedPhotos();
+  }
+
+  async function captureMaintenancePhoto() {
+    if (!global.BVEvidenceCamera) {
+      showStatus('danger', 'No fue posible abrir la cámara. Recarga la página e intenta nuevamente.');
+      return;
+    }
+
+    if (selectedPhotoFiles.length >= MAX_PHOTOS) {
+      showStatus('warning', 'Ya seleccionaste el máximo de tres fotografías.');
+      return;
+    }
+
+    var locationText = elements.location ? elements.location.value.trim() : '';
+    elements.cameraButton.disabled = true;
+
+    try {
+      var evidence = await global.BVEvidenceCamera.capture({
+        contextLabel: 'Evidencia PQRS - Mantenimiento',
+        detailLines: locationText ? ['Ubicación reportada: ' + locationText] : [],
+        filePrefix: 'pqrs-mantenimiento',
+        maxDimension: MAX_DIMENSION,
+        quality: 0.84
+      });
+
+      var file = evidence.file || new File([evidence.blob], evidence.name, {
+        type: 'image/jpeg',
+        lastModified: Date.now()
+      });
+
+      addSelectedPhotos([file], 'Cámara');
+      log('info', 'Fotografía tomada con el módulo compartido de evidencias.', {
+        name: file.name,
+        sizeBytes: file.size,
+        accuracy: evidence.captureMetadata && evidence.captureMetadata.accuracy
+      });
+    } catch (error) {
+      if (error && error.name === 'AbortError') return;
+      log('error', 'No fue posible tomar la fotografía.', error);
+      showStatus('danger', 'No fue posible tomar la fotografía: ' + (error.message || error));
+    } finally {
+      renderSelectedPhotos();
+    }
   }
 
   function addSelectedPhotos(fileList, source) {
@@ -720,7 +754,6 @@
     if (elements.galleryButton) {
       elements.galleryButton.disabled = isBusy || photoLimitReached;
     }
-    if (elements.cameraInput) elements.cameraInput.disabled = isBusy;
     if (elements.galleryInput) elements.galleryInput.disabled = isBusy;
 
     elements.submit.innerHTML = isBusy
@@ -733,7 +766,6 @@
     elements.form.reset();
     elements.form.classList.remove('was-validated');
     selectedPhotoFiles = [];
-    if (elements.cameraInput) elements.cameraInput.value = '';
     if (elements.galleryInput) elements.galleryInput.value = '';
     renderSelectedPhotos();
   }

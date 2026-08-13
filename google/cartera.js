@@ -400,10 +400,24 @@ function ejecutarEnvioNotificacionesPendientes_(opts) {
         enviados++;
 
       } catch (error) {
+        const mensaje = String(error && error.message ? error.message : error);
+
+        if (
+          /too many times for one day:\s*email/i.test(mensaje) ||
+          /daily quota/i.test(mensaje)
+        ) {
+          row[idx.estado] = "PENDIENTE";
+          row[idx.fechaEnvio] = "";
+          row[idx.asunto] = subject;
+          row[idx.observaciones] = mensaje;
+          // No intentar más correos hoy.
+          break;
+        }
+
         row[idx.estado] = "ERROR";
         row[idx.fechaEnvio] = nowTexto;
         row[idx.asunto] = subject;
-        row[idx.observaciones] = "Error enviando correo: " + error.message;
+        row[idx.observaciones] = "Error enviando correo: " + mensaje;
         errores++;
       }
     }

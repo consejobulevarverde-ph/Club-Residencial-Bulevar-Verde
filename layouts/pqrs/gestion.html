@@ -327,18 +327,20 @@
               <div class="mb-4">
                 <label class="form-label fw-semibold">Evidencia de la atención <span
                     class="text-muted fw-normal">(opcional)</span></label>
+                <div class="form-text mb-2">
+                  <i class="bi bi-camera me-1"></i>Toma una foto o selecciona de la galería
+                </div>
                 <div class="management-evidence-actions d-flex flex-wrap gap-2">
                   <button id="managementOpenEvidenceCameraButton" type="button" class="btn btn-outline-success">
-                    <i class="bi bi-camera me-1"></i>Tomar foto
+                    <i class="bi bi-camera me-1"></i>Toma una foto
                   </button>
                   <button id="managementOpenEvidenceGalleryButton" type="button" class="btn btn-outline-success">
-                    <i class="bi bi-images me-1"></i>Elegir de galería
+                    <i class="bi bi-images me-1"></i>Selecciona de la galería
                   </button>
                   <button id="managementRemoveEvidenceButton" type="button" class="btn btn-outline-danger" hidden>
                     <i class="bi bi-trash me-1"></i>Quitar evidencia
                   </button>
                 </div>
-                <input id="managementEvidenceCameraInput" type="file" accept="image/*" capture="environment" hidden>
                 <input id="managementEvidenceGalleryInput" type="file" accept="image/*" hidden>
                 <div id="managementEvidencePreviewContainer" class="mt-3" hidden>
                   <img id="managementEvidencePreview" class="management-evidence-preview"
@@ -369,6 +371,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ "js/portal-bv-client.js" | relURL }}?v={{ .Site.Params.portalClientVersion }}"></script>
+  <script src="{{ "js/evidence-camera.js" | relURL }}?v=20260813-2"></script>
   <script>
     window.PQRS_GESTION_CONFIG = {
       webAppUrl: {{ .Site.Params.pqrsWebAppUrl | default "" }},
