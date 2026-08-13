@@ -1,6 +1,7 @@
 {
   "hosting": {
     "public": "public",
+    "site": "bulevar-verde-app",
     "ignore": [
       "firebase.json",
       "**/.*",
