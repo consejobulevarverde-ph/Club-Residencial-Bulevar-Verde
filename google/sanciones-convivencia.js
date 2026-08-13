@@ -26,29 +26,40 @@
  *
  ***************************************/
 
-const SHEET_ID_CONVIVENCIA = '1GeJZ4Rd4-ddzE6Vi8kpq9iB2_oxuLW87UiAnbZQ6Iow';
-const SHEET_PLANILLA_CONVIVENCIA = 'PLANILLA_CONVIVENCIA';
-const SHEET_CONFIG_SANCIONES = 'config_sanciones';
-const SHEET_BITACORA_DESCARGOS_CONVIVENCIA = 'bitacora_descargos_convivencia';
-const SOPORTE_SANCIONES_CONVIVENCIA_FOLDER_NAME = 'soporte-sanciones-convivencia';
+const CONFIG = {
+  SHEET_ID: '1GeJZ4Rd4-ddzE6Vi8kpq9iB2_oxuLW87UiAnbZQ6Iow',
+  SHEETS: {
+    PLANILLA: 'PLANILLA_CONVIVENCIA',
+    CONFIG: 'config_sanciones'
+  },
+  DRIVE: {
+    FOLDER_ID: '1TxK85prPgH0r1-LWqlk-59DWUEaRnrWx',
+    FOLDER_NAME: 'soporte-sanciones-convivencia',
+    FOLDER_PROP: 'SOPORTE_SANCIONES_CONVIVENCIA_FOLDER_ID'
+  },
+  URL: 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/sanciones-convivencia/',
+  ESTADOS: {
+    PENDIENTE_DESCARGOS: 'PENDIENTE_DESCARGOS',
+    CON_DESCARGOS: 'CON_DESCARGOS',
+    RESUELTO: 'RESUELTO',
+    ARCHIVADO: 'ARCHIVADO'
+  },
+  // Las severidades se cargan dinámicamente desde CONFIG.SHEETS.CONFIG
+  // Ver obtenerSeveridadesConvivencia_()
+  EMAIL_DRY_RUN: false,
+  CUOTA_RESERVA: 3,
+  LOG_LEVEL: 'RESUMEN'
+};
 
-const URL_CONSULTA_CONVIVENCIA = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/sanciones-convivencia/';
-const ESTADO_CASO_PENDIENTE_DESCARGOS = 'PENDIENTE_DESCARGOS';
-const ESTADO_CASO_CON_DESCARGOS = 'CON_DESCARGOS';
-const ESTADO_CASO_RESUELTO = 'RESUELTO';
-const ESTADO_CASO_ARCHIVADO = 'ARCHIVADO';
+// Aliases para compatibilidad (redirigen a CONFIG)
+const SHEET_ID_CONVIVENCIA = CONFIG.SHEET_ID;
+const ESTADO_CASO_PENDIENTE_DESCARGOS = CONFIG.ESTADOS.PENDIENTE_DESCARGOS;
+const ESTADO_CASO_CON_DESCARGOS = CONFIG.ESTADOS.CON_DESCARGOS;
+const ESTADO_CASO_RESUELTO = CONFIG.ESTADOS.RESUELTO;
+const ESTADO_CASO_ARCHIVADO = CONFIG.ESTADOS.ARCHIVADO;
 
-const SEVERIDADES_CONVIVENCIA = [
-  { nombre: 'Llamado de atención', cuotas: 0 },
-  { nombre: 'Leve', cuotas: 0.5 },
-  { nombre: 'Grave', cuotas: 1 },
-  { nombre: 'Muy grave', cuotas: 1.5 },
-  { nombre: 'Máxima gravedad', cuotas: 2 }
-];
-
-const EMAIL_DRY_RUN_CONVIVENCIA = false;
-const CONVIVENCIA_CUOTA_RESERVA = 3;
-const LOG_LEVEL_CONVIVENCIA = 'RESUMEN';
+// SEVERIDADES_CONVIVENCIA se obtiene dinámicamente desde obtenerSeveridadesConvivencia_()
+// No se define como constante para forzar lectura desde la hoja de configuración
 
 /***************************************
  * 01. WEB APP Y CONSULTAS PÚBLICAS
@@ -211,6 +222,16 @@ function subirEvidenciaConvivencia_(payload) {
     const blob = Utilities.newBlob(bytes, mimeType, fileName);
     const file = folder.createFile(blob);
 
+    // Las evidencias históricas ya se consultan mediante URLs públicas de Drive.
+    // Mantiene el mismo comportamiento para las nuevas evidencias de convivencia,
+    // pero sin hacer fallar la carga si la política de Workspace impide compartir.
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (sharingError) {
+      Logger.log('WARN subirEvidenciaConvivencia_ no pudo habilitar enlace público: ' +
+        (sharingError.message || String(sharingError)));
+    }
+
     const descripcion = contexto === 'descargo_residente'
       ? 'Evidencia aportada por residente en descargos de convivencia.' +
         (caseId ? ' Caso: ' + caseId + '.' : '') +
@@ -235,19 +256,68 @@ function subirEvidenciaConvivencia_(payload) {
 
 function obtenerCarpetaSoporteConvivencia_() {
   try {
-    if (typeof FOLDER_ID_IMAGENES_SANCIONES_ORIGEN === 'undefined' ||
-        !safeTrim_(FOLDER_ID_IMAGENES_SANCIONES_ORIGEN)) {
-      throw new Error('No está configurado FOLDER_ID_IMAGENES_SANCIONES_ORIGEN.');
+    const properties = PropertiesService.getScriptProperties();
+
+    // Intentar primero con el ID configurado
+    if (CONFIG.DRIVE.FOLDER_ID) {
+      try {
+        return DriveApp.getFolderById(CONFIG.DRIVE.FOLDER_ID);
+      } catch (error) {
+        Logger.log('WARN obtenerCarpetaSoporteConvivencia_: folderId configurado no accesible. ' +
+          (error.message || String(error)));
+      }
     }
 
-    // Reutiliza exactamente la carpeta configurada para las evidencias de
-    // sanciones. No crea carpetas paralelas para convivencia o descargos.
-    return DriveApp.getFolderById(FOLDER_ID_IMAGENES_SANCIONES_ORIGEN);
+    // Luego con el ID guardado en propiedades
+    const folderIdGuardado = safeTrim_(
+      properties.getProperty(CONFIG.DRIVE.FOLDER_PROP)
+    );
+
+    if (folderIdGuardado) {
+      try {
+        return DriveApp.getFolderById(folderIdGuardado);
+      } catch (error) {
+        Logger.log('WARN obtenerCarpetaSoporteConvivencia_: el folderId guardado ya no es accesible. ' +
+          (error.message || String(error)));
+        properties.deleteProperty(CONFIG.DRIVE.FOLDER_PROP);
+      }
+    }
+
+    // No escribir en FOLDER_ID_IMAGENES_SANCIONES_ORIGEN: esa carpeta es
+    // una fuente externa de evidencias de sanciones y puede estar compartida
+    // con la cuenta del Web App únicamente como lector.
+    // La carpeta de convivencia se crea en Mi unidad de la cuenta que ejecuta
+    // el Web App, por lo que esa misma cuenta tiene permiso de escritura.
+    const rootFolder = DriveApp.getRootFolder();
+    const folders = rootFolder.getFoldersByName(CONFIG.DRIVE.FOLDER_NAME);
+    const folder = folders.hasNext()
+      ? folders.next()
+      : rootFolder.createFolder(CONFIG.DRIVE.FOLDER_NAME);
+
+    properties.setProperty(CONFIG.DRIVE.FOLDER_PROP, folder.getId());
+    return folder;
   } catch (error) {
     Logger.log('ERROR obtenerCarpetaSoporteConvivencia_: ' + (error.message || String(error)));
-    throw new Error('No fue posible acceder a la carpeta de evidencias de sanciones en Drive: ' +
+    throw new Error('No fue posible acceder o crear la carpeta de evidencias de convivencia en Drive: ' +
       (error.message || 'error desconocido'));
   }
+}
+
+/**
+ * Ejecutar una vez desde el editor de Apps Script después de aplicar/desplegar
+ * este cambio. Fuerza la autorización de Drive y deja registrada la carpeta
+ * que utilizará el Web App para las evidencias de casos y descargos.
+ */
+function configurarCarpetaSoporteConvivencia() {
+  const folder = obtenerCarpetaSoporteConvivencia_();
+  const resultado = {
+    folderId: folder.getId(),
+    folderName: folder.getName(),
+    folderUrl: folder.getUrl()
+  };
+
+  Logger.log(JSON.stringify(resultado));
+  return resultado;
 }
 
 /***************************************
@@ -499,7 +569,7 @@ function guardarDescargosConvivencia_(e) {
 
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID_CONVIVENCIA);
-    const sheet = ss.getSheetByName(SHEET_PLANILLA_CONVIVENCIA);
+    const sheet = ss.getSheetByName(CONFIG.SHEETS.PLANILLA);
 
     if (!sheet) {
       return jsonOutput_({
@@ -531,15 +601,6 @@ function guardarDescargosConvivencia_(e) {
     sheet.getRange(sheetRow, IDX.fechaDescargos + 1).setValue(ahora);
     sheet.getRange(sheetRow, IDX.estado + 1).setValue(ESTADO_CASO_CON_DESCARGOS);
 
-    registrarDescargoConvivencia_({
-      caseId: id,
-      apto: apto,
-      aptoNorm: aptoNorm,
-      descargos: descargosTexto,
-      cantidadEvidencias: evidenciasArray.length,
-      fechaDescargos: ahora
-    });
-
     return jsonOutput_({
       ok: true,
       mensaje: 'Descargos guardados exitosamente.',
@@ -561,7 +622,7 @@ function guardarDescargosConvivencia_(e) {
 
 function leerPlanillaConvivencia_() {
   const ss = SpreadsheetApp.openById(SHEET_ID_CONVIVENCIA);
-  const sheet = ss.getSheetByName(SHEET_PLANILLA_CONVIVENCIA);
+  const sheet = ss.getSheetByName(CONFIG.SHEETS.PLANILLA);
 
   if (!sheet) {
     return {
@@ -779,10 +840,10 @@ function generarIdCasoConvivencia_() {
 }
 
 function getOrCreatePlanillaConvivencia_(ss) {
-  let sheet = ss.getSheetByName(SHEET_PLANILLA_CONVIVENCIA);
+  let sheet = ss.getSheetByName(CONFIG.SHEETS.PLANILLA);
 
   if (!sheet) {
-    sheet = ss.insertSheet(SHEET_PLANILLA_CONVIVENCIA);
+    sheet = ss.insertSheet(CONFIG.SHEETS.PLANILLA);
 
     const headers = [
       'ID',
@@ -854,50 +915,6 @@ function registrarConsultaConvivencia_(data) {
   }
 }
 
-function registrarDescargoConvivencia_(data) {
-  try {
-    const ss = SpreadsheetApp.openById(SHEET_ID_CONVIVENCIA);
-    const sheet = getOrCreateHojaBitacoraDescargosConvivencia_(ss);
-
-    sheet.appendRow([
-      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'),
-      data.caseId || '',
-      data.apto || '',
-      data.aptoNorm || '',
-      data.cantidadEvidencias || 0,
-      data.descargos ? data.descargos.substring(0, 200) : '',
-      data.fechaDescargos || ''
-    ]);
-  } catch (error) {
-    Logger.log('ERROR registrando descargo convivencia: ' + error.message);
-  }
-}
-
-function getOrCreateHojaBitacoraDescargosConvivencia_(ss) {
-  let sheet = ss.getSheetByName(SHEET_BITACORA_DESCARGOS_CONVIVENCIA);
-
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_BITACORA_DESCARGOS_CONVIVENCIA);
-
-    sheet.getRange(1, 1, 1, 7).setValues([[
-      'FechaRegistro',
-      'CaseId',
-      'Apartamento',
-      'ApartamentoNormalizado',
-      'CantidadEvidencias',
-      'Descargos',
-      'FechaDescargos'
-    ]]);
-
-    sheet.getRange(1, 1, 1, 7)
-      .setFontWeight('bold')
-      .setBackground('#fff2cc');
-
-    sheet.setFrozenRows(1);
-  }
-
-  return sheet;
-}
 
 /***************************************
  * 06. HELPERS GENERALES
@@ -1023,7 +1040,7 @@ function normalizeText_(value) {
 function obtenerCategoriasConvivencia_() {
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID_CONVIVENCIA);
-    const sheet = ss.getSheetByName(SHEET_CONFIG_SANCIONES);
+    const sheet = ss.getSheetByName(CONFIG.SHEETS.CONFIG);
 
     if (!sheet) {
       Logger.log('Hoja config_sanciones no encontrada, usando categorías por defecto');
@@ -1054,7 +1071,7 @@ function obtenerCategoriasConvivencia_() {
 function obtenerSeveridadesConvivencia_() {
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID_CONVIVENCIA);
-    const sheet = ss.getSheetByName(SHEET_CONFIG_SANCIONES);
+    const sheet = ss.getSheetByName(CONFIG.SHEETS.CONFIG);
 
     if (!sheet) {
       Logger.log('Hoja config_sanciones no encontrada, usando severidades por defecto');
@@ -1114,10 +1131,10 @@ function getCategoriasDefecto_() {
 }
 
 function getOrCreateConfigSanciones_(ss) {
-  let sheet = ss.getSheetByName(SHEET_CONFIG_SANCIONES);
+  let sheet = ss.getSheetByName(CONFIG.SHEETS.CONFIG);
 
   if (!sheet) {
-    sheet = ss.insertSheet(SHEET_CONFIG_SANCIONES, ss.getSheets().length - 1);
+    sheet = ss.insertSheet(CONFIG.SHEETS.CONFIG, ss.getSheets().length - 1);
 
     const headers = ['Tipo', 'Valor/Nombre', 'Cuotas Equivalentes'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);

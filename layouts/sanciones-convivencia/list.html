@@ -896,10 +896,35 @@
       }
     }
 
-    function regresarAlListado() {
-      document.getElementById('paso1').classList.add('hidden');
-      document.getElementById('paso2').classList.remove('hidden');
-      document.getElementById('paso3').classList.add('hidden');
+    async function regresarAlListado() {
+      const apto = document.getElementById('apto').value.trim();
+
+      if (!apto) {
+        document.getElementById('paso1').classList.remove('hidden');
+        document.getElementById('paso2').classList.add('hidden');
+        document.getElementById('paso3').classList.add('hidden');
+        return;
+      }
+
+      try {
+        // Recargar los casos con el estado actualizado
+        const response = await fetch(`${API_URL}?action=consultarCasosApto&apto=${encodeURIComponent(apto)}`);
+        const data = await response.json();
+
+        if (data.ok) {
+          mostrarListadoCasos(data.casos, apto);
+        } else {
+          // Si hay error, solo vuelve al listado
+          document.getElementById('paso1').classList.add('hidden');
+          document.getElementById('paso2').classList.remove('hidden');
+          document.getElementById('paso3').classList.add('hidden');
+        }
+      } catch (error) {
+        // En caso de error de conexión, vuelve al listado sin recargar
+        document.getElementById('paso1').classList.add('hidden');
+        document.getElementById('paso2').classList.remove('hidden');
+        document.getElementById('paso3').classList.add('hidden');
+      }
     }
 
   </script>
