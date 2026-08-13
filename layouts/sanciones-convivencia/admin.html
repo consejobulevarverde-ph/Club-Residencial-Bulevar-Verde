@@ -47,14 +47,7 @@
 </head>
 
 <body>
-  <nav class="navbar navbar-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="{{ site.BaseURL }}">
-        <i class="bi bi-tree-fill"></i> Club Bulevar Verde
-      </a>
-      <span class="navbar-text">Administración - Convivencia</span>
-    </div>
-  </nav>
+  {{ partial "header" . }}
 
   <header class="page-header">
     <div class="container">
@@ -498,6 +491,8 @@
 
     cargarConfiguracion();
   </script>
+
+  {{ partial "footer" . }}
 </body>
 
 </html>

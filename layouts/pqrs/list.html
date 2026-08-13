@@ -233,23 +233,7 @@
 </head>
 
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{{ "/" | relURL }}">
-                <i class="bi bi-houses-fill"></i> Club Bulevar Verde
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    {{ range .Site.Menus.main }}
-                    <li class="nav-item"><a class="nav-link" href="{{ .URL }}">{{ .Name }}</a></li>
-                    {{ end }}
-                </ul>
-            </div>
-        </div>
-    </nav>
+    {{ partial "header" . }}
 
     <section class="page-header text-center">
         <div class="container">
@@ -417,19 +401,7 @@
         </section>
     </main>
 
-    <footer>
-        <div class="container text-center">
-            <p>&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</p>
-            <p class="mt-2">
-                {{ with .Site.Params.facebook }}<a href="{{ . }}" target="_blank" class="me-3"><i
-                        class="bi bi-facebook"></i></a>{{ end }}
-                {{ with .Site.Params.instagram }}<a href="{{ . }}" target="_blank" class="me-3"><i
-                        class="bi bi-instagram"></i></a>{{ end }}
-                {{ with .Site.Params.whatsappComunidad }}<a href="{{ . }}" target="_blank"><i
-                        class="bi bi-whatsapp"></i></a>{{ end }}
-            </p>
-        </div>
-    </footer>
+    {{ partial "footer" . }}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ "js/portal-bv-client.js" | relURL }}?v={{ .Site.Params.portalClientVersion }}"></script>

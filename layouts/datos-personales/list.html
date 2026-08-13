@@ -161,13 +161,7 @@
 </head>
 
 <body>
-  <nav class="navbar navbar-dark">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="{{ "/" | relURL }}">
-        <i class="bi bi-tree-fill me-2"></i>{{ .Site.Title }}
-      </a>
-    </div>
-  </nav>
+  {{ partial "header" . }}
 
   <header class="page-header">
     <div class="container">
@@ -450,10 +444,7 @@
     </section>
   </main>
 
-  <footer class="py-4">
-    <div class="container text-center small">Club Residencial Bulevar Verde · Tratamiento seguro de información personal
-    </div>
-  </footer>
+  {{ partial "footer" . }}
 
   <script src="{{ "js/portal-bv-client.js" | relURL }}?v={{ default "20260718-7" .Site.Params.portalClientVersion }}"></script>
   <script>

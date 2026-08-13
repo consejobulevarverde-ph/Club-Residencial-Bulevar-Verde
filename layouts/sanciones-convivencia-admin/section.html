@@ -46,14 +46,7 @@
 </head>
 
 <body>
-  <nav class="navbar navbar-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="{{ "/" | relURL }}">
-        <i class="bi bi-tree-fill"></i> Club Bulevar Verde
-      </a>
-      <span class="navbar-text">Administración - Convivencia</span>
-    </div>
-  </nav>
+  {{ partial "header" . }}
 
   <header class="page-header">
     <div class="container">
@@ -241,7 +234,7 @@
     </form>
 
     <div class="mt-4">
-      <a href="{{ "/" | relURL }}" class="btn btn-outline-secondary">
+      <a href="{{ .Site.Home.RelPermalink }}" class="btn btn-outline-secondary">
         <i class="bi bi-house me-2"></i>Volver al Inicio
       </a>
     </div>
@@ -648,6 +641,8 @@
 
     cargarConfiguracion();
   </script>
+
+  {{ partial "footer" . }}
 </body>
 
 </html>

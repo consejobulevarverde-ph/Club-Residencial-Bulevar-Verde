@@ -7,8 +7,8 @@
     <title>{{ .Title }} - {{ .Site.Title }}</title>
     
     <!-- Favicons -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ "images/favicon-32x32.png" | relURL }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ "images/favicon-16x16.png" | relURL }}">
     <meta name="theme-color" content="{{ .Site.Params.themeColor }}">
     
     <!-- Bootstrap CSS -->
@@ -156,26 +156,7 @@
     </style>
 </head>
 <body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{{ .Site.Home.RelPermalink }}">
-                <i class="bi bi-houses-fill"></i> Club Bulevar Verde
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    {{ range .Site.Menus.main }}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ .URL }}">{{ .Name }}</a>
-                    </li>
-                    {{ end }}
-                </ul>
-            </div>
-        </div>
-    </nav>
+    {{ partial "header" . }}
 
     <!-- Page Header -->
     <section class="page-header text-center">
@@ -196,16 +177,16 @@
             <h3><i class="bi bi-file-earmark-ruled"></i> Reglamentos</h3>
             <ul class="document-list">
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/reglamentos/reglamento-convivencia.pdf" class="document-link">Reglamento de Convivencia</a></span>
-                    <a href="/documentos/reglamentos/reglamento-convivencia.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/reglamentos/reglamento-convivencia.pdf" | relURL }}" class="document-link">Reglamento de Convivencia</a></span>
+                    <a href="{{ "documentos/reglamentos/reglamento-convivencia.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/reglamentos/reglamento-interno.pdf" class="document-link">Reglamento Interno</a></span>
-                    <a href="/documentos/reglamentos/reglamento-interno.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/reglamentos/reglamento-interno.pdf" | relURL }}" class="document-link">Reglamento Interno</a></span>
+                    <a href="{{ "documentos/reglamentos/reglamento-interno.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/reglamentos/uso-zonas-comunes.pdf" class="document-link">Uso de Zonas Comunes</a></span>
-                    <a href="/documentos/reglamentos/uso-zonas-comunes.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/reglamentos/uso-zonas-comunes.pdf" | relURL }}" class="document-link">Uso de Zonas Comunes</a></span>
+                    <a href="{{ "documentos/reglamentos/uso-zonas-comunes.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
             </ul>
         </div>
@@ -214,12 +195,12 @@
             <h3><i class="bi bi-journal-text"></i> Actas de Asamblea</h3>
             <ul class="document-list">
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/actas/acta-2024-12.pdf" class="document-link">Acta Asamblea - Diciembre 2024</a></span>
-                    <a href="/documentos/actas/acta-2024-12.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/actas/acta-2024-12.pdf" | relURL }}" class="document-link">Acta Asamblea - Diciembre 2024</a></span>
+                    <a href="{{ "documentos/actas/acta-2024-12.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/actas/acta-2024-06.pdf" class="document-link">Acta Asamblea - Junio 2024</a></span>
-                    <a href="/documentos/actas/acta-2024-06.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/actas/acta-2024-06.pdf" | relURL }}" class="document-link">Acta Asamblea - Junio 2024</a></span>
+                    <a href="{{ "documentos/actas/acta-2024-06.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
             </ul>
         </div>
@@ -228,16 +209,16 @@
             <h3><i class="bi bi-file-earmark-spreadsheet"></i> Formularios</h3>
             <ul class="document-list">
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/formularios/solicitud-salon-social.pdf" class="document-link">Solicitud Uso Salón Social</a></span>
-                    <a href="/documentos/formularios/solicitud-salon-social.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/formularios/solicitud-salon-social.pdf" | relURL }}" class="document-link">Solicitud Uso Salón Social</a></span>
+                    <a href="{{ "documentos/formularios/solicitud-salon-social.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/formularios/autorizacion-visitantes.pdf" class="document-link">Autorización de Visitantes</a></span>
-                    <a href="/documentos/formularios/autorizacion-visitantes.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/formularios/autorizacion-visitantes.pdf" | relURL }}" class="document-link">Autorización de Visitantes</a></span>
+                    <a href="{{ "documentos/formularios/autorizacion-visitantes.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/formularios/pqrs.pdf" class="document-link">Formato PQRS</a></span>
-                    <a href="/documentos/formularios/pqrs.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/formularios/pqrs.pdf" | relURL }}" class="document-link">Formato PQRS</a></span>
+                    <a href="{{ "documentos/formularios/pqrs.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
             </ul>
         </div>
@@ -246,8 +227,8 @@
             <h3><i class="bi bi-megaphone"></i> Comunicados</h3>
             <ul class="document-list">
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/comunicados/comunicado-ultima-fecha.pdf" class="document-link">Último Comunicado Oficial</a></span>
-                    <a href="/documentos/comunicados/comunicado-ultima-fecha.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/comunicados/comunicado-ultima-fecha.pdf" | relURL }}" class="document-link">Último Comunicado Oficial</a></span>
+                    <a href="{{ "documentos/comunicados/comunicado-ultima-fecha.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
             </ul>
         </div>
@@ -256,12 +237,12 @@
             <h3><i class="bi bi-cash-coin"></i> Financiero</h3>
             <ul class="document-list">
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/financiero/presupuesto-2024.pdf" class="document-link">Presupuesto 2024</a></span>
-                    <a href="/documentos/financiero/presupuesto-2024.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/financiero/presupuesto-2024.pdf" | relURL }}" class="document-link">Presupuesto 2024</a></span>
+                    <a href="{{ "documentos/financiero/presupuesto-2024.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
                 <li class="document-item">
-                    <span><i class="bi bi-file-pdf document-icon"></i><a href="/documentos/financiero/estado-financiero-2024.pdf" class="document-link">Estado Financiero 2024</a></span>
-                    <a href="/documentos/financiero/estado-financiero-2024.pdf" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
+                    <span><i class="bi bi-file-pdf document-icon"></i><a href="{{ "documentos/financiero/estado-financiero-2024.pdf" | relURL }}" class="document-link">Estado Financiero 2024</a></span>
+                    <a href="{{ "documentos/financiero/estado-financiero-2024.pdf" | relURL }}" download class="btn-download"><i class="bi bi-download"></i> Descargar</a>
                 </li>
             </ul>
         </div>
@@ -271,12 +252,7 @@
         </div>
     </div>
 
-    <!-- Footer -->
-    <footer>
-        <div class="container text-center">
-            <p>&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</p>
-        </div>
-    </footer>
+    {{ partial "footer" . }}
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

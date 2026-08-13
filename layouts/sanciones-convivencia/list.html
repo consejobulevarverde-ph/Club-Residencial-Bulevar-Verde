@@ -161,14 +161,7 @@
 </head>
 
 <body>
-  <nav class="navbar navbar-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="{{ "/" | relURL }}">
-        <i class="bi bi-tree-fill"></i> Club Bulevar Verde
-      </a>
-      <span class="navbar-text">Convivencia</span>
-    </div>
-  </nav>
+  {{ partial "header" . }}
 
   <header class="page-header">
     <div class="container">
@@ -958,6 +951,8 @@
     }
 
   </script>
+
+  {{ partial "footer" . }}
 </body>
 
 </html>
