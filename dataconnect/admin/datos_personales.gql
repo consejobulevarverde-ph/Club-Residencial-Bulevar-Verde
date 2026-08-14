@@ -67,23 +67,31 @@ query ObtenerPerfilUnidadAdmin(
       codigo
       tipoParqueadero
     }
-    estadoCuenta: estado_cuenta_on_unidad {
-      estadoCuenta
-      elegibleReservas
-      fechaCorte
-    }
     mascotas: mascotas_on_unidad(where: { activo: { eq: true } }) {
       id
       nombre
       especie
       raza
     }
-    emergencia: contactos_emergencia_on_unidad(where: { activo: { eq: true } }, limit: 1) {
+    emergencia: contactos_emergencia_on_unidad(where: { activo: { eq: true } }) {
       id
       nombre
       parentesco
       telefono
     }
+  }
+}
+
+# Query separada para obtener el estado de cuenta
+query ObtenerEstadoCuentaUnidadAdmin(
+  $unidadId: UUID!
+)
+@auth(level: NO_ACCESS) {
+  estados_cuenta(where: { unidadId: { eq: $unidadId } }, limit: 1) {
+    id
+    estadoCuenta
+    elegibleReservas
+    fechaCorte
   }
 }
 
