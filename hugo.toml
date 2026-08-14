@@ -41,8 +41,8 @@ title = 'Club Residencial Bulevar Verde'
   sancionesWebAppUrl = "https://script.google.com/macros/s/AKfycbxk69LDxXyh8TgMb2CUjmKuzQ_hWI8hjEwzNjmXHSwxoXsSwrBv-Tiffv8h3BGUwDVx/exec"
 
   # Piloto de migración a bulevar-verde-api (Cloud Run + Firebase Auth + Data Connect).
-  # apiBaseUrl debe apuntar al API en ejecución (por defecto, el servidor local `npm run dev`).
-  apiBaseUrl = "http://localhost:8080"
+  # apiBaseUrl apunta al servicio de Cloud Run en producción.
+  apiBaseUrl = "https://bulevar-verde-api-739757275794.us-east4.run.app"
   apiFirebaseApiKey = "AIzaSyApa7cyLeX3grhBX6fGlIBpIEDJnVaDO6A"
   apiFirebaseAuthDomain = "project-7dd6d100-d8c2-427a-a80.firebaseapp.com"
   apiFirebaseProjectId = "project-7dd6d100-d8c2-427a-a80"
