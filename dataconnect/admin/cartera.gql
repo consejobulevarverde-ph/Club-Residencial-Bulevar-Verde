@@ -1,0 +1,92 @@
+# Queries y mutations para gestión de cartera
+
+# Buscar unidad por código para actualizar estado de cuenta
+query ObtenerUnidadPorCodigoCartera($codigoOficial: String!) @auth(level: NO_ACCESS) {
+  unidades(where: { codigoOficial: { eq: $codigoOficial } }) {
+    id
+    codigoOficial
+    estadoCuenta: estado_cuenta_on_unidad {
+      id
+    }
+  }
+}
+
+# Crear o actualizar estado de cuenta de unidad
+mutation ActualizarEstadoCuenta(
+  $id: UUID!
+  $fechaCorte: Date
+  $saldoAnterior: Float
+  $saldoActual: Float
+  $estadoCuenta: String
+  $elegibleReservas: Boolean
+  $presupuestoUnidad: Float
+  $porcentajeMaximoMora: Float
+  $maximoMoraElegible: Float
+  $excesoMora: Float
+) @auth(level: NO_ACCESS) {
+  estado_cuenta_update(
+    key: { id: $id }
+    data: {
+      fechaCorte: $fechaCorte
+      saldoAnterior: $saldoAnterior
+      saldoActual: $saldoActual
+      estadoCuenta: $estadoCuenta
+      elegibleReservas: $elegibleReservas
+      presupuestoUnidad: $presupuestoUnidad
+      porcentajeMaximoMora: $porcentajeMaximoMora
+      maximoMoraElegible: $maximoMoraElegible
+      excesoMora: $excesoMora
+    }
+  )
+}
+
+mutation CrearEstadoCuenta(
+  $unidadKey: Unidad_Key!
+  $fechaCorte: Date
+  $saldoAnterior: Float
+  $saldoActual: Float
+  $estadoCuenta: String
+  $elegibleReservas: Boolean
+  $presupuestoUnidad: Float
+  $porcentajeMaximoMora: Float
+  $maximoMoraElegible: Float
+  $excesoMora: Float
+) @auth(level: NO_ACCESS) {
+  estado_cuenta_insert(
+    data: {
+      unidad: $unidadKey
+      fechaCorte: $fechaCorte
+      saldoAnterior: $saldoAnterior
+      saldoActual: $saldoActual
+      estadoCuenta: $estadoCuenta
+      elegibleReservas: $elegibleReservas
+      presupuestoUnidad: $presupuestoUnidad
+      porcentajeMaximoMora: $porcentajeMaximoMora
+      maximoMoraElegible: $maximoMoraElegible
+      excesoMora: $excesoMora
+    }
+  )
+}
+
+# Crear registro histórico de cartera
+mutation CrearHistorialCartera(
+  $unidadKey: Unidad_Key!
+  $periodo: String!
+  $fechaCorte: Date
+  $saldoAnterior: Float
+  $saldoActual: Float
+  $estadoCuenta: String
+  $elegibleReservas: Boolean
+) @auth(level: NO_ACCESS) {
+  historial_cartera_insert(
+    data: {
+      unidad: $unidadKey
+      periodo: $periodo
+      fechaCorte: $fechaCorte
+      saldoAnterior: $saldoAnterior
+      saldoActual: $saldoActual
+      estadoCuenta: $estadoCuenta
+      elegibleReservas: $elegibleReservas
+    }
+  )
+}
