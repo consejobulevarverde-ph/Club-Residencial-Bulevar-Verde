@@ -278,7 +278,11 @@
       }
 
       function withIdToken(fn) {
-        return firebase.auth().currentUser.getIdToken().then(fn);
+        var user = firebase.auth().currentUser;
+        if (!user) {
+          return Promise.reject(new Error('No hay sesión activa. Por favor, inicia sesión nuevamente.'));
+        }
+        return user.getIdToken().then(fn);
       }
 
       $('loginForm').addEventListener('submit', function (event) {
