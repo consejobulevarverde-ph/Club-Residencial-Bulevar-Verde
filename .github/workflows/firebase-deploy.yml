@@ -1,9 +1,12 @@
-name: Deploy to Firebase Hosting
+name: Deploy Firebase Hosting and Data Connect
 
 on:
   push:
     branches: ["firebase"]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build-and-deploy:
@@ -20,26 +23,43 @@ jobs:
           extended: true
 
       - name: Build with Hugo
-        run: |
-          hugo --gc --minify
+        run: hugo --gc --minify
 
-      - name: Setup Google Cloud CLI
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          version: latest
-
+      # Firebase CLI can use the ADC file exported by google-github-actions/auth.
+      # Do not pass GITHUB_TOKEN to `firebase deploy --token`: that token belongs
+      # to GitHub Actions and is not a Firebase CI credential.
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-      - name: Setup Firebase CLI
-        run: npm install -g firebase-tools
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: project-7dd6d100-d8c2-427a-a80
 
-      - name: Deploy to Firebase Hosting
+      - name: Setup Firebase CLI
+        run: npm install --global firebase-tools
+
+      - name: Show deployed Data Connect services
         run: |
-          firebase deploy --only hosting \
-            --project=project-7dd6d100-d8c2-427a-a80 \
-            --token="${{ secrets.GITHUB_TOKEN }}"
-        env:
-          FIREBASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          firebase dataconnect:services:list \
+            --project project-7dd6d100-d8c2-427a-a80
+
+      # The API calls operations defined in dataconnect/admin/*.gql. Hosting-only
+      # deployments do not publish those operations. Deploy the admin connector
+      # explicitly, but do not run sql:migrate automatically: schema migrations
+      # must be reviewed separately because they can be destructive.
+      - name: Deploy Data Connect admin connector
+        run: |
+          firebase deploy \
+            --only dataconnect:portal-bulevar-verde:admin \
+            --project project-7dd6d100-d8c2-427a-a80 \
+            --non-interactive
+
+      - name: Deploy Firebase Hosting
+        run: |
+          firebase deploy \
+            --only hosting \
+            --project project-7dd6d100-d8c2-427a-a80 \
+            --non-interactive
