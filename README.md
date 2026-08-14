@@ -1,149 +1,125 @@
-# 🏡 Club Residencial Bulevar Verde - Sitio Web Oficial
+# 🔄 Club Residencial Bulevar Verde - Redirección
 
-Sitio web oficial del Club Residencial Bulevar Verde, conjunto residencial ubicado en Itagüí, Antioquia, Colombia.
+## ⚠️ Aviso Importante: Sitio Web Migrado
 
-## 🚀 Inicio Rápido
+Esta rama (`main`) contiene una **página de redirección automática** que redirige todo el tráfico de GitHub Pages hacia el nuevo sitio alojado en Firebase Hosting.
 
-### Prerrequisitos
-- [Hugo](https://gohugo.io/installation/) v0.120 o superior
-- Git
+### 🌐 URLs del Proyecto:
 
-### Instalación
-
-1. Clonar el repositorio:
-```bash
-git clone [URL_DEL_REPO]
-cd Club-Residencial-Bulevar-Verde
-```
-
-2. Iniciar el servidor de desarrollo:
-```bash
-hugo server -D
-```
-
-4. Abrir el navegador en `http://localhost:1313`
-
-## 📁 Estructura del Proyecto
-
-```
-Club-Residencial-Bulevar-Verde/
-├── hugo.toml              # Configuración del sitio
-├── content/               # Contenido en Markdown
-├── layouts/               # Plantillas HTML
-├── static/                # Archivos estáticos
-│   ├── documentos/       # Documentos del club
-│   └── images/           # Imágenes y logos
-├── public/                # Sitio generado (no incluido en Git)
-└── README.md              # Este archivo
-```
-
-## 🎨 Características
-
-- ✅ **Diseño Responsive**: Compatible con desktop, tablet y móvil
-- ✅ **Sistema de Documentos**: Sección dedicada para documentos compartidos del club
-- ✅ **Bootstrap 5**: Framework CSS moderno
-- ✅ **SEO Optimizado**: Meta tags y estructura semántica
-- ✅ **Rápido**: Sitio estático generado con Hugo
-- ✅ **Fácil de mantener**: Contenido en Markdown
-
-## 📚 Documentación Completa
-
-Para documentación detallada del proyecto, consulta:
-- [copilot-instructions.md](.github/copilot-instructions.md) - Guía completa de desarrollo
-
-## 📝 Cómo Agregar Contenido
-
-### Agregar Documentos
-
-1. Coloca el archivo PDF en la carpeta correspondiente:
-```bash
-static/documentos/[categoria]/tu-documento.pdf
-```
-
-2. Categorías disponibles:
-   - `reglamentos/` - Reglamentos del club
-   - `actas/` - Actas de asambleas
-   - `formularios/` - Formularios administrativos
-   - `comunicados/` - Comunicados oficiales
-   - `financiero/` - Documentos financieros
-
-3. Los documentos aparecerán automáticamente en la sección de Documentos
-
-### Agregar Imágenes
-
-Coloca las imágenes en:
-```bash
-static/images/
-```
-
-Archivos importantes:
-- `.png` - Logo del club (250px ancho recomendado)
-- `favicon-16x16.png` - Favicon 16x16
-- `favicon-32x32.png` - Favicon 32x32
-- `apple-touch-icon.png` - Icono iOS 180x180
-
-## 🔧 Configuración
-
-Edita `hugo.toml` para actualizar:
-- Información de contacto (teléfono, email, dirección)
-- URLs de redes sociales
-- Configuración del sitio
-
-## 🏗️ Construcción para Producción
-
-```bash
-hugo
-```
-
-Los archivos generados estarán en `public/`
-
-## 🌐 Despliegue
-
-El sitio puede ser desplegado en:
-- GitHub Pages
-- Netlify
-- Vercel
-- Cualquier hosting de archivos estáticos
-
-## 📱 Secciones del Sitio
-
-1. **Inicio** (`/`)
-   - Información general del club
-   - Características y beneficios
-   - Contacto
-
-2. **Documentos** (`/documentos/`)
-   - Reglamentos
-   - Actas de asamblea
-   - Formularios administrativos
-   - Comunicados oficiales
-   - Documentos financieros
-
-## 🎨 Paleta de Colores
-
-- **Verde Principal**: #2c5f2d
-- **Verde Secundario**: #4a8c4b
-- **Verde Claro**: #7bb77d
-- **Fondo**: #e8f5e9
-
-## 🛠️ Tecnologías Utilizadas
-
-- **Hugo** - Generador de sitios estáticos
-- **Bootstrap 5.3** - Framework CSS
-- **Bootstrap Icons** - Iconografía
-- **Google Fonts (Montserrat)** - Tipografía
-
-## 📞 Contacto
-
-Para preguntas sobre el desarrollo del sitio:
-- Desarrollador: handresc1127
-- Email: contacto@clubbulevarverde.co
-
-## 📄 Licencia
-
-Este proyecto es propiedad del Club Residencial Bulevar Verde.
+| Descripción | URL | Estado |
+|-------------|-----|--------|
+| **Sitio Web Actual** (Firebase) | https://bulevar-verde-app.web.app/ | ✅ **ACTIVO** |
+| **Redirección** (GitHub Pages) | https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/ | 🔄 Redirige a Firebase |
+| **API Backend** (Cloud Run) | https://bulevar-verde-api-739757275794.us-east4.run.app | ✅ Producción |
 
 ---
 
-**Versión**: 1.0.0  
-**Última actualización**: Marzo 2026
+## 📁 Estructura de Ramas
+
+### Rama `main` (actual) - Redirección
+- **Propósito**: Redirigir usuarios de la URL antigua (GitHub Pages) a la nueva (Firebase Hosting)
+- **Contenido**: Solo `redirect.html` y workflow de GitHub Actions
+- **Deploy**: Automático con cada push a `main` vía GitHub Actions
+- **Archivo clave**: `redirect.html`
+
+### Rama `firebase` - Sitio Web Completo ⭐
+- **Propósito**: Sitio web completo de producción
+- **Tecnología**: Hugo Static Site Generator
+- **Hosting**: Firebase Hosting
+- **Backend**: Cloud Run API + Firebase Data Connect + Cloud SQL
+- **Esta es la rama de desarrollo activa**
+
+---
+
+## 🚀 Deploy de la Redirección
+
+Cuando haces cambios en la rama `main` y haces push:
+
+```bash
+git checkout main
+# Editar redirect.html si es necesario
+git add redirect.html
+git commit -m "Update redirect page design"
+git push origin main
+```
+
+**GitHub Actions automáticamente**:
+1. Detecta el push a `main`
+2. Copia `redirect.html` como `public/index.html`
+3. Despliega a GitHub Pages
+4. Los usuarios que visiten la URL antigua serán redirigidos
+
+### Ver logs del deploy:
+https://github.com/consejobulevarverde-ph/Club-Residencial-Bulevar-Verde/actions
+
+---
+
+## 🔧 Trabajar en el Sitio Web Completo
+
+Para hacer cambios en el sitio web completo, **cambiar a la rama `firebase`**:
+
+```bash
+# Cambiar a rama firebase
+git checkout firebase
+
+# Desarrollo local con Hugo
+hugo server -D
+# Abre http://localhost:1313
+
+# Deploy a Firebase Hosting
+firebase deploy --only hosting
+```
+
+Ver [DEPLOY_INSTRUCTIONS.md](DEPLOY_INSTRUCTIONS.md) para documentación completa de despliegue.
+
+---
+
+## 📋 Archivos en esta Rama
+
+| Archivo | Propósito |
+|---------|-----------|
+| `redirect.html` | Página HTML con redirección automática a Firebase Hosting |
+| `.github/workflows/hugo.yml` | Workflow de GitHub Actions para deploy automático |
+| `.nojekyll` | Desactiva procesamiento Jekyll en GitHub Pages |
+| `README.md` | Este archivo |
+
+---
+
+## 🎨 Diseño de la Página de Redirección
+
+La página de redirección (`redirect.html`) incluye:
+- ✅ Diseño profesional con colores del club (#2c5f2d)
+- ✅ Animación de carga
+- ✅ Redirección automática con `<meta http-equiv="refresh">`
+- ✅ Redirección JavaScript como fallback
+- ✅ Botón manual por si la redirección automática falla
+- ✅ Responsive (desktop, tablet, móvil)
+- ✅ Mensaje claro de "Sitio Web Movido"
+
+---
+
+## 🔗 Enlaces Importantes
+
+| Recurso | URL |
+|---------|-----|
+| **Firebase Console** | https://console.firebase.google.com/project/project-7dd6d100-d8c2-427a-a80 |
+| **Cloud Console (GCP)** | https://console.cloud.google.com/?project=project-7dd6d100-d8c2-427a-a80 |
+| **Cloud Run Service** | https://console.cloud.google.com/run/detail/us-east4/bulevar-verde-api |
+| **GitHub Actions** | https://github.com/consejobulevarverde-ph/Club-Residencial-Bulevar-Verde/actions |
+| **Repositorio API** | https://github.com/consejobulevarverde-ph/bulevar-verde-api |
+
+---
+
+## 📞 Información del Proyecto
+
+**Nombre**: Club Residencial Bulevar Verde  
+**Ubicación**: Calle 70 # 59 265, Itagüí, Antioquia, Colombia  
+**Email Administración**: bulevarverdeadmon@gmail.com  
+**Teléfono**: +57 322 228 9066  
+**Desarrollador**: handresc1127
+
+---
+
+**Última actualización**: 14 de agosto de 2026  
+**Versión**: 2.0 (Migración a Firebase Hosting)
+
