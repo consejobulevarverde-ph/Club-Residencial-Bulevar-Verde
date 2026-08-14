@@ -103,9 +103,10 @@
 
 ## 🔗 URLs de Deploy
 
-- **UI (Firebase Hosting)**: https://project-7dd6d100-d8c2-427a-a80.web.app
+- **UI (Firebase Hosting)**: https://bulevar-verde-app.web.app ✅ **NUEVA URL DESCRIPTIVA**
 - **Project ID**: project-7dd6d100-d8c2-427a-a80
 - **Cloud SQL Instance**: bulevar-verde-sql (us-east4)
+- **Firebase Console**: https://console.firebase.google.com/project/project-7dd6d100-d8c2-427a-a80
 
 ---
 
