@@ -139,6 +139,7 @@ type EstadoCuenta @table(name: "estados_cuenta", singular: "estado_cuenta", plur
   fechaCorte: Date
   saldoAnterior: Float @col(dataType: "numeric(16,2)")
   saldoActual: Float @col(dataType: "numeric(16,2)")
+  cargos: Float @col(dataType: "numeric(16,2)")
   estadoCuenta: String
   elegibleReservas: Boolean
   presupuestoUnidad: Float @col(dataType: "numeric(16,2)")
@@ -155,6 +156,7 @@ type HistorialCartera @table(name: "historial_cartera", singular: "historial_car
   fechaCorte: Date
   saldoAnterior: Float @col(dataType: "numeric(16,2)")
   saldoActual: Float @col(dataType: "numeric(16,2)")
+  cargos: Float @col(dataType: "numeric(16,2)")
   estadoCuenta: String
   elegibleReservas: Boolean
   fechaCreacion: Timestamp! @default(expr: "request.time")
