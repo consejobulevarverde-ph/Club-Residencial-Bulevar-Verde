@@ -150,7 +150,7 @@ function onFormSubmit(e) {
  * DE MANTENIMIENTO EN HUGO
  ***************************************/
 function doGet() {
-  const html = pqrsBuildBridgeHtml_(pqrsGetAllowedOrigins_());
+  const html = pqrsBuildBridgeHtml_();
 
   return HtmlService.createHtmlOutput(html)
     .setTitle('Mantenimiento - Bulevar Verde')
@@ -161,10 +161,8 @@ function doPost(e) {
   const parameters = e && e.parameter ? e.parameter : {};
   const action = safeTrimPQRS_(parameters.action);
   const requestId = pqrsSafeId_(parameters.requestId);
-  const origin = safeTrimPQRS_(parameters.origin);
 
   try {
-    pqrsAssertOrigin_(origin);
 
     if (!requestId) {
       throw new Error('La solicitud no contiene un identificador válido.');
@@ -184,7 +182,6 @@ function doPost(e) {
       event: 'PQRS_MAINTENANCE_POST_RECEIVED',
       requestId: requestId,
       action: action,
-      origin: origin,
       payloadChars: rawPayload.length,
       clientRequestId: payload && payload.clientRequestId
         ? pqrsSafeId_(payload.clientRequestId)
@@ -193,23 +190,23 @@ function doPost(e) {
 
     let result;
     if (action === 'crearReporteMantenimiento') {
-      result = crearReporteMantenimiento(payload, origin);
+      result = crearReporteMantenimiento(payload);
     } else if (action === 'verificarReporteMantenimiento') {
-      result = verificarReporteMantenimiento(payload, origin);
+      result = verificarReporteMantenimiento(payload);
     } else if (action === 'iniciarSesionGestionMantenimiento') {
-      result = iniciarSesionGestionMantenimiento(payload, origin);
+      result = iniciarSesionGestionMantenimiento(payload);
     } else if (action === 'listarReportesMantenimiento') {
-      result = listarReportesMantenimiento(payload, origin);
+      result = listarReportesMantenimiento(payload);
     } else if (action === 'obtenerReporteMantenimiento') {
-      result = obtenerReporteMantenimiento(payload, origin);
+      result = obtenerReporteMantenimiento(payload);
     } else if (action === 'obtenerEvidenciaMantenimiento') {
-      result = obtenerEvidenciaMantenimiento(payload, origin);
+      result = obtenerEvidenciaMantenimiento(payload);
     } else if (action === 'subirEvidenciaGestionMantenimiento') {
-      result = subirEvidenciaGestionMantenimiento(payload, origin);
+      result = subirEvidenciaGestionMantenimiento(payload);
     } else if (action === 'finalizarReporteMantenimiento') {
-      result = finalizarReporteMantenimiento(payload, origin);
+      result = finalizarReporteMantenimiento(payload);
     } else if (action === 'cerrarSesionGestionMantenimiento') {
-      result = cerrarSesionGestionMantenimiento(payload, origin);
+      result = cerrarSesionGestionMantenimiento(payload);
     } else {
       throw new Error('Acción no permitida.');
     }
@@ -222,7 +219,7 @@ function doPost(e) {
       reportId: result && result.reportId ? result.reportId : ''
     }));
 
-    return pqrsBuildPostResponseHtml_(origin, requestId, true, result, '');
+    return pqrsBuildPostResponseHtml_(requestId, true, result, '');
   } catch (error) {
     const message = error && error.message
       ? error.message
@@ -232,17 +229,15 @@ function doPost(e) {
       event: 'PQRS_MAINTENANCE_POST_FAILED',
       requestId: requestId,
       action: action,
-      origin: origin,
       ok: false,
       error: message
     }));
 
-    return pqrsBuildPostResponseHtml_(origin, requestId, false, null, message);
+    return pqrsBuildPostResponseHtml_(requestId, false, null, message);
   }
 }
 
-function pqrsBuildPostResponseHtml_(origin, requestId, ok, data, error) {
-  const targetOrigin = pqrsJsonForInlineScript_(origin || '*');
+function pqrsBuildPostResponseHtml_(requestId, ok, data, error) {
   const message = pqrsJsonForInlineScript_({
     type: 'PORTAL_BV_RESPONSE',
     requestId: requestId,
@@ -263,16 +258,15 @@ function pqrsBuildPostResponseHtml_(origin, requestId, ok, data, error) {
   <script>
     (function () {
       'use strict';
-      var targetOrigin = ${targetOrigin};
       var message = ${message};
       try {
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage(message, targetOrigin || '*');
+          window.parent.postMessage(message, '*');
         }
       } catch (parentError) {}
       try {
         if (window.top && window.top !== window && window.top !== window.parent) {
-          window.top.postMessage(message, targetOrigin || '*');
+          window.top.postMessage(message, '*');
         }
       } catch (topError) {}
     }());
@@ -294,9 +288,7 @@ function pqrsJsonForInlineScript_(value) {
     .replace(/\u2029/g, '\\u2029');
 }
 
-function pqrsBuildBridgeHtml_(allowedOrigins) {
-  const originsJson = JSON.stringify(allowedOrigins);
-
+function pqrsBuildBridgeHtml_() {
   return `<!doctype html>
 <html lang="es">
 <head>
@@ -309,7 +301,6 @@ function pqrsBuildBridgeHtml_(allowedOrigins) {
   <script>
     (function () {
       'use strict';
-      const allowedOrigins = ${originsJson};
       const status = document.getElementById('status');
       const actionMap = {
         crearReporteMantenimiento: 'crearReporteMantenimiento',
@@ -322,11 +313,6 @@ function pqrsBuildBridgeHtml_(allowedOrigins) {
         finalizarReporteMantenimiento: 'finalizarReporteMantenimiento',
         cerrarSesionGestionMantenimiento: 'cerrarSesionGestionMantenimiento'
       };
-
-      function originAllowed(origin) {
-        return allowedOrigins.indexOf('*') !== -1 ||
-          allowedOrigins.indexOf(origin) !== -1;
-      }
 
       function reply(origin, requestId, ok, data, error) {
         window.top.postMessage({
@@ -342,7 +328,6 @@ function pqrsBuildBridgeHtml_(allowedOrigins) {
         const message = event.data || {};
 
         if (event.source !== window.top) return;
-        if (!originAllowed(event.origin)) return;
         if (message.type !== 'PORTAL_BV_REQUEST') return;
 
         const serverFunction = actionMap[message.action];
@@ -394,13 +379,7 @@ function pqrsBuildBridgeHtml_(allowedOrigins) {
         }
       });
 
-      if (allowedOrigins.indexOf('*') !== -1) {
-        window.top.postMessage({ type: 'PORTAL_BV_READY' }, '*');
-      } else {
-        allowedOrigins.forEach(function (origin) {
-          window.top.postMessage({ type: 'PORTAL_BV_READY' }, origin);
-        });
-      }
+      window.top.postMessage({ type: 'PORTAL_BV_READY' }, '*');
 
       status.textContent = 'Puente disponible.';
     }());
@@ -412,8 +391,7 @@ function pqrsBuildBridgeHtml_(allowedOrigins) {
 /***************************************
  * CREAR REPORTE DE MANTENIMIENTO
  ***************************************/
-function crearReporteMantenimiento(payload, origin) {
-  pqrsAssertOrigin_(origin);
+function crearReporteMantenimiento(payload) {
   payload = payload || {};
 
   const clientRequestId = pqrsSafeId_(payload.clientRequestId);
@@ -557,8 +535,7 @@ function crearReporteMantenimiento(payload, origin) {
   }
 }
 
-function verificarReporteMantenimiento(payload, origin) {
-  pqrsAssertOrigin_(origin);
+function verificarReporteMantenimiento(payload) {
   payload = payload || {};
 
   const clientRequestId = pqrsSafeId_(payload.clientRequestId);
@@ -608,8 +585,7 @@ function configurarClaveGestionMantenimiento(clave) {
   };
 }
 
-function iniciarSesionGestionMantenimiento(payload, origin) {
-  pqrsAssertOrigin_(origin);
+function iniciarSesionGestionMantenimiento(payload) {
   payload = payload || {};
 
   const nombre = safeTrimPQRS_(payload.nombre);
@@ -658,7 +634,6 @@ function iniciarSesionGestionMantenimiento(payload, origin) {
   const expiresAt = Date.now() + MANTENIMIENTO_GESTION_SESSION_SECONDS * 1000;
   const session = {
     nombre: nombre,
-    origin: origin,
     createdAt: Date.now(),
     expiresAt: expiresAt
   };
@@ -672,7 +647,6 @@ function iniciarSesionGestionMantenimiento(payload, origin) {
   console.log(JSON.stringify({
     event: 'PQRS_MAINTENANCE_MANAGEMENT_LOGIN',
     name: nombre,
-    origin: origin,
     expiresAt: expiresAt
   }));
 
@@ -684,8 +658,7 @@ function iniciarSesionGestionMantenimiento(payload, origin) {
   };
 }
 
-function cerrarSesionGestionMantenimiento(payload, origin) {
-  pqrsAssertOrigin_(origin);
+function cerrarSesionGestionMantenimiento(payload) {
   const token = pqrsSafeToken_((payload || {}).token);
 
   if (token) {
@@ -697,10 +670,9 @@ function cerrarSesionGestionMantenimiento(payload, origin) {
   return { ok: true };
 }
 
-function listarReportesMantenimiento(payload, origin) {
+function listarReportesMantenimiento(payload) {
   const session = pqrsRequireMaintenanceSession_(
-    (payload || {}).token,
-    origin
+    (payload || {}).token
   );
   const sheet = pqrsGetMaintenanceSheet_();
   const lastRow = sheet.getLastRow();
@@ -762,8 +734,8 @@ function listarReportesMantenimiento(payload, origin) {
   };
 }
 
-function obtenerReporteMantenimiento(payload, origin) {
-  pqrsRequireMaintenanceSession_((payload || {}).token, origin);
+function obtenerReporteMantenimiento(payload) {
+  pqrsRequireMaintenanceSession_((payload || {}).token);
   const reportId = pqrsSafeId_((payload || {}).reportId);
 
   if (!reportId) {
@@ -795,8 +767,8 @@ function obtenerReporteMantenimiento(payload, origin) {
 }
 
 
-function obtenerEvidenciaMantenimiento(payload, origin) {
-  pqrsRequireMaintenanceSession_((payload || {}).token, origin);
+function obtenerEvidenciaMantenimiento(payload) {
+  pqrsRequireMaintenanceSession_((payload || {}).token);
   payload = payload || {};
 
   const reportId = pqrsSafeId_(payload.reportId);
@@ -869,10 +841,9 @@ function obtenerEvidenciaMantenimiento(payload, origin) {
   };
 }
 
-function subirEvidenciaGestionMantenimiento(payload, origin) {
+function subirEvidenciaGestionMantenimiento(payload) {
   const session = pqrsRequireMaintenanceSession_(
-    (payload || {}).token,
-    origin
+    (payload || {}).token
   );
   payload = payload || {};
 
@@ -945,8 +916,7 @@ function subirEvidenciaGestionMantenimiento(payload, origin) {
     reportId: reportId,
     fileId: file.getId(),
     bytes: bytes.length,
-    sessionName: session.nombre,
-    origin: origin
+    sessionName: session.nombre
   }));
 
   return {
@@ -959,10 +929,9 @@ function subirEvidenciaGestionMantenimiento(payload, origin) {
   };
 }
 
-function finalizarReporteMantenimiento(payload, origin) {
+function finalizarReporteMantenimiento(payload) {
   const session = pqrsRequireMaintenanceSession_(
-    (payload || {}).token,
-    origin
+    (payload || {}).token
   );
   payload = payload || {};
 
@@ -1059,8 +1028,7 @@ function finalizarReporteMantenimiento(payload, origin) {
       event: 'PQRS_MAINTENANCE_REPORT_CLOSED',
       reportId: reportId,
       responsable: responsable,
-      sessionName: session.nombre,
-      origin: origin
+      sessionName: session.nombre
     }));
 
     return {
@@ -1079,8 +1047,7 @@ function finalizarReporteMantenimiento(payload, origin) {
   }
 }
 
-function pqrsRequireMaintenanceSession_(token, origin) {
-  pqrsAssertOrigin_(origin);
+function pqrsRequireMaintenanceSession_(token) {
   token = pqrsSafeToken_(token);
 
   if (!token) {
@@ -1096,10 +1063,6 @@ function pqrsRequireMaintenanceSession_(token, origin) {
   }
 
   const session = JSON.parse(raw);
-  if (session.origin !== origin) {
-    cache.remove(key);
-    throw new Error('El origen de la sesión no es válido.');
-  }
   if (Date.now() > Number(session.expiresAt || 0)) {
     cache.remove(key);
     throw new Error('La sesión de gestión venció. Ingresa nuevamente.');
@@ -1242,29 +1205,6 @@ function crearEstructuraMantenimiento() {
   return result;
 }
 
-function configurarOrigenesPQRS(origenes) {
-  const values = Array.isArray(origenes)
-    ? origenes
-    : String(origenes || '').split(',');
-
-  const normalized = values
-    .map(function (value) { return safeTrimPQRS_(value); })
-    .filter(function (value) { return !!value; });
-
-  if (!normalized.length) {
-    throw new Error('Debes indicar al menos un origen HTTPS.');
-  }
-
-  PropertiesService.getScriptProperties().setProperty(
-    'PQRS_ALLOWED_ORIGINS',
-    normalized.join(',')
-  );
-
-  return {
-    ok: true,
-    origins: normalized
-  };
-}
 
 /***************************************
  * HOJA Y FOTOGRAFÍAS
@@ -1656,10 +1596,6 @@ function recuperarRespaldosPendientesMantenimiento(limite) {
   const maxItems = Math.max(1, Math.min(Number(limite || 10), 10));
   const folder = pqrsGetPendingMaintenanceFolder_();
   const files = folder.getFiles();
-  const allowedOrigins = pqrsGetAllowedOrigins_();
-  const origin = allowedOrigins.indexOf('*') !== -1
-    ? '*'
-    : allowedOrigins[0];
   const result = [];
   let processed = 0;
 
@@ -1670,7 +1606,7 @@ function recuperarRespaldosPendientesMantenimiento(limite) {
 
     try {
       const envelope = JSON.parse(file.getBlob().getDataAsString('UTF-8'));
-      const response = crearReporteMantenimiento(envelope.payload || {}, origin);
+      const response = crearReporteMantenimiento(envelope.payload || {});
       result.push({
         file: file.getName(),
         ok: true,
@@ -1804,32 +1740,6 @@ function pqrsSendMaintenanceNotification_(report) {
 /***************************************
  * SEGURIDAD Y HELPERS
  ***************************************/
-function pqrsGetAllowedOrigins_() {
-  const configured = safeTrimPQRS_(
-    PropertiesService.getScriptProperties().getProperty('PQRS_ALLOWED_ORIGINS')
-  );
-
-  const origins = configured
-    ? configured.split(',')
-    : [
-        'https://consejobulevarverde-ph.github.io',
-        'http://localhost:1313',
-        'http://127.0.0.1:1313'
-      ];
-
-  return origins
-    .map(function (origin) { return safeTrimPQRS_(origin); })
-    .filter(function (origin) { return !!origin; });
-}
-
-function pqrsAssertOrigin_(origin) {
-  const allowed = pqrsGetAllowedOrigins_();
-  if (allowed.indexOf('*') !== -1) return;
-  if (allowed.indexOf(safeTrimPQRS_(origin)) === -1) {
-    throw new Error('Origen no autorizado.');
-  }
-}
-
 function pqrsParseDate_(value) {
   const date = new Date(value);
   return isNaN(date.getTime()) ? null : date;
