@@ -123,7 +123,10 @@ mutation ActualizarRolVinculoAdmin(
 )
 @auth(level: NO_ACCESS)
 @transaction {
-  vinculo_unidad_persona_update(id: $id, data: { tipoRelacion: $tipoRelacion })
+  vinculo_unidad_persona_updateMany(
+    where: { id: { eq: $id } }
+    data: { tipoRelacion: $tipoRelacion }
+  )
 }
 
 mutation CrearPersonaAdmin(
