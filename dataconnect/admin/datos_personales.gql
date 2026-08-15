@@ -103,6 +103,29 @@ mutation ActualizarPersonaContactoAdmin(
   persona_update(id: $id, data: { correo: $correo, telefono: $telefono })
 }
 
+mutation ActualizarDatosPersonaAdmin(
+  $id: UUID!
+  $tipoDocumento: String!
+  $numeroDocumento: String!
+  $nombreCompleto: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  persona_update(
+    id: $id
+    data: { tipoDocumento: $tipoDocumento, numeroDocumento: $numeroDocumento, nombreCompleto: $nombreCompleto }
+  )
+}
+
+mutation ActualizarRolVinculoAdmin(
+  $id: UUID!
+  $tipoRelacion: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  vinculo_unidad_persona_update(id: $id, data: { tipoRelacion: $tipoRelacion })
+}
+
 mutation CrearPersonaAdmin(
   $input: Persona_Data!
     @allow(
