@@ -1,0 +1,47 @@
+# Crear parqueadero
+mutation CrearParqueaderoAdmin(
+  $id: UUID!
+  $codigo: String!
+  $tipoParqueadero: String
+  $ubicacionFisica: String
+  $areaPrivada: Float
+  $coeficiente: Float
+  $presupuesto: Float
+  $estadoParqueadero: String
+  $fechaEntrega: Date
+  $unidadId: UUID
+  $activo: Boolean
+)
+@auth(level: NO_ACCESS) {
+  parqueadero_insert(data: {
+    id: $id
+    codigo: $codigo
+    tipoParqueadero: $tipoParqueadero
+    ubicacionFisica: $ubicacionFisica
+    areaPrivada: $areaPrivada
+    coeficiente: $coeficiente
+    presupuesto: $presupuesto
+    estadoParqueadero: $estadoParqueadero
+    fechaEntrega: $fechaEntrega
+    unidad: { id: $unidadId }
+    activo: $activo
+  })
+}
+
+# Buscar parqueadero por código
+query BuscarParqueaderoPorCodigoAdmin($codigo: String!)
+@auth(level: NO_ACCESS) {
+  parqueaderos(where: { codigo: { eq: $codigo } }) {
+    id
+    codigo
+  }
+}
+
+# Buscar unidad por código oficial
+query ObtenerUnidadPorCodigoAdmin($codigoOficial: String!)
+@auth(level: NO_ACCESS) {
+  unidades(where: { codigoOficial: { eq: $codigoOficial } }) {
+    id
+    codigoOficial
+  }
+}
