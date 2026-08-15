@@ -148,6 +148,19 @@
     .hidden {
       display: none !important
     }
+
+    .btn-group-sm {
+      gap: .25rem
+    }
+
+    .btn-group-sm .btn {
+      padding: .25rem .5rem;
+      font-size: .8rem
+    }
+
+    .btn-group-sm .bi {
+      font-size: .75rem
+    }
   </style>
 </head>
 
@@ -372,6 +385,37 @@
         </div>
       </div>
     </section>
+
+    <div class="modal fade hidden" id="editResidentModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Editar datos de contacto</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="editResidentForm">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">Nombre</label>
+                <input id="editResidentName" class="form-control locked" readonly>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="editResidentEmail">Correo</label>
+                <input id="editResidentEmail" type="email" class="form-control">
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="editResidentPhone">Celular</label>
+                <input id="editResidentPhone" class="form-control" inputmode="tel">
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </main>
 
   <footer class="py-4" style="background:var(--bv-primary);color:#fff;margin-top:3rem">
@@ -657,11 +701,20 @@
         $('residentsList').innerHTML = noOwners.length
           ? noOwners.map(function (v) {
               var esPropio = v.id === propioVinculoId;
-              return '<div class="repeat-row d-flex justify-content-between align-items-center">' +
+              return '<div class="repeat-row">' +
+                '<div class="d-flex justify-content-between align-items-start mb-2">' +
                 '<div><strong>' + esc(v.persona.nombreCompleto) + '</strong><div class="small-note">' + esc(v.tipoRelacion) + '</div></div>' +
                 (esPropio
                   ? '<span class="small-note"><i class="bi bi-shield-lock"></i> Tu registro</span>'
-                  : '<button type="button" class="btn btn-outline-danger btn-sm retirar-residente" data-vinculo-id="' + esc(v.id) + '">Retirar</button>') +
+                  : '<div class="btn-group btn-group-sm" role="group">' +
+                    '<button type="button" class="btn btn-outline-primary editar-residente" data-persona-id="' + esc(v.persona.id) + '" data-vinculo-id="' + esc(v.id) + '"><i class="bi bi-pencil"></i></button>' +
+                    '<button type="button" class="btn btn-outline-danger retirar-residente" data-vinculo-id="' + esc(v.id) + '"><i class="bi bi-trash"></i></button>' +
+                    '</div>') +
+                '</div>' +
+                (!esPropio
+                  ? '<div class="small-note"><i class="bi bi-envelope"></i> ' + esc(v.persona.correo || 'Sin correo') + '</div>' +
+                    '<div class="small-note"><i class="bi bi-telephone"></i> ' + esc(v.persona.telefono || 'Sin teléfono') + '</div>'
+                  : '') +
                 '</div>';
             }).join('')
           : '<p class="text-muted mb-0">No hay residentes adicionales registrados.</p>';
@@ -717,12 +770,43 @@
       });
 
       $('residentsList').addEventListener('click', function (event) {
-        var button = event.target.closest('.retirar-residente');
-        if (!button) return;
-        if (!confirm('¿Retirar este residente?')) return;
-        apiFetch('/residentes/' + button.dataset.vinculoId, { method: 'DELETE' })
-          .then(function () { alertMessage('Residente retirado.', 'success'); return loadProfile(); })
-          .catch(function (error) { alertMessage(error.message); });
+        var editBtn = event.target.closest('.editar-residente');
+        var deleteBtn = event.target.closest('.retirar-residente');
+
+        if (editBtn) {
+          var unit = profile.unidad;
+          var vinculo = unit.vinculosPersona.find(function (v) { return v.persona.id === editBtn.dataset.personaId; });
+          if (!vinculo) return;
+
+          $('editResidentName').value = vinculo.persona.nombreCompleto;
+          $('editResidentEmail').value = vinculo.persona.correo || '';
+          $('editResidentPhone').value = vinculo.persona.telefono || '';
+          $('editResidentForm').dataset.personaId = vinculo.persona.id;
+
+          var modal = new bootstrap.Modal($('editResidentModal'));
+          modal.show();
+        } else if (deleteBtn) {
+          if (!confirm('¿Retirar este residente?')) return;
+          apiFetch('/residentes/' + deleteBtn.dataset.vinculoId, { method: 'DELETE' })
+            .then(function () { alertMessage('Residente retirado.', 'success'); return loadProfile(); })
+            .catch(function (error) { alertMessage(error.message); });
+        }
+      });
+
+      $('editResidentForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        clearAlert();
+        var personaId = this.dataset.personaId;
+        apiFetch('/residentes/' + personaId + '/contacto', {
+          method: 'PATCH',
+          body: { correo: $('editResidentEmail').value.trim() || undefined, telefono: $('editResidentPhone').value.trim() || undefined }
+        }).then(function () {
+          alertMessage('Datos de contacto actualizados.', 'success');
+          bootstrap.Modal.getInstance($('editResidentModal')).hide();
+          return loadProfile();
+        }).catch(function (error) {
+          alertMessage(error.message);
+        });
       });
 
       $('addVehicleForm').addEventListener('submit', function (event) {
