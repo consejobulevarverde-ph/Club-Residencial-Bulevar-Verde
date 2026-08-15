@@ -413,8 +413,9 @@
           return '<li>' + esc(p.codigo) + ' — ' + esc(p.tipoParqueadero || '') + '</li>';
         }).join('') || '<li class="text-muted">Sin registros.</li>';
 
-        var estadoCuenta = perfil.estadoCuenta
-          ? esc(perfil.estadoCuenta.estadoCuenta || '') + ' · Saldo: ' + esc(perfil.estadoCuenta.saldoActual || '')
+        var hc = perfil.historialCartera && perfil.historialCartera[0];
+        var estadoCuenta = hc
+          ? esc(hc.estadoCuenta || '') + ' · Saldo: ' + esc(hc.saldoActual || '')
           : 'Sin información.';
 
         $('profile').innerHTML =

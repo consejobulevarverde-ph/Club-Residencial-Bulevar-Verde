@@ -41,7 +41,7 @@ mutation CrearOActualizarHistorialCartera(
   $estadoCuenta: String
   $elegibleReservas: Boolean
 ) @auth(level: NO_ACCESS) {
-  historial_cartera_insert(
+  historial_cartera_upsert(
     data: {
       id: $id
       unidad: $unidadKey

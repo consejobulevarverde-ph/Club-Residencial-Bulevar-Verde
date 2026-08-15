@@ -644,7 +644,7 @@
               '</div><strong>' + esc(item[1]) + '</strong></div></div>';
           }).join('');
 
-          var account = unit.estadoCuenta;
+          var account = unit.historialCartera && unit.historialCartera[0];
           if (account) {
             var isMora = account.estadoCuenta === 'EN_MORA';
             var estadoEmoji = isMora ? '⚠️' : '✅';
