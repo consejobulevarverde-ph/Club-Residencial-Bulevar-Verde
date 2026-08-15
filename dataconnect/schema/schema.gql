@@ -94,6 +94,12 @@ type Parqueadero @table(name: "parqueaderos", singular: "parqueadero", plural: "
   id: UUID! @default(expr: "uuidV4()")
   codigo: String! @unique
   tipoParqueadero: String
+  ubicacionFisica: String
+  areaPrivada: Float @col(dataType: "numeric(12,2)")
+  coeficiente: Float @col(dataType: "numeric(14,8)")
+  presupuesto: Float @col(dataType: "numeric(16,2)")
+  estadoParqueadero: String
+  fechaEntrega: Date
   torre: Int
   unidad: Unidad
   activo: Boolean! @default(value: true)
