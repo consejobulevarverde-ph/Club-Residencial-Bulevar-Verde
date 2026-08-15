@@ -82,16 +82,25 @@ query ObtenerPerfilUnidadAdmin(
   }
 }
 
-# Query separada para obtener el estado de cuenta
-query ObtenerEstadoCuentaUnidadAdmin(
+# Query separada para obtener el historial de cartera más reciente (estado de cuenta)
+query ObtenerHistorialCarteraUnidadAdmin(
   $unidadId: UUID!
 )
 @auth(level: NO_ACCESS) {
-  estados_cuenta(where: { unidadId: { eq: $unidadId } }, limit: 1) {
+  historial_carteras(
+    where: { unidad: { id: { eq: $unidadId } } }
+    orderBy: { periodo: DESC }
+    limit: 1
+  ) {
     id
+    periodo
     estadoCuenta
     elegibleReservas
     fechaCorte
+    saldoAnterior
+    saldoActual
+    cargos
+    fechaActualizacion
   }
 }
 

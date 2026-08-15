@@ -54,17 +54,15 @@ query ObtenerPerfilUnidad(
       torre
       activo
     }
-    estadoCuenta: estado_cuenta_on_unidad {
+    historialCartera: historial_carteras_on_unidad(orderBy: { periodo: DESC }, limit: 1) {
       id
+      periodo
       fechaCorte
       saldoAnterior
       saldoActual
+      cargos
       estadoCuenta
       elegibleReservas
-      presupuestoUnidad
-      porcentajeMaximoMora
-      maximoMoraElegible
-      excesoMora
       fechaActualizacion
     }
   }

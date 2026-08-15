@@ -1,90 +1,55 @@
 # Queries y mutations para gestión de cartera
+# Consolidado en HistorialCartera con restricción de uniqueness en (unidad, periodo)
 
-# Buscar unidad por código para actualizar estado de cuenta
+# Buscar unidad por código para obtener historial de cartera
 query ObtenerUnidadPorCodigoCartera($codigoOficial: String!) @auth(level: NO_ACCESS) {
   unidades(where: { codigoOficial: { eq: $codigoOficial } }) {
     id
     codigoOficial
-    estadoCuenta: estado_cuenta_on_unidad {
-      id
-    }
   }
 }
 
-# Crear o actualizar estado de cuenta de unidad
-mutation ActualizarEstadoCuenta(
-  $id: UUID!
-  $fechaCorte: Date
-  $saldoAnterior: Float
-  $saldoActual: Float
-  $estadoCuenta: String
-  $elegibleReservas: Boolean
-  $presupuestoUnidad: Float
-  $porcentajeMaximoMora: Float
-  $maximoMoraElegible: Float
-  $excesoMora: Float
+# Obtener registro de cartera para un período específico
+query ObtenerHistorialCarteraPorPeriodo(
+  $unidadId: UUID!
+  $periodo: String!
 ) @auth(level: NO_ACCESS) {
-  estado_cuenta_update(
-    key: { id: $id }
-    data: {
-      fechaCorte: $fechaCorte
-      saldoAnterior: $saldoAnterior
-      saldoActual: $saldoActual
-      estadoCuenta: $estadoCuenta
-      elegibleReservas: $elegibleReservas
-      presupuestoUnidad: $presupuestoUnidad
-      porcentajeMaximoMora: $porcentajeMaximoMora
-      maximoMoraElegible: $maximoMoraElegible
-      excesoMora: $excesoMora
+  historial_carteras(
+    where: {
+      unidad: { id: { eq: $unidadId } }
+      periodo: { eq: $periodo }
     }
-  )
+  ) {
+    id
+    unidad {
+      id
+    }
+    periodo
+  }
 }
 
-mutation CrearEstadoCuenta(
-  $unidadKey: Unidad_Key!
-  $fechaCorte: Date
-  $saldoAnterior: Float
-  $saldoActual: Float
-  $estadoCuenta: String
-  $elegibleReservas: Boolean
-  $presupuestoUnidad: Float
-  $porcentajeMaximoMora: Float
-  $maximoMoraElegible: Float
-  $excesoMora: Float
-) @auth(level: NO_ACCESS) {
-  estado_cuenta_insert(
-    data: {
-      unidad: $unidadKey
-      fechaCorte: $fechaCorte
-      saldoAnterior: $saldoAnterior
-      saldoActual: $saldoActual
-      estadoCuenta: $estadoCuenta
-      elegibleReservas: $elegibleReservas
-      presupuestoUnidad: $presupuestoUnidad
-      porcentajeMaximoMora: $porcentajeMaximoMora
-      maximoMoraElegible: $maximoMoraElegible
-      excesoMora: $excesoMora
-    }
-  )
-}
-
-# Crear registro histórico de cartera
-mutation CrearHistorialCartera(
+# Crear o actualizar historial de cartera (upsert)
+# Solo se debe tener un registro por unidad por período
+mutation CrearOActualizarHistorialCartera(
+  $id: UUID
   $unidadKey: Unidad_Key!
   $periodo: String!
   $fechaCorte: Date
   $saldoAnterior: Float
   $saldoActual: Float
+  $cargos: Float
   $estadoCuenta: String
   $elegibleReservas: Boolean
 ) @auth(level: NO_ACCESS) {
   historial_cartera_insert(
     data: {
+      id: $id
       unidad: $unidadKey
       periodo: $periodo
       fechaCorte: $fechaCorte
       saldoAnterior: $saldoAnterior
       saldoActual: $saldoActual
+      cargos: $cargos
       estadoCuenta: $estadoCuenta
       elegibleReservas: $elegibleReservas
     }

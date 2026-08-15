@@ -139,23 +139,12 @@ type ContactoEmergencia
 }
 
 
-type EstadoCuenta @table(name: "estados_cuenta", singular: "estado_cuenta", plural: "estados_cuenta", key: "id") {
-  id: UUID! @default(expr: "uuidV4()")
-  unidad: Unidad! @unique
-  fechaCorte: Date
-  saldoAnterior: Float @col(dataType: "numeric(16,2)")
-  saldoActual: Float @col(dataType: "numeric(16,2)")
-  cargos: Float @col(dataType: "numeric(16,2)")
-  estadoCuenta: String
-  elegibleReservas: Boolean
-  presupuestoUnidad: Float @col(dataType: "numeric(16,2)")
-  porcentajeMaximoMora: Float @col(dataType: "numeric(8,4)")
-  maximoMoraElegible: Float @col(dataType: "numeric(16,2)")
-  excesoMora: Float @col(dataType: "numeric(16,2)")
-  fechaActualizacion: Timestamp! @default(expr: "request.time")
-}
-
-type HistorialCartera @table(name: "historial_cartera", singular: "historial_cartera", plural: "historial_carteras", key: "id") {
+type HistorialCartera @table(
+  name: "historial_cartera"
+  singular: "historial_cartera"
+  plural: "historial_carteras"
+  key: "id"
+) {
   id: UUID! @default(expr: "uuidV4()")
   unidad: Unidad!
   periodo: String!
@@ -166,7 +155,11 @@ type HistorialCartera @table(name: "historial_cartera", singular: "historial_car
   estadoCuenta: String
   elegibleReservas: Boolean
   fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp @default(expr: "request.time")
 }
+
+# Unique constraint: only one record per unidad per periodo
+# This is handled by database: CREATE UNIQUE INDEX historial_cartera_unidad_periodo_idx ON historial_cartera(unidad_id, periodo)
 
 type Reserva @table(name: "reservas", singular: "reserva", plural: "reservas", key: "id") {
   id: UUID! @default(expr: "uuidV4()")
