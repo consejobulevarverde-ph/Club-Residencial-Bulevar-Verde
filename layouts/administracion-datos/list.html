@@ -607,22 +607,28 @@
           var mensaje = '<strong>Importación exitosa</strong><br>' +
             '✅ Actualizados: ' + data.actualizados + '<br>' +
             '📊 Procesados: ' + data.procesados;
-          
+
           if (data.noEncontrados && data.noEncontrados.length > 0) {
-            mensaje += '<br>⚠️ No encontrados: ' + data.noEncontrados.slice(0, 5).join(', ');
+            var noEncontradosStrings = data.noEncontrados.slice(0, 5).map(function(item) {
+              return item.codigo + ' (fila ' + item.fila + ')';
+            });
+            mensaje += '<br>⚠️ No encontrados: ' + noEncontradosStrings.join(', ');
             if (data.noEncontrados.length > 5) {
               mensaje += ' y ' + (data.noEncontrados.length - 5) + ' más';
             }
           }
-          
+
           if (data.errores && data.errores.length > 0) {
-            mensaje += '<br>❌ Errores: ' + data.errores.slice(0, 3).join('<br>');
+            var erroresStrings = data.errores.slice(0, 3).map(function(err) {
+              return 'Fila ' + err.fila + ' (' + err.codigo + '): ' + err.error;
+            });
+            mensaje += '<br>❌ Errores:<br>' + erroresStrings.join('<br>');
             if (data.errores.length > 3) {
               mensaje += '<br>... y ' + (data.errores.length - 3) + ' más';
             }
           }
-          
-          showImportMsg(mensaje, data.errores.length > 0 ? 'warning' : 'success');
+
+          showImportMsg(mensaje, data.errores && data.errores.length > 0 ? 'warning' : 'success');
           
           // Recargar dashboard si hubo cambios
           if (data.actualizados > 0) {
