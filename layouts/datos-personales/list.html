@@ -78,6 +78,38 @@
       font-size: .88rem
     }
 
+    .estado-cuenta {
+      padding: 1rem;
+      border-radius: .8rem;
+      background: #fbfdfb
+    }
+
+    .estado-label {
+      display: inline-block;
+      padding: .25rem .75rem;
+      border-radius: .4rem;
+      font-weight: 700;
+      font-size: .95rem;
+      margin-bottom: .5rem
+    }
+
+    .estado-al-dia {
+      background: #e8f5e9;
+      color: var(--bv-primary)
+    }
+
+    .estado-mora {
+      background: #ffebee;
+      color: #c62828;
+      font-weight: 700
+    }
+
+    .elegibilidad-info {
+      padding-top: .75rem;
+      border-top: 1px solid var(--bv-border);
+      margin-top: .75rem
+    }
+
     .auth-step {
       display: flex;
       align-items: center;
@@ -569,10 +601,26 @@
           }).join('');
 
           var account = unit.estadoCuenta;
-          $('accountSummary').innerHTML = account
-            ? '<div class="locked rounded p-3"><div class="small-note">Estado</div><strong>' + esc(account.estadoCuenta || 'Sin información') +
-              '</strong><hr><div class="small-note">Elegibilidad para reservas</div><strong>' + (account.elegibleReservas ? 'Sí' : 'No') + '</strong></div>'
-            : '<p class="text-muted mb-0">Sin información de estado de cuenta.</p>';
+          if (account) {
+            var isMora = account.estadoCuenta === 'EN_MORA';
+            var estadoEmoji = isMora ? '⚠️' : '✅';
+            var estadoClass = isMora ? 'estado-mora' : 'estado-al-dia';
+            var moraIndicator = isMora ? ' ❌' : '';
+
+            $('accountSummary').innerHTML =
+              '<div class="estado-cuenta">' +
+              '<div class="small-note mb-2">Estado de cuenta</div>' +
+              '<div class="estado-label ' + estadoClass + '">' +
+              estadoEmoji + ' ' + esc(account.estadoCuenta || 'Sin información') + moraIndicator +
+              '</div>' +
+              '<div class="elegibilidad-info">' +
+              '<div class="small-note">Elegibilidad para reservas</div>' +
+              '<strong>' + (account.elegibleReservas ? '✅ Sí' : '❌ No') + '</strong>' +
+              '</div>' +
+              '</div>';
+          } else {
+            $('accountSummary').innerHTML = '<p class="text-muted mb-0">Sin información de estado de cuenta.</p>';
+          }
 
           var owners = unit.vinculosPersona.filter(function (v) { return v.tipoRelacion === 'PROPIETARIO'; });
           $('ownersList').innerHTML = owners.length
