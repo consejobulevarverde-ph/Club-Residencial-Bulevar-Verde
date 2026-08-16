@@ -415,6 +415,9 @@
                 <option value="OCUPANTE AUTORIZADO">Ocupante autorizado</option>
               </select>
             </div>
+            <div class="col-12 mt-2"><small class="text-muted fw-semibold">Contacto (opcional)</small></div>
+            <div class="col-md-6"><label class="form-label small">Correo</label><input id="resEmail" type="email" class="form-control form-control-sm"></div>
+            <div class="col-md-6"><label class="form-label small">Celular</label><input id="resPhone" class="form-control form-control-sm" inputmode="tel"></div>
             <div class="col-12 d-grid"><button class="btn btn-outline-success btn-sm" type="submit"><i class="bi bi-plus-lg"></i> Agregar residente</button></div>
           </form>
         </div>
@@ -569,7 +572,7 @@
       </div>
     </section>
 
-    <div class="modal fade hidden" id="editResidentModal" tabindex="-1">
+    <div class="modal fade" id="editResidentModal" tabindex="-1">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
@@ -1361,8 +1364,8 @@
                 (esPropio
                   ? '<span class="small-note"><i class="bi bi-shield-lock"></i> Tu registro</span>'
                   : '<div class="btn-group btn-group-sm" role="group">' +
-                    '<button type="button" class="btn btn-outline-primary editar-residente" data-vinculo-id="' + esc(v.id) + '"><i class="bi bi-pencil"></i></button>' +
-                    '<button type="button" class="btn btn-outline-danger retirar-residente" data-vinculo-id="' + esc(v.id) + '"><i class="bi bi-trash"></i></button>' +
+                    '<button type="button" class="btn btn-outline-primary editar-residente" title="Editar residente" aria-label="Editar residente" data-vinculo-id="' + esc(v.id) + '"><i class="bi bi-pencil"></i></button>' +
+                    '<button type="button" class="btn btn-outline-danger retirar-residente" title="Retirar residente" aria-label="Retirar residente" data-vinculo-id="' + esc(v.id) + '"><i class="bi bi-trash"></i></button>' +
                     '</div>') +
                 '</div>' +
                 (!esPropio
@@ -1423,6 +1426,8 @@
             numeroDocumento: numeroDocumento,
             nombreCompleto: nombreCompleto,
             rol: $('resRol').value,
+            correo: $('resEmail').value.trim() || undefined,
+            telefono: $('resPhone').value.trim() || undefined,
           },
         }).then(function () {
           alertMessage('Residente agregado.', 'success');
