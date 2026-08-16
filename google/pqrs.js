@@ -614,7 +614,7 @@ function iniciarSesionGestionMantenimiento(payload) {
 
   const cache = CacheService.getScriptCache();
   const attemptKey = MANTENIMIENTO_GESTION_ATTEMPT_PREFIX +
-    pqrsHash_(origin).slice(0, 32);
+    pqrsHash_(nombre).slice(0, 32);
   const attempts = Number(cache.get(attemptKey) || 0);
 
   if (attempts >= 8) {
