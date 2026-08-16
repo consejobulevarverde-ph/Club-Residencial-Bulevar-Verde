@@ -260,7 +260,12 @@
       var form = document.createElement('form');
       var finished = false;
       var timeoutMs = Number(options.timeoutMs || self.timeoutMs || 90000);
-      var parentOrigin = String(options.parentOrigin || window.location.origin || '');
+      var parentOrigin = String(
+        options.parentOrigin ||
+        window.location.origin ||
+        (window.location.protocol + '//' + window.location.host) ||
+        ''
+      );
 
       function addField(name, value) {
         var input = document.createElement('input');

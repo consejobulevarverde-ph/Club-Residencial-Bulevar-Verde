@@ -96,8 +96,9 @@
       timeoutMs: timeoutMs || 90000
     });
 
+    var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
     return client.callViaForm(action, payload, {
-      parentOrigin: window.location.origin,
+      parentOrigin: origin,
       timeoutMs: timeoutMs || 90000
     }).then(function (result) {
       log('info', 'Acción confirmada por Apps Script.', {
