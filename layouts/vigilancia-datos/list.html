@@ -531,7 +531,10 @@
                 '<div class="col-md-4">' +
                 '<h4 class="h6 fw-bold"><i class="bi bi-people me-1"></i>Residentes</h4>' +
                 list(unit.residentes, function (item) {
-                  return '<strong>' + esc(item.persona.nombreCompleto) + '</strong>' +
+                  var whatsappLink = item.persona.telefono
+                    ? '<a href="https://wa.me/57' + item.persona.telefono.replace(/\D/g, '').slice(-10) + '" target="_blank" class="ms-2" title="Chat por WhatsApp" style="text-decoration:none"><i class="bi bi-whatsapp text-success"></i></a>'
+                    : '';
+                  return '<div class="d-flex align-items-center gap-1"><strong>' + esc(item.persona.nombreCompleto) + '</strong>' + whatsappLink + '</div>' +
                     '<div class="small-note">' + esc(item.tipoRelacion) + '</div>';
                 }) +
                 '</div>' +
