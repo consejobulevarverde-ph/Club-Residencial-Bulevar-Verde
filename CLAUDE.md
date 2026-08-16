@@ -291,6 +291,69 @@ Frontend (firebase.web.app) calls backend (Cloud Run) — CORS whitelist on back
 
 **Text not uppercase**: Check input has `text-uppercase` class. Verify backend applies `.transform(upper)`. Clear browser cache.
 
+## UI Design & Sample Data Practices
+
+### Using Generic Sample Data
+
+The productive UI must never bake in personal data from real users. This ensures:
+- Code review doesn't expose resident information accidentally
+- Screenshots/demos stay confidential
+- Placeholders are memorable and guide user intent
+
+**Replace personal data with generic equivalents**:
+- Names: "Pepito Pérez", "Juan García", "María López", "Pedro Páramo"
+- Apartment numbers: "301", "502", "1204" (realistic without being real)
+- Phone numbers: Placeholder format `+57 300 123 4567` or `(+57) 1 2345 6789`
+- Emails: `pepito.perez@example.com`, `usuario@ejemplo.com`
+- Car plates: `ABC123` (valid Colombian format but obviously fake)
+- Document numbers: `1234567890`, `9876543210` (never match real resident docs)
+
+For fields with specific formatting rules (like `vehPlaca`), use format-compliant examples that are clearly fabricated. Do not use actual resident vehicle plates or documents in placeholder text.
+
+### Business Rules Should Not Appear in UI Labels
+
+Expose *constraints*, not rules. Examples:
+
+**❌ Wrong** (exposes business rule):
+```html
+<span class="small text-muted">Máximo 3 mascotas por unidad</span>
+```
+Why: This is a rule. If the user needs to know, the backend will reject with an error message.
+
+**✅ Right** (constraint only):
+```html
+<input placeholder="Nombre de la mascota" ... />
+```
+Why: Neutral label. When/if they exceed capacity, the API returns `"Ya hay 3 mascotas vinculadas a esta unidad"`.
+
+### Following ISO/IEC 13407 & Nielsen's Usability Heuristics
+
+While not strict compliance, the UI should embrace:
+
+1. **Visibility of System Status** — Show real-time feedback:
+   - Plate field: Validation indicator (✓ green / ✗ red) appears as user types
+   - Loading states: spinner + disabled button during API calls
+   - Form submission: visual confirmation (toast/alert) of success
+
+2. **Match Between System & Real World**:
+   - Use terminology residents recognize: "Placa" not "License plate", "Residente" not "Individual"
+   - Format examples should match local conventions (e.g., Colombian phone format, plate format)
+
+3. **User Control & Freedom**:
+   - Modal close buttons (×) always present
+   - Confirmation dialogs for destructive actions ("¿Retirar este vehículo?")
+   - Clear error messages pinpoint the issue (not "Error submitting")
+
+4. **Error Prevention & Recovery**:
+   - Real-time validation (like plate format) prevents invalid submissions
+   - Optional fields are clearly marked; required fields enforce on blur/submit
+   - Trim whitespace; normalize case—don't burden the user with formatting
+
+5. **Aesthetic & Minimalist Design**:
+   - Avoid exposing internal IDs, technical jargon, or debug info to end-user labels
+   - Use semantic HTML (form labels, buttons, modals) for accessibility
+   - Batch related fields (e.g., contact info grouped under "Contacto (opcional)")
+
 ---
 
-**Last updated**: 2026-08-15 — sanciones tab, full resident edit, uppercase transforms, evidence camera integration
+**Last updated**: 2026-08-15 — sanciones tab, full resident edit, uppercase transforms, evidence camera integration, plate formatting, generic sample data guidelines

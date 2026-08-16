@@ -428,7 +428,7 @@
           <p class="small-note">Clasifica cada placa como propia o visitante autorizado.</p>
           <div id="vehiclesList" class="mb-4"></div>
           <form id="addVehicleForm" class="row g-2 align-items-end border-top pt-3">
-            <div class="col-md-3"><label class="form-label small">Placa</label><input id="vehPlaca" class="form-control form-control-sm text-uppercase" required></div>
+            <div class="col-md-3"><label class="form-label small">Placa</label><div class="input-group input-group-sm"><input id="vehPlaca" class="form-control form-control-sm text-uppercase" required placeholder="ABC123"><span id="vehPlacaStatus" class="input-group-text bg-light border-0" style="display:none"><i class="bi bi-check-circle text-success"></i></span></div></div>
             <div class="col-md-3"><label class="form-label small">Tipo</label>
               <select id="vehTipo" class="form-select form-select-sm">
                 <option value="">Selecciona</option>
@@ -1498,6 +1498,22 @@
         }).finally(function () {
           loading(submitBtn, false, 'Guardar cambios');
         });
+      });
+
+      $('vehPlaca').addEventListener('input', function () {
+        var input = this.value.toUpperCase().replace(/\s/g, '');
+        this.value = input;
+        var statusIcon = $('vehPlacaStatus');
+        var isValidColombian = /^[A-Z]{3}(?:\d{3}|\d{2}[A-Z]|\d{2})$/.test(input);
+        if (input.length > 0 && isValidColombian) {
+          statusIcon.style.display = 'inline-flex';
+          statusIcon.innerHTML = '<i class="bi bi-check-circle text-success"></i>';
+        } else if (input.length > 0) {
+          statusIcon.style.display = 'inline-flex';
+          statusIcon.innerHTML = '<i class="bi bi-x-circle text-danger"></i>';
+        } else {
+          statusIcon.style.display = 'none';
+        }
       });
 
       $('addVehicleForm').addEventListener('submit', function (event) {
