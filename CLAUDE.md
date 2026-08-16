@@ -1,163 +1,296 @@
-# Club Residencial Bulevar Verde - Project Documentation
-
-## Technology Stack
-- **Static Site Generator**: Hugo (Spanish language site, es-co locale)
-- **Hosting**: GitHub Pages (`https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/`)
-- **Backend Services**: Google Apps Script (for PQRS, Reservas, Sanciones, Portal Cliente)
-- **Languages**: HTML, JavaScript, TOML (Hugo config)
+# Club Residencial Bulevar Verde — Claude Code Guide
 
 ## Project Overview
-This is a website for Club Residencial Bulevar Verde, a residential community in Itagüí, Antioquia, Colombia. It provides:
-- **Reservas** (Reservations): Community space bookings
-- **PQRS** (Peticiones, Quejas, Reclamos, Sugerencias): Complaints and suggestions system
-- **Sanciones** (Sanctions): Community conduct violations management
-- **Datos Personales** (Personal Data): User account management
 
-## Key Information
-- **Project Name**: Club Residencial Bulevar Verde
-- **Location**: Calle 70 # 59 265, Itagüí, Antioquia, Colombia
-- **Primary Contact**: bulevarverdeadmon@gmail.com | +573222289066
-- **Consejo de Administración**: consejo.bulevarverde@gmail.com
-- **Comité de Convivencia**: comiteconvivenciabulevarverde@gmail.com
-- **Portería**: +573009728851 | +573245820968
-- **WhatsApp Comunidad**: https://chat.whatsapp.com/HonY8ALBTlR6ivBNxyx0pv
-- **Theme Color**: #2c5f2d (green)
+**Stack**: Hugo + Firebase Hosting + Firebase Data Connect (GraphQL over Postgres) + Bootstrap 5.3.3 + vanilla JavaScript
 
-## Directory Structure
+**Key Pages**:
+- `/` — home (landing)
+- `/datos-personales/` — resident self-service portal (login, profile, residents, vehicles, pets, emergency, sanciones)
+- `/sanciones-convivencia/` — community rules violations (legacy page, separate from datos-personales tab)
+- Other static pages and news
+
+**Deployment**: `hugo --gc --minify` → `firebase deploy --only hosting`
+
+**Key URLs**:
+- API: `https://bulevar-verde-api-739757275794.us-east4.run.app`
+- Hosting: `https://project-7dd6d100-d8c2-427a-a80.web.app`
+- GAS (Sanciones): `https://script.google.com/macros/s/AKfycbxk69LDxXyh8TgMb2CUjmKuzQ_hWI8hjEwzNjmXHSwxoXsSwrBv-Tiffv8h3BGUwDVx/exec`
+
+## Critical Patterns & Conventions
+
+### 1. Session Tokens (Resident Portal Login)
+
+Stored in `localStorage` under key `bvDatosPersonalesToken`. Format: HMAC-SHA256 signed, base64url-encoded plaintext (NOT encrypted). Only tamper-proof.
+
+Token obtained from backend (`/api/v1/datos-personales/validar`), then used for all authenticated requests to API. TTL: 2 hours.
+
+**Important**: Never store sensitive PII in plaintext payload. Use only `{ personaId, unidadId }`.
+
+### 2. Hugo Template & Configuration
+
+All pages use Go templates (`.html` files). Configuration injected via `.Site.Params` from `hugo.toml`:
+
+```toml
+[params]
+apiBaseUrl = "https://bulevar-verde-api-739757275794.us-east4.run.app"
+sancionesWebAppUrl = "https://script.google.com/macros/s/AKfycbxk69LDxXyh8TgMb2CUjmKuzQ_hWI8hjEwzNjmXHSwxoXsSwrBv-Tiffv8h3BGUwDVx/exec"
 ```
-├── layouts/              # Hugo templates and partial components
-│   ├── index.html       # Homepage layout
-│   ├── pqrs/           # PQRS system templates
-│   ├── sanciones-*/    # Sanctions system templates
-│   └── ...
-├── static/              # Static assets
-│   ├── js/             # JavaScript files (maintenance, gestion, evidence camera)
-│   └── ...
-├── content/            # Hugo content pages
-├── hugo.toml           # Hugo configuration file
-└── ...
+
+Access in templates: `{{ .Site.Params.apiBaseUrl | default "" | jsonify | safeJS }}`
+
+### 3. JavaScript Pattern (Single IIFE per Page)
+
+Each page with JS (e.g., `datos-personales/list.html`) wraps logic in a single IIFE:
+
+```javascript
+<script>
+  (function () {
+    'use strict';
+    
+    var API_BASE = {{ .Site.Params.apiBaseUrl | ... }};
+    var profile = null;
+    
+    function esc(value) { /* HTML escape */ }
+    function apiFetch(path, options) { /* Fetch wrapper */ }
+    
+    // Event handlers
+    loadProfile();
+  }());
+</script>
 ```
 
-## Google Apps Script Integration
-The site integrates with multiple Google Apps Script Web Apps for backend functionality:
-- **Portal Cliente**: Web App for client portal access
-- **PQRS**: Request/complaint management system
-- **Reservas**: Reservation management
-- **Sanciones**: Sanctions management
+**Reuse these helpers** (don't reimplement):
+- `esc(value)` — HTML-escape to prevent XSS
+- `apiFetch(path, options)` — prefixes `API_BASE + '/api/v1/datos-personales'`, includes token, handles 401 logout
+- `alertMessage(message, type)` — temporary alert (success/error/info)
+- `clearAlert()` — clear alert
+- `showTab(id)` — switch tab visibility (toggle `.hidden`, update `.nav-link.active`)
+- `loading(button, state, text)` — disable/enable button with spinner
 
-Each Google Apps Script has a version identifier in `hugo.toml` under `params` for tracking updates.
+### 4. Tab Navigation Pattern
 
-## Important Notes
-- Site configuration is in `hugo.toml` using TOML format
-- All text and UI labels are in Spanish (Colombian Spanish)
-- The project uses custom JavaScript for functionality like evidence cameras, PQRS management, and maintenance workflows
-- Google Apps Script URLs should not be committed to version control if they contain sensitive tokens
+Resident portal uses `.nav-link` / `.tab-pane-content` convention:
 
-## Design Constraints - IMPORTANT
+```javascript
+$('profileTabs').addEventListener('click', function (event) {
+  var button = event.target.closest('button[data-target]');
+  if (button && !button.closest('.hidden')) {
+    showTab(button.dataset.target);
+    // Lazy-load: if (button.dataset.target === 'tabNewTab') cargarNewTab();
+  }
+});
+```
 
-### Header and Footer Requirements
-**ALL pages (layouts) MUST include both header (navbar) and footer elements using Hugo partials.** This is a non-negotiable requirement. Never duplicate code — always use the centralized partials.
-
-#### Header (Navbar)
-- **Partial location:** `layouts/partials/header.html`
-- **Usage:** Place at the very top of the page, right after `<body>`
-- **Example:**
-  ```html
-  <body>
-    {{ partial "header" . }}
-    <!-- rest of page content -->
-  </body>
-  ```
-- **Includes:**
-  - Site logo/brand link (Club Bulevar Verde)
-  - Navigation menu items from `hugo.toml` configuration
-  - Consistent styling using theme colors
-  - Responsive navbar with mobile toggle
-
-#### Footer
-- **Partial location:** `layouts/partials/footer.html`
-- **Usage:** Place right before the closing `</body>` tag
-- **Example:**
-  ```html
-    {{ partial "footer" . }}
-  </body>
-  ```
-- **Includes:**
-  - Copyright information
-  - Social media links (Facebook, Instagram, WhatsApp community)
-  - Consistent styling and branding
-  - Links from `hugo.toml` social media parameters
-
-**Critical Rule:** 
-- **DO NOT duplicate header or footer code** 
-- **ALWAYS use the partials:** `{{ partial "header" . }}` and `{{ partial "footer" . }}`
-- To customize: Edit the partials once in `layouts/partials/` and changes apply to all pages automatically
-
-This ensures visual consistency across all pages and provides consistent navigation and branding.
-
-## Development Workflow
-When working with this Hugo project:
-1. Edit layouts in `layouts/` directory (HTML with Hugo templating)
-2. Add or modify JavaScript in `static/js/`
-3. Update configuration in `hugo.toml`
-4. **For new layouts (CRITICAL - use partials):**
-   - Top of page: `{{ partial "header" . }}`
-   - Bottom of page (before `</body>`): `{{ partial "footer" . }}`
-   - Never duplicate header or footer code
-5. **To customize header or footer:**
-   - Edit `layouts/partials/header.html` or `layouts/partials/footer.html`
-   - Changes apply to ALL pages automatically
-   - No need to edit individual layouts
-6. Test with Hugo server before deploying to GitHub Pages
-
-## Hugo Links and URLs - CRITICAL ⚠️
-
-**The site is deployed in a subdirectory:** `baseURL = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/'`
-
-### Linking to the Home/Root Page
-
-**CORRECT way:**
-- `{{ .Site.Home.RelPermalink }}` ✓ **ALWAYS USE THIS** - correctly handles subdirectory paths
-- This generates the correct relative URL regardless of subdirectory depth
-
-**INCORRECT ways (NEVER use these):**
-- `{{ "/" | relURL }}` ✗ Does NOT respect subdirectories (BROKEN on GitHub Pages)
-- `{{ "/" }}` ✗ Links to domain root, not site root
-- Hardcoded `/something` ✗ Same problem - won't work in subdirectory
-
-### Linking to Files and Internal Pages
-
-**For ANY static file or page in the site, use relURL:**
+Each tab pane:
 ```html
-<!-- Images (favicons, logos, etc.) -->
-<link rel="icon" href="{{ "images/favicon-32x32.png" | relURL }}">
-<img src="{{ "images/logo.png" | relURL }}">
-
-<!-- JavaScript -->
-<script src="{{ "js/script.js" | relURL }}"></script>
-
-<!-- CSS -->
-<link rel="stylesheet" href="{{ "css/style.css" | relURL }}">
-
-<!-- Links to other pages/sections -->
-<a href="{{ "pqrs/" | relURL }}">PQRS</a>
-<a href="{{ "documentos/reglamentos/reglamento.pdf" | relURL }}">Download PDF</a>
+<div id="tabName" class="tab-pane-content hidden"><!-- content --></div>
 ```
 
-**Never hardcode paths starting with `/`** — they break in subdirectories. Always wrap with `{{ "path" | relURL }}`
+### 5. Text Uppercase Enforcement
 
-### Example - Before and After
+Frontend mirrors backend transforms visually with `text-uppercase` class:
 
-❌ **BROKEN (hardcoded paths):**
 ```html
-<a href="/documentos/file.pdf" download>Download</a>
-<a href="{{ "/" | relURL }}">Home</a>
+<input class="form-control text-uppercase" value="juan" />
+<!-- Renders and stores as "JUAN" -->
 ```
 
-✅ **CORRECT (using relURL):**
+Applied to: tipo documento, número documento, nombre, especie, raza, parentesco. NOT to correo, teléfono, descargos (free text).
+
+### 6. Sanciones (Two Systems)
+
+1. **Legacy**: `/sanciones-convivencia/` — unauthenticated, manual apartment entry, Google Apps Script backend
+2. **New (Tab)**: `/datos-personales/tabSanciones` — authenticated, auto-uses resident's apartment, embedded detail + descargos
+
+Both read from same GAS (`consultarCasosApto`, `consultarCasosDetalle`, `subirEvidenciaConvivencia`, `guardarDescargos`).
+
+**Evidence gallery** (reused in both):
+- Google Drive URLs with fallback chain: `drive.google.com/thumbnail` → `lh3.googleusercontent.com` → original
+- `window.handleConvivenciaEvidenceError_` / `window.handleSancionEvidenceError_` handle missing images on `<img onerror>`
+
+**Evidence capture**:
+- `window.BVEvidenceCamera` — self-contained module (`static/js/evidence-camera.js`), safe to include on multiple pages
+- Call: `BVEvidenceCamera.capture({ contextLabel, detailLines, filePrefix, maxDimension, quality })` → `{ name, size, dataUrl, blob, file, captureMetadata }`
+- Compress client-side before upload (max 1600px, quality 0.82-0.84)
+
+### 7. Permission-Based Visibility
+
+Check `profile.permisos` array against `[data-permission]` attributes:
+
 ```html
-<a href="{{ "documentos/file.pdf" | relURL }}" download>Download</a>
-<a href="{{ .Site.Home.RelPermalink }}">Home</a>
+<div data-permission="RESIDENTES">
+  <!-- Only visible if resident has RESIDENTES perm -->
+</div>
 ```
 
-This is **critical** because the site lives at `/Club-Residencial-Bulevar-Verde/` not at the domain root.
+Owner-only content with `[data-owner-only]`:
+
+```html
+<div data-owner-only>
+  <!-- Only visible to propietarios (puedeVerResumen === true) -->
+</div>
+```
+
+### 8. Bootstrap & Icons
+
+- Bootstrap 5.3.3 — grid, forms, modals, nav pills, badges
+- bootstrap-icons — `<i class="bi bi-icon-name"></i>`
+- CSS variables: `--bv-primary`, `--bv-border` (defined in page `<style>`)
+- Font: Montserrat (CDN-loaded)
+
+## Build & Deploy
+
+### Local Development
+
+```bash
+cd Club-Residencial-Bulevar-Verde
+
+# Serve locally (watches changes)
+hugo server
+
+# Build production
+hugo --gc --minify -d public
+```
+
+**Runs on `http://localhost:1313` by default.**
+
+### Firebase Hosting Deployment
+
+```bash
+hugo --gc --minify
+firebase deploy --only hosting
+
+# Or one command:
+hugo --gc --minify && firebase deploy --only hosting
+```
+
+### Data Connect (Separate)
+
+```bash
+firebase deploy --only dataconnect
+```
+
+Currently `schemaValidation: COMPATIBLE` in `dataconnect/dataconnect.yaml`.
+
+## File Structure
+
+```
+layouts/
+  datos-personales/list.html    # Resident portal (login, tabs, JS IIFE)
+  sanciones-convivencia/list.html  # Legacy sanciones page
+  [other-pages]/
+
+static/
+  js/
+    evidence-camera.js    # Camera module, reusable on multiple pages
+  css/
+  images/
+
+dataconnect/
+  dataconnect.yaml
+  schema/schema.gql
+  admin/datos_personales.gql, cartera.gql, [others]
+
+hugo.toml
+```
+
+## Common Tasks
+
+### Add a Resident Tab
+
+1. Add nav item:
+   ```html
+   <li class="nav-item"><button class="nav-link" data-target="tabName">Tab</button></li>
+   ```
+
+2. Add pane before `</section>`:
+   ```html
+   <div id="tabName" class="tab-pane-content hidden"><!-- content --></div>
+   ```
+
+3. (Optional) Lazy-load:
+   ```javascript
+   if (button.dataset.target === 'tabName' && !nameCargados) cargarName();
+   ```
+
+### Display Evidence Gallery
+
+Pattern from `sanciones-convivencia/list.html`:
+
+```javascript
+function buildEvidenceHtml(url, label) {
+  var displayUrls = buildMediaDisplayUrls(url);
+  var initialUrl = displayUrls.shift() || url;
+  return '<a href="' + esc(url) + '" target="_blank" class="evidence-link">' +
+    '<img src="' + esc(initialUrl) + '" alt="' + esc(label) + '" ' +
+    'onerror="window.handleSancionEvidenceError_(this)" data-fallback-urls="' +
+    esc(JSON.stringify(displayUrls)) + '" />' +
+    '<span>' + esc(label) + '</span></a>';
+}
+```
+
+### Capture Evidence with Camera
+
+```javascript
+window.BVEvidenceCamera.capture({
+  contextLabel: 'Evidencia',
+  detailLines: ['Caso: ' + caseId],
+  filePrefix: 'prefix',
+  maxDimension: 1600,
+  quality: 0.84
+}).then(function (evidence) {
+  evidenciasAportadas.push(evidence);
+  actualizarLista();
+}).catch(function (error) {
+  alertMessage('Error: ' + error.message);
+});
+```
+
+### Validate Input
+
+Always enforce on both frontend AND backend:
+
+```javascript
+var numDoc = $('inputId').value.trim();
+if (numDoc.length < 4) { alertMessage('Too short'); return; }
+// Proceed with apiFetch — backend will uppercase + validate
+```
+
+## Security Notes
+
+### Tokens Not Encrypted
+
+Like the API, tokens are signed but plaintext-readable. Only tamper-proof. Browser console can decode — acceptable because they only contain identity (personaId, unidadId), not sensitive data.
+
+### XSS Prevention
+
+Always use `esc(value)` for user-controlled strings:
+
+```javascript
+// WRONG:
+$('name').innerHTML = persona.nombre;  // XSS risk
+
+// RIGHT:
+$('name').textContent = persona.nombre;  // Safe
+// OR:
+$('name').innerHTML = esc(persona.nombre);  // Safe
+```
+
+### CORS
+
+Frontend (firebase.web.app) calls backend (Cloud Run) — CORS whitelist on backend includes Firebase URLs. GAS endpoint has no CORS restrictions (public).
+
+## Troubleshooting
+
+**Hugo build fails**: Run `hugo server` for detailed errors. Check syntax, partials, range loops.
+
+**Frontend won't authenticate**: Check `localStorage.bvDatosPersonalesToken` in DevTools. Verify backend is reachable. Check CORS origin whitelist.
+
+**Evidence gallery shows broken images**: Browser console should show fallback retries. Verify Google Drive sharing. Try image URL directly.
+
+**Text not uppercase**: Check input has `text-uppercase` class. Verify backend applies `.transform(upper)`. Clear browser cache.
+
+---
+
+**Last updated**: 2026-08-15 — sanciones tab, full resident edit, uppercase transforms, evidence camera integration
