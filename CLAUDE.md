@@ -291,6 +291,47 @@ Frontend (firebase.web.app) calls backend (Cloud Run) — CORS whitelist on back
 
 **Text not uppercase**: Check input has `text-uppercase` class. Verify backend applies `.transform(upper)`. Clear browser cache.
 
+## Vigilancia Module (`vigilancia-datos/list.html`)
+
+**Role**: Security staff access to unit lookup and primary resident registration. Uses Firebase Auth + custom vigilancia API endpoints.
+
+### Registration Form Features
+
+**Real-time validation**:
+- **Apartamento**: Numbers only (1–4 digits). Shows inline error if invalid format detected.
+- **Número de documento**: Automatically removes spaces, dashes, special chars; converts to uppercase (alphanumeric only).
+- **Nombre completo**: Auto-uppercases (class `text-uppercase`).
+
+**Form grouping** (visual hierarchy):
+```
+Unidad [apart. field]
+─────────────────────
+Identidad
+  Nombre completo
+  Tipo de documento | Número de documento
+  Tipo de residente principal
+─────────────────────
+Contacto [opcional badge]
+  Correo | Celular
+─────────────────────
+[Checkbox: Retirar anteriores]
+[Checkbox: Confirmar información]
+```
+
+### Search Results Display
+
+**Contact de emergencia** (if present):
+- Telephone icon + structured layout (name, relation, phone number)
+- Uses `small-note` and `text-monospace` for visual weight hierarchy
+- Border-top separator from unit info above
+
+**Sample data in placeholders**:
+- Apartment: "1029"
+- Name: "Pepito Pérez López"
+- Document: "1234567890"
+- Email: "pepito.perez@ejemplo.com"
+- Phone: "+57 300 123 4567"
+
 ## UI Design & Sample Data Practices
 
 ### Using Generic Sample Data
