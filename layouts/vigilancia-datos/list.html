@@ -363,6 +363,11 @@
         }
       }
 
+      // Limpiar entrada de búsqueda: remover espacios extras, normalizar
+      $('query').addEventListener('input', function () {
+        this.value = this.value.toUpperCase().trim().replace(/\s+/g, ' ');
+      });
+
       $('showSearch').addEventListener('click', function () { mode('search'); });
       $('showRegistration').addEventListener('click', function () { mode('registration'); });
 
@@ -423,8 +428,15 @@
         hideMsg();
         busy($('searchBtn'), true, 'Consultando…');
 
+        var searchTerm = $('query').value.trim();
+        if (!searchTerm) {
+          msg('Ingresa un término de búsqueda (unidad, placa o parqueadero).', 'warning');
+          busy($('searchBtn'), false, 'Consultar');
+          return;
+        }
+
         withIdToken(function (idToken) {
-          return apiFetch('/api/v1/vigilancia/buscar?q=' + encodeURIComponent($('query').value.trim()), idToken)
+          return apiFetch('/api/v1/vigilancia/buscar?q=' + encodeURIComponent(searchTerm), idToken)
             .then(function (body) {
               var unidades = (body.data && body.data.unidades) || [];
               return Promise.all(unidades.map(function (unidad) {
