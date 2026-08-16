@@ -825,6 +825,94 @@
     );
   }
 
+  function normalizeMediaUrl_(value) {
+    if (!value) return '';
+    var normalized = String(value).trim();
+    if (normalized.indexOf('http://') === 0 || normalized.indexOf('https://') === 0) return normalized;
+    if (normalized.indexOf('drive.google.com') !== -1) return 'https://' + normalized;
+    return '';
+  }
+
+  function parseGoogleDriveMediaUrl_(url) {
+    var value = String(url || '').trim();
+    if (!value || value.indexOf('drive.google.com') === -1) return null;
+
+    var fileId = '';
+    var resourceKey = '';
+
+    try {
+      var parsed = new URL(value, window.location.href);
+      fileId = parsed.searchParams.get('id') || '';
+      resourceKey = parsed.searchParams.get('resourcekey') || '';
+
+      if (!fileId) {
+        var pathMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/i);
+        fileId = pathMatch && pathMatch[1] ? pathMatch[1] : '';
+      }
+    } catch (error) {
+      var idMatch = value.match(/[?&]id=([^&#]+)/i);
+      var keyMatch = value.match(/[?&]resourcekey=([^&#]+)/i);
+      var pathMatchFallback = value.match(/\/file\/d\/([^/?#]+)/i);
+
+      fileId = idMatch && idMatch[1]
+        ? decodeURIComponent(idMatch[1])
+        : pathMatchFallback && pathMatchFallback[1]
+          ? decodeURIComponent(pathMatchFallback[1])
+          : '';
+      resourceKey = keyMatch && keyMatch[1] ? decodeURIComponent(keyMatch[1]) : '';
+    }
+
+    return fileId ? { fileId: fileId, resourceKey: resourceKey } : null;
+  }
+
+  function uniqueStrings_(values) {
+    var seen = {};
+    return values.filter(function (value) {
+      var key = String(value || '').trim();
+      if (!key || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+
+  function buildMediaDisplayUrls_(url) {
+    var normalizedUrl = normalizeMediaUrl_(url);
+    if (!normalizedUrl) return [];
+
+    var driveInfo = parseGoogleDriveMediaUrl_(normalizedUrl);
+    if (!driveInfo) return [normalizedUrl];
+
+    var resourceKeyQuery = driveInfo.resourceKey
+      ? '&resourcekey=' + encodeURIComponent(driveInfo.resourceKey)
+      : '';
+
+    return uniqueStrings_([
+      'https://drive.google.com/thumbnail?id=' + encodeURIComponent(driveInfo.fileId) + resourceKeyQuery + '&sz=w1200',
+      'https://lh3.googleusercontent.com/d/' + encodeURIComponent(driveInfo.fileId) + '=w1200',
+      normalizedUrl
+    ]);
+  }
+
+  window.handlePqrsEvidenceError_ = function (img) {
+    if (!img) return;
+
+    var fallbackUrls = [];
+    try {
+      fallbackUrls = JSON.parse(decodeURIComponent(img.getAttribute('data-fallback-urls') || ''));
+    } catch (error) {
+      fallbackUrls = [];
+    }
+
+    if (fallbackUrls.length > 0) {
+      var nextUrl = fallbackUrls.shift();
+      img.setAttribute('data-fallback-urls', encodeURIComponent(JSON.stringify(fallbackUrls)));
+      img.src = nextUrl;
+      return;
+    }
+
+    img.style.display = 'none';
+  };
+
   function renderTextWithLinks(value) {
     var text = String(value || '');
     var urlPattern = /https?:\/\/[^\s<>"']+/gi;
@@ -840,20 +928,82 @@
       var url = normalized.url;
       var trailing = normalized.trailing;
       var isDriveEvidence = /^https:\/\/(?:drive|docs)\.google\.com\//i.test(url);
-      var label = isDriveEvidence ? 'Ver evidencia' : 'Abrir enlace';
-      var icon = isDriveEvidence ? 'bi-image' : 'bi-box-arrow-up-right';
 
-      output += '<a class="btn btn-outline-success btn-sm mx-1 align-baseline" ' +
-        'href="' + escAttr(url) + '" target="_blank" rel="noopener noreferrer" ' +
-        'title="Abrir en una pestaña nueva">' +
-        '<i class="bi ' + icon + ' me-1" aria-hidden="true"></i>' +
-        esc(label) + '</a>' + esc(trailing);
+      if (isDriveEvidence) {
+        // Renderizar miniatura con fallback chain para Drive
+        var displayUrls = buildMediaDisplayUrls_(url);
+        var initialUrl = displayUrls.shift() || url;
+        var fallbackUrls = encodeURIComponent(JSON.stringify(displayUrls));
 
+        output += '<a href="' + escAttr(url) + '" target="_blank" rel="noopener noreferrer" ' +
+          'class="d-inline-flex flex-column align-items-center text-decoration-none mx-1" ' +
+          'title="Abrir evidencia en una pestaña nueva">' +
+          '<span class="border border-success-subtle rounded overflow-hidden bg-light d-flex align-items-center justify-content-center shadow-sm pqrs-evidence-thumb">' +
+          '<img data-evidence-preview alt="Previsualización de evidencia" ' +
+          'width="150" height="150" decoding="async" referrerpolicy="no-referrer" ' +
+          'style="width:150px;height:150px;object-fit:cover;display:block;" hidden ' +
+          'src="' + escAttr(initialUrl) + '" ' +
+          'data-fallback-urls="' + escAttr(fallbackUrls) + '" ' +
+          'onerror="window.handlePqrsEvidenceError_(this)">' +
+          '<span data-evidence-loading class="text-success text-center px-3">' +
+          '<span class="spinner-border spinner-border-sm d-block mx-auto mb-2" role="status" aria-hidden="true"></span>' +
+          '<span class="small">Cargando…</span></span>' +
+          '<span data-evidence-fallback hidden class="text-success text-center px-3">' +
+          '<i class="bi bi-image fs-1 d-block"></i><span class="small">Ver evidencia</span></span>' +
+          '</span>' +
+          '<span class="small fw-semibold text-success mt-1">' +
+          '<i class="bi bi-image me-1" aria-hidden="true"></i>Ver evidencia</span>' +
+          '</a>';
+
+        // Script inline para cargar la imagen cuando se carga el DOM
+        if (!window.pqrsEvidenceLoaderAttached) {
+          window.pqrsEvidenceLoaderAttached = true;
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function loadPqrsEvidences() {
+              loadPqrsEvidencePreviews();
+              document.removeEventListener('DOMContentLoaded', loadPqrsEvidences);
+            });
+          } else {
+            loadPqrsEvidencePreviews();
+          }
+        }
+      } else {
+        // Link simple para URLs no-Drive
+        var label = 'Abrir enlace';
+        var icon = 'bi-box-arrow-up-right';
+
+        output += '<a class="btn btn-outline-success btn-sm mx-1 align-baseline" ' +
+          'href="' + escAttr(url) + '" target="_blank" rel="noopener noreferrer" ' +
+          'title="Abrir en una pestaña nueva">' +
+          '<i class="bi ' + icon + ' me-1" aria-hidden="true"></i>' +
+          esc(label) + '</a>';
+      }
+
+      output += esc(trailing);
       lastIndex = urlPattern.lastIndex;
     }
 
     output += esc(text.slice(lastIndex));
     return output;
+  }
+
+  function loadPqrsEvidencePreviews() {
+    var images = Array.prototype.slice.call(
+      document.querySelectorAll('[data-evidence-preview]')
+    );
+    images.forEach(function (image) {
+      if (image.src && image.src.indexOf('drive.google.com') !== -1) {
+        // Mostrar loading
+        var loading = image.parentElement.querySelector('[data-evidence-loading]');
+        if (loading) loading.style.display = 'block';
+
+        // Mostrar imagen
+        image.hidden = false;
+        image.onload = function () {
+          if (loading) loading.style.display = 'none';
+        };
+      }
+    });
   }
 
   function splitTrailingUrlPunctuation(value) {
