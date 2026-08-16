@@ -11,6 +11,7 @@ schema:
       database: bulevar-verde
       cloudSql:
         instanceId: bulevar-verde-sql
+      schemaValidation: COMPATIBLE
 
 connectorDirs:
   - ./admin
