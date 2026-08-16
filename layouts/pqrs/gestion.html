@@ -358,8 +358,8 @@
   <script src="{{ "js/evidence-camera.js" | relURL }}?v=20260813-2"></script>
   <script>
     window.PQRS_GESTION_CONFIG = {
-      webAppUrl: {{ .Site.Params.pqrsWebAppUrl | default "" }},
-    storageKey: 'bvMaintenanceManagementSession'
+      webAppUrl: '{{ .Site.Params.pqrsWebAppUrl | default "" }}',
+      storageKey: 'bvMaintenanceManagementSession'
     };
   </script>
   <script src="{{ "js/pqrs-gestion.js" | relURL }}?v={{ .Site.Params.pqrsGestionVersion | default "1" }}"></script>
