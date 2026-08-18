@@ -237,7 +237,7 @@
             </div>
 
             <!-- Contacto -->
-            <div class="col-12 pt-2"><small class="text-muted fw-semibold">Contacto <span class="badge bg-light text-muted ms-1">opcional</span></small></div>
+            <div class="col-12 pt-2"><small class="text-muted fw-semibold">Contacto</small></div>
             <div class="col-md-6">
               <label class="form-label" for="newEmail">Correo</label>
               <input
@@ -245,7 +245,8 @@
                 type="email"
                 class="form-control"
                 placeholder="pepito.perez@ejemplo.com"
-                autocomplete="email">
+                autocomplete="email"
+                required>
             </div>
 
             <div class="col-md-6">
@@ -604,7 +605,7 @@
           tipoDocumento: $('newDocumentType').value,
           numeroDocumento: $('newDocument').value.trim(),
           rol: $('newRole').value,
-          correo: $('newEmail').value.trim() || undefined,
+          correo: $('newEmail').value.trim(),
           telefono: $('newPhone').value.trim() || undefined,
           retirarResidentesAnteriores: $('retirePrevious').checked
         };

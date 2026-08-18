@@ -519,8 +519,8 @@
             '<option value="PROPIETARIO">PROPIETARIO</option>' +
             '<option value="RESIDENTE">RESIDENTE</option>' +
             '</select></div>' +
-            '<div class="col-md-4"><label class="form-label small">Correo (opcional)</label>' +
-            '<input id="addCorreo" type="email" class="form-control form-control-sm"></div>' +
+            '<div class="col-md-4"><label class="form-label small">Correo</label>' +
+            '<input id="addCorreo" type="email" class="form-control form-control-sm" required></div>' +
             '<div class="col-md-3"><label class="form-label small">Teléfono (opcional)</label>' +
             '<input id="addTelefono" class="form-control form-control-sm"></div>' +
             '<div class="col-md-3 d-grid"><button type="submit" class="btn btn-outline-success btn-sm">Agregar</button></div>' +
@@ -564,7 +564,7 @@
             numeroDocumento: $('addNumeroDocumento').value.trim(),
             nombreCompleto: $('addNombreCompleto').value.trim(),
             tipoRelacion: $('addTipoRelacion').value,
-            correo: $('addCorreo').value.trim() || undefined,
+            correo: $('addCorreo').value.trim(),
             telefono: $('addTelefono').value.trim() || undefined
           };
 
