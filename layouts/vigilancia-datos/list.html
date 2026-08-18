@@ -146,6 +146,9 @@
           <button id="showConvivencia" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-exclamation-circle me-1"></i>Registrar Caso
           </button>
+          <button id="openReservas" type="button" class="btn btn-outline-success">
+            <i class="bi bi-calendar-check me-1"></i>Reservas
+          </button>
         </div>
       </div>
 
@@ -487,6 +490,10 @@
       $('showRegistration').addEventListener('click', function () { mode('registration'); });
       $('showVehicleRegistration').addEventListener('click', function () { mode('vehicle'); });
       $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
+
+      $('openReservas').addEventListener('click', function () {
+        window.open('https://docs.google.com/spreadsheets/d/159z9Dl1PV0pX7Bz0VuH3wgUP114HnVA0v0Hm312lDW4/edit?resourcekey=&gid=1263124094#gid=1263124094', '_blank');
+      });
 
       function apiFetch(path, idToken, options) {
         options = options || {};
