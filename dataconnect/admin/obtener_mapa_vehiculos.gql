@@ -1,0 +1,12 @@
+# Obtiene el mapa placa -> UUID de los vehículos ya creados, para no
+# duplicar ni sobrescribir registros existentes en importaciones nuevas.
+query ObtenerMapaVehiculosImportacion(
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: NO_ACCESS) {
+  vehiculos(limit: $limit, offset: $offset) {
+    id
+    placa
+  }
+}
