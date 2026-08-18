@@ -128,7 +128,10 @@
             <i class="bi bi-search me-1"></i>Consultar
           </button>
           <button id="showRegistration" type="button" class="btn btn-outline-success mode-button">
-            <i class="bi bi-person-plus me-1"></i>Registrar residente
+            <i class="bi bi-person-plus me-1"></i>+ Residente
+          </button>
+          <button id="showVehicleRegistration" type="button" class="btn btn-outline-success mode-button">
+            <i class="bi bi-car-front me-1"></i>+ Vehículo
           </button>
         </div>
       </div>
@@ -294,6 +297,90 @@
 
         <div id="registrationResult" class="mt-4"></div>
       </section>
+
+      <section id="vehicleRegistrationView" class="hidden">
+        <div class="surface p-4 p-lg-5">
+          <div class="mb-4">
+            <h3 class="section-title h4">
+              <i class="bi bi-car-front me-2"></i>
+              Registrar vehículo
+            </h3>
+            <p class="mb-0">
+              Registra un vehículo vinculado a una unidad para la vigilancia y control de acceso.
+            </p>
+          </div>
+
+          <form id="vehicleRegistrationForm" class="row g-3">
+            <!-- Unidad -->
+            <div class="col-12 pt-2"><small class="text-muted fw-semibold">Unidad</small></div>
+            <div class="col-12 col-md-4">
+              <label class="form-label" for="vehApartment">Apartamento</label>
+              <input
+                id="vehApartment"
+                class="form-control"
+                inputmode="numeric"
+                maxlength="4"
+                placeholder="Ej.: 1029"
+                required>
+            </div>
+
+            <!-- Tipo de vehículo -->
+            <div class="col-12 pt-2"><small class="text-muted fw-semibold">Vehículo</small></div>
+            <div class="col-md-6">
+              <label class="form-label" for="vehTipoVehiculo">Tipo de vehículo</label>
+              <select id="vehTipoVehiculo" class="form-select" required>
+                <option value="CARRO">Carro</option>
+                <option value="MOTO">Moto</option>
+              </select>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label" for="vehPlaca">Placa</label>
+              <input
+                id="vehPlaca"
+                class="form-control plate"
+                maxlength="10"
+                placeholder="Ej.: ABC123"
+                required>
+              <small class="d-block text-muted mt-1">
+                Si el vehículo no tiene placa (ej. moto eléctrica), escribe <strong>ELECTRICO</strong> o <strong>SIN PLACA</strong>.
+              </small>
+            </div>
+
+            <!-- Relación con la unidad -->
+            <div class="col-12 pt-2"><small class="text-muted fw-semibold">Relación</small></div>
+            <div class="col-md-6">
+              <label class="form-label" for="vehTipoVinculo">Tipo de vinculación</label>
+              <select id="vehTipoVinculo" class="form-select" required>
+                <option value="RESIDENTE">Residente</option>
+                <option value="VISITANTE">Visitante</option>
+              </select>
+            </div>
+
+            <div class="col-12">
+              <div class="form-check">
+                <input
+                  id="confirmVehicleRegistration"
+                  class="form-check-input"
+                  type="checkbox"
+                  required>
+                <label class="form-check-label" for="confirmVehicleRegistration">
+                  Confirmo que revisé el apartamento, el tipo de vehículo y la placa suministrados.
+                </label>
+              </div>
+            </div>
+
+            <div class="col-12 d-grid d-md-flex justify-content-md-end">
+              <button id="registerVehicleBtn" class="btn btn-primary btn-lg" type="submit">
+                <i class="bi bi-car-front-fill me-2"></i>
+                Registrar vehículo
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div id="vehicleRegistrationResult" class="mt-4"></div>
+      </section>
     </section>
   </main>
 
@@ -351,13 +438,18 @@
 
       function mode(name) {
         var registration = name === 'registration';
-        $('searchView').classList.toggle('hidden', registration);
+        var vehicle = name === 'vehicle';
+        $('searchView').classList.toggle('hidden', registration || vehicle);
         $('registrationView').classList.toggle('hidden', !registration);
-        $('showSearch').classList.toggle('active', !registration);
+        $('vehicleRegistrationView').classList.toggle('hidden', !vehicle);
+        $('showSearch').classList.toggle('active', !registration && !vehicle);
         $('showRegistration').classList.toggle('active', registration);
+        $('showVehicleRegistration').classList.toggle('active', vehicle);
 
         if (registration) {
           $('newApartment').focus();
+        } else if (vehicle) {
+          $('vehApartment').focus();
         } else {
           $('query').focus();
         }
@@ -370,6 +462,7 @@
 
       $('showSearch').addEventListener('click', function () { mode('search'); });
       $('showRegistration').addEventListener('click', function () { mode('registration'); });
+      $('showVehicleRegistration').addEventListener('click', function () { mode('vehicle'); });
 
       function apiFetch(path, idToken, options) {
         options = options || {};
@@ -462,6 +555,12 @@
         } else {
           errorEl.style.display = 'none';
         }
+      });
+
+      // Validar apartamento del formulario de vehículo: solo números
+      $('vehApartment').addEventListener('input', function () {
+        var value = this.value.replace(/\D/g, '').slice(0, 4);
+        this.value = value;
       });
 
       // Limpiar documento: remover espacios y caracteres especiales
@@ -592,6 +691,74 @@
           '</h3>' +
           '<p class="mb-0"><strong>' + esc(data.nombreCompleto) + '</strong> quedó registrado en la unidad ' +
           '<strong>' + esc(data.codigoOficial) + '</strong> como ' + esc(data.rol) + '.</p>' +
+          '</article>';
+      }
+
+      var PLACAS_SIN_PLACA = ['ELECTRICO', 'SIN PLACA'];
+      function placaValida(placa, tipoVehiculo) {
+        if (PLACAS_SIN_PLACA.indexOf(placa) !== -1) return true;
+        if (tipoVehiculo === 'CARRO') return /^[A-Z]{3}\d{3}$/.test(placa);
+        if (tipoVehiculo === 'MOTO') return /^[A-Z]{3}\d{2}[A-Z]$/.test(placa);
+        return false;
+      }
+
+      $('vehPlaca').addEventListener('input', function () {
+        this.value = this.value.toUpperCase();
+      });
+
+      $('vehicleRegistrationForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        hideMsg();
+
+        if (!$('confirmVehicleRegistration').checked) {
+          msg('Confirma que revisaste la información.', 'warning');
+          return;
+        }
+
+        var apartment = $('vehApartment').value.trim();
+        if (!apartment || !/^\d{1,4}$/.test(apartment)) {
+          msg('El apartamento debe tener entre 1 y 4 dígitos.', 'warning');
+          return;
+        }
+
+        var tipoVehiculo = $('vehTipoVehiculo').value;
+        var placa = $('vehPlaca').value.trim().toUpperCase().replace(/\s+/g, ' ');
+        if (!placaValida(placa, tipoVehiculo)) {
+          msg('La placa no corresponde al formato del tipo de vehículo (o escribe ELECTRICO / SIN PLACA).', 'warning');
+          return;
+        }
+
+        busy($('registerVehicleBtn'), true, 'Registrando…');
+
+        var payload = {
+          apartamento: apartment,
+          tipoVehiculo: tipoVehiculo,
+          tipoVinculo: $('vehTipoVinculo').value,
+          placa: placa
+        };
+
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/vigilancia/registrar-vehiculo', idToken, { method: 'POST', body: payload });
+        }).then(function (body) {
+          renderVehicleRegistrationResult(body.data);
+          $('vehicleRegistrationForm').reset();
+          msg('El vehículo fue registrado correctamente.', 'success');
+        }).catch(function (error) {
+          msg(error.message);
+        }).finally(function () {
+          busy($('registerVehicleBtn'), false, 'Registrar vehículo');
+        });
+      });
+
+      function renderVehicleRegistrationResult(data) {
+        $('vehicleRegistrationResult').innerHTML =
+          '<article class="surface registration-result p-4">' +
+          '<h3 class="h5 text-success fw-bold">' +
+          '<i class="bi bi-check-circle-fill me-2"></i>' +
+          'Registro completado' +
+          '</h3>' +
+          '<p class="mb-0">Vehículo <span class="plate">' + esc(data.placa) + '</span> (' + esc(data.tipoVehiculo) + ') quedó registrado en la unidad ' +
+          '<strong>' + esc(data.codigoOficial) + '</strong> como ' + esc(data.tipoVinculo) + '.</p>' +
           '</article>';
       }
 
