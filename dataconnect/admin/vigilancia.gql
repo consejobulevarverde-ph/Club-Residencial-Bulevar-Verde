@@ -87,3 +87,28 @@ mutation RetirarResidentesNoPropietarios(
     data: { activo: false, fechaFin: $fechaFin }
   )
 }
+
+query BuscarVehiculoPorPlaca(
+  $placa: String!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint al rol vigilancia antes de invocar la consulta.") {
+  vehiculos(where: { placa: { eq: $placa } }, limit: 1) {
+    id
+  }
+}
+
+mutation CrearVehiculo(
+  $input: Vehiculo_Data! @allow(fields: "placa tipoVehiculo estadoVehiculo activo")
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint al rol vigilancia antes de invocar la mutación.")
+@transaction {
+  vehiculo_insert(data: $input)
+}
+
+mutation CrearVinculoVehiculoUnidad(
+  $input: VinculoVehiculoUnidad_Data! @allow(fields: "vehiculoId unidadId tipoVinculo estadoVinculo esActual vigenteDesde origenRegistro")
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint al rol vigilancia antes de invocar la mutación.")
+@transaction {
+  vinculo_vehiculo_unidad_insert(data: $input)
+}
