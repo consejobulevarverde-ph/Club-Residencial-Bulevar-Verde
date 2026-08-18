@@ -487,7 +487,7 @@
               <h3 class="section-title h5">Contacto de emergencia</h3>
               <form id="emergencyForm" class="row g-3 mt-1">
                 <div class="col-md-5"><label class="form-label" for="emergencyName">Nombre</label><input id="emergencyName" class="form-control text-uppercase"></div>
-                <div class="col-md-4"><label class="form-label" for="emergencyPhone">Celular</label><input id="emergencyPhone" class="form-control" inputmode="tel"></div>
+                <div class="col-md-4"><label class="form-label" for="emergencyPhone">Celular</label><input id="emergencyPhone" class="form-control" inputmode="numeric"></div>
                 <div class="col-md-3"><label class="form-label" for="emergencyRelation">Parentesco</label><input id="emergencyRelation" class="form-control text-uppercase"></div>
                 <div class="col-12 d-grid d-md-flex justify-content-md-end"><button class="btn btn-primary" type="submit">Guardar contacto de emergencia</button></div>
               </form>
@@ -1396,7 +1396,10 @@
 
         var emergency = unit.emergencia[0] || {};
         $('emergencyName').value = emergency.nombre || '';
-        $('emergencyPhone').value = emergency.telefono || '';
+        var telefonoEmergencia = emergency.telefono || '';
+        $('emergencyPhone').value = '';
+        $('emergencyPhone').placeholder = telefonoEmergencia ? maskTelefono(telefonoEmergencia) : 'Celular';
+        $('emergencyPhone').dataset.original = telefonoEmergencia;
         $('emergencyRelation').value = emergency.parentesco || '';
       }
 
@@ -1592,7 +1595,7 @@
         }
       });
 
-      ['contactPhone', 'resPhone', 'editResidentPhone'].forEach(function (id) {
+      ['contactPhone', 'resPhone', 'editResidentPhone', 'emergencyPhone'].forEach(function (id) {
         $(id).addEventListener('input', function () {
           this.value = this.value.replace(/\D/g, '');
         });
@@ -1645,9 +1648,11 @@
       $('emergencyForm').addEventListener('submit', function (event) {
         event.preventDefault();
         clearAlert();
+        var telefonoInput = $('emergencyPhone').value.trim();
+        var telefono = telefonoInput || $('emergencyPhone').dataset.original || undefined;
         apiFetch('/emergencia', {
           method: 'PUT',
-          body: { nombre: $('emergencyName').value.trim() || undefined, telefono: $('emergencyPhone').value.trim() || undefined, parentesco: $('emergencyRelation').value.trim() || undefined },
+          body: { nombre: $('emergencyName').value.trim() || undefined, telefono: telefono || undefined, parentesco: $('emergencyRelation').value.trim() || undefined },
         }).then(function () { alertMessage('Contacto de emergencia actualizado.', 'success'); return loadProfile(); })
           .catch(function (error) { alertMessage(error.message); });
       });
