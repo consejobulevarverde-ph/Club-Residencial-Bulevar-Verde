@@ -395,10 +395,13 @@
             </div>
             <div class="col-md-6">
               <label class="form-label" for="contactPhone">Celular</label>
-              <input id="contactPhone" class="form-control" inputmode="tel">
+              <input id="contactPhone" class="form-control" inputmode="numeric">
             </div>
             <div class="col-12 d-grid d-md-flex justify-content-md-end">
               <button class="btn btn-primary" type="submit">Guardar contacto</button>
+            </div>
+            <div class="col-12">
+              <small class="text-muted">Déjalo en blanco para mantener el valor actual.</small>
             </div>
           </form>
         </div>
@@ -433,7 +436,7 @@
               </select>
             </div>
             <div class="col-md-6"><label class="form-label small">Correo</label><input id="resEmail" type="email" class="form-control form-control-sm"></div>
-            <div class="col-md-6"><label class="form-label small">Celular</label><input id="resPhone" class="form-control form-control-sm" inputmode="tel"></div>
+            <div class="col-md-6"><label class="form-label small">Celular</label><input id="resPhone" class="form-control form-control-sm" inputmode="numeric"></div>
             <div class="col-12 d-grid"><button class="btn btn-outline-success btn-sm" type="submit"><i class="bi bi-plus-lg"></i> Agregar residente</button></div>
           </form>
         </div>
@@ -630,7 +633,7 @@
                 </div>
                 <div class="col-md-6">
                   <label class="form-label" for="editResidentPhone">Celular</label>
-                  <input id="editResidentPhone" class="form-control" inputmode="tel">
+                  <input id="editResidentPhone" class="form-control" inputmode="numeric">
                 </div>
               </div>
             </div>
@@ -674,6 +677,23 @@
         return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
           return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character];
         });
+      }
+
+      var EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      function maskCorreo(correo) {
+        if (!correo) return '';
+        var at = correo.indexOf('@');
+        if (at <= 0) return '***';
+        return correo.slice(0, Math.min(3, at)) + '**********@' + correo.slice(at + 1);
+      }
+
+      function maskTelefono(telefono) {
+        if (!telefono) return '';
+        var digitos = telefono.replace(/\D/g, '');
+        if (digitos.length <= 5) return '*'.repeat(digitos.length);
+        var medio = digitos.length - 5;
+        return digitos.slice(0, 1) + '*'.repeat(medio) + digitos.slice(-4);
       }
 
       function alertMessage(message, type) {
@@ -1361,8 +1381,14 @@
 
         var propio = unit.vinculosPersona.find(function (v) { return v.persona.id === profile.autenticacion.personaId; });
         $('contactName').value = propio ? propio.persona.nombreCompleto : '';
-        $('contactEmail').value = (propio && propio.persona.correo) || '';
-        $('contactPhone').value = (propio && propio.persona.telefono) || '';
+        var correoActual = (propio && propio.persona.correo) || '';
+        var telefonoActual = (propio && propio.persona.telefono) || '';
+        $('contactEmail').value = '';
+        $('contactEmail').placeholder = correoActual ? maskCorreo(correoActual) : 'Correo electrónico';
+        $('contactEmail').dataset.original = correoActual;
+        $('contactPhone').value = '';
+        $('contactPhone').placeholder = telefonoActual ? maskTelefono(telefonoActual) : 'Celular';
+        $('contactPhone').dataset.original = telefonoActual;
 
         renderResidents(unit.vinculosPersona, propio ? propio.id : null);
         renderVehicles(unit.vinculosVehiculo);
@@ -1390,8 +1416,8 @@
                     '</div>') +
                 '</div>' +
                 (!esPropio
-                  ? '<div class="small-note"><i class="bi bi-envelope"></i> ' + esc(v.persona.correo || 'Sin correo') + '</div>' +
-                    '<div class="small-note"><i class="bi bi-telephone"></i> ' + esc(v.persona.telefono || 'Sin teléfono') + '</div>'
+                  ? '<div class="small-note"><i class="bi bi-envelope"></i> ' + esc(v.persona.correo ? maskCorreo(v.persona.correo) : 'Sin correo') + '</div>' +
+                    '<div class="small-note"><i class="bi bi-telephone"></i> ' + esc(v.persona.telefono ? maskTelefono(v.persona.telefono) : 'Sin teléfono') + '</div>'
                   : '') +
                 '</div>';
             }).join('')
@@ -1423,7 +1449,15 @@
       $('contactForm').addEventListener('submit', function (event) {
         event.preventDefault();
         clearAlert();
-        apiFetch('/contacto', { method: 'PATCH', body: { correo: $('contactEmail').value.trim() || undefined, telefono: $('contactPhone').value.trim() || undefined } })
+        var correoInput = $('contactEmail').value.trim();
+        var telefonoInput = $('contactPhone').value.trim();
+        if (correoInput && !EMAIL_REGEX.test(correoInput)) {
+          alertMessage('Ingresa un correo electrónico válido.');
+          return;
+        }
+        var correo = correoInput || $('contactEmail').dataset.original || undefined;
+        var telefono = telefonoInput || $('contactPhone').dataset.original || undefined;
+        apiFetch('/contacto', { method: 'PATCH', body: { correo: correo || undefined, telefono: telefono || undefined } })
           .then(function () { alertMessage('Contacto actualizado.', 'success'); return loadProfile(); })
           .catch(function (error) { alertMessage(error.message); });
       });
@@ -1436,6 +1470,12 @@
         var nombreCompleto = $('resNombre').value.trim();
         if (numeroDocumento.length < 4) { alertMessage('El número de documento debe tener al menos 4 caracteres.'); return; }
         if (nombreCompleto.length < 3) { alertMessage('Ingresa el nombre completo del residente.'); return; }
+
+        var correoInput = $('resEmail').value.trim();
+        if (correoInput && !EMAIL_REGEX.test(correoInput)) {
+          alertMessage('Ingresa un correo electrónico válido.');
+          return;
+        }
 
         var submitBtn = this.querySelector('button[type="submit"]');
         loading(submitBtn, true, 'Agregar residente');
@@ -1473,8 +1513,14 @@
           $('editResidentNumeroDocumento').value = vinculo.persona.numeroDocumento;
           $('editResidentName').value = vinculo.persona.nombreCompleto;
           $('editResidentRol').value = vinculo.tipoRelacion;
-          $('editResidentEmail').value = vinculo.persona.correo || '';
-          $('editResidentPhone').value = vinculo.persona.telefono || '';
+          var correoActualEdit = vinculo.persona.correo || '';
+          var telefonoActualEdit = vinculo.persona.telefono || '';
+          $('editResidentEmail').value = '';
+          $('editResidentEmail').placeholder = correoActualEdit ? maskCorreo(correoActualEdit) : 'Correo electrónico';
+          $('editResidentEmail').dataset.original = correoActualEdit;
+          $('editResidentPhone').value = '';
+          $('editResidentPhone').placeholder = telefonoActualEdit ? maskTelefono(telefonoActualEdit) : 'Celular';
+          $('editResidentPhone').dataset.original = telefonoActualEdit;
           $('editResidentForm').dataset.vinculoId = vinculo.id;
 
           var modal = new bootstrap.Modal($('editResidentModal'));
@@ -1496,9 +1542,18 @@
         if (numeroDocumento.length < 4) { alertMessage('El número de documento debe tener al menos 4 caracteres.'); return; }
         if (nombreCompleto.length < 3) { alertMessage('Ingresa el nombre completo del residente.'); return; }
 
+        var correoInput = $('editResidentEmail').value.trim();
+        if (correoInput && !EMAIL_REGEX.test(correoInput)) {
+          alertMessage('Ingresa un correo electrónico válido.');
+          return;
+        }
+
         var vinculoId = this.dataset.vinculoId;
         var submitBtn = this.querySelector('button[type="submit"]');
         loading(submitBtn, true, 'Guardar cambios');
+
+        var correo = correoInput || $('editResidentEmail').dataset.original || undefined;
+        var telefono = ($('editResidentPhone').value.trim() || $('editResidentPhone').dataset.original || undefined);
 
         apiFetch('/residentes/' + vinculoId, {
           method: 'PATCH',
@@ -1507,8 +1562,8 @@
             numeroDocumento: numeroDocumento,
             nombreCompleto: nombreCompleto,
             rol: $('editResidentRol').value,
-            correo: $('editResidentEmail').value.trim() || undefined,
-            telefono: $('editResidentPhone').value.trim() || undefined,
+            correo: correo || undefined,
+            telefono: telefono || undefined,
           }
         }).then(function () {
           alertMessage('Residente actualizado.', 'success');
@@ -1535,6 +1590,12 @@
         } else {
           statusIcon.style.display = 'none';
         }
+      });
+
+      ['contactPhone', 'resPhone', 'editResidentPhone'].forEach(function (id) {
+        $(id).addEventListener('input', function () {
+          this.value = this.value.replace(/\D/g, '');
+        });
       });
 
       $('addVehicleForm').addEventListener('submit', function (event) {
