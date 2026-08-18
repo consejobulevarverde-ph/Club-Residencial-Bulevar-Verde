@@ -272,6 +272,15 @@
             <div class="col-12 d-grid">
               <button id="continueUnitBtn" class="btn btn-primary btn-lg" type="submit">Continuar <i class="bi bi-arrow-right ms-2"></i></button>
             </div>
+            <div class="col-12">
+              <p class="small-note habeas-data-note mt-2 mb-0">
+                <i class="bi bi-shield-lock me-1"></i>
+                Al ingresar, registrar o modificar esta información aceptas nuestra política de tratamiento de datos personales (Ley 1581 de 2012).
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline habeas-data-trigger" data-bs-toggle="popover" data-bs-html="true" data-bs-placement="top" data-bs-title="Tratamiento de datos personales" data-bs-content="&lt;p&gt;En cumplimiento de la Ley 1581 de 2012 y el Decreto 1377 de 2013, el Club Residencial Bulevar Verde recolecta, almacena, usa, circula y suprime los datos personales que registras en este portal (información personal y de contacto, datos del grupo familiar y residentes, vehículos, mascotas y contactos de emergencia), con el fin de: garantizar la seguridad y el control de acceso a la copropiedad; informarte sobre eventos, novedades y situaciones de emergencia; gestionar comunicaciones administrativas; mantener actualizada la base de datos de residentes; y cumplir con las disposiciones legales aplicables a la propiedad horizontal.&lt;/p&gt;&lt;p&gt;Tus datos serán tratados de forma confidencial y segura. Tienes derecho a conocer, actualizar, rectificar y solicitar la supresión de tus datos personales, derechos que puedes ejercer escribiendo a &lt;a href=&quot;mailto:bulevarverdeadmon@gmail.com&quot;&gt;bulevarverdeadmon@gmail.com&lt;/a&gt; o en la oficina de administración, donde también puedes consultar la política de tratamiento de datos completa.&lt;/p&gt;">
+                  Ver detalle
+                </button>
+              </p>
+            </div>
           </form>
         </div>
       </div>
@@ -323,6 +332,14 @@
         </div>
         <button id="logoutBtn" type="button" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-right me-1"></i>Salir</button>
       </div>
+
+      <p class="small-note habeas-data-note mb-3">
+        <i class="bi bi-shield-lock me-1"></i>
+        Al ingresar, registrar o modificar esta información aceptas nuestra política de tratamiento de datos personales (Ley 1581 de 2012).
+        <button type="button" class="btn btn-link btn-sm p-0 align-baseline habeas-data-trigger" data-bs-toggle="popover" data-bs-html="true" data-bs-placement="top" data-bs-title="Tratamiento de datos personales" data-bs-content="&lt;p&gt;En cumplimiento de la Ley 1581 de 2012 y el Decreto 1377 de 2013, el Club Residencial Bulevar Verde recolecta, almacena, usa, circula y suprime los datos personales que registras en este portal (información personal y de contacto, datos del grupo familiar y residentes, vehículos, mascotas y contactos de emergencia), con el fin de: garantizar la seguridad y el control de acceso a la copropiedad; informarte sobre eventos, novedades y situaciones de emergencia; gestionar comunicaciones administrativas; mantener actualizada la base de datos de residentes; y cumplir con las disposiciones legales aplicables a la propiedad horizontal.&lt;/p&gt;&lt;p&gt;Tus datos serán tratados de forma confidencial y segura. Tienes derecho a conocer, actualizar, rectificar y solicitar la supresión de tus datos personales, derechos que puedes ejercer escribiendo a &lt;a href=&quot;mailto:bulevarverdeadmon@gmail.com&quot;&gt;bulevarverdeadmon@gmail.com&lt;/a&gt; o en la oficina de administración, donde también puedes consultar la política de tratamiento de datos completa.&lt;/p&gt;">
+          Ver detalle
+        </button>
+      </p>
 
       <div class="surface p-3 mb-4">
         <ul class="nav nav-pills gap-2" id="profileTabs">
@@ -648,6 +665,10 @@
       var sancionesCargadas = false;
       var currentSancion = null;
       var sancionEvidenciasAportadas = [];
+
+      [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]')).forEach(function (el) {
+        new bootstrap.Popover(el, { trigger: 'focus' });
+      });
 
       function esc(value) {
         return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
