@@ -133,6 +133,9 @@
           <button id="showVehicleRegistration" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-car-front me-1"></i>+ Vehículo
           </button>
+          <button id="showConvivencia" type="button" class="btn btn-outline-success mode-button">
+            <i class="bi bi-exclamation-circle me-1"></i>Registrar Caso
+          </button>
         </div>
       </div>
 
@@ -381,6 +384,10 @@
 
         <div id="vehicleRegistrationResult" class="mt-4"></div>
       </section>
+
+      <section id="convivenciaView" class="hidden">
+        {{ partial "convivencia-form.html" . }}
+      </section>
     </section>
   </main>
 
@@ -439,17 +446,22 @@
       function mode(name) {
         var registration = name === 'registration';
         var vehicle = name === 'vehicle';
-        $('searchView').classList.toggle('hidden', registration || vehicle);
+        var convivencia = name === 'convivencia';
+        $('searchView').classList.toggle('hidden', registration || vehicle || convivencia);
         $('registrationView').classList.toggle('hidden', !registration);
         $('vehicleRegistrationView').classList.toggle('hidden', !vehicle);
-        $('showSearch').classList.toggle('active', !registration && !vehicle);
+        $('convivenciaView').classList.toggle('hidden', !convivencia);
+        $('showSearch').classList.toggle('active', !registration && !vehicle && !convivencia);
         $('showRegistration').classList.toggle('active', registration);
         $('showVehicleRegistration').classList.toggle('active', vehicle);
+        $('showConvivencia').classList.toggle('active', convivencia);
 
         if (registration) {
           $('newApartment').focus();
         } else if (vehicle) {
           $('vehApartment').focus();
+        } else if (convivencia) {
+          $('convivenciaApto').focus();
         } else {
           $('query').focus();
         }
@@ -463,6 +475,7 @@
       $('showSearch').addEventListener('click', function () { mode('search'); });
       $('showRegistration').addEventListener('click', function () { mode('registration'); });
       $('showVehicleRegistration').addEventListener('click', function () { mode('vehicle'); });
+      $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
 
       function apiFetch(path, idToken, options) {
         options = options || {};

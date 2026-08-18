@@ -1,0 +1,317 @@
+<style>
+  .convivencia-panel .cv-section-title {
+    color: var(--p, #2c5f2d);
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    font-size: 1.3rem;
+    border-bottom: 3px solid var(--s, #4a8c4b);
+    padding-bottom: 0.5rem;
+  }
+
+  .convivencia-panel .cv-category-badge,
+  .convivencia-panel .cv-severity-badge {
+    display: inline-block;
+    background: var(--l, #e8f5e9);
+    border: 2px solid var(--p, #2c5f2d);
+    color: var(--p, #2c5f2d);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    margin: 0.25rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+
+  .convivencia-panel .cv-category-badge:hover,
+  .convivencia-panel .cv-severity-badge:hover {
+    background: var(--p, #2c5f2d);
+    color: #fff;
+  }
+
+  .convivencia-panel .cv-category-badge.selected,
+  .convivencia-panel .cv-severity-badge.selected {
+    background: var(--p, #2c5f2d);
+    color: #fff;
+  }
+
+  .convivencia-panel .cv-info-badge {
+    background: #e2e3e5;
+    color: #383d41;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    display: inline-block;
+  }
+
+  .convivencia-panel .cv-step-indicator {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .convivencia-panel .cv-step {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .convivencia-panel .cv-step-number {
+    background: var(--p, #2c5f2d);
+    color: #fff;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+
+  .convivencia-panel .cv-step.completed .cv-step-number {
+    background: #28a745;
+  }
+
+  .convivencia-panel .cv-success-message {
+    background: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .convivencia-panel .cv-form-section {
+    background: #fff;
+    border: 1px solid var(--b, #d8e6d9);
+    border-radius: 0.5rem;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(44, 95, 45, 0.08);
+  }
+
+  .convivencia-panel .cv-btn-primary {
+    background: var(--p, #2c5f2d) !important;
+    border-color: var(--p, #2c5f2d) !important;
+    font-weight: 600;
+  }
+
+  .convivencia-panel .cv-btn-primary:hover {
+    background: var(--s, #4a8c4b) !important;
+  }
+
+  .convivencia-panel .cv-form-label {
+    font-weight: 600;
+    color: var(--p, #2c5f2d);
+  }
+
+  .convivencia-panel .cv-form-control:focus,
+  .convivencia-panel .cv-form-select:focus {
+    border-color: var(--s, #4a8c4b);
+    box-shadow: 0 0 0 0.2rem rgba(74, 140, 75, 0.25);
+  }
+
+  .convivencia-panel .card {
+    border: 1px solid var(--b, #d8e6d9);
+    box-shadow: 0 2px 8px rgba(44, 95, 45, 0.08);
+  }
+
+  .convivencia-panel .alert-info {
+    background: #d1ecf1;
+    border-color: #bee5eb;
+    color: #0c5460;
+  }
+
+  .convivencia-panel .hidden {
+    display: none !important;
+  }
+</style>
+
+<div class="convivencia-panel">
+  <div id="convivenciaAlert" class="alert hidden" role="alert"></div>
+
+  <div class="cv-success-message hidden" id="convivenciaSuccessMessage">
+    <i class="bi bi-check-circle me-2"></i>
+    <strong>Caso creado exitosamente</strong>
+    <p class="mb-0 mt-2">ID: <code id="convivenciaSuccessCaseId"></code></p>
+  </div>
+
+  <div class="cv-step-indicator">
+    <div class="cv-step" id="convivenciaStep1"><div class="cv-step-number">1</div><span>Datos Básicos</span></div>
+    <div class="cv-step" id="convivenciaStep2"><div class="cv-step-number">2</div><span>Motivo</span></div>
+    <div class="cv-step" id="convivenciaStep3"><div class="cv-step-number">3</div><span>Descripción</span></div>
+    <div class="cv-step" id="convivenciaStep4"><div class="cv-step-number">4</div><span>Confirmación</span></div>
+  </div>
+
+  <form id="convivenciaCasoForm" class="cv-form-section">
+    <!-- PASO 1: Datos Básicos -->
+    <div id="convivenciaPaso1">
+      <h2 class="cv-section-title"><i class="bi bi-1-circle-fill me-2"></i>Datos Básicos del Caso</h2>
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label cv-form-label" for="convivenciaApto"><i class="bi bi-house-door me-1"></i>Apartamento</label>
+          <input id="convivenciaApto" type="text" class="form-control cv-form-control" placeholder="Ej: 101, 205, 1015" required>
+          <small class="text-muted">Número del apartamento afectado</small>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label cv-form-label" for="convivenciaNotificador"><i class="bi bi-person-badge me-1"></i>Notificador (Tu Nombre)</label>
+          <input id="convivenciaNotificador" type="text" class="form-control cv-form-control" placeholder="Nombre de quien registra" required>
+          <small class="text-muted">Quién está registrando este caso</small>
+        </div>
+      </div>
+      <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Debido Proceso:</strong> El residente recibirá notificación de este caso y podrá aportar sus descargos.
+      </div>
+      <button type="button" class="btn btn-primary cv-btn-primary" id="convivenciaSiguiente1">
+        Siguiente <i class="bi bi-arrow-right ms-2"></i>
+      </button>
+    </div>
+
+    <!-- PASO 2: Motivo y Severidad -->
+    <div id="convivenciaPaso2" class="hidden">
+      <h2 class="cv-section-title"><i class="bi bi-2-circle-fill me-2"></i>Motivo y Severidad</h2>
+      <div class="mb-4">
+        <p class="mb-3"><strong>1. Selecciona la categoría principal:</strong></p>
+        <div id="convivenciaCategoriasContainer" class="mb-3"></div>
+        <small class="text-muted d-block mb-3">
+          <i class="bi bi-info-circle me-1"></i>Si la categoría no existe, puedes escribir un motivo personalizado
+        </small>
+        <div class="mb-3">
+          <label class="form-label cv-form-label" for="convivenciaMotivoCustom">O especifica un motivo personalizado:</label>
+          <input id="convivenciaMotivoCustom" type="text" class="form-control cv-form-control" placeholder="Ej: Ruido a las 3 AM">
+          <small class="text-muted">Si seleccionaste una categoría, este campo es opcional</small>
+        </div>
+      </div>
+      <hr>
+      <div class="mb-4">
+        <p class="mb-3"><strong>2. Selecciona la severidad:</strong></p>
+        <div id="convivenciaSeveridadContainer" class="mb-3"></div>
+        <input type="hidden" id="convivenciaSeveridadValue">
+        <div id="convivenciaCuotasInfo" class="cv-info-badge">Selecciona una severidad</div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary" id="convivenciaAnterior2">
+          <i class="bi bi-arrow-left me-2"></i>Anterior
+        </button>
+        <button type="button" class="btn btn-primary cv-btn-primary" id="convivenciaSiguiente2">
+          Siguiente <i class="bi bi-arrow-right ms-2"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- PASO 3: Descripción -->
+    <div id="convivenciaPaso3" class="hidden">
+      <h2 class="cv-section-title"><i class="bi bi-3-circle-fill me-2"></i>Descripción y Evidencias</h2>
+      <div class="mb-3">
+        <label class="form-label cv-form-label" for="convivenciaDescripcion">
+          <i class="bi bi-chat-left-text me-1"></i>Descripción de los hechos
+          <small class="text-muted">(máximo 1000 caracteres)</small>
+        </label>
+        <textarea id="convivenciaDescripcion" class="form-control cv-form-control" rows="4" maxlength="1000"
+          placeholder="Describe con detalle lo ocurrido, fecha, hora y testigos si aplica..." required></textarea>
+        <small class="text-muted d-block mt-1">
+          <span id="convivenciaDescCount">0</span>/1000 caracteres
+        </small>
+      </div>
+      <div class="mb-3">
+        <label class="form-label cv-form-label" for="convivenciaRazonNotificacion">
+          <i class="bi bi-exclamation-triangle me-1"></i>Justificación de la notificación
+          <small class="text-muted">(por qué se le notifica)</small>
+        </label>
+        <textarea id="convivenciaRazonNotificacion" class="form-control cv-form-control" rows="3" maxlength="1000"
+          placeholder="Explica por qué se le está notificando (norma presuntamente incumplida, afectación o motivo del llamado)." required></textarea>
+        <small class="text-muted d-block mt-1">Información sobre debido proceso y posibilidad de descargos</small>
+      </div>
+      <div class="mb-3">
+        <label class="form-label cv-form-label">Evidencias (Fotos, Videos, etc.)</label>
+        <div class="mb-2">
+          <small class="text-muted d-block mb-2">
+            <i class="bi bi-camera me-1"></i>Toma una foto o selecciona de la galería
+          </small>
+          <div class="d-flex gap-2 mb-3">
+            <button type="button" class="btn btn-outline-secondary" id="convivenciaOpenCameraBtn">
+              <i class="bi bi-camera me-1"></i>Cámara
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="convivenciaOpenGalleryBtn">
+              <i class="bi bi-image me-1"></i>Galería
+            </button>
+          </div>
+          <input type="file" id="convivenciaGalleryInput" accept="image/*" style="display: none;">
+        </div>
+        <div id="convivenciaEvidenciasList" class="mb-3">
+          <small class="text-muted d-block">Ninguna evidencia seleccionada</small>
+        </div>
+        <div id="convivenciaUploadStatus"></div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary" id="convivenciaAnterior3">
+          <i class="bi bi-arrow-left me-2"></i>Anterior
+        </button>
+        <button type="button" class="btn btn-primary cv-btn-primary" id="convivenciaSiguiente3">
+          Siguiente <i class="bi bi-arrow-right ms-2"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- PASO 4: Confirmación -->
+    <div id="convivenciaPaso4" class="hidden">
+      <h2 class="cv-section-title"><i class="bi bi-4-circle-fill me-2"></i>Revisar y Confirmar</h2>
+      <div class="card mb-3">
+        <div class="card-header bg-light"><h5 class="mb-0">Datos del Caso</h5></div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <p><strong>Apartamento:</strong> <span id="convivenciaReviewApto"></span></p>
+              <p><strong>Notificador:</strong> <span id="convivenciaReviewNotificador"></span></p>
+              <p><strong>Motivo:</strong> <span id="convivenciaReviewMotivo"></span></p>
+            </div>
+            <div class="col-md-6">
+              <p><strong>Severidad:</strong> <span id="convivenciaReviewSeveridad"></span></p>
+              <p><strong>Fecha de Registro:</strong> <span id="convivenciaReviewFecha"></span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card mb-3">
+        <div class="card-header bg-light"><h5 class="mb-0">Descripción</h5></div>
+        <div class="card-body">
+          <p id="convivenciaReviewDescripcion"></p>
+          <div class="cv-info-badge"><i class="bi bi-info-circle me-1"></i><span id="convivenciaCharCountReview"></span> caracteres</div>
+        </div>
+      </div>
+      <div class="card mb-3">
+        <div class="card-header bg-light"><h5 class="mb-0">Justificación</h5></div>
+        <div class="card-body"><p id="convivenciaReviewRazon"></p></div>
+      </div>
+      <div id="convivenciaReviewEvidenciasSection" class="card mb-3 hidden">
+        <div class="card-header bg-light"><h5 class="mb-0"><i class="bi bi-image me-1"></i>Evidencias</h5></div>
+        <div class="card-body"><div id="convivenciaReviewEvidencias"></div></div>
+      </div>
+      <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Confirmación:</strong> Al guardar, se creará el caso y se notificará al residente.
+        El residente podrá consultar y aportar sus descargos.
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary" id="convivenciaAnterior4">
+          <i class="bi bi-arrow-left me-2"></i>Anterior
+        </button>
+        <button type="submit" class="btn btn-primary cv-btn-primary" id="convivenciaSubmitBtn">
+          <i class="bi bi-check-circle me-2"></i>Crear Caso
+        </button>
+        <span id="convivenciaSubmitStatus" class="ms-2"></span>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script src="{{ "js/evidence-camera.js" | relURL }}?v=20260813-1"></script>
+<script>
+  window.CONVIVENCIA_FORM_CONFIG = {
+    apiUrl: {{ .Site.Params.sancionesWebAppUrl | default "" | jsonify | safeJS }}
+  };
+</script>
+<script src="{{ "js/convivencia-form.js" | relURL }}?v=1"></script>
