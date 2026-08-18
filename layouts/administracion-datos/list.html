@@ -63,6 +63,26 @@
     .sticky-panel {
       top: 1rem;
     }
+
+    .accordion-button {
+      font-weight: 600;
+      color: var(--p);
+    }
+
+    .accordion-button:not(.collapsed) {
+      background: var(--l);
+      color: var(--p);
+      box-shadow: none;
+    }
+
+    .accordion-button:focus {
+      box-shadow: 0 0 0 2px var(--b);
+      border-color: var(--p);
+    }
+
+    .accordion-item {
+      border-color: var(--b);
+    }
   </style>
 </head>
 
@@ -398,6 +418,7 @@
           return '<li class="mb-1">' + esc(v.persona.nombreCompleto) + ' — ' + esc(v.tipoRelacion) +
             ' (' + esc(v.persona.tipoDocumento) + ' ' + esc(v.persona.numeroDocumento) + ')' +
             (v.persona.correo ? ' · ' + esc(v.persona.correo) : '') +
+            (v.persona.telefono ? ' · ' + esc(v.persona.telefono) : '') +
             (v.activo
               ? ' <button type="button" class="btn btn-outline-danger btn-sm ms-2 retirar-propietario" data-vinculo-id="' + esc(v.id) + '">Retirar</button>'
               : ' <span class="badge text-bg-secondary">retirado</span>') +
@@ -413,10 +434,27 @@
           return '<li>' + esc(p.codigo) + ' — ' + esc(p.tipoParqueadero || '') + '</li>';
         }).join('') || '<li class="text-muted">Sin registros.</li>';
 
+        var mascotas = (perfil.mascotas || []).map(function (m) {
+          return '<li>' + esc(m.nombre || 'Mascota') + (m.especie ? ' — ' + esc(m.especie) : '') + (m.raza ? ' (' + esc(m.raza) + ')' : '') + '</li>';
+        }).join('') || '<li class="text-muted">Sin registros.</li>';
+
+        var emergencia = (perfil.emergencia || []).map(function (e) {
+          return '<li>' + esc(e.nombre || '') + (e.parentesco ? ' — ' + esc(e.parentesco) : '') + (e.telefono ? ' · ' + esc(e.telefono) : '') + '</li>';
+        }).join('') || '<li class="text-muted">Sin registros.</li>';
+
         var hc = perfil.historialCartera && perfil.historialCartera[0];
         var estadoCuenta = hc
           ? esc(hc.estadoCuenta || '') + ' · Saldo: ' + esc(hc.saldoActual || '')
           : 'Sin información.';
+
+        function accordionItem(id, title, body, expanded) {
+          return '<div class="accordion-item">' +
+            '<h2 class="accordion-header">' +
+            '<button class="accordion-button' + (expanded ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + id + '">' +
+            title + '</button></h2>' +
+            '<div id="' + id + '" class="accordion-collapse collapse' + (expanded ? ' show' : '') + '">' +
+            '<div class="accordion-body p-3">' + body + '</div></div></div>';
+        }
 
         $('profile').innerHTML =
           '<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">' +
@@ -424,44 +462,47 @@
           '<span class="badge text-bg-success">' + esc(perfil.estadoUnidad) + '</span>' +
           '</div>' +
 
-          '<h5 class="section-title">Editar unidad</h5>' +
-          '<form id="editUnidadForm" class="row g-2 align-items-end mb-4">' +
-          '<div class="col-md-5"><label class="form-label small">Estado</label>' +
-          '<select id="editEstadoUnidad" class="form-select form-select-sm">' +
-          ['NO_ENTREGADA', 'ENTREGADA'].map(function (estado) {
-            return '<option value="' + estado + '"' + (estado === perfil.estadoUnidad ? ' selected' : '') + '>' + estado + '</option>';
-          }).join('') +
-          '</select></div>' +
-          '<div class="col-md-5"><label class="form-label small">Fecha de entrega</label>' +
-          '<input id="editFechaEntrega" type="date" class="form-control form-control-sm" value="' + esc((perfil.fechaEntrega || '').slice(0, 10)) + '"></div>' +
-          '<div class="col-md-2 d-grid"><button type="submit" class="btn btn-primary btn-sm">Guardar</button></div>' +
-          '</form>' +
+          '<div class="accordion">' +
+          accordionItem('collapse-editar', 'Datos de la unidad',
+            '<form id="editUnidadForm" class="row g-2 align-items-end">' +
+            '<div class="col-md-5"><label class="form-label small">Estado</label>' +
+            '<select id="editEstadoUnidad" class="form-select form-select-sm">' +
+            ['NO_ENTREGADA', 'ENTREGADA'].map(function (estado) {
+              return '<option value="' + estado + '"' + (estado === perfil.estadoUnidad ? ' selected' : '') + '>' + estado + '</option>';
+            }).join('') +
+            '</select></div>' +
+            '<div class="col-md-5"><label class="form-label small">Fecha de entrega</label>' +
+            '<input id="editFechaEntrega" type="date" class="form-control form-control-sm" value="' + esc((perfil.fechaEntrega || '').slice(0, 10)) + '"></div>' +
+            '<div class="col-md-2 d-grid"><button type="submit" class="btn btn-primary btn-sm">Guardar</button></div>' +
+            '</form>', false) +
 
-          '<h5 class="section-title">Propietarios y residentes</h5>' +
-          '<ul>' + propietarios + '</ul>' +
+          accordionItem('collapse-propietarios', 'Propietarios y residentes',
+            '<ul>' + propietarios + '</ul>' +
+            '<form id="addPropietarioForm" class="row g-2 align-items-end border-top pt-3 mt-3">' +
+            '<div class="col-md-2"><label class="form-label small">Tipo doc.</label>' +
+            '<input id="addTipoDocumento" class="form-control form-control-sm" value="CC" required></div>' +
+            '<div class="col-md-3"><label class="form-label small">Número doc.</label>' +
+            '<input id="addNumeroDocumento" class="form-control form-control-sm" required></div>' +
+            '<div class="col-md-4"><label class="form-label small">Nombre completo</label>' +
+            '<input id="addNombreCompleto" class="form-control form-control-sm" required></div>' +
+            '<div class="col-md-3"><label class="form-label small">Relación</label>' +
+            '<select id="addTipoRelacion" class="form-select form-select-sm">' +
+            '<option value="PROPIETARIO">PROPIETARIO</option>' +
+            '<option value="RESIDENTE">RESIDENTE</option>' +
+            '</select></div>' +
+            '<div class="col-md-4"><label class="form-label small">Correo (opcional)</label>' +
+            '<input id="addCorreo" type="email" class="form-control form-control-sm"></div>' +
+            '<div class="col-md-3"><label class="form-label small">Teléfono (opcional)</label>' +
+            '<input id="addTelefono" class="form-control form-control-sm"></div>' +
+            '<div class="col-md-3 d-grid"><button type="submit" class="btn btn-outline-success btn-sm">Agregar</button></div>' +
+            '</form>', true) +
 
-          '<form id="addPropietarioForm" class="row g-2 align-items-end border-top pt-3 mb-4">' +
-          '<div class="col-md-2"><label class="form-label small">Tipo doc.</label>' +
-          '<input id="addTipoDocumento" class="form-control form-control-sm" value="CC" required></div>' +
-          '<div class="col-md-3"><label class="form-label small">Número doc.</label>' +
-          '<input id="addNumeroDocumento" class="form-control form-control-sm" required></div>' +
-          '<div class="col-md-4"><label class="form-label small">Nombre completo</label>' +
-          '<input id="addNombreCompleto" class="form-control form-control-sm" required></div>' +
-          '<div class="col-md-3"><label class="form-label small">Relación</label>' +
-          '<select id="addTipoRelacion" class="form-select form-select-sm">' +
-          '<option value="PROPIETARIO">PROPIETARIO</option>' +
-          '<option value="RESIDENTE">RESIDENTE</option>' +
-          '</select></div>' +
-          '<div class="col-md-4"><label class="form-label small">Correo (opcional)</label>' +
-          '<input id="addCorreo" type="email" class="form-control form-control-sm"></div>' +
-          '<div class="col-md-3"><label class="form-label small">Teléfono (opcional)</label>' +
-          '<input id="addTelefono" class="form-control form-control-sm"></div>' +
-          '<div class="col-md-3 d-grid"><button type="submit" class="btn btn-outline-success btn-sm">Agregar</button></div>' +
-          '</form>' +
-
-          '<h5 class="section-title">Vehículos</h5><ul>' + vehiculos + '</ul>' +
-          '<h5 class="section-title">Parqueaderos</h5><ul>' + parqueaderos + '</ul>' +
-          '<h5 class="section-title">Estado de cuenta</h5><p>' + estadoCuenta + '</p>';
+          accordionItem('collapse-vehiculos', 'Vehículos', '<ul>' + vehiculos + '</ul>', false) +
+          accordionItem('collapse-parqueaderos', 'Parqueaderos', '<ul>' + parqueaderos + '</ul>', false) +
+          accordionItem('collapse-mascotas', 'Mascotas', '<ul>' + mascotas + '</ul>', false) +
+          accordionItem('collapse-emergencia', 'Contacto de emergencia', '<ul>' + emergencia + '</ul>', false) +
+          accordionItem('collapse-cuenta', 'Estado de cuenta', '<p>' + estadoCuenta + '</p>', false) +
+          '</div>';
       }
 
       $('profile').addEventListener('submit', function (event) {

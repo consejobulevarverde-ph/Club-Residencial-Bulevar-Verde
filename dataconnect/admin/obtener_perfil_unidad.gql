@@ -54,6 +54,18 @@ query ObtenerPerfilUnidad(
       torre
       activo
     }
+    mascotas: mascotas_on_unidad(where: { activo: { eq: true } }) {
+      id
+      nombre
+      especie
+      raza
+    }
+    emergencia: contactos_emergencia_on_unidad(where: { activo: { eq: true } }) {
+      id
+      nombre
+      parentesco
+      telefono
+    }
     historialCartera: historial_carteras_on_unidad(orderBy: { periodo: DESC }, limit: 1) {
       id
       periodo
