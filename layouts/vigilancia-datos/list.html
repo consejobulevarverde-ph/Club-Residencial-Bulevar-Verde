@@ -60,6 +60,16 @@
       border-left: 6px solid var(--p);
     }
 
+    .unit-card.cartera-mora {
+      background: #fdecea;
+      border-left-color: #dc3545;
+    }
+
+    .cartera-alerta {
+      color: #c62828;
+      font-weight: 700;
+    }
+
     .plate {
       font-family: ui-monospace, monospace;
       font-size: 1.2rem;
@@ -160,7 +170,7 @@
           </form>
           <p class="small-note mt-2 mb-0">
             <i class="bi bi-eye-slash me-1"></i>
-            Esta vista no muestra correos, documentos, coeficientes ni estado de cuenta.
+            Esta vista no muestra correos, documentos ni coeficientes. Solo se muestra el estado general de cartera, sin montos.
           </p>
         </div>
         <div id="results"></div>
@@ -625,15 +635,33 @@
         });
       });
 
+      function formatEstadoCartera(estadoCuenta) {
+        if (!estadoCuenta) return 'SIN INFORMACIÓN';
+        var mapeo = {
+          'AL_DIA': 'AL DÍA',
+          'EN_MORA': 'EN MORA',
+          'SALDO_A_FAVOR': 'SALDO A FAVOR',
+          'PENDIENTE_VALIDACION': 'PENDIENTE VALIDACIÓN'
+        };
+        return mapeo[estadoCuenta] || estadoCuenta.replace(/_/g, ' ');
+      }
+
       function render(items) {
         $('results').innerHTML = items.length
           ? items.map(function (unit) {
+              var estadoCartera = unit.historialCartera && unit.historialCartera[0] && unit.historialCartera[0].estadoCuenta;
+              var alDia = estadoCartera === 'AL_DIA';
+              var textoCartera = formatEstadoCartera(estadoCartera);
+              var cartaClase = alDia ? '' : ' cartera-mora';
+
               return (
-                '<article class="surface unit-card p-4 mb-3">' +
+                '<article class="surface unit-card' + cartaClase + ' p-4 mb-3">' +
                 '<div class="d-flex flex-wrap justify-content-between align-items-start gap-2">' +
                 '<div>' +
                 '<h3 class="section-title h4 mb-1">' + esc(unit.codigoOficial) + '</h3>' +
-                '<div class="small-note">Estado: ' + esc(unit.estadoUnidad || '') + '</div>' +
+                '<div class="small-note">Estado: ' + esc(unit.estadoUnidad || '') +
+                (estadoCartera ? ' · Cartera: <span class="' + (alDia ? '' : 'cartera-alerta') + '">' + esc(textoCartera) + '</span>' : '') +
+                '</div>' +
                 '</div>' +
                 '<button type="button" class="btn btn-sm btn-outline-success register-unit" data-apartment="' +
                 esc((unit.codigoOficial || '').split('-')[0]) + '">' +

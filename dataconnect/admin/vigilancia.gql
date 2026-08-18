@@ -1,7 +1,8 @@
 # Operaciones para el rol vigilancia: búsqueda y perfil restringidos
-# (sin correo, documento, coeficiente ni estado de cuenta) y registro
-# de residente principal, equivalente a "buscarVigilancia" y
-# "registrarResidenteVigilancia" de Apps Script.
+# (sin correo, documento ni coeficiente) y registro de residente principal.
+# Se expone el estado general de cartera (sin montos) para que vigilancia
+# pueda detectar si una unidad está al día. Equivalente a "buscarVigilancia"
+# y "registrarResidenteVigilancia" de Apps Script.
 
 query BuscarVigilancia(
   $termino: String!
@@ -68,6 +69,9 @@ query ObtenerPerfilVigilancia(
       nombre
       parentesco
       telefono
+    }
+    historialCartera: historial_carteras_on_unidad(orderBy: { periodo: DESC }, limit: 1) {
+      estadoCuenta
     }
   }
 }
