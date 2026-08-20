@@ -132,6 +132,27 @@
 <div class="convivencia-panel">
   <div id="convivenciaAlert" class="alert hidden" role="alert"></div>
 
+  <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+    <div>
+      <span class="text-muted">Red:</span>
+      <span id="convivenciaNetworkStatus" class="fw-semibold">Verificando…</span>
+    </div>
+    <div>
+      <span class="text-muted">En cola:</span>
+      <span id="convivenciaQueueCount" class="badge text-bg-warning">0</span>
+      <button id="convivenciaRetryBtn" type="button" class="btn btn-sm btn-outline-primary ms-2" hidden>
+        <i class="bi bi-arrow-repeat"></i> Intentar enviar
+      </button>
+    </div>
+  </div>
+
+  <div id="convivenciaQueueStatus" class="alert alert-info" hidden role="status" aria-live="polite"></div>
+
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>
+    <small><strong>Offline resilience:</strong> El caso no se pierde: si no hay conexión, queda guardado en este dispositivo y se reintenta automáticamente.</small>
+  </div>
+
   <div class="cv-success-message hidden" id="convivenciaSuccessMessage">
     <i class="bi bi-check-circle me-2"></i>
     <strong>Caso creado exitosamente</strong>
@@ -314,4 +335,4 @@
     apiUrl: {{ .Site.Params.sancionesWebAppUrl | default "" | jsonify | safeJS }}
   };
 </script>
-<script src="{{ "js/convivencia-form.js" | relURL }}?v=1"></script>
+<script src="{{ "js/convivencia-form.js" | relURL }}?v=2"></script>

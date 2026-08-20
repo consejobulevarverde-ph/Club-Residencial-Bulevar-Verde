@@ -10,7 +10,28 @@
   var motivoSeleccionado = '';
   var severidadSeleccionada = '';
 
+  var DB_NAME = 'bulevar-verde-convivencia';
+  var DB_VERSION = 1;
+  var STORE_NAME = 'casosQueue';
+  var CONFIG_CACHE_KEY = 'bv-convivencia-config-cache';
+  var LOG_PREFIX = '[BV:Convivencia]';
+
+  var flushInProgress = false;
+  var queuedFlushRequest = null;
+
+  var elements = {};
+
   var $ = function (id) { return document.getElementById(id); };
+
+  function log(level, message, details) {
+    var method = console[level] ? level : 'log';
+    var timestamp = new Date().toISOString();
+    if (typeof details === 'undefined') {
+      console[method](LOG_PREFIX, timestamp, message);
+      return;
+    }
+    console[method](LOG_PREFIX, timestamp, message, details);
+  }
 
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
@@ -32,8 +53,63 @@
     if (alertEl) alertEl.classList.add('hidden');
   }
 
+  function showStatus(type, message) {
+    var statusEl = $('convivenciaQueueStatus');
+    if (!statusEl) return;
+    statusEl.hidden = false;
+    statusEl.className = 'alert alert-' + type;
+    statusEl.textContent = message;
+
+    global.setTimeout(function () {
+      refreshQueueCount();
+    }, 12000);
+  }
+
+  function renderNetworkStatus() {
+    var network = $('convivenciaNetworkStatus');
+    if (!network) return;
+
+    var text = navigator.onLine ? 'Con conexión' : 'Sin conexión';
+    var className = navigator.onLine ? 'text-success' : 'text-warning';
+    var connection = navigator.connection ||
+      navigator.mozConnection ||
+      navigator.webkitConnection;
+
+    if (navigator.onLine && connection && connection.effectiveType) {
+      text += ' · ' + connection.effectiveType.toUpperCase();
+    }
+
+    network.textContent = text;
+    network.className = className + ' fw-semibold';
+  }
+
+  async function refreshQueueCount() {
+    var items = await getQueueItems();
+    var count = items.length;
+
+    var queueEl = $('convivenciaQueueCount');
+    if (queueEl) queueEl.textContent = String(count);
+
+    var retryBtn = $('convivenciaRetryBtn');
+    if (retryBtn) retryBtn.hidden = count === 0;
+
+    var statusEl = $('convivenciaQueueStatus');
+    if (statusEl && count > 0) {
+      statusEl.hidden = false;
+      statusEl.className = 'alert alert-warning';
+      statusEl.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> ' +
+        '<strong>' + count + '</strong> caso(s) pendiente(s) de envío. ' +
+        'La información permanece guardada en este dispositivo.';
+    } else if (statusEl && (!statusEl.dataset.persistent)) {
+      statusEl.hidden = true;
+    }
+  }
+
   var form = $('convivenciaCasoForm');
-  if (!form) return;
+  if (!form) {
+    log('warn', 'Formulario no encontrado; módulo no se inició.');
+    return;
+  }
 
   form.addEventListener('submit', guardarCaso);
 
@@ -54,12 +130,38 @@
       if (data.ok) {
         categorias = data.categorias || [];
         severidades = data.severidades || [];
+        var cacheData = {
+          categorias: categorias,
+          severidades: severidades,
+          cachedAt: new Date().toISOString()
+        };
+        try {
+          localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(cacheData));
+        } catch (e) {
+          log('warn', 'No fue posible cachear configuración en localStorage', e);
+        }
         cargarCategorias();
         cargarSeveridades();
       }
     } catch (error) {
-      console.error('Error cargando configuración:', error);
-      showAlert('No se pudo cargar la configuración');
+      log('error', 'Error cargando configuración:', error);
+      var cached = null;
+      try {
+        cached = JSON.parse(localStorage.getItem(CONFIG_CACHE_KEY) || 'null');
+      } catch (e) {
+        log('warn', 'No fue posible leer caché de configuración', e);
+      }
+
+      if (cached) {
+        log('info', 'Usando configuración cacheada');
+        categorias = cached.categorias || [];
+        severidades = cached.severidades || [];
+        cargarCategorias();
+        cargarSeveridades();
+        showAlert('Se está usando una copia guardada de la configuración (puede no estar actualizada)', 'warning');
+      } else {
+        showAlert('No se pudo cargar la configuración');
+      }
     }
   }
 
@@ -191,78 +293,250 @@
 
     try {
       var btn = $('convivenciaSubmitBtn');
-      var status = $('convivenciaSubmitStatus');
       if (btn) btn.disabled = true;
-      if (status) status.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Subiendo evidencias...';
 
-      var evidenceUrls = [];
-      for (var i = 0; i < evidencias.length; i++) {
-        var evidence = evidencias[i];
-        if (status) status.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Subiendo evidencia ' + (i + 1) + '/' + evidencias.length + '...';
-
-        try {
-          var uploadResult = await uploadEvidenceToGoogle(evidence);
-          if (uploadResult.ok) {
-            evidenceUrls.push(uploadResult.url);
-          }
-        } catch (uploadError) {
-          console.warn('Error subiendo evidencia:', uploadError);
-        }
-      }
-
-      if (status) status.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creando caso...';
-
-      var caseData = {
+      var caso = {
+        clientRequestId: createRequestId(),
+        reportedAt: new Date().toISOString(),
+        queuedAt: new Date().toISOString(),
+        attempts: 0,
         apto: apto ? apto.value.trim() : '',
         motivo: motivoSeleccionado || (motivo ? motivo.value.trim() : ''),
         descripcion: descripcion ? descripcion.value.trim() : '',
         razonNotificacion: razon ? razon.value.trim() : '',
         notificador: notificador ? notificador.value.trim() : '',
         severidad: severidadSeleccionada,
-        evidencias: evidenceUrls
+        evidencias: evidencias,
+        evidenciasSubidas: []
       };
 
-      var createResponse = await fetch(API_URL + '?action=crearCasoConvivencia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: JSON.stringify(caseData)
-      });
+      await putQueueItem(caso);
+      log('info', 'Caso guardado en IndexedDB.', { clientRequestId: caso.clientRequestId });
+      resetForm();
+      await refreshQueueCount();
 
-      var createResult = await createResponse.json();
-      if (!createResult.ok) {
-        throw new Error(createResult.error || 'Error al crear el caso');
-      }
+      showStatus(
+        'success',
+        'El caso quedó guardado de forma segura en este dispositivo. Se intentará enviar ahora.'
+      );
 
-      var caseIdEl = $('convivenciaSuccessCaseId');
-      if (caseIdEl) caseIdEl.textContent = createResult.caseId;
-      var successMsg = $('convivenciaSuccessMessage');
-      if (successMsg) successMsg.classList.remove('hidden');
-      if (form) form.reset();
-      evidencias = [];
-      motivoSeleccionado = '';
-      severidadSeleccionada = '';
-      actualizarListaEvidencias();
-
-      setTimeout(function () {
-        ocultarPasos();
-        var paso1 = $('convivenciaPaso1');
-        if (paso1) paso1.classList.remove('hidden');
-        var steps = document.querySelectorAll('[id^="convivenciaStep"]');
-        for (var j = 0; j < steps.length; j++) {
-          steps[j].classList.remove('completed');
-        }
-      }, 3000);
-
+      await flushQueue(true, caso.clientRequestId, 'envío inmediato después de guardar');
     } catch (error) {
-      showAlert('Error al crear caso: ' + error.message);
-      console.error(error);
+      log('error', 'Error al guardar el caso.', error);
+      showAlert('Error al crear caso: ' + (error.message || error));
     } finally {
       if (btn) btn.disabled = false;
-      if (status) status.innerHTML = '';
     }
   }
 
-  async function uploadEvidenceToGoogle(evidence) {
+  async function flushQueue(force, preferredId, trigger) {
+    trigger = trigger || 'no especificado';
+
+    log('info', 'Solicitud de procesamiento de cola.', {
+      trigger: trigger,
+      force: Boolean(force),
+      preferredId: preferredId || null,
+      online: navigator.onLine
+    });
+
+    if (flushInProgress) {
+      queuedFlushRequest = {
+        force: Boolean(force) || Boolean(queuedFlushRequest && queuedFlushRequest.force),
+        preferredId: preferredId || (queuedFlushRequest && queuedFlushRequest.preferredId) || null,
+        trigger: trigger
+      };
+      return;
+    }
+
+    if (!navigator.onLine) {
+      log('info', 'Se omite el intento de envío (offline).');
+      await refreshQueueCount();
+      return;
+    }
+
+    if (!API_URL) {
+      log('error', 'No se puede enviar: falta configurar API_URL.');
+      showStatus('warning', 'El caso está en cola, pero falta configurar la URL del servidor.');
+      await refreshQueueCount();
+      return;
+    }
+
+    flushInProgress = true;
+    var retryBtn = $('convivenciaRetryBtn');
+    if (retryBtn) retryBtn.disabled = true;
+
+    log('info', 'Procesamiento de cola iniciado.', { trigger: trigger });
+
+    try {
+      var items = await getQueueItems();
+      log('info', 'Casos recuperados de IndexedDB.', { count: items.length });
+
+      if (items.length === 0) {
+        log('info', 'No hay casos pendientes de envío.');
+        return;
+      }
+
+      if (preferredId) {
+        items.sort(function (a, b) {
+          if (a.clientRequestId === preferredId) return -1;
+          if (b.clientRequestId === preferredId) return 1;
+          return String(a.queuedAt).localeCompare(String(b.queuedAt));
+        });
+      }
+
+      for (var index = 0; index < items.length; index += 1) {
+        var item = items[index];
+
+        try {
+          item.attempts = Number(item.attempts || 0) + 1;
+          item.lastAttemptAt = new Date().toISOString();
+          delete item.lastError;
+          await putQueueItem(item);
+
+          log('info', 'Enviando caso al servidor.', { clientRequestId: item.clientRequestId });
+
+          var evidenciasRestantes = (item.evidencias || []).filter(function (ev) {
+            return !item.evidenciasSubidas.some(function (sub) { return sub.name === ev.name; });
+          });
+
+          if (evidenciasRestantes.length > 0) {
+            log('info', 'Subiendo evidencias.', { count: evidenciasRestantes.length });
+            for (var i = 0; i < evidenciasRestantes.length; i++) {
+              try {
+                var uploadResult = await uploadEvidenceToGoogle(evidenciasRestantes[i], item.apto);
+                if (uploadResult.ok) {
+                  item.evidenciasSubidas.push({ name: evidenciasRestantes[i].name, url: uploadResult.url });
+                  await putQueueItem(item);
+                  log('info', 'Evidencia subida.', { name: evidenciasRestantes[i].name });
+                }
+              } catch (uploadError) {
+                var transportFailure = Boolean(
+                  uploadError && (
+                    uploadError.code === 'POST_TIMEOUT' ||
+                    uploadError.code === 'POST_SUBMIT_FAILED' ||
+                    /conectar|cargar el servicio|POST no recibió|tiempo permitido|Failed to fetch/i.test((uploadError.message || ''))
+                  )
+                );
+
+                if (transportFailure) {
+                  log('error', 'Error de transporte subiendo evidencia; se detiene la cola.', uploadError);
+                  item.lastError = uploadError.message || 'Error de transporte al subir evidencia';
+                  await putQueueItem(item);
+                  showStatus('warning', 'El caso continúa guardado en la cola. Se reintentará cuando haya una conexión estable.');
+
+                  if (!navigator.onLine) {
+                    break;
+                  }
+                  break;
+                } else {
+                  log('warn', 'Error al subir evidencia (no es de transporte); se continúa.', uploadError);
+                }
+              }
+            }
+          }
+
+          if (!navigator.onLine) {
+            log('info', 'Se detectó que el navegador está offline; se detiene la cola.');
+            break;
+          }
+
+          var caseData = {
+            apto: item.apto,
+            motivo: item.motivo,
+            descripcion: item.descripcion,
+            razonNotificacion: item.razonNotificacion,
+            notificador: item.notificador,
+            severidad: item.severidad,
+            evidencias: item.evidenciasSubidas.map(function (sub) { return sub.url; })
+          };
+
+          var createResponse = await fetch(API_URL + '?action=crearCasoConvivencia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+            body: JSON.stringify(caseData)
+          });
+
+          var createResult = await createResponse.json();
+          if (!createResult.ok) {
+            throw new Error(createResult.error || 'El servidor no confirmó el registro.');
+          }
+
+          await deleteQueueItem(item.clientRequestId);
+          log('info', 'Caso confirmado y eliminado de la cola.', { clientRequestId: item.clientRequestId, caseId: createResult.caseId });
+
+          showStatus(
+            'success',
+            'Caso enviado correctamente. ID: ' + createResult.caseId
+          );
+
+          setTimeout(function () {
+            ocultarPasos();
+            var paso1 = $('convivenciaPaso1');
+            if (paso1) paso1.classList.remove('hidden');
+            var steps = document.querySelectorAll('[id^="convivenciaStep"]');
+            for (var j = 0; j < steps.length; j++) {
+              steps[j].classList.remove('completed');
+            }
+          }, 3000);
+
+        } catch (error) {
+          item.lastError = error.message || String(error);
+          await putQueueItem(item);
+
+          log('error', 'Falló el envío del caso; permanece en la cola.', {
+            clientRequestId: item.clientRequestId,
+            error: item.lastError,
+            online: navigator.onLine
+          });
+
+          showStatus(
+            'warning',
+            'El caso continúa guardado en la cola. Se reintentará cuando haya una conexión estable.'
+          );
+
+          if (!navigator.onLine) {
+            log('warn', 'Navegador offline; se detiene la cola.');
+            break;
+          }
+
+          var transportFailure = Boolean(
+            error && (
+              error.code === 'POST_TIMEOUT' ||
+              error.code === 'POST_SUBMIT_FAILED' ||
+              /conectar|cargar el servicio|POST no recibió|tiempo permitido|Failed to fetch/i.test(item.lastError)
+            )
+          );
+
+          if (transportFailure) {
+            log('warn', 'Fallo de transporte; se detiene la cola para no repetir con otros casos.');
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      log('error', 'Error general procesando la cola.', error);
+      showStatus('danger', 'No fue posible procesar la cola. Revisa la consola para más detalles.');
+    } finally {
+      flushInProgress = false;
+      if (retryBtn) retryBtn.disabled = false;
+      try {
+        await refreshQueueCount();
+      } catch (error) {
+        log('error', 'Error al actualizar contador.', error);
+      }
+
+      if (queuedFlushRequest) {
+        var nextFlush = queuedFlushRequest;
+        queuedFlushRequest = null;
+        log('info', 'Ejecutando intento programado.', nextFlush);
+        window.setTimeout(function () {
+          flushQueue(nextFlush.force, nextFlush.preferredId, 'reintento programado');
+        }, 0);
+      }
+    }
+  }
+
+  async function uploadEvidenceToGoogle(evidence, apto) {
     try {
       var response = await fetch(API_URL + '?action=subirEvidenciaConvivencia', {
         method: 'POST',
@@ -271,8 +545,8 @@
           name: evidence.name,
           mimeType: 'image/jpeg',
           dataUrl: evidence.dataUrl,
-          contexto: 'caso_admin',
-          apto: $('convivenciaApto') ? $('convivenciaApto').value.trim() : '',
+          contexto: 'caso_offline',
+          apto: apto || '',
           captureMetadata: evidence.captureMetadata || null
         })
       });
@@ -280,7 +554,7 @@
       var result = await response.json();
       return result;
     } catch (error) {
-      console.error('Error uploading to Google Drive:', error);
+      log('error', 'Error subiendo evidencia:', error);
       throw error;
     }
   }
@@ -307,9 +581,9 @@
 
     try {
       var evidence = await window.BVEvidenceCamera.capture({
-        contextLabel: 'Evidencia de convivencia - Administración',
+        contextLabel: 'Evidencia de convivencia - Reporte',
         detailLines: apto && apto.value ? ['Apartamento: ' + apto.value] : [],
-        filePrefix: 'convivencia-admin',
+        filePrefix: 'convivencia-caso',
         maxDimension: 1600,
         quality: 0.84
       });
@@ -470,5 +744,154 @@
     }
   });
 
-  cargarConfiguracion();
+  function openDb() {
+    return new Promise(function (resolve, reject) {
+      var request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = function () {
+        var db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          var store = db.createObjectStore(STORE_NAME, { keyPath: 'clientRequestId' });
+          store.createIndex('queuedAt', 'queuedAt', { unique: false });
+        }
+      };
+      request.onsuccess = function () { resolve(request.result); };
+      request.onerror = function () {
+        reject(request.error || new Error('No fue posible abrir IndexedDB.'));
+      };
+    });
+  }
+
+  async function putQueueItem(item) {
+    var db = await openDb();
+    return transactionPromise(db, 'readwrite', function (store) {
+      store.put(item);
+    });
+  }
+
+  async function deleteQueueItem(clientRequestId) {
+    var db = await openDb();
+    return transactionPromise(db, 'readwrite', function (store) {
+      store.delete(clientRequestId);
+    });
+  }
+
+  async function getQueueItems() {
+    var db = await openDb();
+    return new Promise(function (resolve, reject) {
+      var transaction = db.transaction(STORE_NAME, 'readonly');
+      var store = transaction.objectStore(STORE_NAME);
+      var request = store.getAll();
+
+      request.onsuccess = function () {
+        resolve((request.result || []).sort(function (a, b) {
+          return String(a.queuedAt).localeCompare(String(b.queuedAt));
+        }));
+      };
+      request.onerror = function () {
+        reject(request.error || new Error('No fue posible consultar IndexedDB.'));
+      };
+      transaction.oncomplete = function () { db.close(); };
+    });
+  }
+
+  function transactionPromise(db, mode, operation) {
+    return new Promise(function (resolve, reject) {
+      var transaction = db.transaction(STORE_NAME, mode);
+      var store = transaction.objectStore(STORE_NAME);
+
+      try {
+        operation(store);
+      } catch (error) {
+        db.close();
+        reject(error);
+        return;
+      }
+
+      transaction.oncomplete = function () { db.close(); resolve(); };
+      transaction.onerror = function () {
+        db.close();
+        reject(transaction.error || new Error('Error en transacción de IndexedDB.'));
+      };
+      transaction.onabort = transaction.onerror;
+    });
+  }
+
+  function resetForm() {
+    if (form) form.reset();
+    if (form) form.classList.remove('was-validated');
+    evidencias = [];
+    motivoSeleccionado = '';
+    severidadSeleccionada = '';
+    actualizarListaEvidencias();
+  }
+
+  function createRequestId() {
+    if (window.crypto && window.crypto.randomUUID) {
+      return 'CREQ-' + window.crypto.randomUUID();
+    }
+    return 'CREQ-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+  }
+
+  function initEventListeners() {
+    window.addEventListener('online', function () {
+      log('info', 'Evento online recibido.');
+      renderNetworkStatus();
+      flushQueue(false, null, 'evento online');
+    });
+
+    window.addEventListener('offline', function () {
+      log('warn', 'Evento offline recibido.');
+      renderNetworkStatus();
+    });
+
+    window.addEventListener('focus', function () {
+      log('debug', 'Ventana enfocada; comprobando cola.');
+      flushQueue(false, null, 'foco de ventana');
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) {
+        log('debug', 'Página visible; comprobando cola.');
+        flushQueue(false, null, 'página visible');
+      }
+    });
+
+    if (navigator.connection && navigator.connection.addEventListener) {
+      navigator.connection.addEventListener('change', function () {
+        log('info', 'Cambió la conexión.');
+        renderNetworkStatus();
+        flushQueue(false, null, 'cambio de conexión');
+      });
+    }
+
+    window.setInterval(function () {
+      if (!document.hidden) {
+        log('debug', 'Temporizador periódico; comprobando cola.');
+        flushQueue(false, null, 'temporizador de 60 segundos');
+      }
+    }, 60000);
+
+    elements.retryBtn = $('convivenciaRetryBtn');
+    if (elements.retryBtn) {
+      elements.retryBtn.addEventListener('click', function () {
+        log('info', 'Botón "Intentar enviar" presionado.');
+        flushQueue(true, null, 'botón manual');
+      });
+    }
+  }
+
+  async function init() {
+    log('info', 'Inicializando módulo.', {
+      online: navigator.onLine,
+      apiUrl: API_URL ? 'configurada' : 'sin configurar'
+    });
+
+    renderNetworkStatus();
+    initEventListeners();
+    cargarConfiguracion();
+    refreshQueueCount();
+    flushQueue(false, null, 'inicio del módulo');
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
 })();
