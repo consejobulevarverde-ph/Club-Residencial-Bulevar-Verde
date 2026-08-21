@@ -273,6 +273,12 @@
       ].join(' ')).indexOf(query) !== -1;
     });
 
+    filtered.sort(function (a, b) {
+      var dateA = new Date(a.fechaRecepcion || a.fechaReporte || 0).getTime();
+      var dateB = new Date(b.fechaRecepcion || b.fechaReporte || 0).getTime();
+      return dateA - dateB;
+    });
+
     elements.empty.hidden = filtered.length !== 0;
     elements.reportList.innerHTML = filtered.map(renderReportCard).join('');
   }
