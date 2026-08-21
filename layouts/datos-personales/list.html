@@ -1207,8 +1207,8 @@
       $('unitForm').addEventListener('submit', function (event) {
         event.preventDefault();
         clearAlert();
-        var apartment = $('apartamento').value.replace(/\D/g, '');
-        if (!/^\d{1,4}$/.test(apartment)) {
+        var apartment = $('apartamento').value.replace(/\D/g, '').padStart(4, '0');
+        if (!/^\d{4}$/.test(apartment)) {
           alertMessage('Ingresa un número de apartamento válido.');
           return;
         }
