@@ -947,32 +947,14 @@
           '<span class="border border-success-subtle rounded overflow-hidden bg-light d-flex align-items-center justify-content-center shadow-sm pqrs-evidence-thumb">' +
           '<img data-evidence-preview alt="Previsualización de evidencia" ' +
           'width="150" height="150" decoding="async" referrerpolicy="no-referrer" ' +
-          'style="width:150px;height:150px;object-fit:cover;display:block;" hidden ' +
+          'style="width:150px;height:150px;object-fit:cover;display:block;" ' +
           'src="' + escAttr(initialUrl) + '" ' +
           'data-fallback-urls="' + escAttr(fallbackUrls) + '" ' +
           'onerror="window.handlePqrsEvidenceError_(this)">' +
-          '<span data-evidence-loading class="text-success text-center px-3">' +
-          '<span class="spinner-border spinner-border-sm d-block mx-auto mb-2" role="status" aria-hidden="true"></span>' +
-          '<span class="small">Cargando…</span></span>' +
-          '<span data-evidence-fallback hidden class="text-success text-center px-3">' +
-          '<i class="bi bi-image fs-1 d-block"></i><span class="small">Ver evidencia</span></span>' +
           '</span>' +
           '<span class="small fw-semibold text-success mt-1">' +
           '<i class="bi bi-image me-1" aria-hidden="true"></i>Ver evidencia</span>' +
-          '</a>';
-
-        // Script inline para cargar la imagen cuando se carga el DOM
-        if (!window.pqrsEvidenceLoaderAttached) {
-          window.pqrsEvidenceLoaderAttached = true;
-          if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function loadPqrsEvidences() {
-              loadPqrsEvidencePreviews();
-              document.removeEventListener('DOMContentLoaded', loadPqrsEvidences);
-            });
-          } else {
-            loadPqrsEvidencePreviews();
-          }
-        }
+          '</a>'
       } else {
         // Link simple para URLs no-Drive
         var label = 'Abrir enlace';
@@ -991,25 +973,6 @@
 
     output += esc(text.slice(lastIndex));
     return output;
-  }
-
-  function loadPqrsEvidencePreviews() {
-    var images = Array.prototype.slice.call(
-      document.querySelectorAll('[data-evidence-preview]')
-    );
-    images.forEach(function (image) {
-      if (image.src && image.src.indexOf('drive.google.com') !== -1) {
-        // Mostrar loading
-        var loading = image.parentElement.querySelector('[data-evidence-loading]');
-        if (loading) loading.style.display = 'block';
-
-        // Mostrar imagen
-        image.hidden = false;
-        image.onload = function () {
-          if (loading) loading.style.display = 'none';
-        };
-      }
-    });
   }
 
   function splitTrailingUrlPunctuation(value) {
