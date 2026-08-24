@@ -348,7 +348,7 @@
           <li class="nav-item" data-permission="RESIDENTES"><button class="nav-link" data-target="tabResidents" type="button">Residentes</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabVehicles" type="button">Vehículos</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabOther" type="button">Otros datos</button></li>
-          <li class="nav-item"><button class="nav-link" data-target="tabDocumentos" type="button">Documentos</button></li>
+          <li class="nav-item" data-owner-only><button class="nav-link" data-target="tabDocumentos" type="button">Documentos</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabSanciones" type="button">Sanciones</button></li>
         </ul>
       </div>
@@ -497,7 +497,7 @@
         </div>
       </div>
 
-      <div id="tabDocumentos" class="tab-pane-content hidden">
+      <div id="tabDocumentos" class="tab-pane-content hidden" data-owner-only>
         <div class="surface p-4">
           <h3 class="section-title h5 mb-1">Documentos de la unidad</h3>
           <p class="small-note">Descarga tus documentos de facturación y estado de cuenta.</p>
