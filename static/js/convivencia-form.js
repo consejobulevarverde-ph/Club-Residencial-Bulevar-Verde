@@ -18,6 +18,8 @@
 
   var flushInProgress = false;
   var queuedFlushRequest = null;
+  var lastPassiveFlushAttempt = 0;
+  var PASSIVE_FLUSH_THROTTLE_MS = 5000;
 
   var elements = {};
 
@@ -339,6 +341,15 @@
       online: navigator.onLine
     });
 
+    if (!force) {
+      var now = Date.now();
+      if (now - lastPassiveFlushAttempt < PASSIVE_FLUSH_THROTTLE_MS) {
+        log('debug', 'Se omitió reintento pasivo por throttle (demasiado pronto).');
+        return;
+      }
+      lastPassiveFlushAttempt = now;
+    }
+
     if (flushInProgress) {
       queuedFlushRequest = {
         force: Boolean(force) || Boolean(queuedFlushRequest && queuedFlushRequest.force),
@@ -441,6 +452,7 @@
           }
 
           var caseData = {
+            clientRequestId: item.clientRequestId,
             apto: item.apto,
             motivo: item.motivo,
             descripcion: item.descripcion,
