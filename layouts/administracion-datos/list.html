@@ -531,7 +531,88 @@
           accordionItem('collapse-mascotas', 'Mascotas', '<ul>' + mascotas + '</ul>', false) +
           accordionItem('collapse-emergencia', 'Contacto de emergencia', '<ul>' + emergencia + '</ul>', false) +
           accordionItem('collapse-cuenta', 'Estado de cuenta', '<p>' + estadoCuenta + '</p>', false) +
+          accordionItem('collapse-documentos', 'Documentos PhEnLinea',
+            '<div id="docsPhEnLinea" class="row g-3"></div>' +
+            '<div id="docsPhEnLineaLoading" class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Cargando documentos…</div>' +
+            '<div id="docsPhEnLineaError" class="alert alert-danger hidden mb-0"></div>' +
+            '<div id="docsPhEnLineaVacio" class="alert alert-info hidden mb-0"><i class="bi bi-info-circle me-2"></i>No hay documentos disponibles.</div>', false) +
           '</div>';
+      }
+
+      var documentosPhEnLinea = {};
+
+      $('profile').addEventListener('click', function (event) {
+        var button = event.target.closest('[data-bs-target="#collapse-documentos"]');
+        if (button && !documentosPhEnLinea[currentUnidadId]) {
+          cargarDocumentosAdmin(currentUnidadId);
+        }
+      });
+
+      function cargarDocumentosAdmin(unidadId) {
+        var container = $('docsPhEnLinea');
+        var loading = $('docsPhEnLineaLoading');
+        var error = $('docsPhEnLineaError');
+        var vacio = $('docsPhEnLineaVacio');
+
+        loading.classList.remove('hidden');
+        error.classList.add('hidden');
+        vacio.classList.add('hidden');
+        container.innerHTML = '';
+
+        withIdToken(function (idToken) {
+          return Promise.all([
+            apiFetch('/api/v1/unidades/' + unidadId + '/cuenta-cobro', idToken),
+            apiFetch('/api/v1/unidades/' + unidadId + '/informes/estado-cuenta', idToken),
+            apiFetch('/api/v1/unidades/' + unidadId + '/informes/recibo', idToken),
+            apiFetch('/api/v1/unidades/' + unidadId + '/informes/certificado', idToken),
+            apiFetch('/api/v1/unidades/' + unidadId + '/informes/paz-y-salvo', idToken),
+          ]);
+        }).then(function (responses) {
+          loading.classList.add('hidden');
+          var tiposDocumentos = [
+            { id: 'cuenta-cobro', label: 'Cuenta de Cobro', icono: 'bi-receipt' },
+            { id: 'estado-cuenta', label: 'Estado de Cuenta', icono: 'bi-file-earmark' },
+            { id: 'recibo', label: 'Recibo', icono: 'bi-file-pdf' },
+            { id: 'certificado', label: 'Certificado', icono: 'bi-award' },
+            { id: 'paz-y-salvo', label: 'Paz y Salvo', icono: 'bi-check-circle' },
+          ];
+          var documentos = responses.map(function (resp, idx) {
+            var tipo = tiposDocumentos[idx];
+            var cuenta = resp.data && resp.data.cuenta;
+            var informe = resp.data && resp.data.informe;
+            var success = (cuenta && cuenta.success) || (informe && informe.success) || false;
+            var url = (cuenta && cuenta.ruta) || (informe && informe.url) || null;
+            return { tipo: tipo, success: success, url: url };
+          });
+          documentosPhEnLinea[unidadId] = true;
+          var algunoDisponible = documentos.some(function (d) { return d.success; });
+          if (!algunoDisponible) {
+            vacio.classList.remove('hidden');
+          } else {
+            container.innerHTML = documentos.map(function (doc) {
+              var disponible = doc.success && doc.url;
+              var btnClass = disponible ? 'btn-primary' : 'btn-secondary';
+              var btnDisabled = !disponible ? ' disabled' : '';
+              var icon = '<i class="bi ' + esc(doc.tipo.icono) + ' me-2"></i>';
+              var btnText = disponible ? icon + 'Descargar' : icon + 'No disponible';
+              return '<div class="col-md-6 col-lg-4">' +
+                '<div class="card border-0 h-100" style="box-shadow:0 2px 8px rgba(0,0,0,0.08)">' +
+                '<div class="card-body d-flex flex-column">' +
+                '<h6 class="card-title mb-3" style="color:var(--p);font-weight:700">' + esc(doc.tipo.label) + '</h6>' +
+                '<p class="card-text small text-muted mb-3 flex-grow-1">Período actual de facturación</p>' +
+                (disponible
+                  ? '<a href="' + esc(doc.url) + '" target="_blank" rel="noopener noreferrer" class="btn ' + btnClass + ' btn-sm mt-auto">' + btnText + '</a>'
+                  : '<button type="button" class="btn ' + btnClass + '" disabled>' + btnText + '</button>') +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            }).join('');
+          }
+        }).catch(function (error) {
+          loading.classList.add('hidden');
+          error.textContent = 'Error al cargar documentos: ' + esc(error.message);
+          error.classList.remove('hidden');
+        });
       }
 
       $('profile').addEventListener('submit', function (event) {

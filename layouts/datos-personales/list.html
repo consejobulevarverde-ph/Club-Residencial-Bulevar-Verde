@@ -348,6 +348,7 @@
           <li class="nav-item" data-permission="RESIDENTES"><button class="nav-link" data-target="tabResidents" type="button">Residentes</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabVehicles" type="button">Vehículos</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabOther" type="button">Otros datos</button></li>
+          <li class="nav-item"><button class="nav-link" data-target="tabDocumentos" type="button">Documentos</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabSanciones" type="button">Sanciones</button></li>
         </ul>
       </div>
@@ -493,6 +494,17 @@
               </form>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div id="tabDocumentos" class="tab-pane-content hidden">
+        <div class="surface p-4">
+          <h3 class="section-title h5 mb-1">Documentos de la unidad</h3>
+          <p class="small-note">Descarga tus documentos de facturación y estado de cuenta.</p>
+          <div id="documentosLoading" class="text-muted small py-3 hidden"><span class="spinner-border spinner-border-sm me-2"></span>Cargando documentos…</div>
+          <div id="documentosError" class="alert alert-danger hidden mb-0"></div>
+          <div id="documentosVacio" class="alert alert-info hidden mb-0"><i class="bi bi-info-circle me-2"></i>No hay documentos disponibles en este momento.</div>
+          <div id="documentosGrid" class="row g-3 mt-1"></div>
         </div>
       </div>
 
@@ -757,11 +769,14 @@
         });
       }
 
+      var documentosCargados = false;
+
       $('profileTabs').addEventListener('click', function (event) {
         var button = event.target.closest('button[data-target]');
         if (!button || button.closest('.hidden')) return;
         showTab(button.dataset.target);
-        if (button.dataset.target === 'tabSanciones' && !sancionesCargadas) cargarSanciones();
+        if (button.dataset.target === 'tabSanciones' && !sancionesCargados) cargarSanciones();
+        if (button.dataset.target === 'tabDocumentos' && !documentosCargados) cargarDocumentos();
       });
 
       /* ---------- Sanciones de convivencia ---------- */
@@ -1202,6 +1217,69 @@
           status.innerHTML = '';
           uploadStatus.innerHTML = '';
         });
+      }
+
+      /* ---------- Documentos PhEnLinea ---------- */
+
+      var tiposDocumentos = [
+        { id: 'cuenta-cobro', label: 'Cuenta de Cobro', icono: 'bi-receipt' },
+        { id: 'estado-cuenta', label: 'Estado de Cuenta', icono: 'bi-file-earmark' },
+        { id: 'recibo', label: 'Recibo', icono: 'bi-file-pdf' },
+        { id: 'certificado', label: 'Certificado', icono: 'bi-award' },
+        { id: 'paz-y-salvo', label: 'Paz y Salvo', icono: 'bi-check-circle' },
+      ];
+
+      function cargarDocumentos() {
+        $('documentosLoading').classList.remove('hidden');
+        $('documentosError').classList.add('hidden');
+        $('documentosVacio').classList.add('hidden');
+        $('documentosGrid').innerHTML = '';
+        documentosCargados = true;
+
+        Promise.all([
+          apiFetch('/cuenta-cobro'),
+          apiFetch('/informes/estado-cuenta'),
+          apiFetch('/informes/recibo'),
+          apiFetch('/informes/certificado'),
+          apiFetch('/informes/paz-y-salvo'),
+        ]).then(function (responses) {
+          $('documentosLoading').classList.add('hidden');
+          var documentos = responses.map(function (resp, idx) {
+            var tipo = tiposDocumentos[idx];
+            return { tipo: tipo, success: resp.data && resp.data.informe ? resp.data.informe.success : false, url: resp.data && resp.data.informe ? resp.data.informe.url : null, error: null };
+          });
+          var algunoDisponible = documentos.some(function (d) { return d.success; });
+          if (!algunoDisponible) {
+            $('documentosVacio').classList.remove('hidden');
+          } else {
+            renderizarDocumentos(documentos);
+          }
+        }).catch(function (error) {
+          $('documentosLoading').classList.add('hidden');
+          $('documentosError').textContent = 'Error al cargar documentos: ' + error.message;
+          $('documentosError').classList.remove('hidden');
+        });
+      }
+
+      function renderizarDocumentos(documentos) {
+        $('documentosGrid').innerHTML = documentos.map(function (doc) {
+          var disponible = doc.success && doc.url;
+          var btnClass = disponible ? 'btn-primary' : 'btn-secondary';
+          var btnDisabled = !disponible ? ' disabled' : '';
+          var icon = '<i class="bi ' + esc(doc.tipo.icono) + ' me-2"></i>';
+          var btnText = disponible ? icon + 'Descargar' : icon + 'No disponible';
+          return '<div class="col-md-6 col-lg-4">' +
+            '<div class="card border-0 h-100" style="box-shadow:0 2px 8px rgba(0,0,0,0.08)">' +
+            '<div class="card-body d-flex flex-column">' +
+            '<h6 class="card-title mb-3" style="color:var(--bv-primary);font-weight:700">' + esc(doc.tipo.label) + '</h6>' +
+            '<p class="card-text small text-muted mb-3 flex-grow-1">Período actual de facturación</p>' +
+            (disponible
+              ? '<a href="' + esc(doc.url) + '" target="_blank" rel="noopener noreferrer" class="btn ' + btnClass + ' btn-sm mt-auto">' + btnText + '</a>'
+              : '<button type="button" class="btn ' + btnClass + '" disabled>' + btnText + '</button>') +
+            '</div>' +
+            '</div>' +
+            '</div>';
+        }).join('');
       }
 
       $('unitForm').addEventListener('submit', function (event) {
