@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="{{ .Site.LanguageCode | default "es" }}">
-
 <head>
   <meta charset="UTF-8">
   <meta name="robots" content="noindex,nofollow">
@@ -11,109 +10,157 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --p: #2c5f2d;
-      --s: #4a8c4b;
-      --l: #e8f5e9;
-      --b: #d8e6d9;
-    }
+    :root { --p: #2c5f2d; --s: #4a8c4b; --l: #e8f5e9; --b: #d8e6d9; }
+    body { font-family: Montserrat, sans-serif; background: var(--l); }
+    .navbar, .btn-primary { background: var(--p) !important; border-color: var(--p) !important; }
+    .header { background: linear-gradient(135deg, var(--s), var(--p)); color: #fff; padding: 2.5rem 0; }
+    .surface { background: #fff; border: 1px solid var(--b); border-radius: 1rem; box-shadow: 0 5px 18px rgba(44, 95, 45, .08); }
+    .section-title { color: var(--p); font-weight: 700; }
+    .small-note { font-size: .86rem; color: #667268; }
+    .hidden { display: none !important; }
+    .mode-button { color: var(--p); border-color: var(--p); font-weight: 500; }
+    .mode-button:hover { background: var(--l); color: var(--p); }
+    .mode-button.active { color: #fff; background: var(--p); border-color: var(--p); }
+    .repeat-row { padding: 1rem 0; border-bottom: 1px solid var(--b); }
+    .repeat-row:last-child { border-bottom: none; }
+    table { font-size: 0.9rem; }
 
-    body {
-      font-family: Montserrat, sans-serif;
-      background: var(--l);
-    }
-
-    .navbar,
-    .btn-primary {
-      background: var(--p) !important;
-      border-color: var(--p) !important;
-    }
-
-    .header {
-      background: linear-gradient(135deg, var(--s), var(--p));
-      color: #fff;
-      padding: 2.5rem 0;
-    }
-
-    .surface {
+    /* Calendario de Reservas */
+    .calendar-table {
+      width: 100%;
+      border-collapse: collapse;
       background: #fff;
+      font-size: 0.8rem;
+    }
+
+    .calendar-table th, .calendar-table td {
       border: 1px solid var(--b);
-      border-radius: 1rem;
-      box-shadow: 0 5px 18px rgba(44, 95, 45, .08);
+      padding: 0.6rem 0.4rem;
+      text-align: center;
+      vertical-align: middle;
     }
 
-    .section-title {
-      color: var(--p);
+    .calendar-table th {
+      background: var(--p);
+      color: #fff;
       font-weight: 700;
+      padding: 0.6rem 0.4rem;
     }
 
-    .metric {
-      border-left: 5px solid var(--p);
-    }
-
-    .small-note {
-      font-size: .86rem;
-      color: #667268;
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .sticky-panel {
-      top: 1rem;
-    }
-
-    .accordion-button {
-      font-weight: 600;
+    .calendar-table .zona-nombre {
+      text-align: left;
+      font-weight: 700;
       color: var(--p);
+      background: #f5f7f5;
+      min-width: 140px;
+      padding: 0.6rem 0.8rem;
     }
 
-    .accordion-button:not(.collapsed) {
-      background: var(--l);
+    .calendar-table .fecha-header {
+      background: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
       color: var(--p);
-      box-shadow: none;
+      padding: 0.6rem 0.3rem;
     }
 
-    .accordion-button:focus {
-      box-shadow: 0 0 0 2px var(--b);
-      border-color: var(--p);
-    }
-
-    .accordion-item {
-      border-color: var(--b);
-    }
-
-    .mode-button {
+    .fecha-numero {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 700;
       color: var(--p);
-      border-color: var(--p);
+      margin-bottom: 0.15rem;
+    }
+
+    .fecha-dia {
+      display: block;
+      font-size: 0.65rem;
+      color: #888;
       font-weight: 500;
     }
 
-    .mode-button:hover {
-      background: var(--l);
-      color: var(--p);
+    .reserva-block {
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      color: #fff;
+      font-weight: 600;
+      padding: 2px 3px;
+      margin: 2px 0;
+      border-radius: 3px;
+      flex-direction: column;
+      gap: 1px;
+      line-height: 1.2;
+      word-break: break-word;
     }
 
-    .mode-button.active {
+    .reserva-emoji {
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+
+    .reserva-texto {
+      font-size: 0.6rem;
+      word-wrap: break-word;
+    }
+
+    .reserva-pendiente {
+      background: #ffc107;
+      color: #000;
+    }
+
+    .reserva-confirmada {
+      background: #28a745;
       color: #fff;
-      background: var(--p);
-      border-color: var(--p);
+    }
+
+    .reserva-cancelada {
+      background: #6c757d;
+      color: #fff;
+    }
+
+    .reserva-rechazada {
+      background: #dc3545;
+      color: #fff;
+    }
+
+    .reserva-vacia {
+      background: #fafafa;
+      border: 1px dashed #ddd;
+    }
+
+    .calendar-legend {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #f9faf9;
+      border-radius: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .legend-emoji {
+      font-size: 1.1rem;
+      min-width: 1.2rem;
     }
   </style>
 </head>
-
 <body>
   {{ partial "header" . }}
 
   <header class="header">
     <div class="container">
-      <h1 class="fw-bold">
-        <i class="bi bi-database-lock me-2"></i>Gestión de datos maestros
-      </h1>
-      <p class="mb-0">
-        Consulta, actualización directa de apartamentos y propietarios.
-      </p>
+      <h1 class="fw-bold"><i class="bi bi-calendar-check me-2"></i>Gestión de Reservas</h1>
+      <p class="mb-0">Administración de zonas comunes y reservas de residentes.</p>
     </div>
   </header>
 
@@ -140,137 +187,196 @@
     <section id="app" class="hidden">
       <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
-          <h2 class="section-title h3 mb-0">Panel administrativo</h2>
+          <h2 class="section-title h3 mb-0">Gestión de Reservas</h2>
           <div id="userText" class="small-note"></div>
         </div>
         <div class="d-flex gap-2">
-          <button id="showDashboard" type="button" class="btn btn-outline-success mode-button active">
-            <i class="bi bi-speedometer2 me-1"></i>Panel General
-          </button>
-          <button id="showConvivencia" type="button" class="btn btn-outline-success mode-button">
-            <i class="bi bi-exclamation-circle me-1"></i>Registrar Caso
+          <button id="showCatalogo" type="button" class="btn btn-outline-success mode-button active">
+            <i class="bi bi-list me-1"></i>Catálogo de Zonas
           </button>
           <button id="showReservas" type="button" class="btn btn-outline-success mode-button">
-            <i class="bi bi-calendar-check me-1"></i>Reservas
+            <i class="bi bi-bookmark me-1"></i>Reservas
           </button>
-          <button id="btnImportarCartera" class="btn btn-success">
-            <i class="bi bi-file-earmark-excel me-1"></i>Importar Cartera
+          <button id="logoutBtn" type="button" class="btn btn-outline-danger">
+            <i class="bi bi-box-arrow-right me-1"></i>Salir
           </button>
-          <button id="logout" class="btn btn-outline-secondary">Salir</button>
         </div>
       </div>
 
-      <section id="dashboardView">
-        <div id="metrics" class="row g-3 mb-4"></div>
-
-        <div class="row g-4">
-          <div class="col-xl-4">
-            <div class="surface p-4">
-              <h3 class="section-title h5">Buscar unidad o persona</h3>
-              <form id="searchForm" class="input-group">
-                <input
-                  id="query"
-                  class="form-control"
-                  placeholder="Código, placa, correo, documento o nombre">
-                <button class="btn btn-primary">Buscar</button>
-              </form>
-              <div id="searchResults" class="mt-3 text-muted">Sin búsquedas todavía.</div>
+      <section id="catalogoView">
+        <div class="surface p-4 mb-4">
+          <h3 class="section-title h5 mb-3"><i class="bi bi-plus-circle me-2"></i>Crear nueva zona</h3>
+          <form id="crearZonaForm" class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label small">Código</label>
+              <input id="zonaCodigo" type="text" class="form-control form-control-sm" required>
             </div>
-          </div>
-
-          <div class="col-xl-8">
-            <div class="surface p-4 sticky-xl-top sticky-panel">
-              <h3 class="section-title h5">Detalle y edición de unidad</h3>
-              <div id="profile">
-                <p class="text-muted">
-                  Selecciona un resultado para consultar y actualizar el apartamento.
-                </p>
+            <div class="col-md-3">
+              <label class="form-label small">Tipo</label>
+              <input id="zonaTipo" type="text" class="form-control form-control-sm" placeholder="ej: Salón, Cancha" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small">Descripción</label>
+              <input id="zonaDescripcion" type="text" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">Hora apertura</label>
+              <input id="zonaHoraApertura" type="time" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">Hora cierre</label>
+              <input id="zonaHoraCierre" type="time" class="form-control form-control-sm" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">Dur. mín. (horas)</label>
+              <input id="zonaDuracionMin" type="number" class="form-control form-control-sm" min="1" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">Dur. máx. (horas)</label>
+              <input id="zonaDuracionMax" type="number" class="form-control form-control-sm" min="1" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">Costo</label>
+              <input id="zonaCosto" type="number" class="form-control form-control-sm" step="0.01" min="0">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">Depósito</label>
+              <input id="zonaDeposito" type="number" class="form-control form-control-sm" step="0.01" min="0">
+            </div>
+            <div class="col-md-3">
+              <div class="form-check mt-4">
+                <input id="zonaRequierePago" type="checkbox" class="form-check-input">
+                <label class="form-check-label small" for="zonaRequierePago">Requiere pago</label>
               </div>
             </div>
-          </div>
+            <div class="col-md-3">
+              <div class="form-check mt-4">
+                <input id="zonaRequiereAprobacion" type="checkbox" class="form-check-input">
+                <label class="form-check-label small" for="zonaRequiereAprobacion">Requiere aprobación</label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-check mt-4">
+                <input id="zonaSoportaRecreativa" type="checkbox" class="form-check-input">
+                <label class="form-check-label small" for="zonaSoportaRecreativa">Soporta recreativa</label>
+              </div>
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus me-1"></i>Crear zona</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="surface p-4">
+          <h3 class="section-title h5 mb-3">Zonas comunes</h3>
+          <div id="catalogoLoading" class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+          <div id="catalogoLista"></div>
         </div>
       </section>
 
-      <section id="convivenciaView" class="hidden">
-        {{ partial "convivencia-form.html" . }}
-      </section>
-
       <section id="reservasView" class="hidden">
-        <div class="alert alert-info">
-          <p class="mb-0">
-            Acceder al <a href="/reservas-admin/" class="alert-link" target="_blank">panel de gestión de reservas</a> para administrar zonas comunes y reservas.
-          </p>
+        <div class="surface p-4 mb-4">
+          <h2 class="h5 mb-3"><i class="bi bi-calendar-event me-2"></i>Agenda de Reservas</h2>
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label small">Rango de fechas</label>
+              <div class="d-flex gap-2">
+                <input id="agendaDesde" type="date" class="form-control form-control-sm">
+                <span class="align-self-center text-muted">a</span>
+                <input id="agendaHasta" type="date" class="form-control form-control-sm">
+              </div>
+            </div>
+            <div class="col-md-6 d-flex gap-2 align-items-end">
+              <button id="agendaSiete" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-calendar me-1"></i>7 días</button>
+              <button id="agendaMes" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-calendar2 me-1"></i>Mes</button>
+              <button id="agendaRefrescar" type="button" class="btn btn-primary btn-sm flex-grow-1"><i class="bi bi-arrow-clockwise me-1"></i>Cargar</button>
+            </div>
+          </div>
+          <div id="agendaLoading" class="text-muted small mb-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+          <div id="agendaError" class="alert alert-danger hidden mb-3"></div>
+          <div id="agendaCalendario" style="overflow-x: auto;"></div>
         </div>
       </section>
     </section>
 
-    <!-- Modal de importación de cartera -->
-    <div class="modal fade" id="modalImportarCartera" tabindex="-1">
+    <!-- Modal: Rechazar Reserva -->
+    <div class="modal fade" id="modalRechazar" tabindex="-1">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">
-              <i class="bi bi-file-earmark-excel me-2"></i>Importar Informe de Cartera
-            </h5>
+            <h5 class="modal-title">Rechazar Reserva</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            <div id="importResult" class="alert hidden mb-3" role="alert"></div>
-            
-            <form id="formImportarCartera">
-              <div class="mb-3">
-                <label for="archivoCartera" class="form-label">
-                  Selecciona el archivo Excel (.xls o .xlsx)
-                </label>
-                <input 
-                  type="file" 
-                  class="form-control" 
-                  id="archivoCartera" 
-                  accept=".xls,.xlsx"
-                  required>
-                <div class="form-text">
-                  <strong>Formato esperado:</strong> El archivo debe contener columnas como:
-                  <ul class="mb-0 mt-1">
-                    <li><strong>Inmueble</strong> o <strong>Apartamento</strong>: Código del apto (ej: 1029)</li>
-                    <li><strong>Saldo Actual</strong>: Saldo actual de cartera</li>
-                    <li><strong>Saldo Anterior</strong>: Saldo del periodo anterior (opcional)</li>
-                    <li><strong>Fecha Corte</strong>: Fecha del reporte (opcional)</li>
-                    <li><strong>Estado</strong>: AL_DIA o EN_MORA (opcional)</li>
-                  </ul>
-                </div>
-              </div>
-              
-              <div id="progressBar" class="progress hidden mb-3" style="height: 25px;">
-                <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                     role="progressbar" 
-                     style="width: 100%">
-                  Procesando archivo...
-                </div>
-              </div>
-              
-              <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-success" id="btnSubirCartera">
-                  <i class="bi bi-upload me-1"></i>Subir e Importar
-                </button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                  Cancelar
-                </button>
-              </div>
-            </form>
+            <textarea id="motivoRechazo" class="form-control" rows="3" placeholder="Motivo del rechazo..."></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="confirmarRechazo" type="button" class="btn btn-danger">Rechazar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Cancelar Reserva -->
+    <div class="modal fade" id="modalCancelar" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Cancelar Reserva</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <textarea id="motivoCancelacion" class="form-control" rows="3" placeholder="Motivo de la cancelación (opcional)..."></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="confirmarCancelacion" type="button" class="btn btn-warning">Cancelar Reserva</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Registrar Pago -->
+    <div class="modal fade" id="modalPago" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Registrar Pago</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body row g-3">
+            <div class="col-12">
+              <label class="form-label small">Estado del pago</label>
+              <select id="estadoPago" class="form-select form-select-sm">
+                <option value="NO_REQUIERE">No requiere</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="PAGADO">Pagado</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label small">Fecha de pago (opcional)</label>
+              <input id="fechaPago" type="date" class="form-control form-control-sm">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="confirmarPago" type="button" class="btn btn-primary">Registrar</button>
           </div>
         </div>
       </div>
     </div>
   </main>
 
+  {{ partial "footer" . }}
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script>
     (function () {
       'use strict';
-
       var API_BASE = {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }};
-
       firebase.initializeApp({
         apiKey: {{ .Site.Params.apiFirebaseApiKey | default "" | jsonify | safeJS }},
         authDomain: {{ .Site.Params.apiFirebaseAuthDomain | default "" | jsonify | safeJS }},
@@ -278,563 +384,454 @@
       });
 
       var $ = function (id) { return document.getElementById(id); };
-      var currentUnidadId = null;
 
       function esc(value) {
-        return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
-          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character];
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c];
         });
       }
 
       function msg(text, type) {
-        var alertBox = $('alert');
-        alertBox.className = 'alert alert-' + (type || 'danger');
-        alertBox.textContent = text;
-        alertBox.classList.remove('hidden');
+        var box = $('alert');
+        if (!box) { console.error('Alert element not found'); return; }
+        box.className = 'alert alert-' + (type || 'danger');
+        box.textContent = text;
+        box.classList.remove('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
-      function hideMsg() {
-        $('alert').classList.add('hidden');
-      }
+      function hideMsg() { var box = $('alert'); if (box) box.classList.add('hidden'); }
 
       function panel(id) {
-        ['login', 'app'].forEach(function (panelId) {
-          $(panelId).classList.toggle('hidden', panelId !== id);
+        ['login', 'app'].forEach(function (p) {
+          var el = $(p);
+          if (el) el.classList.toggle('hidden', p !== id);
         });
       }
 
-      function busy(button, active, text) {
+      function mode(name) {
+        var es_catalogo = name === 'catalogo';
+        var catalogoView = $('catalogoView');
+        var reservasView = $('reservasView');
+        var showCatalogo = $('showCatalogo');
+        var showReservas = $('showReservas');
+        if (catalogoView) catalogoView.classList.toggle('hidden', !es_catalogo);
+        if (reservasView) reservasView.classList.toggle('hidden', es_catalogo);
+        if (showCatalogo) showCatalogo.classList.toggle('active', es_catalogo);
+        if (showReservas) showReservas.classList.toggle('active', !es_catalogo);
+      }
+
+      function busy(btn, active, label) {
         if (active) {
-          button.dataset.old = button.innerHTML;
-          button.disabled = true;
-          button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + text;
+          btn.dataset.old = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + label;
         } else {
-          button.disabled = false;
-          button.innerHTML = button.dataset.old || text;
+          btn.disabled = false;
+          btn.innerHTML = btn.dataset.old || label;
         }
+      }
+
+      function withIdToken(fn) {
+        var user = firebase.auth().currentUser;
+        if (!user) return Promise.reject(new Error('No authenticated'));
+        return user.getIdToken().then(fn);
       }
 
       function apiFetch(path, idToken, options) {
         options = options || {};
         var headers = { Authorization: 'Bearer ' + idToken };
         var fetchOptions = { method: options.method || 'GET', headers: headers };
-
         if (options.body !== undefined) {
           headers['Content-Type'] = 'application/json';
           fetchOptions.body = JSON.stringify(options.body);
         }
-
         return fetch(API_BASE + path, fetchOptions).then(function (response) {
           if (response.status === 204) return {};
-
           return response.json().then(function (body) {
-            if (!response.ok) {
-              throw new Error((body.error && body.error.message) || 'Error ' + response.status);
-            }
+            if (!response.ok) throw new Error((body.error && body.error.message) || 'Error ' + response.status);
             return body;
           });
         });
       }
 
-      function withIdToken(fn) {
-        var user = firebase.auth().currentUser;
-        if (!user) {
-          return Promise.reject(new Error('No hay sesión activa. Por favor, inicia sesión nuevamente.'));
-        }
-        return user.getIdToken().then(fn);
+      /* --- Catálogo --- */
+      function cargarCatalogo() {
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/catalogo', idToken);
+        }).then(function (result) {
+          renderCatalogo(result.data || []);
+          cargarFiltroZonas(result.data || []);
+        }).catch(function (error) { msg('Error: ' + error.message); });
       }
 
-      $('loginForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        hideMsg();
+      function renderCatalogo(zonas) {
+        var catalogoLista = $('catalogoLista');
+        if (catalogoLista) {
+          catalogoLista.innerHTML = zonas.length ? zonas.map(function (z) {
+            return '<div class="repeat-row"><div class="row"><div class="col-md-4"><strong>' + esc(z.descripcion) + '</strong>' +
+              '<div class="small-note">' + esc(z.tipo) + ' | ' + esc(z.horaApertura) + '–' + esc(z.horaCierre) + '</div></div>' +
+              '<div class="col-md-8"><button type="button" class="btn btn-outline-primary btn-sm editar-zona" data-id="' + esc(z.id) + '">Editar</button></div></div></div>';
+          }).join('') : '<p class="text-muted">No hay zonas registradas.</p>';
+        }
+      }
 
-        var button = $('loginBtn');
-        busy(button, true, 'Ingresando…');
-
-        firebase.auth().signInWithEmailAndPassword($('email').value.trim(), $('password').value)
-          .then(function () {
-            panel('app');
-            return loadDashboard();
-          })
-          .catch(function (error) {
-            msg(error.message);
-          })
-          .finally(function () {
-            busy(button, false, 'Ingresar');
-          });
-      });
-
-      $('logout').addEventListener('click', function () {
-        firebase.auth().signOut().then(function () {
-          panel('login');
-        });
-      });
-
-      function loadDashboard() {
-        return withIdToken(function (idToken) {
-          return apiFetch('/api/v1/usuarios/me', idToken).then(function (me) {
-            $('userText').textContent = me.data.email;
-            return apiFetch('/api/v1/dashboard/metricas', idToken);
-          });
-        }).then(function (body) {
-          var metricas = body.data;
-          var cards = [
-            ['Unidades', metricas.unidades, 'bi-buildings'],
-            ['Personas', metricas.personas, 'bi-people'],
-            ['Vehículos', metricas.vehiculos, 'bi-car-front'],
-            ['Parqueaderos', metricas.parqueaderos, 'bi-p-square']
-          ];
-
-          $('metrics').innerHTML = cards.map(function (item) {
-            return '<div class="col-6 col-lg-3 col-xl">' +
-              '<div class="surface metric p-3 h-100">' +
-              '<i class="bi ' + item[2] + '"></i>' +
-              '<div class="fs-4 fw-bold">' + esc(item[1]) + '</div>' +
-              '<div class="small-note">' + esc(item[0]) + '</div>' +
-              '</div></div>';
+      function cargarFiltroZonas(zonas) {
+        var select = $('filtroZona');
+        if (select) {
+          select.innerHTML = '<option value="">Todas</option>' + zonas.map(function (z) {
+            return '<option value="' + esc(z.id) + '">' + esc(z.descripcion) + '</option>';
           }).join('');
-        }).catch(function (error) {
-          msg(error.message);
-        });
-      }
-
-      function renderCoincidencias(coincidencias) {
-        return coincidencias.map(function (c) {
-          return esc(c.tipo) + ': ' + esc(c.detalle);
-        }).join(' · ');
-      }
-
-      $('searchForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        hideMsg();
-
-        var termino = $('query').value.trim();
-        var results = $('searchResults');
-        if (!termino) return;
-
-        results.textContent = 'Buscando…';
-
-        withIdToken(function (idToken) {
-          return apiFetch('/api/v1/unidades/buscar?q=' + encodeURIComponent(termino), idToken);
-        }).then(function (body) {
-          var resultados = (body.data && body.data.resultados) || [];
-
-          results.innerHTML = resultados.length
-            ? resultados.map(function (item) {
-                return '<button type="button" class="btn btn-outline-success w-100 text-start mb-2 unit-result" data-unit-id="' +
-                  esc(item.unidad.id) + '">' +
-                  '<strong>' + esc(item.unidad.codigoOficial) + '</strong>' +
-                  '<div class="small-note">' + renderCoincidencias(item.coincidencias) + '</div>' +
-                  '</button>';
-              }).join('')
-            : '<p class="text-muted mb-0">Sin resultados.</p>';
-        }).catch(function (error) {
-          results.innerHTML = '<p class="text-danger mb-0">Error: ' + esc(error.message) + '</p>';
-        });
-      });
-
-      $('searchResults').addEventListener('click', function (event) {
-        var button = event.target.closest('.unit-result');
-        if (button) loadProfile(button.dataset.unitId);
-      });
-
-      function loadProfile(unidadId) {
-        currentUnidadId = unidadId;
-        var box = $('profile');
-        box.innerHTML = '<p>Cargando…</p>';
-
-        withIdToken(function (idToken) {
-          return apiFetch('/api/v1/unidades/' + unidadId + '/perfil', idToken);
-        }).then(function (body) {
-          renderProfile(body.data);
-        }).catch(function (error) {
-          box.innerHTML = '<p class="text-danger mb-0">Error: ' + esc(error.message) + '</p>';
-        });
-      }
-
-      function renderProfile(perfil) {
-        var propietarios = (perfil.vinculosPersona || []).map(function (v) {
-          return '<li class="mb-1">' + esc(v.persona.nombreCompleto) + ' — ' + esc(v.tipoRelacion) +
-            ' (' + esc(v.persona.tipoDocumento) + ' ' + esc(v.persona.numeroDocumento) + ')' +
-            (v.persona.correo ? ' · ' + esc(v.persona.correo) : '') +
-            (v.persona.telefono ? ' · ' + esc(v.persona.telefono) : '') +
-            (v.activo
-              ? ' <button type="button" class="btn btn-outline-danger btn-sm ms-2 retirar-propietario" data-vinculo-id="' + esc(v.id) + '">Retirar</button>'
-              : ' <span class="badge text-bg-secondary">retirado</span>') +
-            '</li>';
-        }).join('') || '<li class="text-muted">Sin registros.</li>';
-
-        var vehiculos = (perfil.vinculosVehiculo || []).map(function (v) {
-          return '<li>' + esc(v.vehiculo.placa) + ' — ' + esc(v.vehiculo.tipoVehiculo || '') +
-            ' (' + esc(v.tipoVinculo) + ', ' + esc(v.estadoVinculo) + ')</li>';
-        }).join('') || '<li class="text-muted">Sin registros.</li>';
-
-        var parqueaderos = (perfil.parqueaderos || []).map(function (p) {
-          return '<li>' + esc(p.codigo) + ' — ' + esc(p.tipoParqueadero || '') + '</li>';
-        }).join('') || '<li class="text-muted">Sin registros.</li>';
-
-        var mascotas = (perfil.mascotas || []).map(function (m) {
-          return '<li>' + esc(m.nombre || 'Mascota') + (m.especie ? ' — ' + esc(m.especie) : '') + (m.raza ? ' (' + esc(m.raza) + ')' : '') + '</li>';
-        }).join('') || '<li class="text-muted">Sin registros.</li>';
-
-        var emergencia = (perfil.emergencia || []).map(function (e) {
-          return '<li>' + esc(e.nombre || '') + (e.parentesco ? ' — ' + esc(e.parentesco) : '') + (e.telefono ? ' · ' + esc(e.telefono) : '') + '</li>';
-        }).join('') || '<li class="text-muted">Sin registros.</li>';
-
-        var hc = perfil.historialCartera && perfil.historialCartera[0];
-        var estadoCuenta = hc
-          ? esc(hc.estadoCuenta || '') + ' · Saldo: ' + esc(hc.saldoActual || '')
-          : 'Sin información.';
-
-        function accordionItem(id, title, body, expanded) {
-          return '<div class="accordion-item">' +
-            '<h2 class="accordion-header">' +
-            '<button class="accordion-button' + (expanded ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + id + '">' +
-            title + '</button></h2>' +
-            '<div id="' + id + '" class="accordion-collapse collapse' + (expanded ? ' show' : '') + '">' +
-            '<div class="accordion-body p-3">' + body + '</div></div></div>';
         }
-
-        $('profile').innerHTML =
-          '<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">' +
-          '<h4 class="mb-0">' + esc(perfil.codigoOficial) + '</h4>' +
-          '<span class="badge text-bg-success">' + esc(perfil.estadoUnidad) + '</span>' +
-          '</div>' +
-
-          '<div class="accordion">' +
-          accordionItem('collapse-editar', 'Datos de la unidad',
-            '<form id="editUnidadForm" class="row g-2 align-items-end">' +
-            '<div class="col-md-5"><label class="form-label small">Estado</label>' +
-            '<select id="editEstadoUnidad" class="form-select form-select-sm">' +
-            ['NO_ENTREGADA', 'ENTREGADA'].map(function (estado) {
-              return '<option value="' + estado + '"' + (estado === perfil.estadoUnidad ? ' selected' : '') + '>' + estado + '</option>';
-            }).join('') +
-            '</select></div>' +
-            '<div class="col-md-5"><label class="form-label small">Fecha de entrega</label>' +
-            '<input id="editFechaEntrega" type="date" class="form-control form-control-sm" value="' + esc((perfil.fechaEntrega || '').slice(0, 10)) + '"></div>' +
-            '<div class="col-md-2 d-grid"><button type="submit" class="btn btn-primary btn-sm">Guardar</button></div>' +
-            '</form>', false) +
-
-          accordionItem('collapse-propietarios', 'Propietarios y residentes',
-            '<ul>' + propietarios + '</ul>' +
-            '<form id="addPropietarioForm" class="row g-2 align-items-end border-top pt-3 mt-3">' +
-            '<div class="col-md-2"><label class="form-label small">Tipo doc.</label>' +
-            '<input id="addTipoDocumento" class="form-control form-control-sm" value="CC" required></div>' +
-            '<div class="col-md-3"><label class="form-label small">Número doc.</label>' +
-            '<input id="addNumeroDocumento" class="form-control form-control-sm" required></div>' +
-            '<div class="col-md-4"><label class="form-label small">Nombre completo</label>' +
-            '<input id="addNombreCompleto" class="form-control form-control-sm" required></div>' +
-            '<div class="col-md-3"><label class="form-label small">Relación</label>' +
-            '<select id="addTipoRelacion" class="form-select form-select-sm">' +
-            '<option value="PROPIETARIO">PROPIETARIO</option>' +
-            '<option value="RESIDENTE">RESIDENTE</option>' +
-            '</select></div>' +
-            '<div class="col-md-4"><label class="form-label small">Correo</label>' +
-            '<input id="addCorreo" type="email" class="form-control form-control-sm" required></div>' +
-            '<div class="col-md-3"><label class="form-label small">Teléfono (opcional)</label>' +
-            '<input id="addTelefono" class="form-control form-control-sm"></div>' +
-            '<div class="col-md-3 d-grid"><button type="submit" class="btn btn-outline-success btn-sm">Agregar</button></div>' +
-            '</form>', true) +
-
-          accordionItem('collapse-vehiculos', 'Vehículos', '<ul>' + vehiculos + '</ul>', false) +
-          accordionItem('collapse-parqueaderos', 'Parqueaderos', '<ul>' + parqueaderos + '</ul>', false) +
-          accordionItem('collapse-mascotas', 'Mascotas', '<ul>' + mascotas + '</ul>', false) +
-          accordionItem('collapse-emergencia', 'Contacto de emergencia', '<ul>' + emergencia + '</ul>', false) +
-          accordionItem('collapse-cuenta', 'Estado de cuenta', '<p>' + estadoCuenta + '</p>', false) +
-          accordionItem('collapse-documentos', 'Documentos PhEnLinea',
-            '<div id="docsPhEnLinea" class="row g-3"></div>' +
-            '<div id="docsPhEnLineaLoading" class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Cargando documentos…</div>' +
-            '<div id="docsPhEnLineaError" class="alert alert-danger hidden mb-0"></div>' +
-            '<div id="docsPhEnLineaVacio" class="alert alert-info hidden mb-0"><i class="bi bi-info-circle me-2"></i>No hay documentos disponibles.</div>', false) +
-          '</div>';
       }
 
-      var documentosPhEnLinea = {};
-
-      $('profile').addEventListener('click', function (event) {
-        var button = event.target.closest('[data-bs-target="#collapse-documentos"]');
-        if (button && !documentosPhEnLinea[currentUnidadId]) {
-          cargarDocumentosAdmin(currentUnidadId);
-        }
-      });
-
-      function cargarDocumentosAdmin(unidadId) {
-        var container = $('docsPhEnLinea');
-        var loading = $('docsPhEnLineaLoading');
-        var error = $('docsPhEnLineaError');
-        var vacio = $('docsPhEnLineaVacio');
-
-        loading.classList.remove('hidden');
-        error.classList.add('hidden');
-        vacio.classList.add('hidden');
-        container.innerHTML = '';
-
+      var frm = $('crearZonaForm');
+      if (frm) frm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var btn = this.querySelector('button[type="submit"]');
+        busy(btn, true, 'Creando…');
         withIdToken(function (idToken) {
-          return Promise.all([
-            apiFetch('/api/v1/unidades/' + unidadId + '/cuenta-cobro', idToken),
-            apiFetch('/api/v1/unidades/' + unidadId + '/informes/estado-cuenta', idToken),
-            apiFetch('/api/v1/unidades/' + unidadId + '/informes/recibo', idToken),
-            apiFetch('/api/v1/unidades/' + unidadId + '/informes/certificado', idToken),
-            apiFetch('/api/v1/unidades/' + unidadId + '/informes/paz-y-salvo', idToken),
-          ]);
-        }).then(function (responses) {
-          loading.classList.add('hidden');
-          var tiposDocumentos = [
-            { id: 'cuenta-cobro', label: 'Cuenta de Cobro', icono: 'bi-receipt' },
-            { id: 'estado-cuenta', label: 'Estado de Cuenta', icono: 'bi-file-earmark' },
-            { id: 'recibo', label: 'Recibo', icono: 'bi-file-pdf' },
-            { id: 'certificado', label: 'Certificado', icono: 'bi-award' },
-            { id: 'paz-y-salvo', label: 'Paz y Salvo', icono: 'bi-check-circle' },
-          ];
-          var documentos = responses.map(function (resp, idx) {
-            var tipo = tiposDocumentos[idx];
-            var cuenta = resp.data && resp.data.cuenta;
-            var informe = resp.data && resp.data.informe;
-            var success = (cuenta && cuenta.success) || (informe && informe.success) || false;
-            var url = (cuenta && cuenta.ruta) || (informe && informe.url) || null;
-            return { tipo: tipo, success: success, url: url };
+          return apiFetch('/api/v1/reservas/catalogo', idToken, {
+            method: 'POST',
+            body: {
+              codigo: $('zonaCodigo').value.trim(),
+              tipo: $('zonaTipo').value.trim(),
+              descripcion: $('zonaDescripcion').value.trim(),
+              horaApertura: $('zonaHoraApertura').value,
+              horaCierre: $('zonaHoraCierre').value,
+              duracionMinHoras: parseInt($('zonaDuracionMin').value) || 1,
+              duracionMaxHoras: parseInt($('zonaDuracionMax').value) || 2,
+              costoReserva: parseFloat($('zonaCosto').value) || undefined,
+              depositoGarantia: parseFloat($('zonaDeposito').value) || undefined,
+              requierePago: $('zonaRequierePago').checked,
+              requiereAprobacion: $('zonaRequiereAprobacion').checked,
+              soportaModalidadRecreativa: $('zonaSoportaRecreativa').checked
+            }
           });
-          documentosPhEnLinea[unidadId] = true;
-          var algunoDisponible = documentos.some(function (d) { return d.success; });
-          if (!algunoDisponible) {
-            vacio.classList.remove('hidden');
-          } else {
-            container.innerHTML = documentos.map(function (doc) {
-              var disponible = doc.success && doc.url;
-              var btnClass = disponible ? 'btn-primary' : 'btn-secondary';
-              var btnDisabled = !disponible ? ' disabled' : '';
-              var icon = '<i class="bi ' + esc(doc.tipo.icono) + ' me-2"></i>';
-              var btnText = disponible ? icon + 'Descargar' : icon + 'No disponible';
-              return '<div class="col-md-6 col-lg-4">' +
-                '<div class="card border-0 h-100" style="box-shadow:0 2px 8px rgba(0,0,0,0.08)">' +
-                '<div class="card-body d-flex flex-column">' +
-                '<h6 class="card-title mb-3" style="color:var(--p);font-weight:700">' + esc(doc.tipo.label) + '</h6>' +
-                '<p class="card-text small text-muted mb-3 flex-grow-1">Período actual de facturación</p>' +
-                (disponible
-                  ? '<a href="' + esc(doc.url) + '" target="_blank" rel="noopener noreferrer" class="btn ' + btnClass + ' btn-sm mt-auto">' + btnText + '</a>'
-                  : '<button type="button" class="btn ' + btnClass + '" disabled>' + btnText + '</button>') +
-                '</div>' +
-                '</div>' +
-                '</div>';
-            }).join('');
-          }
-        }).catch(function (error) {
-          loading.classList.add('hidden');
-          error.textContent = 'Error al cargar documentos: ' + esc(error.message);
-          error.classList.remove('hidden');
-        });
-      }
-
-      $('profile').addEventListener('submit', function (event) {
-        if (event.target.id === 'editUnidadForm') {
-          event.preventDefault();
-          hideMsg();
-
-          var payload = {
-            estadoUnidad: $('editEstadoUnidad').value,
-            fechaEntrega: $('editFechaEntrega').value || undefined
-          };
-
-          withIdToken(function (idToken) {
-            return apiFetch('/api/v1/unidades/' + currentUnidadId, idToken, { method: 'PATCH', body: payload });
-          }).then(function () {
-            msg('Unidad actualizada.', 'success');
-            loadProfile(currentUnidadId);
-            loadDashboard();
-          }).catch(function (error) {
-            msg(error.message);
-          });
-        }
-
-        if (event.target.id === 'addPropietarioForm') {
-          event.preventDefault();
-          hideMsg();
-
-          var payload = {
-            tipoDocumento: $('addTipoDocumento').value.trim(),
-            numeroDocumento: $('addNumeroDocumento').value.trim(),
-            nombreCompleto: $('addNombreCompleto').value.trim(),
-            tipoRelacion: $('addTipoRelacion').value,
-            correo: $('addCorreo').value.trim(),
-            telefono: $('addTelefono').value.trim() || undefined
-          };
-
-          withIdToken(function (idToken) {
-            return apiFetch('/api/v1/unidades/' + currentUnidadId + '/propietarios', idToken, { method: 'POST', body: payload });
-          }).then(function () {
-            msg('Propietario/residente agregado.', 'success');
-            loadProfile(currentUnidadId);
-            loadDashboard();
-          }).catch(function (error) {
-            msg(error.message);
-          });
-        }
-      });
-
-      $('profile').addEventListener('click', function (event) {
-        var button = event.target.closest('.retirar-propietario');
-        if (!button) return;
-
-        if (!confirm('¿Retirar este vínculo?')) return;
-
-        withIdToken(function (idToken) {
-          return apiFetch(
-            '/api/v1/unidades/' + currentUnidadId + '/propietarios/' + button.dataset.vinculoId,
-            idToken,
-            { method: 'DELETE' }
-          );
         }).then(function () {
-          msg('Vínculo retirado.', 'success');
-          loadProfile(currentUnidadId);
+          msg('Zona creada', 'success');
+          $('crearZonaForm').reset();
+          cargarCatalogo();
+        }).catch(function (error) { msg(error.message); }).finally(function () { busy(btn, false, 'Crear zona'); });
+      });
+
+      /* --- Reservas --- */
+      function getEmojiZona(descripcion) {
+        var desc = (descripcion || '').toLowerCase();
+        if (desc.includes('salón social 1') || desc.includes('salon social 1')) return '🏛️🌇';
+        if (desc.includes('salón social 2') || desc.includes('salon social 2')) return '🏛️🏢';
+        if (desc.includes('salón social 3') || desc.includes('salon social 3')) return '🏛️💂';
+        if (desc.includes('cancha')) return '⚽';
+        return '';
+      }
+
+      function getEmojiEstado(estado) {
+        switch ((estado || '').toUpperCase()) {
+          case 'PENDIENTE': return '⏳';
+          case 'CONFIRMADA': return '✅';
+          case 'RECHAZADA': return '❌';
+          case 'CANCELADA': return '⚫';
+          default: return '';
+        }
+      }
+
+      function getNombreDia(fecha) {
+        var dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        return dias[fecha.getDay()];
+      }
+
+      function cargarAgendaReservas() {
+        var agendaLoading = $('agendaLoading');
+        var agendaError = $('agendaError');
+        var agendaCalendario = $('agendaCalendario');
+        var agendaDesde = $('agendaDesde');
+        var agendaHasta = $('agendaHasta');
+
+        if (agendaLoading) agendaLoading.classList.remove('hidden');
+        if (agendaError) agendaError.classList.add('hidden');
+        if (agendaCalendario) agendaCalendario.innerHTML = '';
+
+        var desdeStr = agendaDesde ? agendaDesde.value : '';
+        var hastaStr = agendaHasta ? agendaHasta.value : '';
+
+        // Si no hay fechas, inicializarlas antes de proceder
+        if (!desdeStr || !hastaStr) {
+          initAgendaFechas();
+          desdeStr = agendaDesde ? agendaDesde.value : '';
+          hastaStr = agendaHasta ? agendaHasta.value : '';
+        }
+
+        if (!desdeStr || !hastaStr) {
+          if (agendaLoading) agendaLoading.classList.add('hidden');
+          if (agendaError) {
+            agendaError.textContent = 'Error al inicializar fechas';
+            agendaError.classList.remove('hidden');
+          }
+          return;
+        }
+
+        var desde = new Date(desdeStr + 'T00:00:00').toISOString();
+        var hasta = new Date(hastaStr + 'T23:59:59').toISOString();
+
+        var queryParams = ['desde=' + encodeURIComponent(desde), 'hasta=' + encodeURIComponent(hasta)];
+
+        var url = '/api/v1/reservas?' + queryParams.join('&');
+
+        withIdToken(function (idToken) {
+          return apiFetch(url, idToken);
+        }).then(function (result) {
+          if (agendaLoading) agendaLoading.classList.add('hidden');
+          var reservas = result.data || [];
+          renderCalendarioReservas(reservas, desdeStr, hastaStr);
         }).catch(function (error) {
-          msg(error.message);
+          if (agendaLoading) agendaLoading.classList.add('hidden');
+          if (agendaError) {
+            agendaError.textContent = 'Error: ' + error.message;
+            agendaError.classList.remove('hidden');
+          }
         });
+      }
+
+      function renderCalendarioReservas(reservas, desdeStr, hastaStr) {
+        var desde = new Date(desdeStr + 'T00:00:00');
+        var hasta = new Date(hastaStr + 'T23:59:59');
+
+        // Agrupar por zona
+        var zonas = {};
+        reservas.forEach(function (r) {
+          var zona = r.zonaComun.descripcion;
+          if (!zonas[zona]) zonas[zona] = [];
+          zonas[zona].push(r);
+        });
+
+        if (Object.keys(zonas).length === 0) {
+          $('agendaCalendario').innerHTML = '<p class="text-muted text-center py-4">No hay reservas en este período</p>';
+          return;
+        }
+
+        // Generar lista de fechas en el rango
+        var fechas = [];
+        var fecha = new Date(desde);
+        while (fecha <= hasta) {
+          fechas.push(new Date(fecha));
+          fecha.setDate(fecha.getDate() + 1);
+        }
+
+        var html = '<table class="calendar-table"><thead><tr><th style="min-width:160px;">Zona</th>';
+        fechas.forEach(function (f) {
+          var num = f.getDate();
+          var dia = getNombreDia(f);
+          html += '<th class="fecha-header"><span class="fecha-numero">' + num + '</span><span class="fecha-dia">' + dia + '</span></th>';
+        });
+        html += '</tr></thead><tbody>';
+
+        Object.keys(zonas).sort().forEach(function (zona) {
+          var emojiZona = getEmojiZona(zona);
+          html += '<tr><td class="zona-nombre">' + emojiZona + ' ' + esc(zona) + '</td>';
+
+          fechas.forEach(function (f) {
+            var fechaStr = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
+            var reservasDelDia = zonas[zona].filter(function (r) {
+              return r.fechaHoraInicio.substring(0, 10) === fechaStr;
+            });
+
+            if (reservasDelDia.length === 0) {
+              html += '<td class="reserva-vacia"></td>';
+            } else {
+              html += '<td>' + reservasDelDia.map(function (r) {
+                var claseEstado = 'reserva-' + r.estado.toLowerCase();
+                var hora = new Date(r.fechaHoraInicio).toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit'});
+                var emojiEstado = getEmojiEstado(r.estado);
+                var unidad = esc(r.unidad.codigoOficial);
+                var title = unidad + ' ' + hora + ' ' + r.estado;
+                return '<div class="reserva-block ' + claseEstado + '" title="' + title + '"><div class="reserva-emoji">' + emojiEstado + '</div><div class="reserva-texto">' + unidad + '<br>' + hora + '</div></div>';
+              }).join('') + '</td>';
+            }
+          });
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        html += '<div class="calendar-legend">' +
+          '<div class="legend-item"><span class="legend-emoji">⏳</span><small>Pendiente</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">✅</span><small>Confirmada</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">❌</span><small>Rechazada</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">⚫</span><small>Cancelada</small></div>' +
+          '</div>';
+
+        var agendaCalendario = $('agendaCalendario');
+        if (agendaCalendario) agendaCalendario.innerHTML = html;
+      }
+
+      function initAgendaFechas() {
+        var today = new Date();
+        var hasta = new Date(today);
+        hasta.setDate(hasta.getDate() + 6);
+
+        var agendaDesde = $('agendaDesde');
+        var agendaHasta = $('agendaHasta');
+        if (agendaDesde) agendaDesde.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        if (agendaHasta) agendaHasta.value = hasta.getFullYear() + '-' + String(hasta.getMonth() + 1).padStart(2, '0') + '-' + String(hasta.getDate()).padStart(2, '0');
+      }
+
+      var showCatalogo = $('showCatalogo');
+      var showReservas = $('showReservas');
+      if (showCatalogo) showCatalogo.addEventListener('click', function () { mode('catalogo'); });
+      if (showReservas) showReservas.addEventListener('click', function () {
+        mode('reservas');
+        var agendaDesdeVal = $('agendaDesde');
+        if (!agendaDesdeVal || !agendaDesdeVal.value) {
+          initAgendaFechas();
+          cargarAgendaReservas();
+        }
+      });
+
+      var agendaSiete = $('agendaSiete');
+      if (agendaSiete) agendaSiete.addEventListener('click', function () {
+        initAgendaFechas();
+        cargarAgendaReservas();
+      });
+
+      var agendaMes = $('agendaMes');
+      if (agendaMes) agendaMes.addEventListener('click', function () {
+        var today = new Date();
+        var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        var monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        var agendaDesde = $('agendaDesde');
+        var agendaHasta = $('agendaHasta');
+        if (agendaDesde) agendaDesde.value = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-' + String(monthStart.getDate()).padStart(2, '0');
+        if (agendaHasta) agendaHasta.value = monthEnd.getFullYear() + '-' + String(monthEnd.getMonth() + 1).padStart(2, '0') + '-' + String(monthEnd.getDate()).padStart(2, '0');
+        cargarAgendaReservas();
+      });
+
+      var agendaRefrescar = $('agendaRefrescar');
+      if (agendaRefrescar) agendaRefrescar.addEventListener('click', cargarAgendaReservas);
+      var logoutBtn = $('logoutBtn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function () { firebase.auth().signOut(); });
+      var loginForm = $('loginForm');
+      if (loginForm) loginForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var btn = $('loginBtn');
+        var emailField = $('email');
+        var passwordField = $('password');
+        busy(btn, true, 'Ingresando…');
+        firebase.auth().signInWithEmailAndPassword(emailField ? emailField.value : '', passwordField ? passwordField.value : '')
+          .then(function () { panel('app'); cargarCatalogo(); })
+          .catch(function (err) { msg(err.message); })
+          .finally(function () { busy(btn, false, 'Ingresar'); });
+      });
+
+      /* --- Acciones de Reservas --- */
+      var modalRechazarEl = $('modalRechazar');
+      var modalCancelarEl = $('modalCancelar');
+      var modalPagoEl = $('modalPago');
+      var modalRechazar = modalRechazarEl ? new bootstrap.Modal(modalRechazarEl) : null;
+      var modalCancelar = modalCancelarEl ? new bootstrap.Modal(modalCancelarEl) : null;
+      var modalPago = modalPagoEl ? new bootstrap.Modal(modalPagoEl) : null;
+      var reservaActualId = null;
+
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.accion-reserva');
+        if (!btn) return;
+        reservaActualId = btn.dataset.id;
+        var estado = btn.dataset.estado;
+
+        if (estado === 'PENDIENTE') {
+          var menu = '<div class="btn-group btn-group-sm" style="width:100%">' +
+            '<button class="btn btn-success btn-sm flex-fill" id="accionAprobar">Aprobar</button>' +
+            '<button class="btn btn-danger btn-sm flex-fill" id="accionRechazar">Rechazar</button>' +
+            '</div>';
+          if (confirm('Opciones para esta reserva:\n\n- Aprobar: confirmar la reserva\n- Rechazar: denegar la reserva')) {
+            // Placeholder: mostrar opciones en un popover o menú flotante
+            // Por ahora usamos confirm para elegir
+            if (confirm('¿Aprobar esta reserva?')) {
+              aprobarReserva();
+            } else if (confirm('¿Rechazar esta reserva?')) {
+              var motivoRechazo = $('motivoRechazo');
+              if (motivoRechazo) motivoRechazo.value = '';
+              if (modalRechazar) modalRechazar.show();
+            }
+          }
+        } else if (estado === 'CONFIRMADA' || estado === 'PENDIENTE') {
+          if (confirm('¿Cancelar esta reserva?')) {
+            var motivoCancelacion = $('motivoCancelacion');
+            if (motivoCancelacion) motivoCancelacion.value = '';
+            if (modalCancelar) modalCancelar.show();
+          }
+        }
+
+        var accionPago = confirm('¿Registrar pago para esta reserva?');
+        if (accionPago) {
+          var estadoPago = $('estadoPago');
+          var fechaPago = $('fechaPago');
+          if (estadoPago) estadoPago.value = 'PENDIENTE';
+          if (fechaPago) fechaPago.value = '';
+          if (modalPago) modalPago.show();
+        }
+      });
+
+      function aprobarReserva() {
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/' + reservaActualId + '/aprobar', idToken, { method: 'PATCH' });
+        }).then(function () {
+          msg('Reserva aprobada', 'success');
+          cargarAgendaReservas();
+        }).catch(function (error) { msg(error.message); });
+      }
+
+      $('confirmarRechazo').addEventListener('click', function () {
+        var motivo = $('motivoRechazo').value.trim() || 'Rechazada por administrador';
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/' + reservaActualId + '/rechazar', idToken, {
+            method: 'PATCH',
+            body: { motivo: motivo }
+          });
+        }).then(function () {
+          msg('Reserva rechazada', 'success');
+          if (modalRechazar) modalRechazar.hide();
+          cargarAgendaReservas();
+        }).catch(function (error) { msg(error.message); });
+      });
+
+      $('confirmarCancelacion').addEventListener('click', function () {
+        var motivo = $('motivoCancelacion').value.trim() || 'Cancelada por administrador';
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/' + reservaActualId + '/cancelar', idToken, {
+            method: 'PATCH',
+            body: { motivo: motivo }
+          });
+        }).then(function () {
+          msg('Reserva cancelada', 'success');
+          if (modalCancelar) modalCancelar.hide();
+          cargarAgendaReservas();
+        }).catch(function (error) { msg(error.message); });
+      });
+
+      $('confirmarPago').addEventListener('click', function () {
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/' + reservaActualId + '/pago', idToken, {
+            method: 'PATCH',
+            body: {
+              estadoPago: $('estadoPago').value,
+              fechaPago: $('fechaPago').value ? new Date($('fechaPago').value).toISOString() : undefined
+            }
+          });
+        }).then(function () {
+          msg('Pago registrado', 'success');
+          if (modalPago) modalPago.hide();
+          cargarAgendaReservas();
+        }).catch(function (error) { msg(error.message); });
       });
 
       firebase.auth().onAuthStateChanged(function (user) {
         if (user) {
           panel('app');
-          loadDashboard();
-        } else {
-          panel('login');
-        }
+          $('userText').textContent = user.email;
+          cargarCatalogo();
+        } else { panel('login'); }
       });
-
-      // ===== VISTA ALTERNADA: DASHBOARD vs CONVIVENCIA =====
-
-      function mode(name) {
-        var isDashboard = name === 'dashboard';
-        var isConvivencia = name === 'convivencia';
-        var isReservas = name === 'reservas';
-        $('dashboardView').classList.toggle('hidden', !isDashboard);
-        $('convivenciaView').classList.toggle('hidden', !isConvivencia);
-        $('reservasView').classList.toggle('hidden', !isReservas);
-        $('showDashboard').classList.toggle('active', isDashboard);
-        $('showConvivencia').classList.toggle('active', isConvivencia);
-        $('showReservas').classList.toggle('active', isReservas);
-      }
-
-      $('showDashboard').addEventListener('click', function () { mode('dashboard'); });
-      $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
-      $('showReservas').addEventListener('click', function () { mode('reservas'); });
-
-      // ===== IMPORTACIÓN DE CARTERA =====
-      
-      var modalImportarCartera = null;
-      
-      // Inicializar modal cuando el DOM esté listo
-      document.addEventListener('DOMContentLoaded', function() {
-        modalImportarCartera = new bootstrap.Modal($('modalImportarCartera'));
-      });
-
-      $('btnImportarCartera').addEventListener('click', function () {
-        if (!modalImportarCartera) {
-          modalImportarCartera = new bootstrap.Modal($('modalImportarCartera'));
-        }
-        // Limpiar formulario y mensajes
-        $('formImportarCartera').reset();
-        $('importResult').classList.add('hidden');
-        $('progressBar').classList.add('hidden');
-        modalImportarCartera.show();
-      });
-
-      $('formImportarCartera').addEventListener('submit', function (event) {
-        event.preventDefault();
-        
-        var fileInput = $('archivoCartera');
-        var file = fileInput.files[0];
-        
-        if (!file) {
-          showImportMsg('Por favor selecciona un archivo', 'danger');
-          return;
-        }
-
-        // Validar extensión
-        var extension = file.name.split('.').pop().toLowerCase();
-        if (extension !== 'xls' && extension !== 'xlsx') {
-          showImportMsg('El archivo debe ser .xls o .xlsx', 'danger');
-          return;
-        }
-
-        // Mostrar progress bar
-        $('progressBar').classList.remove('hidden');
-        $('importResult').classList.add('hidden');
-        var submitBtn = $('btnSubirCartera');
-        busy(submitBtn, true, 'Procesando...');
-
-        // Crear FormData
-        var formData = new FormData();
-        formData.append('archivo', file);
-
-        // Enviar archivo al API
-        withIdToken(function (idToken) {
-          return fetch(API_BASE + '/api/v1/cartera/importar', {
-            method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + idToken
-            },
-            body: formData
-          }).then(function (response) {
-            return response.json().then(function (body) {
-              if (!response.ok) {
-                throw new Error(body.error && body.error.message || 'Error al importar');
-              }
-              return body;
-            });
-          });
-        }).then(function (body) {
-          var data = body.data;
-          var mensaje = '<strong>Importación exitosa</strong><br>' +
-            '✅ Actualizados: ' + data.actualizados + '<br>' +
-            '📊 Procesados: ' + data.procesados;
-
-          if (data.noEncontrados && data.noEncontrados.length > 0) {
-            var noEncontradosStrings = data.noEncontrados.slice(0, 5).map(function(item) {
-              return item.codigo + ' (fila ' + item.fila + ')';
-            });
-            mensaje += '<br>⚠️ No encontrados: ' + noEncontradosStrings.join(', ');
-            if (data.noEncontrados.length > 5) {
-              mensaje += ' y ' + (data.noEncontrados.length - 5) + ' más';
-            }
-          }
-
-          if (data.errores && data.errores.length > 0) {
-            var erroresStrings = data.errores.slice(0, 3).map(function(err) {
-              return 'Fila ' + err.fila + ' (' + err.codigo + '): ' + err.error;
-            });
-            mensaje += '<br>❌ Errores:<br>' + erroresStrings.join('<br>');
-            if (data.errores.length > 3) {
-              mensaje += '<br>... y ' + (data.errores.length - 3) + ' más';
-            }
-          }
-
-          showImportMsg(mensaje, data.errores && data.errores.length > 0 ? 'warning' : 'success');
-          
-          // Recargar dashboard si hubo cambios
-          if (data.actualizados > 0) {
-            loadDashboard();
-          }
-        }).catch(function (error) {
-          showImportMsg('Error: ' + error.message, 'danger');
-        }).finally(function () {
-          $('progressBar').classList.add('hidden');
-          busy(submitBtn, false, 'Subir e Importar');
-        });
-      });
-
-      function showImportMsg(html, type) {
-        var alertBox = $('importResult');
-        alertBox.className = 'alert alert-' + (type || 'info');
-        alertBox.innerHTML = html;
-        alertBox.classList.remove('hidden');
-      }
     }());
   </script>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-  {{ partial "footer" . }}
 </body>
-
 </html>
