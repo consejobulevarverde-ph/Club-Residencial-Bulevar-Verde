@@ -197,12 +197,15 @@
     {{ partial "header" . }}
 
     <!-- Hero Section -->
-    <section class="hero-section text-center" style="background-image: url('{{ "images/drone.jpeg" | relURL }}'); background-size: cover; background-position: center;">
-        <div class="container">
-            <!-- Logo will go here when uploaded -->
-            <img src="{{ "images/logo.png" | relURL }}" alt="Club Residencial Bulevar Verde" class="hero-logo" onerror="this.style.display='none'" style="border: 2px solid black;">
-            <h1 class="display-4">{{ .Site.Title }}</h1> <!-- debe de estar en la parte de mas abajo del hero, movel al button -->
-            <p class="lead">{{ .Site.Params.description }}</p> 
+    <section class="hero-section text-center" style="background-image: url('{{ "images/drone.jpeg" | relURL }}'); background-size: cover; background-position: center; display: flex; flex-direction: column; min-height: 500px;">
+        <div class="container" style="flex: 1; display: flex; align-items: flex-start; justify-content: center;">
+            <img src="{{ "images/logo.png" | relURL }}" alt="Club Residencial Bulevar Verde" class="hero-logo" onerror="this.style.display='none'">
+        </div>
+        <div class="container" style="margin-top: auto; padding-bottom: 2rem;">
+            <div>
+                <h1 class="display-4" style="color: white; margin-bottom: 1rem;">{{ .Site.Title }}</h1>
+                <p class="lead" style="color: #ddd;">{{ .Site.Params.description }}</p>
+            </div>
         </div>
     </section>
 
