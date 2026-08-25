@@ -403,15 +403,22 @@
       function hideMsg() { var box = $('alert'); if (box) box.classList.add('hidden'); }
 
       function panel(id) {
-        ['login', 'app'].forEach(function (p) { $(p).classList.toggle('hidden', p !== id); });
+        ['login', 'app'].forEach(function (p) {
+          var el = $(p);
+          if (el) el.classList.toggle('hidden', p !== id);
+        });
       }
 
       function mode(name) {
         var es_catalogo = name === 'catalogo';
-        $('catalogoView').classList.toggle('hidden', !es_catalogo);
-        $('reservasView').classList.toggle('hidden', es_catalogo);
-        $('showCatalogo').classList.toggle('active', es_catalogo);
-        $('showReservas').classList.toggle('active', !es_catalogo);
+        var catalogoView = $('catalogoView');
+        var reservasView = $('reservasView');
+        var showCatalogo = $('showCatalogo');
+        var showReservas = $('showReservas');
+        if (catalogoView) catalogoView.classList.toggle('hidden', !es_catalogo);
+        if (reservasView) reservasView.classList.toggle('hidden', es_catalogo);
+        if (showCatalogo) showCatalogo.classList.toggle('active', es_catalogo);
+        if (showReservas) showReservas.classList.toggle('active', !es_catalogo);
       }
 
       function busy(btn, active, label) {
@@ -459,18 +466,23 @@
       }
 
       function renderCatalogo(zonas) {
-        $('catalogoLista').innerHTML = zonas.length ? zonas.map(function (z) {
-          return '<div class="repeat-row"><div class="row"><div class="col-md-4"><strong>' + esc(z.descripcion) + '</strong>' +
-            '<div class="small-note">' + esc(z.tipo) + ' | ' + esc(z.horaApertura) + '–' + esc(z.horaCierre) + '</div></div>' +
-            '<div class="col-md-8"><button type="button" class="btn btn-outline-primary btn-sm editar-zona" data-id="' + esc(z.id) + '">Editar</button></div></div></div>';
-        }).join('') : '<p class="text-muted">No hay zonas registradas.</p>';
+        var catalogoLista = $('catalogoLista');
+        if (catalogoLista) {
+          catalogoLista.innerHTML = zonas.length ? zonas.map(function (z) {
+            return '<div class="repeat-row"><div class="row"><div class="col-md-4"><strong>' + esc(z.descripcion) + '</strong>' +
+              '<div class="small-note">' + esc(z.tipo) + ' | ' + esc(z.horaApertura) + '–' + esc(z.horaCierre) + '</div></div>' +
+              '<div class="col-md-8"><button type="button" class="btn btn-outline-primary btn-sm editar-zona" data-id="' + esc(z.id) + '">Editar</button></div></div></div>';
+          }).join('') : '<p class="text-muted">No hay zonas registradas.</p>';
+        }
       }
 
       function cargarFiltroZonas(zonas) {
         var select = $('filtroZona');
-        select.innerHTML = '<option value="">Todas</option>' + zonas.map(function (z) {
-          return '<option value="' + esc(z.id) + '">' + esc(z.descripcion) + '</option>';
-        }).join('');
+        if (select) {
+          select.innerHTML = '<option value="">Todas</option>' + zonas.map(function (z) {
+            return '<option value="' + esc(z.id) + '">' + esc(z.descripcion) + '</option>';
+          }).join('');
+        }
       }
 
       var frm = $('crearZonaForm');
@@ -529,24 +541,32 @@
       }
 
       function cargarAgendaReservas() {
-        $('agendaLoading').classList.remove('hidden');
-        $('agendaError').classList.add('hidden');
-        $('agendaCalendario').innerHTML = '';
+        var agendaLoading = $('agendaLoading');
+        var agendaError = $('agendaError');
+        var agendaCalendario = $('agendaCalendario');
+        var agendaDesde = $('agendaDesde');
+        var agendaHasta = $('agendaHasta');
 
-        var desdeStr = $('agendaDesde').value;
-        var hastaStr = $('agendaHasta').value;
+        if (agendaLoading) agendaLoading.classList.remove('hidden');
+        if (agendaError) agendaError.classList.add('hidden');
+        if (agendaCalendario) agendaCalendario.innerHTML = '';
+
+        var desdeStr = agendaDesde ? agendaDesde.value : '';
+        var hastaStr = agendaHasta ? agendaHasta.value : '';
 
         // Si no hay fechas, inicializarlas antes de proceder
         if (!desdeStr || !hastaStr) {
           initAgendaFechas();
-          desdeStr = $('agendaDesde').value;
-          hastaStr = $('agendaHasta').value;
+          desdeStr = agendaDesde ? agendaDesde.value : '';
+          hastaStr = agendaHasta ? agendaHasta.value : '';
         }
 
         if (!desdeStr || !hastaStr) {
-          $('agendaLoading').classList.add('hidden');
-          $('agendaError').textContent = 'Error al inicializar fechas';
-          $('agendaError').classList.remove('hidden');
+          if (agendaLoading) agendaLoading.classList.add('hidden');
+          if (agendaError) {
+            agendaError.textContent = 'Error al inicializar fechas';
+            agendaError.classList.remove('hidden');
+          }
           return;
         }
 
@@ -560,13 +580,15 @@
         withIdToken(function (idToken) {
           return apiFetch(url, idToken);
         }).then(function (result) {
-          $('agendaLoading').classList.add('hidden');
+          if (agendaLoading) agendaLoading.classList.add('hidden');
           var reservas = result.data || [];
           renderCalendarioReservas(reservas, desdeStr, hastaStr);
         }).catch(function (error) {
-          $('agendaLoading').classList.add('hidden');
-          $('agendaError').textContent = 'Error: ' + error.message;
-          $('agendaError').classList.remove('hidden');
+          if (agendaLoading) agendaLoading.classList.add('hidden');
+          if (agendaError) {
+            agendaError.textContent = 'Error: ' + error.message;
+            agendaError.classList.remove('hidden');
+          }
         });
       }
 
@@ -637,7 +659,8 @@
           '<div class="legend-item"><span class="legend-emoji">⚫</span><small>Cancelada</small></div>' +
           '</div>';
 
-        $('agendaCalendario').innerHTML = html;
+        var agendaCalendario = $('agendaCalendario');
+        if (agendaCalendario) agendaCalendario.innerHTML = html;
       }
 
       function initAgendaFechas() {
@@ -645,50 +668,67 @@
         var hasta = new Date(today);
         hasta.setDate(hasta.getDate() + 6);
 
-        $('agendaDesde').value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-        $('agendaHasta').value = hasta.getFullYear() + '-' + String(hasta.getMonth() + 1).padStart(2, '0') + '-' + String(hasta.getDate()).padStart(2, '0');
+        var agendaDesde = $('agendaDesde');
+        var agendaHasta = $('agendaHasta');
+        if (agendaDesde) agendaDesde.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        if (agendaHasta) agendaHasta.value = hasta.getFullYear() + '-' + String(hasta.getMonth() + 1).padStart(2, '0') + '-' + String(hasta.getDate()).padStart(2, '0');
       }
 
-      $('showCatalogo').addEventListener('click', function () { mode('catalogo'); });
-      $('showReservas').addEventListener('click', function () {
+      var showCatalogo = $('showCatalogo');
+      var showReservas = $('showReservas');
+      if (showCatalogo) showCatalogo.addEventListener('click', function () { mode('catalogo'); });
+      if (showReservas) showReservas.addEventListener('click', function () {
         mode('reservas');
-        if (!$('agendaDesde').value) {
+        var agendaDesdeVal = $('agendaDesde');
+        if (!agendaDesdeVal || !agendaDesdeVal.value) {
           initAgendaFechas();
           cargarAgendaReservas();
         }
       });
 
-      $('agendaSiete').addEventListener('click', function () {
+      var agendaSiete = $('agendaSiete');
+      if (agendaSiete) agendaSiete.addEventListener('click', function () {
         initAgendaFechas();
         cargarAgendaReservas();
       });
 
-      $('agendaMes').addEventListener('click', function () {
+      var agendaMes = $('agendaMes');
+      if (agendaMes) agendaMes.addEventListener('click', function () {
         var today = new Date();
         var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
         var monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
-        $('agendaDesde').value = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-' + String(monthStart.getDate()).padStart(2, '0');
-        $('agendaHasta').value = monthEnd.getFullYear() + '-' + String(monthEnd.getMonth() + 1).padStart(2, '0') + '-' + String(monthEnd.getDate()).padStart(2, '0');
+        var agendaDesde = $('agendaDesde');
+        var agendaHasta = $('agendaHasta');
+        if (agendaDesde) agendaDesde.value = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-' + String(monthStart.getDate()).padStart(2, '0');
+        if (agendaHasta) agendaHasta.value = monthEnd.getFullYear() + '-' + String(monthEnd.getMonth() + 1).padStart(2, '0') + '-' + String(monthEnd.getDate()).padStart(2, '0');
         cargarAgendaReservas();
       });
 
-      $('agendaRefrescar').addEventListener('click', cargarAgendaReservas);
-      $('logoutBtn').addEventListener('click', function () { firebase.auth().signOut(); });
-      $('loginForm').addEventListener('submit', function (e) {
+      var agendaRefrescar = $('agendaRefrescar');
+      if (agendaRefrescar) agendaRefrescar.addEventListener('click', cargarAgendaReservas);
+      var logoutBtn = $('logoutBtn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function () { firebase.auth().signOut(); });
+      var loginForm = $('loginForm');
+      if (loginForm) loginForm.addEventListener('submit', function (e) {
         e.preventDefault();
         var btn = $('loginBtn');
+        var emailField = $('email');
+        var passwordField = $('password');
         busy(btn, true, 'Ingresando…');
-        firebase.auth().signInWithEmailAndPassword($('email').value, $('password').value)
+        firebase.auth().signInWithEmailAndPassword(emailField ? emailField.value : '', passwordField ? passwordField.value : '')
           .then(function () { panel('app'); cargarCatalogo(); })
           .catch(function (err) { msg(err.message); })
           .finally(function () { busy(btn, false, 'Ingresar'); });
       });
 
       /* --- Acciones de Reservas --- */
-      var modalRechazar = new bootstrap.Modal($('modalRechazar'));
-      var modalCancelar = new bootstrap.Modal($('modalCancelar'));
-      var modalPago = new bootstrap.Modal($('modalPago'));
+      var modalRechazarEl = $('modalRechazar');
+      var modalCancelarEl = $('modalCancelar');
+      var modalPagoEl = $('modalPago');
+      var modalRechazar = modalRechazarEl ? new bootstrap.Modal(modalRechazarEl) : null;
+      var modalCancelar = modalCancelarEl ? new bootstrap.Modal(modalCancelarEl) : null;
+      var modalPago = modalPagoEl ? new bootstrap.Modal(modalPagoEl) : null;
       var reservaActualId = null;
 
       document.addEventListener('click', function (e) {
@@ -708,22 +748,26 @@
             if (confirm('¿Aprobar esta reserva?')) {
               aprobarReserva();
             } else if (confirm('¿Rechazar esta reserva?')) {
-              $('motivoRechazo').value = '';
-              modalRechazar.show();
+              var motivoRechazo = $('motivoRechazo');
+              if (motivoRechazo) motivoRechazo.value = '';
+              if (modalRechazar) modalRechazar.show();
             }
           }
         } else if (estado === 'CONFIRMADA' || estado === 'PENDIENTE') {
           if (confirm('¿Cancelar esta reserva?')) {
-            $('motivoCancelacion').value = '';
-            modalCancelar.show();
+            var motivoCancelacion = $('motivoCancelacion');
+            if (motivoCancelacion) motivoCancelacion.value = '';
+            if (modalCancelar) modalCancelar.show();
           }
         }
 
         var accionPago = confirm('¿Registrar pago para esta reserva?');
         if (accionPago) {
-          $('estadoPago').value = 'PENDIENTE';
-          $('fechaPago').value = '';
-          modalPago.show();
+          var estadoPago = $('estadoPago');
+          var fechaPago = $('fechaPago');
+          if (estadoPago) estadoPago.value = 'PENDIENTE';
+          if (fechaPago) fechaPago.value = '';
+          if (modalPago) modalPago.show();
         }
       });
 
@@ -745,7 +789,7 @@
           });
         }).then(function () {
           msg('Reserva rechazada', 'success');
-          modalRechazar.hide();
+          if (modalRechazar) modalRechazar.hide();
           cargarAgendaReservas();
         }).catch(function (error) { msg(error.message); });
       });
@@ -759,7 +803,7 @@
           });
         }).then(function () {
           msg('Reserva cancelada', 'success');
-          modalCancelar.hide();
+          if (modalCancelar) modalCancelar.hide();
           cargarAgendaReservas();
         }).catch(function (error) { msg(error.message); });
       });
@@ -775,7 +819,7 @@
           });
         }).then(function () {
           msg('Pago registrado', 'success');
-          modalPago.hide();
+          if (modalPago) modalPago.hide();
           cargarAgendaReservas();
         }).catch(function (error) { msg(error.message); });
       });
