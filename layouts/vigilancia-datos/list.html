@@ -1028,9 +1028,16 @@
         var desdeStr = $('agendaDesde').value;
         var hastaStr = $('agendaHasta').value;
 
+        // Si no hay fechas, inicializarlas antes de proceder
+        if (!desdeStr || !hastaStr) {
+          initAgendaFechas();
+          desdeStr = $('agendaDesde').value;
+          hastaStr = $('agendaHasta').value;
+        }
+
         if (!desdeStr || !hastaStr) {
           $('agendaLoading').classList.add('hidden');
-          $('agendaError').textContent = 'Selecciona un rango de fechas';
+          $('agendaError').textContent = 'Error al inicializar fechas';
           $('agendaError').classList.remove('hidden');
           return;
         }
