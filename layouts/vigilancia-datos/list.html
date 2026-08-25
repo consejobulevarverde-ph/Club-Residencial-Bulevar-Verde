@@ -408,17 +408,13 @@
 
       <section id="reservasAgendaView" class="hidden">
         <div class="surface p-4">
-          <h2 class="h5 mb-3"><i class="bi bi-calendar-check me-2"></i>Agenda de Reservas</h2>
+          <h2 class="h5 mb-3"><i class="bi bi-calendar-check me-2"></i>Calendario de Reservas</h2>
           <div class="row g-3 mb-4">
-            <div class="col-md-3">
-              <label class="form-label small">Desde</label>
-              <input id="agendaDesde" type="date" class="form-control form-control-sm">
+            <div class="col-md-4">
+              <label class="form-label small">Mes/Año</label>
+              <input id="agendaMes" type="month" class="form-control form-control-sm">
             </div>
-            <div class="col-md-3">
-              <label class="form-label small">Hasta</label>
-              <input id="agendaHasta" type="date" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
               <label class="form-label small">Estado</label>
               <select id="agendaEstado" class="form-select form-select-sm">
                 <option value="">Todos</option>
@@ -428,13 +424,13 @@
                 <option value="RECHAZADA">Rechazada</option>
               </select>
             </div>
-            <div class="col-md-3 d-flex align-items-end">
-              <button id="agendaRefrescar" type="button" class="btn btn-primary btn-sm w-100"><i class="bi bi-arrow-clockwise me-1"></i>Filtrar</button>
+            <div class="col-md-4 d-flex align-items-end">
+              <button id="agendaRefrescar" type="button" class="btn btn-primary btn-sm w-100"><i class="bi bi-arrow-clockwise me-1"></i>Cargar</button>
             </div>
           </div>
-          <div id="agendaLoading" class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
-          <div id="agendaError" class="alert alert-danger hidden mb-0"></div>
-          <div id="agendaTabla"></div>
+          <div id="agendaLoading" class="text-muted small mb-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+          <div id="agendaError" class="alert alert-danger hidden mb-3"></div>
+          <div id="agendaCalendario" style="overflow-x: auto;"></div>
         </div>
       </section>
     </section>
