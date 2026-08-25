@@ -572,6 +572,86 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal: Editar Zona -->
+    <div class="modal fade" id="modalEditarZona" tabindex="-1">
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Editar Zona Común</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="editarZonaForm" class="row g-3">
+              <div class="col-lg-2">
+                <label class="form-label small">Código (solo lectura)</label>
+                <input id="editZonaCodigo" type="text" class="form-control form-control-sm" disabled>
+              </div>
+              <div class="col-lg-2">
+                <label class="form-label small">Tipo (solo lectura)</label>
+                <input id="editZonaTipo" type="text" class="form-control form-control-sm" disabled>
+              </div>
+              <div class="col-lg-8">
+                <label class="form-label small">Descripción</label>
+                <input id="editZonaDescripcion" type="text" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small">Hora apertura</label>
+                <input id="editZonaHoraApertura" type="time" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small">Hora cierre</label>
+                <input id="editZonaHoraCierre" type="time" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small">Dur. mín. (horas)</label>
+                <input id="editZonaDuracionMin" type="number" class="form-control form-control-sm" min="1" required>
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small">Dur. máx. (horas)</label>
+                <input id="editZonaDuracionMax" type="number" class="form-control form-control-sm" min="1" required>
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small">Costo</label>
+                <input id="editZonaCosto" type="number" class="form-control form-control-sm" step="0.01" min="0">
+              </div>
+              <div class="col-lg-3">
+                <label class="form-label small">Depósito</label>
+                <input id="editZonaDeposito" type="number" class="form-control form-control-sm" step="0.01" min="0">
+              </div>
+              <div class="col-lg-2">
+                <div class="form-check mt-4">
+                  <input id="editZonaRequierePago" type="checkbox" class="form-check-input">
+                  <label class="form-check-label small" for="editZonaRequierePago">Requiere pago</label>
+                </div>
+              </div>
+              <div class="col-lg-2">
+                <div class="form-check mt-4">
+                  <input id="editZonaRequiereAprobacion" type="checkbox" class="form-check-input">
+                  <label class="form-check-label small" for="editZonaRequiereAprobacion">Req. aprobación</label>
+                </div>
+              </div>
+              <div class="col-lg-2">
+                <div class="form-check mt-4">
+                  <input id="editZonaSoportaRecreativa" type="checkbox" class="form-check-input">
+                  <label class="form-check-label small" for="editZonaSoportaRecreativa">Soporta recreativa</label>
+                </div>
+              </div>
+              <div class="col-lg-2">
+                <div class="form-check mt-4">
+                  <input id="editZonaActivo" type="checkbox" class="form-check-input">
+                  <label class="form-check-label small" for="editZonaActivo">Activo</label>
+                </div>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="editZonaSubmit" type="button" class="btn btn-primary">Guardar cambios</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -1029,13 +1109,22 @@
         return dias[fecha.getDay()];
       }
 
+      var zonasCatalogoCache = [];
+
       function cargarReservasCatalogo() {
+        var catalogoLoading = $('reservasCatalogoLoading');
+        if (catalogoLoading) catalogoLoading.classList.remove('hidden');
         withIdToken(function (idToken) {
           return apiFetch('/api/v1/reservas/catalogo', idToken);
         }).then(function (result) {
-          renderReservasCatalogo(result.data || []);
-          cargarReservasFiltroZonas(result.data || []);
-        }).catch(function (error) { msg('Error: ' + error.message); });
+          if (catalogoLoading) catalogoLoading.classList.add('hidden');
+          zonasCatalogoCache = result.data || [];
+          renderReservasCatalogo(zonasCatalogoCache);
+          cargarReservasFiltroZonas(zonasCatalogoCache);
+        }).catch(function (error) {
+          if (catalogoLoading) catalogoLoading.classList.add('hidden');
+          msg('Error: ' + error.message);
+        });
       }
 
       function renderReservasCatalogo(zonas) {
@@ -1057,6 +1146,29 @@
           }).join('');
         }
       }
+
+      $('reservasCatalogoLista').addEventListener('click', function (e) {
+        var btn = e.target.closest('.editar-zona');
+        if (!btn) return;
+        var zonaId = btn.dataset.id;
+        var zona = zonasCatalogoCache.find(function (z) { return z.id === zonaId; });
+        if (!zona) return;
+        zonaEditandoId = zonaId;
+        $('editZonaCodigo').value = zona.codigo;
+        $('editZonaTipo').value = zona.tipo;
+        $('editZonaDescripcion').value = zona.descripcion;
+        $('editZonaHoraApertura').value = zona.horaApertura;
+        $('editZonaHoraCierre').value = zona.horaCierre;
+        $('editZonaDuracionMin').value = zona.duracionMinHoras;
+        $('editZonaDuracionMax').value = zona.duracionMaxHoras;
+        $('editZonaCosto').value = zona.costoReserva || '';
+        $('editZonaDeposito').value = zona.depositoGarantia || '';
+        $('editZonaRequierePago').checked = zona.requierePago;
+        $('editZonaRequiereAprobacion').checked = zona.requiereAprobacion;
+        $('editZonaSoportaRecreativa').checked = zona.soportaModalidadRecreativa;
+        $('editZonaActivo').checked = zona.activo;
+        if (modalEditarZona) modalEditarZona.show();
+      });
 
       var reservasFrm = $('crearZonaForm');
       if (reservasFrm) reservasFrm.addEventListener('submit', function (e) {
@@ -1086,6 +1198,38 @@
           $('crearZonaForm').reset();
           cargarReservasCatalogo();
         }).catch(function (error) { msg(error.message); }).finally(function () { busy(btn, false, 'Crear zona'); });
+      });
+
+      var editSubmitBtn = $('editZonaSubmit');
+      if (editSubmitBtn) editSubmitBtn.addEventListener('click', function () {
+        if (!zonaEditandoId) return;
+        hideMsg();
+        var btn = this;
+        busy(btn, true, 'Guardando…');
+        var costoVal = parseFloat($('editZonaCosto').value);
+        var depositoVal = parseFloat($('editZonaDeposito').value);
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/catalogo/' + zonaEditandoId, idToken, {
+            method: 'PATCH',
+            body: {
+              descripcion: $('editZonaDescripcion').value.trim(),
+              horaApertura: $('editZonaHoraApertura').value,
+              horaCierre: $('editZonaHoraCierre').value,
+              duracionMinHoras: parseInt($('editZonaDuracionMin').value) || 1,
+              duracionMaxHoras: parseInt($('editZonaDuracionMax').value) || 2,
+              costoReserva: isNaN(costoVal) ? undefined : costoVal,
+              depositoGarantia: isNaN(depositoVal) ? undefined : depositoVal,
+              requierePago: $('editZonaRequierePago').checked,
+              requiereAprobacion: $('editZonaRequiereAprobacion').checked,
+              soportaModalidadRecreativa: $('editZonaSoportaRecreativa').checked,
+              activo: $('editZonaActivo').checked
+            }
+          });
+        }).then(function () {
+          msg('Zona actualizada', 'success');
+          if (modalEditarZona) modalEditarZona.hide();
+          cargarReservasCatalogo();
+        }).catch(function (error) { msg(error.message); }).finally(function () { busy(btn, false, 'Guardar cambios'); });
       });
 
       function cargarReservasAgenda() {
@@ -1188,7 +1332,7 @@
                 var emojiEstado = getEmojiEstado(r.estado);
                 var unidad = esc(r.unidad.codigoOficial);
                 var title = unidad + ' ' + hora + ' ' + r.estado;
-                return '<div class="reserva-block ' + claseEstado + '" title="' + title + '"><div class="reserva-emoji">' + emojiEstado + '</div><div class="reserva-texto">' + unidad + '<br>' + hora + '</div></div>';
+                return '<div class="reserva-block accion-reserva ' + claseEstado + '" data-id="' + esc(r.id) + '" data-estado="' + esc(r.estado) + '" style="cursor:pointer;" title="' + title + '"><div class="reserva-emoji">' + emojiEstado + '</div><div class="reserva-texto">' + unidad + '<br>' + hora + '</div></div>';
               }).join('') + '</td>';
             }
           });
@@ -1268,14 +1412,18 @@
       var reservasModalRechazar = null;
       var reservasModalCancelar = null;
       var reservasModalPago = null;
+      var modalEditarZona = null;
+      var zonaEditandoId = null;
 
       document.addEventListener('DOMContentLoaded', function() {
         var modalRechazarEl = $('reservasModalRechazar');
         var modalCancelarEl = $('reservasModalCancelar');
         var modalPagoEl = $('reservasModalPago');
+        var modalEditarEl = $('modalEditarZona');
         if (modalRechazarEl) reservasModalRechazar = new bootstrap.Modal(modalRechazarEl);
         if (modalCancelarEl) reservasModalCancelar = new bootstrap.Modal(modalCancelarEl);
         if (modalPagoEl) reservasModalPago = new bootstrap.Modal(modalPagoEl);
+        if (modalEditarEl) modalEditarZona = new bootstrap.Modal(modalEditarEl);
       });
 
       document.addEventListener('click', function (e) {
