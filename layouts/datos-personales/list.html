@@ -11,6 +11,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
   <style>
     :root {
       --bv-primary: #2c5f2d;
@@ -321,6 +322,75 @@
       margin-bottom: .25rem
     }
 
+    .flatpickr-calendar {
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(44, 95, 45, .15) !important;
+      border-radius: .5rem !important;
+    }
+
+    .flatpickr-calendar.open {
+      display: block !important;
+    }
+
+    .flatpickr-months {
+      background: var(--bv-light);
+    }
+
+    .flatpickr-prev-month, .flatpickr-next-month {
+      color: var(--bv-primary) !important;
+    }
+
+    .flatpickr-prev-month:hover, .flatpickr-next-month:hover {
+      background: rgba(44, 95, 45, .1) !important;
+    }
+
+    .flatpickr-current-month {
+      color: var(--bv-primary) !important;
+      font-weight: 600 !important;
+    }
+
+    .flatpickr-weekdays {
+      background: var(--bv-light);
+      color: var(--bv-muted);
+    }
+
+    .flatpickr-day {
+      color: var(--bv-primary) !important;
+      border-color: var(--bv-border) !important;
+    }
+
+    .flatpickr-day.selected {
+      background: var(--bv-primary) !important;
+      border-color: var(--bv-primary) !important;
+      color: #fff !important;
+    }
+
+    .flatpickr-day.today {
+      border-color: var(--bv-secondary) !important;
+      color: var(--bv-secondary) !important;
+    }
+
+    .flatpickr-day.disabled, .flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay {
+      color: #b8c5ba !important;
+      background: #f5f7f5 !important;
+      cursor: not-allowed !important;
+    }
+
+    .flatpickr-day:hover:not(.disabled):not(.prevMonthDay):not(.nextMonthDay) {
+      background: var(--bv-light) !important;
+      border-color: var(--bv-secondary) !important;
+    }
+
+    #reservaFechaConsulta {
+      cursor: pointer;
+    }
+
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+    }
+
     .slot-disponible {
       border: 2px solid var(--bv-border);
       border-radius: .5rem;
@@ -369,6 +439,8 @@
       font-size: 1.1rem
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/es.js"></script>
 </head>
 
 <body>
@@ -689,7 +761,7 @@
               </div>
 
               <p class="small text-muted mb-3">Haz clic en un horario disponible (verde) para continuar:</p>
-              <div id="disponibilidadContainer" class="mb-4 p-3 rounded" style="max-height: 350px; overflow-y: auto; background: #fafafa; border: 1px solid var(--bv-border);"></div>
+              <div id="disponibilidadContainer" class="slots-grid mb-4 p-3 rounded" style="max-height: 350px; overflow-y: auto; background: #fafafa; border: 1px solid var(--bv-border);"></div>
 
               <div class="d-flex gap-2 justify-content-between">
                 <button type="button" class="btn btn-secondary btn-sm" id="volverPaso1"><i class="bi bi-arrow-left me-1"></i>Atrás</button>
@@ -711,8 +783,8 @@
                     <div class="value" id="confirmarFechaNombre">-</div>
                   </div>
                   <div class="col-md-4">
-                    <div class="label">Duración mínima</div>
-                    <div class="value" id="confirmarDuracionMin">-</div>
+                    <div class="label">Duración permitida</div>
+                    <div class="value" id="confirmarDuracion">-</div>
                   </div>
                 </div>
               </div>
@@ -720,11 +792,11 @@
               <form id="confirmarReservaForm" class="row g-3">
                 <div class="col-md-6">
                   <label class="form-label small">Hora de inicio</label>
-                  <input id="reservaInicio" type="time" class="form-control form-control-sm" required>
+                  <input id="reservaInicio" type="time" class="form-control form-control-sm" required step="3600">
                 </div>
                 <div class="col-md-6">
                   <label class="form-label small">Hora de fin</label>
-                  <input id="reservaFin" type="time" class="form-control form-control-sm" required>
+                  <input id="reservaFin" type="time" class="form-control form-control-sm" required step="3600">
                 </div>
                 <div class="col-12" id="modalidadUsoDiv" style="display:none;">
                   <label class="form-label small">Modalidad de uso</label>
@@ -1579,12 +1651,51 @@
         $('zonasContainer').innerHTML = html;
       }
 
+      function calcularFechasAnticipacion(zona) {
+        var ahora = new Date();
+        var minDate = new Date(ahora);
+        var maxDate = new Date(ahora);
+        maxDate.setDate(maxDate.getDate() + zona.anticipacionMaxDias);
+
+        // Calcular primer día hábil válido (anticipación mínima)
+        var diasHabiles = 0;
+        var checker = new Date(ahora);
+        while (diasHabiles < zona.anticipacionMinHabiles) {
+          checker.setDate(checker.getDate() + 1);
+          var dayOfWeek = checker.getDay();
+          if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            diasHabiles++;
+          }
+          if ((checker.getTime() - ahora.getTime()) / (1000 * 60 * 60 * 24) > 365) break;
+        }
+        minDate = checker;
+
+        return { minDate: minDate, maxDate: maxDate };
+      }
+
+      function initFlatpickr(zona) {
+        var dates = calcularFechasAnticipacion(zona);
+        if (window.reservaFechaConsultaPicker) {
+          window.reservaFechaConsultaPicker.destroy();
+        }
+        window.reservaFechaConsultaPicker = flatpickr('#reservaFechaConsulta', {
+          minDate: dates.minDate,
+          maxDate: dates.maxDate,
+          locale: 'es',
+          mode: 'single',
+          dateFormat: 'Y-m-d',
+          disableMobile: true
+        });
+      }
+
       document.addEventListener('click', function (event) {
         var card = event.target.closest('.zona-card');
         if (!card) return;
         document.querySelectorAll('.zona-card').forEach(function (c) { c.classList.remove('selected'); });
         card.classList.add('selected');
         reservasData.zonaSeleccionada = card.dataset.id;
+        var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
+        initFlatpickr(zona);
         var esRecreativa = card.dataset.recreativa === 'true';
         $('modalidadUsoDiv').style.display = 'block';
         $('modalidadRecreativaDiv').style.display = esRecreativa ? 'block' : 'none';
@@ -1613,7 +1724,7 @@
             $('reservaFechaNombre').textContent = fechaFormato;
             $('confirmarZonaNombre').textContent = zona.descripcion;
             $('confirmarFechaNombre').textContent = fechaFormato;
-            $('confirmarDuracionMin').textContent = zona.duracionMinHoras + ' horas';
+            $('confirmarDuracion').textContent = zona.duracionMinHoras + 'h – ' + zona.duracionMaxHoras + 'h';
 
             renderDisponibilidad();
             mostrarStep(2);
@@ -1630,9 +1741,14 @@
         var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
         var horaInicio = zona.horaApertura.split(':');
         var horaFin = zona.horaCierre.split(':');
-        var durMinutes = Math.max(30, zona.duracionMinHoras * 60);
 
-        var html = '<p class="small mb-2 text-muted">Horarios disponibles (mínimo ' + zona.duracionMinHoras + ' horas):</p>';
+        // Establecer min/max de los inputs de hora según el horario de la zona
+        $('reservaInicio').min = zona.horaApertura;
+        $('reservaInicio').max = zona.horaCierre;
+        $('reservaFin').min = zona.horaApertura;
+        $('reservaFin').max = zona.horaCierre;
+
+        var html = '<p class="small mb-0 text-muted">Horarios disponibles (mínimo ' + zona.duracionMinHoras + 'h):</p><div style="margin-top:0.75rem;">';
         var slots = [];
         var currentHour = parseInt(horaInicio[0]);
         var currentMin = parseInt(horaInicio[1]);
@@ -1643,7 +1759,7 @@
           var slotStart = new Date(reservasData.fechaSeleccionada);
           slotStart.setHours(currentHour, currentMin, 0);
           var slotEnd = new Date(slotStart);
-          slotEnd.setMinutes(slotEnd.getMinutes() + durMinutes);
+          slotEnd.setMinutes(slotEnd.getMinutes() + (zona.duracionMinHoras * 60));
 
           var isOccupied = reservasData.disponibilidad.some(function (res) {
             var resStart = new Date(res.fechaHoraInicio);
@@ -1651,28 +1767,31 @@
             return (slotStart < resEnd && slotEnd > resStart);
           });
 
-          var slotHTML = '<button type="button" class="btn btn-sm m-1 ' +
+          var startStr = slotStart.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+          var endStr = slotEnd.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+          var slotHTML = '<button type="button" class="btn btn-sm ' +
             (isOccupied ? 'btn-danger disabled' : 'btn-outline-success slot-disponible') +
-            '" ' + (isOccupied ? 'disabled' : 'data-hora="' + slotStart.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}) + '"') +
+            '" ' + (isOccupied ? 'disabled' : 'data-hora="' + startStr + '" data-hora-fin="' + endStr + '"') +
             '>' +
-            slotStart.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}) + ' - ' +
-            slotEnd.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}) +
-            (isOccupied ? ' (Ocupado)' : '') +
+            startStr + ' - ' + endStr +
+            (isOccupied ? '<br><small>(Ocupado)</small>' : '') +
             '</button>';
           html += slotHTML;
 
-          currentMin += 30;
+          currentMin += 60;
           if (currentMin >= 60) {
             currentHour += Math.floor(currentMin / 60);
             currentMin = currentMin % 60;
           }
         }
+        html += '</div>';
 
         $('disponibilidadContainer').innerHTML = html;
 
         document.querySelectorAll('.slot-disponible').forEach(function (btn) {
           btn.addEventListener('click', function () {
             $('reservaInicio').value = this.dataset.hora;
+            $('reservaFin').value = this.dataset.horaFin;
             mostrarStep(3);
           });
         });
