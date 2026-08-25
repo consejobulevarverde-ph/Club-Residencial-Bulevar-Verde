@@ -241,6 +241,133 @@
       width: 2px;
       background: var(--bv-border)
     }
+
+    /* Reservas Wizard Styles */
+    .step-indicator {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2rem
+    }
+
+    .step-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: .95rem;
+      border: 2px solid var(--bv-border);
+      color: #999;
+      background: #fff;
+      transition: all .3s ease
+    }
+
+    .step-badge.active {
+      border-color: var(--bv-primary);
+      background: var(--bv-primary);
+      color: #fff;
+      box-shadow: 0 0 0 3px rgba(44, 95, 45, .2)
+    }
+
+    .step-badge.done {
+      border-color: #7bb77d;
+      background: #7bb77d;
+      color: #fff
+    }
+
+    .step-content {
+      transition: opacity .3s ease
+    }
+
+    .step-content.hidden {
+      display: none
+    }
+
+    .zona-card {
+      border: 2px solid var(--bv-border);
+      border-radius: .8rem;
+      padding: 1.5rem;
+      cursor: pointer;
+      transition: all .3s ease;
+      text-align: center;
+      background: #fff
+    }
+
+    .zona-card:hover {
+      border-color: var(--bv-secondary);
+      transform: translateY(-3px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .1)
+    }
+
+    .zona-card.selected {
+      border-color: var(--bv-primary);
+      background: var(--bv-light);
+      box-shadow: 0 0 0 3px rgba(44, 95, 45, .2)
+    }
+
+    .zona-card i {
+      font-size: 2.5rem;
+      color: var(--bv-primary);
+      margin-bottom: .5rem
+    }
+
+    .zona-card h6 {
+      color: var(--bv-primary);
+      font-weight: 700;
+      margin-top: .75rem;
+      margin-bottom: .25rem
+    }
+
+    .slot-disponible {
+      border: 2px solid var(--bv-border);
+      border-radius: .5rem;
+      padding: .5rem 1rem;
+      background: #fff;
+      transition: all .2s ease;
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--bv-primary)
+    }
+
+    .slot-disponible:hover:not(:disabled) {
+      border-color: var(--bv-secondary);
+      background: var(--bv-light);
+      color: var(--bv-primary);
+      text-decoration: none
+    }
+
+    .slot-disponible:disabled {
+      background: #f8d7da;
+      border-color: #dc3545;
+      color: #721c24;
+      cursor: not-allowed;
+      opacity: .7
+    }
+
+    .selection-summary {
+      background: var(--bv-light);
+      border-radius: .8rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      border-left: 4px solid var(--bv-primary)
+    }
+
+    .selection-summary .label {
+      font-weight: 600;
+      color: #666;
+      font-size: .8rem;
+      text-transform: uppercase;
+      margin-bottom: .25rem
+    }
+
+    .selection-summary .value {
+      font-weight: 700;
+      color: var(--bv-primary);
+      font-size: 1.1rem
+    }
   </style>
 </head>
 
@@ -527,29 +654,69 @@
             </div>
 
             <div id="reservasStep1" class="step-content">
-              <h4 class="h6 mb-3">Paso 1: Selecciona zona y fecha</h4>
-              <div id="zonasContainer" class="row g-3 mb-4"></div>
-              <div class="mb-3">
+              <h4 class="h6 mb-4"><i class="bi bi-door-closed me-2"></i>Paso 1: Selecciona zona y fecha</h4>
+
+              <div class="mb-4">
+                <p class="small text-muted mb-3">Elige la zona común donde deseas hacer tu reserva:</p>
+                <div id="zonasContainer" class="row g-3 mb-4"></div>
+              </div>
+
+              <div class="mb-4">
                 <label class="form-label small">Fecha para consultar disponibilidad</label>
                 <input id="reservaFechaConsulta" type="date" class="form-control form-control-sm" required>
+                <small class="text-muted d-block mt-1"><i class="bi bi-info-circle me-1"></i>Selecciona la fecha en la que deseas reservar la zona</small>
               </div>
-              <button type="button" class="btn btn-primary btn-sm" id="irPaso2"><i class="bi bi-arrow-right me-1"></i>Siguiente</button>
+
+              <div class="d-flex gap-2 justify-content-end">
+                <button type="button" class="btn btn-primary btn-sm" id="irPaso2"><i class="bi bi-arrow-right me-1"></i>Siguiente</button>
+              </div>
             </div>
 
             <div id="reservasStep2" class="step-content hidden">
-              <h4 class="h6 mb-3">Paso 2: Verifica disponibilidad</h4>
-              <div class="alert alert-info small mb-3">
-                <strong id="reservasDisponibilidadTitulo"></strong>
+              <h4 class="h6 mb-4"><i class="bi bi-calendar-check me-2"></i>Paso 2: Verifica disponibilidad</h4>
+
+              <div class="selection-summary mb-4">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="label">Zona seleccionada</div>
+                    <div class="value" id="reservaZonaNombre">-</div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="label">Fecha</div>
+                    <div class="value" id="reservaFechaNombre">-</div>
+                  </div>
+                </div>
               </div>
-              <div id="disponibilidadContainer" class="mb-4" style="max-height: 300px; overflow-y: auto;"></div>
-              <div class="d-flex gap-2">
+
+              <p class="small text-muted mb-3">Haz clic en un horario disponible (verde) para continuar:</p>
+              <div id="disponibilidadContainer" class="mb-4 p-3 rounded" style="max-height: 350px; overflow-y: auto; background: #fafafa; border: 1px solid var(--bv-border);"></div>
+
+              <div class="d-flex gap-2 justify-content-between">
                 <button type="button" class="btn btn-secondary btn-sm" id="volverPaso1"><i class="bi bi-arrow-left me-1"></i>Atrás</button>
-                <button type="button" class="btn btn-primary btn-sm" id="irPaso3"><i class="bi bi-arrow-right me-1"></i>Siguiente</button>
+                <button type="button" class="btn btn-primary btn-sm" id="irPaso3" style="display:none;"><i class="bi bi-arrow-right me-1"></i>Siguiente</button>
               </div>
             </div>
 
             <div id="reservasStep3" class="step-content hidden">
-              <h4 class="h6 mb-3">Paso 3: Confirma tu reserva</h4>
+              <h4 class="h6 mb-4"><i class="bi bi-check2-circle me-2"></i>Paso 3: Confirma tu reserva</h4>
+
+              <div class="selection-summary mb-4">
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="label">Zona</div>
+                    <div class="value" id="confirmarZonaNombre">-</div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="label">Fecha</div>
+                    <div class="value" id="confirmarFechaNombre">-</div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="label">Duración mínima</div>
+                    <div class="value" id="confirmarDuracionMin">-</div>
+                  </div>
+                </div>
+              </div>
+
               <form id="confirmarReservaForm" class="row g-3">
                 <div class="col-md-6">
                   <label class="form-label small">Hora de inicio</label>
@@ -1439,7 +1606,15 @@
           .then(function (result) {
             reservasData.disponibilidad = result.data || [];
             var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
-            $('reservasDisponibilidadTitulo').textContent = (zona ? zona.descripcion + ' - ' : '') + new Date(reservasData.fechaSeleccionada).toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            var fechaFormato = new Date(reservasData.fechaSeleccionada).toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+            // Actualizar resúmenes visuales
+            $('reservaZonaNombre').textContent = zona.descripcion;
+            $('reservaFechaNombre').textContent = fechaFormato;
+            $('confirmarZonaNombre').textContent = zona.descripcion;
+            $('confirmarFechaNombre').textContent = fechaFormato;
+            $('confirmarDuracionMin').textContent = zona.duracionMinHoras + ' horas';
+
             renderDisponibilidad();
             mostrarStep(2);
           })
