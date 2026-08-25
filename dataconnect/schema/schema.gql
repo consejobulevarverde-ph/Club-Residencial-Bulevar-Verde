@@ -161,14 +161,53 @@ type HistorialCartera @table(
 # Unique constraint: only one record per unidad per periodo
 # This is handled by database: CREATE UNIQUE INDEX historial_cartera_unidad_periodo_idx ON historial_cartera(unidad_id, periodo)
 
+type ZonaComun @table(name: "zonas_comunes", singular: "zona_comun", plural: "zonas_comunes", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  codigo: String! @unique
+  tipo: String!
+  descripcion: String!
+  horaApertura: String!
+  horaCierre: String!
+  duracionMinHoras: Int!
+  duracionMaxHoras: Int!
+  costoReserva: Float @col(dataType: "numeric(16,2)")
+  depositoGarantia: Float @col(dataType: "numeric(16,2)")
+  requierePago: Boolean!
+  requiereAprobacion: Boolean!
+  anticipacionMinHabiles: Int!
+  anticipacionMaxDias: Int!
+  soportaModalidadRecreativa: Boolean! @default(value: false)
+  costoRecreativo: Float @col(dataType: "numeric(16,2)")
+  depositoRecreativo: Float @col(dataType: "numeric(16,2)")
+  requierePagoRecreativo: Boolean
+  requiereAprobacionRecreativo: Boolean
+  anticipacionMinHabilesRecreativo: Int
+  anticipacionMaxDiasRecreativo: Int
+  activo: Boolean! @default(value: true)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
 type Reserva @table(name: "reservas", singular: "reserva", plural: "reservas", key: "id") {
   id: UUID! @default(expr: "uuidV4()")
   unidad: Unidad!
-  personaSolicitante: Persona!
-  zonaComun: String
-  fechaHoraInicio: Timestamp
-  fechaHoraFin: Timestamp
-  estado: String
+  personaSolicitante: Persona
+  zonaComun: ZonaComun!
+  modalidadUso: String! @default(value: "ORGANIZADO_CON_INVITADOS")
+  fechaHoraInicio: Timestamp!
+  fechaHoraFin: Timestamp!
+  estado: String! @default(value: "PENDIENTE")
+  precio: Float @col(dataType: "numeric(16,2)")
+  depositoGarantia: Float @col(dataType: "numeric(16,2)")
+  requierePago: Boolean!
+  requiereAprobacion: Boolean!
+  confirmacionAutomatica: Boolean!
+  estadoPago: String! @default(value: "NO_REQUIERE")
+  fechaPago: Timestamp
+  origen: String! @default(value: "RESIDENTE")
+  creadoPorUid: String
+  motivoRechazo: String
+  motivoCancelacion: String
   observaciones: String
   fechaCreacion: Timestamp! @default(expr: "request.time")
   fechaActualizacion: Timestamp! @default(expr: "request.time")

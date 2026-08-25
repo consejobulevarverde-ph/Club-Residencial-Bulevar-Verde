@@ -150,6 +150,9 @@
           <button id="showConvivencia" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-exclamation-circle me-1"></i>Registrar Caso
           </button>
+          <button id="showReservas" type="button" class="btn btn-outline-success mode-button">
+            <i class="bi bi-calendar-check me-1"></i>Reservas
+          </button>
           <button id="btnImportarCartera" class="btn btn-success">
             <i class="bi bi-file-earmark-excel me-1"></i>Importar Cartera
           </button>
@@ -190,6 +193,14 @@
 
       <section id="convivenciaView" class="hidden">
         {{ partial "convivencia-form.html" . }}
+      </section>
+
+      <section id="reservasView" class="hidden">
+        <div class="alert alert-info">
+          <p class="mb-0">
+            Acceder al <a href="/reservas-admin/" class="alert-link" target="_blank">panel de gestión de reservas</a> para administrar zonas comunes y reservas.
+          </p>
+        </div>
       </section>
     </section>
 
@@ -695,14 +706,18 @@
       function mode(name) {
         var isDashboard = name === 'dashboard';
         var isConvivencia = name === 'convivencia';
-        $('dashboardView').classList.toggle('hidden', isConvivencia);
-        $('convivenciaView').classList.toggle('hidden', isDashboard);
+        var isReservas = name === 'reservas';
+        $('dashboardView').classList.toggle('hidden', !isDashboard);
+        $('convivenciaView').classList.toggle('hidden', !isConvivencia);
+        $('reservasView').classList.toggle('hidden', !isReservas);
         $('showDashboard').classList.toggle('active', isDashboard);
         $('showConvivencia').classList.toggle('active', isConvivencia);
+        $('showReservas').classList.toggle('active', isReservas);
       }
 
       $('showDashboard').addEventListener('click', function () { mode('dashboard'); });
       $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
+      $('showReservas').addEventListener('click', function () { mode('reservas'); });
 
       // ===== IMPORTACIÓN DE CARTERA =====
       

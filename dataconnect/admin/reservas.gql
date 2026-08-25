@@ -1,0 +1,341 @@
+# Reservation operations (staff: admin/vigilancia)
+
+mutation CrearReserva(
+  $input: Reserva_Data!
+    @allow(fields: "id unidadId personaSolicitanteId zonaComunId modalidadUso fechaHoraInicio fechaHoraFin estado precio depositoGarantia requierePago requiereAprobacion confirmacionAutomatica estadoPago origen creadoPorUid observaciones")
+)
+@auth(level: USER, insecureReason: "La API valida política/elegibilidad/límites antes de invocar esta mutación.")
+@transaction
+{
+  reserva_insert(data: $input)
+}
+
+mutation AprobarReserva($id: UUID!)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la mutación.")
+@transaction
+{
+  reserva_update(id: $id, data: {estado: "CONFIRMADA"})
+}
+
+mutation RechazarReserva($id: UUID!, $motivo: String!)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la mutación.")
+@transaction
+{
+  reserva_update(id: $id, data: {estado: "RECHAZADA", motivoRechazo: $motivo})
+}
+
+mutation CancelarReserva($id: UUID!, $motivo: String!)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin/vigilancia (cancelación) antes de invocar la mutación.")
+@transaction
+{
+  reserva_update(id: $id, data: {estado: "CANCELADA", motivoCancelacion: $motivo})
+}
+
+mutation RegistrarPagoReserva($id: UUID!, $estadoPago: String!, $fechaPago: Timestamp)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la mutación.")
+@transaction
+{
+  reserva_update(id: $id, data: {estadoPago: $estadoPago, fechaPago: $fechaPago})
+}
+
+query ListarReservas(
+  $zonaComunId: UUID
+  $unidadId: UUID
+  $estado: String
+  $desde: Timestamp
+  $hasta: Timestamp
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la consulta.")
+{
+  reservas(
+    where: {
+      zonaComunId: {eq: $zonaComunId}
+      unidadId: {eq: $unidadId}
+      estado: {eq: $estado}
+      fechaHoraInicio: {ge: $desde}
+      fechaHoraFin: {le: $hasta}
+    }
+    orderBy: [{fechaHoraInicio: DESC}]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    estado
+    modalidadUso
+    fechaHoraInicio
+    fechaHoraFin
+    precio
+    depositoGarantia
+    requierePago
+    requiereAprobacion
+    estadoPago
+    fechaPago
+    origen
+    observaciones
+    motivoRechazo
+    motivoCancelacion
+    fechaCreacion
+    unidad {
+      id
+      codigoOficial
+      torre
+      apartamento
+    }
+    zonaComun {
+      id
+      codigo
+      descripcion
+      tipo
+    }
+    personaSolicitante {
+      id
+      nombreCompleto
+      numeroDocumento
+    }
+  }
+}
+
+query ObtenerReserva($id: UUID!)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la consulta.")
+{
+  reserva(id: $id) {
+    id
+    estado
+    modalidadUso
+    fechaHoraInicio
+    fechaHoraFin
+    precio
+    depositoGarantia
+    requierePago
+    requiereAprobacion
+    confirmacionAutomatica
+    estadoPago
+    fechaPago
+    origen
+    creadoPorUid
+    observaciones
+    motivoRechazo
+    motivoCancelacion
+    fechaCreacion
+    unidad {
+      id
+      codigoOficial
+      torre
+      apartamento
+    }
+    zonaComun {
+      id
+      codigo
+      descripcion
+      tipo
+    }
+    personaSolicitante {
+      id
+      nombreCompleto
+      numeroDocumento
+      correo
+      telefono
+    }
+  }
+}
+
+query ListarReservasVigilancia($desde: Timestamp!, $hasta: Timestamp!, $estado: String)
+@auth(level: USER, insecureReason: "La API restringe este endpoint al rol vigilancia antes de invocar la consulta.")
+{
+  reservas(
+    where: {
+      fechaHoraInicio: {ge: $desde}
+      fechaHoraFin: {le: $hasta}
+      estado: {eq: $estado}
+    }
+    orderBy: [{fechaHoraInicio: ASC}]
+  ) {
+    id
+    estado
+    fechaHoraInicio
+    fechaHoraFin
+    unidad {
+      codigoOficial
+    }
+    zonaComun {
+      codigo
+      descripcion
+    }
+  }
+}
+
+query ContarReservasActivasUnidad($unidadId: UUID!, $ahora: Timestamp!)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la consulta.")
+{
+  reservas(
+    where: {
+      unidadId: {eq: $unidadId}
+      fechaHoraInicio: {ge: $ahora}
+      estado: {in: ["PENDIENTE", "CONFIRMADA"]}
+    }
+  ) {
+    id
+  }
+}
+
+query ContarReservasRecreativasUnidad($unidadId: UUID!, $desde: Timestamp!, $hasta: Timestamp!)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la consulta.")
+{
+  reservas(
+    where: {
+      unidadId: {eq: $unidadId}
+      modalidadUso: {eq: "RECREATIVO_RESIDENTES"}
+      fechaHoraInicio: {ge: $desde}
+      fechaHoraFin: {le: $hasta}
+      estado: {in: ["PENDIENTE", "CONFIRMADA"]}
+    }
+  ) {
+    id
+    fechaHoraInicio
+  }
+}
+
+query ObtenerHistorialCarteraVigenteUnidad($unidadId: UUID!)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la consulta.")
+{
+  historial_carteras(where: {unidadId: {eq: $unidadId}}, orderBy: [{periodo: DESC}], limit: 1) {
+    elegibleReservas
+    estadoCuenta
+    periodo
+  }
+}
+
+# Admin versions (NO_ACCESS) for resident-facing endpoints in datos-personales
+
+mutation CrearReservaAdmin(
+  $input: Reserva_Data!
+    @allow(fields: "id unidadId personaSolicitanteId zonaComunId modalidadUso fechaHoraInicio fechaHoraFin estado precio depositoGarantia requierePago requiereAprobacion confirmacionAutomatica estadoPago origen creadoPorUid observaciones")
+)
+@auth(level: NO_ACCESS)
+@transaction
+{
+  reserva_insert(data: $input)
+}
+
+mutation CancelarReservaAdmin($id: UUID!, $motivo: String!)
+@auth(level: NO_ACCESS)
+@transaction
+{
+  reserva_update(id: $id, data: {estado: "CANCELADA", motivoCancelacion: $motivo})
+}
+
+query ListarReservasUnidadAdmin($unidadId: UUID!, $limit: Int, $offset: Int)
+@auth(level: NO_ACCESS)
+{
+  reservas(
+    where: {unidadId: {eq: $unidadId}}
+    orderBy: [{fechaHoraInicio: DESC}]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    estado
+    modalidadUso
+    fechaHoraInicio
+    fechaHoraFin
+    precio
+    depositoGarantia
+    requierePago
+    requiereAprobacion
+    estadoPago
+    observaciones
+    fechaCreacion
+    zonaComun {
+      codigo
+      descripcion
+      tipo
+    }
+  }
+}
+
+query ContarReservasActivasUnidadAdmin($unidadId: UUID!, $ahora: Timestamp!)
+@auth(level: NO_ACCESS)
+{
+  reservas(
+    where: {
+      unidadId: {eq: $unidadId}
+      fechaHoraInicio: {ge: $ahora}
+      estado: {in: ["PENDIENTE", "CONFIRMADA"]}
+    }
+  ) {
+    id
+  }
+}
+
+query ContarReservasRecreativasUnidadAdmin($unidadId: UUID!, $desde: Timestamp!, $hasta: Timestamp!)
+@auth(level: NO_ACCESS)
+{
+  reservas(
+    where: {
+      unidadId: {eq: $unidadId}
+      modalidadUso: {eq: "RECREATIVO_RESIDENTES"}
+      fechaHoraInicio: {ge: $desde}
+      fechaHoraFin: {le: $hasta}
+      estado: {in: ["PENDIENTE", "CONFIRMADA"]}
+    }
+  ) {
+    id
+    fechaHoraInicio
+  }
+}
+
+query ObtenerHistorialCarteraVigenteUnidadAdmin($unidadId: UUID!)
+@auth(level: NO_ACCESS)
+{
+  historial_carteras(where: {unidadId: {eq: $unidadId}}, orderBy: [{periodo: DESC}], limit: 1) {
+    elegibleReservas
+    estadoCuenta
+    periodo
+  }
+}
+
+query ObtenerReservaAdmin($id: UUID!)
+@auth(level: NO_ACCESS)
+{
+  reserva(id: $id) {
+    id
+    estado
+    modalidadUso
+    fechaHoraInicio
+    fechaHoraFin
+    precio
+    depositoGarantia
+    requierePago
+    requiereAprobacion
+    confirmacionAutomatica
+    estadoPago
+    fechaPago
+    origen
+    creadoPorUid
+    observaciones
+    motivoRechazo
+    motivoCancelacion
+    fechaCreacion
+    unidad {
+      id
+      codigoOficial
+      torre
+      apartamento
+    }
+    zonaComun {
+      id
+      codigo
+      descripcion
+      tipo
+    }
+    personaSolicitante {
+      id
+      nombreCompleto
+      numeroDocumento
+      correo
+      telefono
+    }
+  }
+}

@@ -349,6 +349,7 @@
           <li class="nav-item"><button class="nav-link" data-target="tabVehicles" type="button">Vehículos</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabOther" type="button">Otros datos</button></li>
           <li class="nav-item" data-owner-only><button class="nav-link" data-target="tabDocumentos" type="button">Documentos</button></li>
+          <li class="nav-item"><button class="nav-link" data-target="tabReservas" type="button">Reservas</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabSanciones" type="button">Sanciones</button></li>
         </ul>
       </div>
@@ -505,6 +506,64 @@
           <div id="documentosError" class="alert alert-danger hidden mb-0"></div>
           <div id="documentosVacio" class="alert alert-info hidden mb-0"><i class="bi bi-info-circle me-2"></i>No hay documentos disponibles en este momento.</div>
           <div id="documentosGrid" class="row g-3 mt-1"></div>
+        </div>
+      </div>
+
+      <div id="tabReservas" class="tab-pane-content hidden">
+        <div class="surface p-4">
+          <h3 class="section-title h5 mb-1">Reservas de zonas comunes</h3>
+          <p class="small-note">Consulta y gestiona tus reservas de espacios comunes.</p>
+
+          <div id="reservasElegibilidadAlerta" class="alert alert-warning d-none mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>No elegible para reservar:</strong> Tu unidad no cumple los requisitos de elegibilidad en este momento. Contacta a administración para más información.
+          </div>
+
+          <div class="mb-4">
+            <h4 class="h6 mb-3">Nueva reserva</h4>
+            <form id="nuevaReservaForm" class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label small">Zona común</label>
+                <select id="reservaZonaSelect" class="form-select form-select-sm" required>
+                  <option value="">Selecciona una zona</option>
+                </select>
+              </div>
+              <div class="col-md-4" id="modalidadUsoDiv" style="display:none;">
+                <label class="form-label small">Modalidad de uso</label>
+                <div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="modalidadUso" id="modalidadOrganizado" value="ORGANIZADO_CON_INVITADOS" checked>
+                    <label class="form-check-label small" for="modalidadOrganizado">Organizado</label>
+                  </div>
+                  <div class="form-check" id="modalidadRecreativaDiv" style="display:none;">
+                    <input class="form-check-input" type="radio" name="modalidadUso" id="modalidadRecreativo" value="RECREATIVO_RESIDENTES">
+                    <label class="form-check-label small" for="modalidadRecreativo">Recreativo</label>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small">Fecha y hora de inicio</label>
+                <input id="reservaInicio" type="datetime-local" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small">Fecha y hora de fin</label>
+                <input id="reservaFin" type="datetime-local" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-12">
+                <label class="form-label small">Observaciones (opcional)</label>
+                <textarea id="reservaObservaciones" class="form-control form-control-sm" rows="2" placeholder="Detalles adicionales..."></textarea>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Crear reserva</button>
+              </div>
+            </form>
+          </div>
+
+          <hr class="my-4">
+
+          <h4 class="h6 mb-3">Mis reservas</h4>
+          <div id="misReservasLoading" class="text-muted small" style="display:none;"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+          <div id="misReservasList"></div>
         </div>
       </div>
 
@@ -770,6 +829,7 @@
       }
 
       var documentosCargados = false;
+      var reservasCargados = false;
 
       $('profileTabs').addEventListener('click', function (event) {
         var button = event.target.closest('button[data-target]');
@@ -777,6 +837,7 @@
         showTab(button.dataset.target);
         if (button.dataset.target === 'tabSanciones' && !sancionesCargados) cargarSanciones();
         if (button.dataset.target === 'tabDocumentos' && !documentosCargados) cargarDocumentos();
+        if (button.dataset.target === 'tabReservas' && !reservasCargados) cargarReservas();
       });
 
       /* ---------- Sanciones de convivencia ---------- */
@@ -1281,6 +1342,141 @@
             '</div>';
         }).join('');
       }
+
+      /* ---------- Reservas de zonas comunes ---------- */
+
+      function cargarReservas() {
+        reservasCargados = true;
+        cargarZonasComunes();
+        cargarMisReservas();
+      }
+
+      function cargarZonasComunes() {
+        apiFetch('/zonas-comunes')
+          .then(function (result) {
+            var zonas = result.data || [];
+            var select = $('reservaZonaSelect');
+            select.innerHTML = '<option value="">Selecciona una zona</option>' +
+              zonas.map(function (zona) {
+                return '<option value="' + esc(zona.id) + '" data-recreativa="' + (zona.soportaModalidadRecreativa ? 'true' : 'false') + '">' +
+                  esc(zona.descripcion) + ' (' + esc(zona.tipo) + ')' +
+                  '</option>';
+              }).join('');
+          })
+          .catch(function (error) {
+            alertMessage('Error al cargar zonas: ' + error.message);
+          });
+      }
+
+      function cargarMisReservas() {
+        $('misReservasLoading').style.display = 'block';
+        $('misReservasList').innerHTML = '';
+        apiFetch('/reservas')
+          .then(function (result) {
+            $('misReservasLoading').style.display = 'none';
+            var reservas = result.data || [];
+            if (reservas.length === 0) {
+              $('misReservasList').innerHTML = '<p class="text-muted mb-0">No tienes reservas registradas.</p>';
+              return;
+            }
+            renderMisReservas(reservas);
+          })
+          .catch(function (error) {
+            $('misReservasLoading').style.display = 'none';
+            alertMessage('Error al cargar reservas: ' + error.message);
+          });
+      }
+
+      function renderMisReservas(reservas) {
+        $('misReservasList').innerHTML = reservas.map(function (r) {
+          var estadoBadge = (function() {
+            var badges = {
+              'PENDIENTE': '<span class="badge text-bg-warning">Pendiente</span>',
+              'CONFIRMADA': '<span class="badge text-bg-success">Confirmada</span>',
+              'RECHAZADA': '<span class="badge text-bg-danger">Rechazada</span>',
+              'CANCELADA': '<span class="badge text-bg-secondary">Cancelada</span>'
+            };
+            return badges[r.estado] || '<span class="badge text-bg-secondary">' + esc(r.estado) + '</span>';
+          })();
+          var puedeCancel = (r.estado === 'PENDIENTE' || r.estado === 'CONFIRMADA');
+          var inicio = new Date(r.fechaHoraInicio).toLocaleString('es-CO', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          var fin = new Date(r.fechaHoraFin).toLocaleString('es-CO', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          return '<div class="repeat-row d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">' +
+            '<div>' +
+            '<strong>' + esc(r.zonaComun.descripcion) + '</strong>' +
+            '<div class="small-note">' + inicio + ' hasta ' + fin + '</div>' +
+            '<div class="small-note">' + estadoBadge + '</div>' +
+            '</div>' +
+            (puedeCancel ? '<button type="button" class="btn btn-outline-danger btn-sm cancelar-reserva" data-id="' + esc(r.id) + '">Cancelar</button>' : '') +
+            '</div>';
+        }).join('');
+      }
+
+      $('reservaZonaSelect').addEventListener('change', function () {
+        var option = this.options[this.selectedIndex];
+        var esRecreativa = option.dataset.recreativa === 'true';
+        $('modalidadUsoDiv').style.display = this.value ? 'block' : 'none';
+        $('modalidadRecreativaDiv').style.display = esRecreativa ? 'block' : 'none';
+      });
+
+      $('nuevaReservaForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        clearAlert();
+
+        var zonaid = $('reservaZonaSelect').value;
+        var inicio = new Date($('reservaInicio').value);
+        var fin = new Date($('reservaFin').value);
+
+        if (!zonaid) { alertMessage('Selecciona una zona.'); return; }
+        if (!inicio || isNaN(inicio.getTime())) { alertMessage('Ingresa una fecha/hora de inicio válida.'); return; }
+        if (!fin || isNaN(fin.getTime())) { alertMessage('Ingresa una fecha/hora de fin válida.'); return; }
+        if (inicio >= fin) { alertMessage('La hora de inicio debe ser anterior a la de fin.'); return; }
+
+        var submitBtn = this.querySelector('button[type="submit"]');
+        loading(submitBtn, true, 'Creando reserva…');
+
+        apiFetch('/reservas', {
+          method: 'POST',
+          body: {
+            zonaComunId: zonaid,
+            modalidadUso: $('modalidadRecreativo').checked ? 'RECREATIVO_RESIDENTES' : 'ORGANIZADO_CON_INVITADOS',
+            fechaHoraInicio: inicio.toISOString(),
+            fechaHoraFin: fin.toISOString(),
+            observaciones: $('reservaObservaciones').value.trim() || undefined
+          }
+        }).then(function (result) {
+          alertMessage('Reserva creada exitosamente!', 'success');
+          $('nuevaReservaForm').reset();
+          $('modalidadUsoDiv').style.display = 'none';
+          cargarMisReservas();
+        }).catch(function (error) {
+          alertMessage(error.message);
+        }).finally(function () {
+          loading(submitBtn, false, 'Crear reserva');
+        });
+      });
+
+      document.addEventListener('click', function (event) {
+        var button = event.target.closest('.cancelar-reserva');
+        if (!button) return;
+        if (!confirm('¿Estás seguro de que deseas cancelar esta reserva?')) return;
+
+        var reservaId = button.dataset.id;
+        var submitBtn = button;
+        loading(submitBtn, true, 'Cancelando…');
+
+        apiFetch('/reservas/' + encodeURIComponent(reservaId) + '/cancelar', {
+          method: 'PATCH',
+          body: { motivo: 'Cancelada por residente' }
+        }).then(function () {
+          alertMessage('Reserva cancelada.', 'success');
+          cargarMisReservas();
+        }).catch(function (error) {
+          alertMessage(error.message);
+        }).finally(function () {
+          loading(submitBtn, false, 'Cancelar');
+        });
+      }, true);
 
       $('unitForm').addEventListener('submit', function (event) {
         event.preventDefault();

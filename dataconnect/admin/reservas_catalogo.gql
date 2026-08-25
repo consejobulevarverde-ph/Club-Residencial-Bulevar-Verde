@@ -1,0 +1,179 @@
+# Catalog operations for ZonaComun (staff: admin/vigilancia)
+
+query ListarZonasComunes
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin/vigilancia antes de invocar la consulta.")
+{
+  zonas_comunes(orderBy: [{tipo: ASC}, {codigo: ASC}]) {
+    id
+    codigo
+    tipo
+    descripcion
+    horaApertura
+    horaCierre
+    duracionMinHoras
+    duracionMaxHoras
+    costoReserva
+    depositoGarantia
+    requierePago
+    requiereAprobacion
+    anticipacionMinHabiles
+    anticipacionMaxDias
+    soportaModalidadRecreativa
+    costoRecreativo
+    depositoRecreativo
+    requierePagoRecreativo
+    requiereAprobacionRecreativo
+    anticipacionMinHabilesRecreativo
+    anticipacionMaxDiasRecreativo
+    activo
+    fechaCreacion
+  }
+}
+
+query ObtenerZonaComun($id: UUID!)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la consulta.")
+{
+  zona_comun(id: $id) {
+    id
+    codigo
+    tipo
+    descripcion
+    horaApertura
+    horaCierre
+    duracionMinHoras
+    duracionMaxHoras
+    costoReserva
+    depositoGarantia
+    requierePago
+    requiereAprobacion
+    anticipacionMinHabiles
+    anticipacionMaxDias
+    soportaModalidadRecreativa
+    costoRecreativo
+    depositoRecreativo
+    requierePagoRecreativo
+    requiereAprobacionRecreativo
+    anticipacionMinHabilesRecreativo
+    anticipacionMaxDiasRecreativo
+    activo
+  }
+}
+
+mutation CrearZonaComun(
+  $input: ZonaComun_Data!
+    @allow(fields: "codigo tipo descripcion horaApertura horaCierre duracionMinHoras duracionMaxHoras costoReserva depositoGarantia requierePago requiereAprobacion anticipacionMinHabiles anticipacionMaxDias soportaModalidadRecreativa costoRecreativo depositoRecreativo requierePagoRecreativo requiereAprobacionRecreativo anticipacionMinHabilesRecreativo anticipacionMaxDiasRecreativo activo")
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la mutación.")
+@transaction
+{
+  zona_comun_insert(data: $input)
+}
+
+mutation ActualizarZonaComun(
+  $id: UUID!
+  $descripcion: String
+  $horaApertura: String
+  $horaCierre: String
+  $duracionMinHoras: Int
+  $duracionMaxHoras: Int
+  $costoReserva: Float
+  $depositoGarantia: Float
+  $requierePago: Boolean
+  $requiereAprobacion: Boolean
+  $anticipacionMinHabiles: Int
+  $anticipacionMaxDias: Int
+  $soportaModalidadRecreativa: Boolean
+  $costoRecreativo: Float
+  $depositoRecreativo: Float
+  $requierePagoRecreativo: Boolean
+  $requiereAprobacionRecreativo: Boolean
+  $anticipacionMinHabilesRecreativo: Int
+  $anticipacionMaxDiasRecreativo: Int
+  $activo: Boolean
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin antes de invocar la mutación.")
+@transaction
+{
+  zona_comun_update(
+    id: $id
+    data: {
+      descripcion: $descripcion
+      horaApertura: $horaApertura
+      horaCierre: $horaCierre
+      duracionMinHoras: $duracionMinHoras
+      duracionMaxHoras: $duracionMaxHoras
+      costoReserva: $costoReserva
+      depositoGarantia: $depositoGarantia
+      requierePago: $requierePago
+      requiereAprobacion: $requiereAprobacion
+      anticipacionMinHabiles: $anticipacionMinHabiles
+      anticipacionMaxDias: $anticipacionMaxDias
+      soportaModalidadRecreativa: $soportaModalidadRecreativa
+      costoRecreativo: $costoRecreativo
+      depositoRecreativo: $depositoRecreativo
+      requierePagoRecreativo: $requierePagoRecreativo
+      requiereAprobacionRecreativo: $requiereAprobacionRecreativo
+      anticipacionMinHabilesRecreativo: $anticipacionMinHabilesRecreativo
+      anticipacionMaxDiasRecreativo: $anticipacionMaxDiasRecreativo
+      activo: $activo
+    }
+  )
+}
+
+# Admin versions (NO_ACCESS) for resident-facing endpoints in datos-personales
+
+query ListarZonasComunesAdmin
+@auth(level: NO_ACCESS)
+{
+  zonas_comunes(where: {activo: {eq: true}}, orderBy: [{tipo: ASC}, {codigo: ASC}]) {
+    id
+    codigo
+    tipo
+    descripcion
+    horaApertura
+    horaCierre
+    duracionMinHoras
+    duracionMaxHoras
+    costoReserva
+    depositoGarantia
+    requierePago
+    requiereAprobacion
+    anticipacionMinHabiles
+    anticipacionMaxDias
+    soportaModalidadRecreativa
+    costoRecreativo
+    depositoRecreativo
+    requierePagoRecreativo
+    requiereAprobacionRecreativo
+    anticipacionMinHabilesRecreativo
+    anticipacionMaxDiasRecreativo
+  }
+}
+
+query ObtenerZonaComunAdmin($id: UUID!)
+@auth(level: NO_ACCESS)
+{
+  zona_comun(id: $id) {
+    id
+    codigo
+    tipo
+    descripcion
+    horaApertura
+    horaCierre
+    duracionMinHoras
+    duracionMaxHoras
+    costoReserva
+    depositoGarantia
+    requierePago
+    requiereAprobacion
+    anticipacionMinHabiles
+    anticipacionMaxDias
+    soportaModalidadRecreativa
+    costoRecreativo
+    depositoRecreativo
+    requierePagoRecreativo
+    requiereAprobacionRecreativo
+    anticipacionMinHabilesRecreativo
+    anticipacionMaxDiasRecreativo
+  }
+}
