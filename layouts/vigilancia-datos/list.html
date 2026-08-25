@@ -92,47 +92,80 @@
       width: 100%;
       border-collapse: collapse;
       background: #fff;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
     }
 
     .calendar-table th, .calendar-table td {
       border: 1px solid var(--b);
-      padding: 0.5rem;
+      padding: 0.6rem 0.4rem;
       text-align: center;
+      vertical-align: middle;
     }
 
     .calendar-table th {
       background: var(--p);
       color: #fff;
-      font-weight: 600;
+      font-weight: 700;
+      padding: 0.6rem 0.4rem;
     }
 
     .calendar-table .zona-nombre {
       text-align: left;
-      font-weight: 600;
+      font-weight: 700;
       color: var(--p);
-      background: #f9faf9;
+      background: #f5f7f5;
+      min-width: 140px;
+      padding: 0.6rem 0.8rem;
     }
 
     .calendar-table .fecha-header {
-      background: #f5f7f5;
-      font-size: 0.8rem;
-      font-weight: 600;
+      background: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--p);
+      padding: 0.6rem 0.3rem;
+    }
+
+    .fecha-numero {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--p);
+      margin-bottom: 0.15rem;
+    }
+
+    .fecha-dia {
+      display: block;
+      font-size: 0.65rem;
+      color: #888;
+      font-weight: 500;
     }
 
     .reserva-block {
-      min-height: 30px;
+      min-height: 36px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       color: #fff;
       font-weight: 600;
-      padding: 2px 4px;
-      border-radius: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      padding: 2px 3px;
+      margin: 2px 0;
+      border-radius: 3px;
+      flex-direction: column;
+      gap: 1px;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    .reserva-emoji {
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+
+    .reserva-texto {
+      font-size: 0.6rem;
+      word-wrap: break-word;
     }
 
     .reserva-pendiente {
@@ -142,20 +175,28 @@
 
     .reserva-confirmada {
       background: #28a745;
+      color: #fff;
     }
 
     .reserva-cancelada {
       background: #6c757d;
+      color: #fff;
     }
 
     .reserva-rechazada {
       background: #dc3545;
+      color: #fff;
+    }
+
+    .reserva-vacia {
+      background: #fafafa;
+      border: 1px dashed #ddd;
     }
 
     .calendar-legend {
       display: flex;
-      gap: 1rem;
-      margin-top: 1rem;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
       padding: 1rem;
       background: #f9faf9;
       border-radius: 0.5rem;
@@ -166,12 +207,17 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
+    }
+
+    .legend-emoji {
+      font-size: 1.1rem;
+      min-width: 1.2rem;
     }
 
     .legend-color {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       border-radius: 3px;
     }
   </style>
@@ -496,24 +542,20 @@
 
       <section id="reservasAgendaView" class="hidden">
         <div class="surface p-4">
-          <h2 class="h5 mb-3"><i class="bi bi-calendar-check me-2"></i>Calendario de Reservas</h2>
+          <h2 class="h5 mb-3"><i class="bi bi-calendar-event me-2"></i>Agenda de Reservas</h2>
           <div class="row g-3 mb-4">
-            <div class="col-md-4">
-              <label class="form-label small">Mes/Año</label>
-              <input id="agendaMes" type="month" class="form-control form-control-sm">
+            <div class="col-md-6">
+              <label class="form-label small">Rango de fechas</label>
+              <div class="d-flex gap-2">
+                <input id="agendaDesde" type="date" class="form-control form-control-sm">
+                <span class="align-self-center text-muted">a</span>
+                <input id="agendaHasta" type="date" class="form-control form-control-sm">
+              </div>
             </div>
-            <div class="col-md-4">
-              <label class="form-label small">Estado</label>
-              <select id="agendaEstado" class="form-select form-select-sm">
-                <option value="">Todos</option>
-                <option value="PENDIENTE">Pendiente</option>
-                <option value="CONFIRMADA">Confirmada</option>
-                <option value="CANCELADA">Cancelada</option>
-                <option value="RECHAZADA">Rechazada</option>
-              </select>
-            </div>
-            <div class="col-md-4 d-flex align-items-end">
-              <button id="agendaRefrescar" type="button" class="btn btn-primary btn-sm w-100"><i class="bi bi-arrow-clockwise me-1"></i>Cargar</button>
+            <div class="col-md-6 d-flex gap-2 align-items-end">
+              <button id="agendaSiete" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-calendar me-1"></i>7 días</button>
+              <button id="agendaMes" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-calendar2 me-1"></i>Mes</button>
+              <button id="agendaRefrescar" type="button" class="btn btn-primary btn-sm flex-grow-1"><i class="bi bi-arrow-clockwise me-1"></i>Cargar</button>
             </div>
           </div>
           <div id="agendaLoading" class="text-muted small mb-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
@@ -614,14 +656,38 @@
       $('showRegistration').addEventListener('click', function () { mode('registration'); });
       $('showVehicleRegistration').addEventListener('click', function () { mode('vehicle'); });
       $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
+      function initAgendaFechas() {
+        var today = new Date();
+        var hasta = new Date(today);
+        hasta.setDate(hasta.getDate() + 6);
+
+        $('agendaDesde').value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        $('agendaHasta').value = hasta.getFullYear() + '-' + String(hasta.getMonth() + 1).padStart(2, '0') + '-' + String(hasta.getDate()).padStart(2, '0');
+      }
+
       $('showReservasAgenda').addEventListener('click', function () {
         mode('reservas');
-        if (!$('agendaMes').value) {
-          var today = new Date();
-          $('agendaMes').value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+        if (!$('agendaDesde').value) {
+          initAgendaFechas();
           cargarAgendaReservas();
         }
       });
+
+      $('agendaSiete').addEventListener('click', function () {
+        initAgendaFechas();
+        cargarAgendaReservas();
+      });
+
+      $('agendaMes').addEventListener('click', function () {
+        var today = new Date();
+        var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        var monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        $('agendaDesde').value = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-' + String(monthStart.getDate()).padStart(2, '0');
+        $('agendaHasta').value = monthEnd.getFullYear() + '-' + String(monthEnd.getMonth() + 1).padStart(2, '0') + '-' + String(monthEnd.getDate()).padStart(2, '0');
+        cargarAgendaReservas();
+      });
+
       $('agendaRefrescar').addEventListener('click', cargarAgendaReservas);
 
       $('openReservas').addEventListener('click', function () {
@@ -959,21 +1025,20 @@
         $('agendaError').classList.add('hidden');
         $('agendaCalendario').innerHTML = '';
 
-        var mesAño = $('agendaMes').value;
-        if (!mesAño) {
+        var desdeStr = $('agendaDesde').value;
+        var hastaStr = $('agendaHasta').value;
+
+        if (!desdeStr || !hastaStr) {
           $('agendaLoading').classList.add('hidden');
-          $('agendaError').textContent = 'Selecciona un mes';
+          $('agendaError').textContent = 'Selecciona un rango de fechas';
           $('agendaError').classList.remove('hidden');
           return;
         }
 
-        var parts = mesAño.split('-');
-        var desde = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1).toISOString();
-        var hasta = new Date(parseInt(parts[0]), parseInt(parts[1]), 0, 23, 59, 59).toISOString();
-        var estado = $('agendaEstado').value;
+        var desde = new Date(desdeStr + 'T00:00:00').toISOString();
+        var hasta = new Date(hastaStr + 'T23:59:59').toISOString();
 
         var queryParams = ['desde=' + encodeURIComponent(desde), 'hasta=' + encodeURIComponent(hasta)];
-        if (estado) queryParams.push('estado=' + encodeURIComponent(estado));
 
         var url = '/api/v1/vigilancia/reservas?' + queryParams.join('&');
 
@@ -982,7 +1047,7 @@
         }).then(function (result) {
           $('agendaLoading').classList.add('hidden');
           var reservas = result.data || [];
-          renderCalendarioReservas(reservas, mesAño);
+          renderCalendarioReservas(reservas, desdeStr, hastaStr);
         }).catch(function (error) {
           $('agendaLoading').classList.add('hidden');
           $('agendaError').textContent = 'Error: ' + error.message;
@@ -990,12 +1055,33 @@
         });
       }
 
-      function renderCalendarioReservas(reservas, mesAño) {
-        var parts = mesAño.split('-');
-        var año = parseInt(parts[0]);
-        var mes = parseInt(parts[1]);
-        var primerDia = new Date(año, mes - 1, 1);
-        var ultimoDia = new Date(año, mes, 0).getDate();
+      function getEmojiZona(descripcion) {
+        var desc = (descripcion || '').toLowerCase();
+        if (desc.includes('salón social 1') || desc.includes('salon social 1')) return '🏛️🌇';
+        if (desc.includes('salón social 2') || desc.includes('salon social 2')) return '🏛️🏢';
+        if (desc.includes('salón social 3') || desc.includes('salon social 3')) return '🏛️💂';
+        if (desc.includes('cancha')) return '⚽';
+        return '';
+      }
+
+      function getEmojiEstado(estado) {
+        switch ((estado || '').toUpperCase()) {
+          case 'PENDIENTE': return '⏳';
+          case 'CONFIRMADA': return '✅';
+          case 'RECHAZADA': return '❌';
+          case 'CANCELADA': return '⚫';
+          default: return '';
+        }
+      }
+
+      function getNombreDia(fecha) {
+        var dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        return dias[fecha.getDay()];
+      }
+
+      function renderCalendarioReservas(reservas, desdeStr, hastaStr) {
+        var desde = new Date(desdeStr + 'T00:00:00');
+        var hasta = new Date(hastaStr + 'T23:59:59');
 
         // Agrupar por zona
         var zonas = {};
@@ -1005,40 +1091,60 @@
           zonas[zona].push(r);
         });
 
-        var html = '<table class="calendar-table"><thead><tr><th style="min-width:150px;">Zona</th>';
-        for (var d = 1; d <= ultimoDia; d++) {
-          html += '<th class="fecha-header">' + d + '</th>';
+        if (Object.keys(zonas).length === 0) {
+          $('agendaCalendario').innerHTML = '<p class="text-muted text-center py-4">No hay reservas en este período</p>';
+          return;
         }
+
+        // Generar lista de fechas en el rango
+        var fechas = [];
+        var fecha = new Date(desde);
+        while (fecha <= hasta) {
+          fechas.push(new Date(fecha));
+          fecha.setDate(fecha.getDate() + 1);
+        }
+
+        var html = '<table class="calendar-table"><thead><tr><th style="min-width:160px;">Zona</th>';
+        fechas.forEach(function (f) {
+          var num = f.getDate();
+          var dia = getNombreDia(f);
+          html += '<th class="fecha-header"><span class="fecha-numero">' + num + '</span><span class="fecha-dia">' + dia + '</span></th>';
+        });
         html += '</tr></thead><tbody>';
 
         Object.keys(zonas).sort().forEach(function (zona) {
-          html += '<tr><td class="zona-nombre">' + esc(zona) + '</td>';
-          for (var d = 1; d <= ultimoDia; d++) {
-            var fecha = new Date(año, mes - 1, d);
-            var fechaStr = fecha.getFullYear() + '-' + String(fecha.getMonth() + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+          var emojiZona = getEmojiZona(zona);
+          html += '<tr><td class="zona-nombre">' + emojiZona + ' ' + esc(zona) + '</td>';
+
+          fechas.forEach(function (f) {
+            var fechaStr = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
             var reservasDelDia = zonas[zona].filter(function (r) {
               return r.fechaHoraInicio.substring(0, 10) === fechaStr;
             });
 
             if (reservasDelDia.length === 0) {
-              html += '<td style="background:#fafafa;"></td>';
+              html += '<td class="reserva-vacia"></td>';
             } else {
               html += '<td>' + reservasDelDia.map(function (r) {
                 var claseEstado = 'reserva-' + r.estado.toLowerCase();
                 var hora = new Date(r.fechaHoraInicio).toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit'});
-                return '<div class="reserva-block ' + claseEstado + '" title="' + esc(r.unidad.codigoOficial) + ' ' + hora + '">' + esc(r.unidad.codigoOficial) + ' ' + hora + '</div>';
+                var emojiEstado = getEmojiEstado(r.estado);
+                var unidad = esc(r.unidad.codigoOficial);
+                var title = unidad + ' ' + hora + ' ' + r.estado;
+                return '<div class="reserva-block ' + claseEstado + '" title="' + title + '"><div class="reserva-emoji">' + emojiEstado + '</div><div class="reserva-texto">' + unidad + '<br>' + hora + '</div></div>';
               }).join('') + '</td>';
             }
-          }
+          });
           html += '</tr>';
         });
 
         html += '</tbody></table>';
         html += '<div class="calendar-legend">' +
-          '<div class="legend-item"><div class="legend-color" style="background:#ffc107;"></div><small>Pendiente</small></div>' +
-          '<div class="legend-item"><div class="legend-color" style="background:#28a745;"></div><small>Confirmada</small></div>' +
-          '<div class="legend-item"><div class="legend-color" style="background:#dc3545;"></div><small>Rechazada</small></div>' +
-          '<div class="legend-item"><div class="legend-color" style="background:#6c757d;"></div><small>Cancelada</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">⏳</span><small>Pendiente</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">✅</span><small>Confirmada</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">❌</span><small>Rechazada</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">⚫</span><small>Cancelada</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">⏳</span><small>Pendiente pago</small></div>' +
           '</div>';
 
         $('agendaCalendario').innerHTML = html;

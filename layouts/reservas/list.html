@@ -1,0 +1,2065 @@
+<!DOCTYPE html>
+<html lang="{{ .Site.LanguageCode }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Reservas de Zonas Comunes - {{ .Site.Title }}">
+    <title>{{ .Title }} - {{ .Site.Title }}</title>
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ "images/favicon-32x32.png" | relURL }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ "images/favicon-16x16.png" | relURL }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ "images/apple-touch-icon.png" | relURL }}">
+    <link rel="manifest" href="{{ "site.webmanifest" | relURL }}">
+    <meta name="theme-color" content="{{ .Site.Params.themeColor }}">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    
+    <!-- Google Fonts - Montserrat -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --font-primary: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-weight-regular: 400;
+            --font-weight-semibold: 600;
+            --font-weight-bold: 700;
+            --font-weight-extrabold: 800;
+            --color-primary: #2c5f2d;
+            --color-secondary: #4a8c4b;
+            --color-tertiary: #7bb77d;
+            --color-light: #e8f5e9;
+            --color-white: #ffffff;
+        }
+        
+        body {
+            font-family: var(--font-primary);
+            font-weight: var(--font-weight-regular);
+            background-color: var(--color-light);
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background-color: var(--color-primary) !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .navbar-brand {
+            font-weight: var(--font-weight-extrabold);
+            font-size: 1.5rem;
+            color: var(--color-white) !important;
+        }
+        .nav-link {
+            color: var(--color-light) !important;
+            font-weight: var(--font-weight-semibold);
+            transition: color 0.3s ease;
+        }
+        .nav-link:hover {
+            color: var(--color-white) !important;
+        }
+        
+        .page-header {
+            background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary) 100%);
+            color: var(--color-white);
+            padding: 60px 0 40px;
+            margin-bottom: 40px;
+        }
+        .page-header h1 {
+            font-weight: var(--font-weight-extrabold);
+            font-size: 2.5rem;
+        }
+        
+        .content-section {
+            background-color: var(--color-white);
+            border-radius: 10px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .content-section h2 {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: 20px;
+        }
+        
+        .btn-primary {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+        }
+        .btn-primary:hover {
+            background-color: var(--color-secondary);
+            border-color: var(--color-secondary);
+        }
+        
+        footer {
+            background-color: var(--color-primary);
+            color: var(--color-light);
+            padding: 40px 0;
+            margin-top: 60px;
+        }
+        footer a {
+            color: var(--color-light);
+            text-decoration: none;
+        }
+        footer a:hover {
+            color: var(--color-white);
+        }
+
+        /* === Reservas === */
+        .bien-card {
+            border: 2px solid var(--color-light);
+            border-radius: 10px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        .bien-card:hover {
+            border-color: var(--color-secondary);
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .bien-card.selected {
+            border-color: var(--color-primary);
+            background-color: var(--color-light);
+            box-shadow: 0 0 0 3px rgba(44,95,45,0.2);
+        }
+        .bien-card i {
+            font-size: 2rem;
+            color: var(--color-primary);
+        }
+        .bien-card h5 {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+        .bien-card .badge {
+            font-size: 0.75rem;
+        }
+
+        .slot-btn {
+            border: 2px solid var(--color-light);
+            border-radius: 8px;
+            padding: 10px 16px;
+            background: var(--color-white);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+            font-weight: var(--font-weight-semibold);
+        }
+        .slot-btn:hover:not(.slot-occupied) {
+            border-color: var(--color-secondary);
+            background: var(--color-light);
+        }
+        .slot-btn.slot-occupied {
+            background: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .slot-btn.slot-selected {
+            border-color: var(--color-primary);
+            background: var(--color-primary);
+            color: var(--color-white);
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        .step-badge {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: var(--font-weight-bold);
+            font-size: 0.9rem;
+            border: 2px solid var(--color-light);
+            color: #aaa;
+            background: var(--color-white);
+        }
+        .step-badge.active {
+            border-color: var(--color-primary);
+            background: var(--color-primary);
+            color: var(--color-white);
+        }
+        .step-badge.done {
+            border-color: var(--color-tertiary);
+            background: var(--color-tertiary);
+            color: var(--color-white);
+        }
+
+        #loading-spinner {
+            display: none;
+        }
+        #loading-spinner.show {
+            display: block;
+        }
+
+        .info-card {
+            background-color: var(--color-light);
+            border-left: 4px solid var(--color-primary);
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+        }
+
+        .form-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 140%;
+            height: 0;
+            overflow: hidden;
+            border-radius: 0.5rem;
+            border: 2px solid var(--color-light);
+        }
+        .form-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+            border-radius: 0.5rem;
+        }
+
+        .selection-summary {
+            background: var(--color-light);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .selection-summary .label {
+            font-weight: var(--font-weight-semibold);
+            color: #666;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+        .selection-summary .value {
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+            font-size: 1.1rem;
+        }
+
+        /* Salon cards */
+        .salon-card {
+            border: 2px solid var(--color-light);
+            border-radius: 10px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .salon-card.available {
+            cursor: pointer;
+        }
+        .salon-card.available:hover {
+            border-color: var(--color-secondary);
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .salon-card.occupied {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background-color: #fff5f5;
+        }
+        .salon-card.selected {
+            border-color: var(--color-primary);
+            background-color: var(--color-light);
+            box-shadow: 0 0 0 3px rgba(44,95,45,0.2);
+        }
+
+        /* Cancha sections */
+        .cancha-section {
+            border: 2px solid var(--color-light);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        .cancha-section:hover {
+            border-color: var(--color-secondary);
+        }
+        .cancha-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+        }
+        .cancha-header h5 {
+            margin-bottom: 0;
+        }
+        .cancha-slots {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--color-light);
+        }
+        .chevron-icon {
+            transition: transform 0.3s ease;
+            margin-left: auto;
+            font-size: 1.2rem;
+        }
+        .chevron-icon.open {
+            transform: rotate(180deg);
+        }
+
+        /* Duration filter tabs */
+        .duration-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .duration-tab {
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 2px solid var(--color-light);
+            background: var(--color-white);
+            cursor: pointer;
+            font-weight: var(--font-weight-semibold);
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+        .duration-tab:hover {
+            border-color: var(--color-secondary);
+        }
+        .duration-tab.active {
+            border-color: var(--color-primary);
+            background: var(--color-primary);
+            color: var(--color-white);
+        }
+
+
+        /* === Mejoras de experiencia por pasos === */
+        .step-indicator {
+            align-items: flex-start;
+            gap: clamp(12px, 4vw, 36px);
+        }
+        .step-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 90px;
+            color: #6c757d;
+            font-size: 0.78rem;
+            font-weight: var(--font-weight-semibold);
+            text-align: center;
+        }
+        .step-item:has(.step-badge.active),
+        .step-item:has(.step-badge.done) {
+            color: var(--color-primary);
+        }
+        .step-label {
+            margin-top: 8px;
+        }
+        .step-help-card {
+            background: #f7fbf7;
+            border: 1px solid #d8ead9;
+            border-left: 4px solid var(--color-primary);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 28px;
+        }
+        .step-help-card h5 {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: 8px;
+        }
+        .step-help-card p:last-child,
+        .step-help-card ul:last-child {
+            margin-bottom: 0;
+        }
+        .price-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--color-primary);
+            color: var(--color-white);
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 0.82rem;
+            font-weight: var(--font-weight-bold);
+        }
+        .asset-detail {
+            color: #5f6b63;
+            font-size: 0.88rem;
+            line-height: 1.45;
+            min-height: 42px;
+            margin: 10px 0 14px;
+        }
+        .section-heading {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e4eee5;
+        }
+        .bank-card {
+            background: #fff;
+            border: 1px solid #d8ead9;
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+        }
+        .bank-card img {
+            display: block;
+            width: 100%;
+            max-width: 720px;
+            height: auto;
+            margin: 0 auto;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .security-note {
+            background: #fff8e1;
+            border-left: 4px solid #f0ad4e;
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 0.88rem;
+        }
+        .terms-box {
+            border: 1px solid #d8ead9;
+            border-radius: 10px;
+            padding: 0 16px;
+            background: #fff;
+        }
+        .terms-box + .terms-box {
+            margin-top: 12px;
+        }
+        .terms-box summary {
+            cursor: pointer;
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            padding: 14px 0;
+        }
+        .terms-box .terms-content {
+            padding: 0 0 14px;
+            color: #4f5952;
+            font-size: 0.92rem;
+        }
+        .form-section-title {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: 18px;
+        }
+        .date-requirement {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+
+        .quick-date-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 14px;
+        }
+        .quick-date-btn {
+            border: 1px solid #c9ddca;
+            background: #fff;
+            color: var(--color-primary);
+            border-radius: 999px;
+            padding: 7px 13px;
+            font-weight: var(--font-weight-semibold);
+        }
+        .quick-date-btn:hover,
+        .quick-date-btn.active {
+            background: var(--color-primary);
+            color: #fff;
+        }
+        .public-agenda {
+            margin-top: 30px;
+            border: 1px solid #d8ead9;
+            border-radius: 12px;
+            background: #fbfdfb;
+            padding: 18px;
+        }
+        .agenda-day-card {
+            width: 100%;
+            height: 100%;
+            text-align: left;
+            border: 1px solid #d8ead9;
+            border-radius: 10px;
+            background: #fff;
+            padding: 13px;
+            transition: all 0.2s ease;
+        }
+        .agenda-day-card:hover {
+            border-color: var(--color-secondary);
+            transform: translateY(-2px);
+        }
+        .agenda-court-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 0.83rem;
+            margin-top: 6px;
+        }
+        .mode-option {
+            display: block;
+            border: 2px solid #d8ead9;
+            border-radius: 12px;
+            padding: 15px;
+            height: 100%;
+            cursor: pointer;
+            background: #fff;
+        }
+        .mode-option:has(input:checked) {
+            border-color: var(--color-primary);
+            background: #f2f8f2;
+            box-shadow: 0 0 0 2px rgba(44, 95, 45, 0.12);
+        }
+        .mode-option.disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+            background: #f4f4f4;
+        }
+        .mode-option-title {
+            display: block;
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: 4px;
+        }
+        .mode-option-detail {
+            display: block;
+            color: #5f6b63;
+            font-size: 0.87rem;
+        }
+        .free-confirmation-card {
+            border: 1px solid #badbcc;
+            border-left: 5px solid #198754;
+            border-radius: 12px;
+            padding: 18px;
+            background: #eef9f3;
+            margin-bottom: 24px;
+        }
+        .court-policy-note {
+            font-size: 0.82rem;
+            color: #5f6b63;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 767.98px) {
+            .page-header {
+                padding: 38px 0 28px;
+                margin-bottom: 24px;
+            }
+            .page-header h1 {
+                font-size: 1.8rem;
+            }
+            .content-section {
+                padding: 22px 16px;
+            }
+            .step-item {
+                min-width: 72px;
+                font-size: 0.7rem;
+            }
+            .selection-summary .row > div {
+                margin-bottom: 12px;
+            }
+            .selection-summary .row > div:last-child {
+                margin-bottom: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    {{ partial "header" . }}
+
+    <!-- Page Header -->
+    <section class="page-header text-center">
+        <div class="container">
+            <h1><i class="bi bi-calendar-check"></i> {{ .Title }}</h1>
+            <p class="lead">Reserva las zonas comunes</p>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="content-section">
+            {{ .Content }}
+
+            <!-- Step Indicator -->
+            <div class="step-indicator" aria-label="Progreso de la reserva">
+                <div class="step-item">
+                    <div class="step-badge active" id="step-badge-1">1</div>
+                    <span class="step-label">Fecha y tipo</span>
+                </div>
+                <div class="step-item">
+                    <div class="step-badge" id="step-badge-2">2</div>
+                    <span class="step-label">Espacio y horario</span>
+                </div>
+                <div class="step-item">
+                    <div class="step-badge" id="step-badge-3">3</div>
+                    <span class="step-label">Datos</span>
+                </div>
+            </div>
+
+            <!-- ========== PASO 1: Seleccionar fecha y tipo de bien ========== -->
+            <div id="step-1">
+                <h3 class="text-center mb-4" style="color: var(--color-primary);">
+                    <i class="bi bi-calendar3"></i> Paso 1: Seleccionar fecha y zona común
+                </h3>
+
+                <div class="step-help-card">
+                    <h5><i class="bi bi-ui-checks"></i> Define tu solicitud</h5>
+                    <p>Selecciona la fecha y el tipo de zona común. La disponibilidad se mostrará en el siguiente paso.</p>
+                    <ul class="mb-0">
+                        <li>Los horarios, duración, activación, costos y anticipación dependen de cada zona común.</li>
+                        <li>Recuerda que debes de estar al dia para poder reservar.</li>
+                    </ul>
+                </div>
+
+                <div class="row justify-content-center g-4 mb-4">
+                    <div class="col-md-5">
+                        <label for="fecha-reserva" class="form-label fw-bold">
+                            <i class="bi bi-calendar-event"></i> Fecha de reserva
+                        </label>
+                        <input type="date" class="form-control form-control-lg" id="fecha-reserva">
+                    </div>
+                    <div class="col-md-7">
+                        <div class="form-label fw-bold">
+                            <i class="bi bi-grid"></i> Tipo de bien a reservar
+                        </div>
+                        <div class="row g-3" role="radiogroup" aria-label="Tipo de bien a reservar">
+                            <div class="col-sm-6">
+                                <label class="mode-option h-100" for="tipo-bien-salon">
+                                    <input class="form-check-input me-2" type="radio" name="tipo-bien" id="tipo-bien-salon" value="SALON">
+                                    <span class="mode-option-title">Salón social</span>
+                                    <span class="mode-option-detail">Reserva uno de los salones habilitados.</span>
+                                </label>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="mode-option h-100" for="tipo-bien-cancha">
+                                    <input class="form-check-input me-2" type="radio" name="tipo-bien" id="tipo-bien-cancha" value="CANCHA">
+                                    <span class="mode-option-title">Cancha sintética</span>
+                                    <span class="mode-option-detail">Selecciona cancha, horario y tipo de uso.</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div id="tipo-bien-error" class="text-danger small mt-2 d-none">Selecciona el tipo de bien que deseas reservar.</div>
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <button id="btn-consultar-disponibilidad" class="btn btn-primary btn-lg" onclick="consultarDisponibilidad()">
+                        <i class="bi bi-arrow-right-circle"></i> Continuar
+                    </button>
+                </div>
+
+                <div id="loading-spinner" class="text-center py-4">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <p id="loading-spinner-text" class="mt-2 text-muted">Consultando los espacios configurados para la fecha seleccionada.</p>
+                </div>
+
+                <div id="availability-error" class="alert alert-danger d-none mt-3" role="alert">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span id="availability-error-msg"></span>
+                </div>
+            </div>
+
+            <!-- ========== PASO 2: Disponibilidad y selección ========== -->
+            <div id="step-2" class="d-none">
+                <h3 class="text-center mb-4" style="color: var(--color-primary);">
+                    <i class="bi bi-grid-3x3-gap"></i> Paso 2: Selecciona el espacio y el horario
+                </h3>
+
+                <div class="row justify-content-center g-3 mb-4">
+                    <div class="col-md-5">
+                        <div class="selection-summary text-center">
+                            <div class="label">Fecha seleccionada</div>
+                            <div class="value" id="selected-date-display">-</div>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="selection-summary text-center">
+                            <div class="label">Tipo de bien</div>
+                            <div class="value" id="selected-type-display">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step-help-card">
+                    <h5><i class="bi bi-hand-index-thumb"></i> Selecciona un bien disponible</h5>
+                    <p>Los horarios, duraciones, modalidades y costos se muestran según la configuración vigente de cada bien.</p>
+                </div>
+
+                <!-- Salones Sociales -->
+                <section id="salones-section">
+                    <div class="section-heading mb-3">
+                        <h4 class="mb-0" style="color: var(--color-primary);">
+                            <i class="bi bi-building"></i> Salones Sociales
+                            <small class="text-muted fw-normal d-block d-sm-inline" style="font-size: 0.8rem;">— Revisa las condiciones de cada salón</small>
+                        </h4>
+                        <span class="price-chip"><i class="bi bi-cash-coin"></i> Costos según configuración</span>
+                    </div>
+                    <div class="row g-3 mb-4" id="salones-grid"></div>
+                </section>
+
+                <!-- Canchas -->
+                <section id="canchas-section">
+                    <div class="section-heading mb-3">
+                        <h4 class="mb-0" style="color: var(--color-primary);">
+                            <span class="me-1" aria-hidden="true">⚽</span> Canchas Sintéticas
+                            <small class="text-muted fw-normal d-block d-sm-inline" style="font-size: 0.8rem;">— Franjas según cada cancha</small>
+                        </h4>
+                        <span class="price-chip"><i class="bi bi-people"></i> Modalidades y costos según configuración</span>
+                    </div>
+                    <div id="canchas-grid"></div>
+                </section>
+
+                <div class="text-center mt-4">
+                    <button class="btn btn-outline-secondary" onclick="goToStep(1)">
+                        <i class="bi bi-arrow-left"></i> Cambiar fecha o tipo de bien
+                    </button>
+                </div>
+            </div>
+
+            <!-- ========== PASO 3: Formulario de reserva ========== -->
+            <div id="step-3" class="d-none">
+                <h3 class="text-center mb-4" style="color: var(--color-primary);">
+                    <i class="bi bi-pencil-square"></i> Paso 3: Completa tu reserva
+                </h3>
+
+                <div class="row justify-content-center mb-4">
+                    <div class="col-md-8">
+                        <div class="selection-summary">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="label">Espacio</div>
+                                    <div class="value" id="summary-bien">-</div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="label">Fecha</div>
+                                    <div class="value" id="summary-fecha">-</div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="label">Horario</div>
+                                    <div class="value" id="summary-horario">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step-help-card" id="reservation-help-card">
+                    <h5><i class="bi bi-info-circle"></i> Antes de confirmar</h5>
+                    <ul class="mb-0" id="reservation-help-list">
+                        <li>Verifica que el espacio, la fecha y el horario sean correctos.</li>
+                        <li>El apartamento no debe de tener <strong>mora</strong> en la última factura.</li>
+                    </ul>
+                </div>
+
+                <div id="free-confirmation-card" class="free-confirmation-card d-none">
+                    <h5 class="text-success"><i class="bi bi-check-circle"></i> Confirmación</h5>
+                    <p class="mb-0">Al superar las validaciones del apto y de disponibilidad, la reserva quedará confirmada. Conserva el ID generado para presentarlo en vigilancia.</p>
+                </div>
+
+                <div class="mb-4">
+                    <h5 class="form-section-title"><i class="bi bi-file-earmark-check"></i> Términos y autorizaciones</h5>
+                    <details class="terms-box">
+                        <summary>Condiciones de la reserva y uso del espacio</summary>
+                        <div class="terms-content">
+                            <ul class="mb-0">
+                                <li>El envío del formulario no garantiza la reserva; esta queda sujeta a disponibilidad, validación y aprobación.</li>
+                                <li>El solicitante responde por sus invitados, por el uso adecuado del espacio y por los daños o faltantes ocasionados.</li>
+                                <li>El espacio debe entregarse limpio, ordenado y dentro del horario autorizado.</li>
+                                <li>No se permiten actividades que perturben la tranquilidad, afecten la convivencia o contradigan el reglamento de la copropiedad.</li>
+                            </ul>
+                        </div>
+                    </details>
+                    <details class="terms-box">
+                        <summary>Autorización de tratamiento de datos personales</summary>
+                        <div class="terms-content">
+                            Los datos serán utilizados para gestionar la solicitud, verificar requisitos, contactar al solicitante y conservar el registro administrativo de la reserva, conforme a la Ley 1581 de 2012 y las políticas de la copropiedad.
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Formulario de reserva -->
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <h5 class="form-section-title"><i class="bi bi-person-vcard"></i> Datos del solicitante</h5>
+                        <form id="reservation-form" class="needs-validation" novalidate>
+                            <section id="court-mode-section" class="d-none mb-4">
+                                <h5 class="form-section-title"><i class="bi bi-people"></i> Tipo de uso de la cancha</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="mode-option" id="mode-option-recreativo" for="mode-recreativo">
+                                            <input class="form-check-input me-2" type="radio" name="modalidad-uso" id="mode-recreativo" value="RECREATIVO_RESIDENTES">
+                                            <span class="mode-option-title" id="mode-recreativo-title">Uso recreativo de Bulevar Verde</span>
+                                            <span class="mode-option-detail" id="mode-recreativo-detail">Cargando condiciones...</span>
+                                            <small class="text-danger d-block mt-2" id="mode-recreativo-message"></small>
+                                        </label>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="mode-option" id="mode-option-organizado" for="mode-organizado">
+                                            <input class="form-check-input me-2" type="radio" name="modalidad-uso" id="mode-organizado" value="ORGANIZADO_CON_INVITADOS">
+                                            <span class="mode-option-title" id="mode-organizado-title">Uso organizado y/o con visitantes</span>
+                                            <span class="mode-option-detail" id="mode-organizado-detail">Cargando condiciones...</span>
+                                            <small class="text-danger d-block mt-2" id="mode-organizado-message"></small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section id="court-details-section" class="d-none mb-4">
+                                <h5 class="form-section-title"><i class="bi bi-person-arms-up"></i> Condiciones de uso</h5>
+
+                                <div class="form-check mb-3" id="residents-confirmation-field">
+                                    <input class="form-check-input" type="checkbox" id="check-solo-residentes">
+                                    <label class="form-check-label" for="check-solo-residentes">
+                                        Confirmo que el uso recreativo será exclusivo para residentes de Bulevar Verde.
+                                    </label>
+                                    <div class="invalid-feedback">Debes confirmar que el uso recreativo será exclusivo para residentes de Bulevar Verde</div>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="check-menores-14">
+                                    <label class="form-check-label" for="check-menores-14">
+                                        Participarán menores de 14 años
+                                    </label>
+                                </div>
+                            </section>
+
+                            <div class="mb-3">
+                                <label for="input-nombre" class="form-label">Nombre completo del adulto responsable <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="input-nombre" required maxlength="120">
+                                <div class="invalid-feedback">Por favor ingresa el nombre completo del adulto responsable</div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="input-torre" class="form-label">Torre <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="input-torre" required>
+                                        <option value="">Seleccione...</option>
+                                        <option value="T1">Torre 1</option>
+                                        <option value="T2">Torre 2</option>
+                                        <option value="T3">Torre 3</option>
+                                        <option value="T4">Torre 4</option>
+                                        <option value="T8">Torre 8</option>
+                                    </select>
+                                    <div class="invalid-feedback">Por favor selecciona tu torre</div>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="input-apto" class="form-label">Apartamento <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="input-apto" placeholder="Ej: 1029" required pattern="[0-9]{3,4}">
+                                    <div class="invalid-feedback">Ingresa el número de apartamento (3 o 4 dígitos)</div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="input-email" class="form-label">Correo electrónico <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="input-email" placeholder="correo@ejemplo.com" required>
+                                <div class="invalid-feedback">Por favor ingresa un correo electrónico válido</div>
+                                <small class="text-muted">Usa el correo donde deseas recibir la respuesta. Por ahora no se valida contra los datos registrados.</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="input-asunto" class="form-label">Motivo / Asunto de la reserva <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="input-asunto" rows="3" placeholder="Describe brevemente el motivo de tu reserva" required maxlength="300"></textarea>
+                                <div class="invalid-feedback">Por favor describe el motivo de tu reserva</div>
+                                <small class="text-muted">Máximo 300 caracteres</small>
+                            </div>
+
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="check-reglamento" required>
+                                <label class="form-check-label" for="check-reglamento">
+                                    He leído y acepto las condiciones de la reserva y el reglamento aplicable <span class="text-danger">*</span>
+                                </label>
+                                <div class="invalid-feedback">Debes aceptar el reglamento</div>
+                            </div>
+
+                            <div class="form-check mb-4">
+                                <input class="form-check-input" type="checkbox" id="check-habeas-data" required>
+                                <label class="form-check-label" for="check-habeas-data">
+                                    Autorizo el tratamiento de mis datos personales para gestionar esta reserva, conforme a la Ley 1581 de 2012 <span class="text-danger">*</span>
+                                </label>
+                                <div class="invalid-feedback">Debes autorizar el tratamiento de datos</div>
+                            </div>
+
+                <div class="row g-4 mb-4" id="payment-section">
+                    <div class="col-lg-7">
+                        <div class="bank-card h-100">
+                            <h5 class="mb-3" style="color: var(--color-primary);">
+                                <i class="bi bi-bank"></i> Información para el pago
+                            </h5>
+                            <p class="mb-2">Valor de la reserva: <strong id="summary-price">—</strong></p>
+                            <img src="{{ "images/bancario.jpeg" | relURL }}"
+                                 alt="Datos bancarios oficiales del Club Residencial Bulevar Verde"
+                                 loading="lazy">
+                            <div class="security-note mt-3 text-start">
+                                <i class="bi bi-shield-check"></i>
+                                Verifica que la imagen corresponda a los datos bancarios oficiales antes de realizar el pago. La administración nunca solicitará consignaciones a cuentas personales.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="info-card h-100 mb-0">
+                            <h5><i class="bi bi-receipt"></i> Envío del comprobante</h5>
+                            <p>Envía el soporte indicando <strong>nombre, torre, apartamento, fecha y espacio reservado</strong>.</p>
+                            <p class="mb-2">
+                                <i class="bi bi-whatsapp"></i>
+                                <a href="https://wa.me/573222289066" target="_blank" rel="noopener noreferrer">WhatsApp +57 322 228 9066</a>
+                            </p>
+                            <p class="mb-2">
+                                <i class="bi bi-envelope"></i>
+                                <a href="mailto:bulevarverdeadmon@gmail.com">bulevarverdeadmon@gmail.com</a>
+                            </p>
+                            <p class="mb-0" id="payment-deadline-note"><i class="bi bi-calendar-check"></i> Revisa el plazo configurado para completar el pago y la aprobación.</p>
+                            <div id="deposit-note" class="alert alert-secondary mt-3 mb-0 d-none" role="note"></div>
+                        </div>
+                    </div>
+                </div>
+
+                            <div id="reservation-policy-alert" class="alert alert-warning d-none" role="alert"></div>
+                            <div id="form-alerts"></div>
+
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary" onclick="goToStep(2)">
+                                    <i class="bi bi-arrow-left"></i> Volver
+                                </button>
+                                <button type="submit" class="btn btn-primary btn-lg" id="btn-enviar-reserva">
+                                    <i class="bi bi-send"></i> Enviar solicitud
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{ partial "footer" . }}
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // Las URL se insertan como texto JavaScript normal.
+        // No usar jsonify aquí: podía dejar comillas codificadas
+        // como %22 o %2522 y convertir la URL en una ruta local.
+        const RAW_WEBAPP_URL = "{{ .Site.Params.reservasWebAppUrl }}";
+        const WEBAPP_URL = normalizeConfiguredUrl(
+            RAW_WEBAPP_URL,
+            'Web App de reservas'
+        );
+
+        const DATOS_PERSONALES_URL = normalizeConfiguredUrl(
+            "{{ "datos-personales/" | absURL }}",
+            'Datos personales',
+            false
+        );
+
+        function normalizeConfiguredUrl(
+            rawValue,
+            label,
+            requireAppsScript
+        ) {
+            var value = String(rawValue || '').trim();
+
+            // Corrige entidades HTML de comillas.
+            value = value
+                .replace(/&quot;|&#34;|&#x22;/gi, '"')
+                .trim();
+
+            // Corrige hasta dos niveles de codificación:
+            // %2522https...%2522 -> %22https...%22 -> "https..."
+            for (
+                var attempt = 0;
+                attempt < 2;
+                attempt += 1
+            ) {
+                try {
+                    var decoded = decodeURIComponent(value);
+
+                    if (decoded === value) {
+                        break;
+                    }
+
+                    value = decoded.trim();
+                } catch (error) {
+                    break;
+                }
+            }
+
+            // Elimina comillas envolventes.
+            value = value
+                .replace(/^["']+|["']+$/g, '')
+                .trim();
+
+            if (!/^https?:\/\//i.test(value)) {
+                throw new Error(
+                    'La URL de ' + label +
+                    ' no es absoluta: ' + value
+                );
+            }
+
+            if (
+                requireAppsScript !== false &&
+                !/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec(?:$|[?#])/i.test(value)
+            ) {
+                throw new Error(
+                    'La URL de ' + label +
+                    ' no corresponde a una implementación /exec válida.'
+                );
+            }
+
+            return value;
+        }
+
+        let state = {
+            selectedDate: null,
+            availability: null,
+            selectedBien: null,
+            selectedSlot: null,
+            selectedMode: null,
+            selectedBienType: null
+        };
+
+        var loadingCountdownTimer = null;
+
+        // ========== INICIALIZACIÓN ==========
+
+        document.addEventListener('DOMContentLoaded', function() {
+            setupDateInput();
+            setupAssetTypeListeners_();
+            setupCourtModeListeners_();
+        });
+
+        function setupDateInput() {
+            var dateInput = document.getElementById('fecha-reserva');
+            var today = new Date();
+            dateInput.setAttribute('min', formatDateISO(today));
+
+            // El máximo permitido se valida en el backend con Bienes y Config.
+            dateInput.removeAttribute('max');
+        }
+
+        // ========== PASO 1: CONSULTAR DISPONIBILIDAD ==========
+
+        function setupAssetTypeListeners_() {
+            document.querySelectorAll('input[name="tipo-bien"]').forEach(function(input) {
+                input.addEventListener('change', function() {
+                    var error = document.getElementById('tipo-bien-error');
+                    if (error) error.classList.add('d-none');
+                });
+            });
+        }
+
+        window.consultarDisponibilidad = function() {
+            var dateInput = document.getElementById('fecha-reserva');
+            var typeInput = document.querySelector('input[name="tipo-bien"]:checked');
+            var typeError = document.getElementById('tipo-bien-error');
+
+            if (!dateInput.value) {
+                dateInput.focus();
+                return;
+            }
+
+            if (!typeInput) {
+                if (typeError) typeError.classList.remove('d-none');
+                var firstType = document.getElementById('tipo-bien-salon');
+                if (firstType) firstType.focus();
+                return;
+            }
+
+            if (typeError) typeError.classList.add('d-none');
+            state.selectedDate = dateInput.value;
+            state.selectedBienType = typeInput.value;
+            state.selectedBien = null;
+            state.selectedSlot = null;
+            state.selectedMode = null;
+            loadAvailability();
+        };
+
+        function loadAvailability() {
+            var spinner = document.getElementById('loading-spinner');
+            var errorEl = document.getElementById('availability-error');
+            var consultButton = document.getElementById('btn-consultar-disponibilidad');
+
+            // Deshabilitar botón
+            if (consultButton) {
+                consultButton.disabled = true;
+            }
+
+            // Iniciar contador
+            startLoadingCountdown_();
+
+            spinner.classList.add('show');
+            errorEl.classList.add('d-none');
+
+            var url = WEBAPP_URL + '?action=availability&fecha=' + encodeURIComponent(state.selectedDate);
+
+            fetch(url)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    stopLoadingCountdown_();
+                    spinner.classList.remove('show');
+                    if (consultButton) {
+                        consultButton.disabled = false;
+                    }
+                    if (data.ok) {
+                        state.availability = data;
+
+                        var parts = state.selectedDate.split('-');
+                        document.getElementById('selected-date-display').textContent =
+                            parts[2] + '/' + parts[1] + '/' + parts[0];
+                        document.getElementById('selected-type-display').textContent =
+                            state.selectedBienType === 'SALON'
+                                ? 'Salón social'
+                                : 'Cancha sintética';
+
+                        renderAvailability(data);
+                        goToStep(2);
+                    } else {
+                        document.getElementById('availability-error-msg').textContent =
+                            data.error || 'Error al consultar disponibilidad.';
+                        errorEl.classList.remove('d-none');
+                    }
+                })
+                .catch(function() {
+                    stopLoadingCountdown_();
+                    spinner.classList.remove('show');
+                    if (consultButton) {
+                        consultButton.disabled = false;
+                    }
+                    document.getElementById('availability-error-msg').textContent =
+                        'Error de conexión. Intenta de nuevo.';
+                    errorEl.classList.remove('d-none');
+                });
+        }
+
+        // ========== PASO 2: RENDERIZAR DISPONIBILIDAD ==========
+
+        function renderAvailability(data) {
+            var selectedType = state.selectedBienType;
+            var salonesSection = document.getElementById('salones-section');
+            var canchasSection = document.getElementById('canchas-section');
+            var salones = data.bienes.filter(function(b) {
+                return b.Tipo === 'SALON';
+            });
+            var canchas = data.bienes.filter(function(b) {
+                return b.Tipo === 'CANCHA';
+            });
+
+            salonesSection.classList.toggle('d-none', selectedType !== 'SALON');
+            canchasSection.classList.toggle('d-none', selectedType !== 'CANCHA');
+
+            if (selectedType === 'SALON') {
+                renderSalones(salones);
+                document.getElementById('canchas-grid').innerHTML = '';
+            } else {
+                renderCanchas(canchas);
+                document.getElementById('salones-grid').innerHTML = '';
+            }
+        }
+
+        function renderSalones(salones) {
+            var grid = document.getElementById('salones-grid');
+            grid.innerHTML = '';
+
+            salones.forEach(function(salon) {
+                var col = document.createElement('div');
+                col.className = 'col-md-4';
+
+                var card = document.createElement('div');
+                card.className = 'salon-card ' + (salon.disponible ? 'available' : 'occupied');
+                card.setAttribute('data-bien-id', salon.BienID);
+                var detail = getSalonDetail(salon, salones.indexOf(salon));
+                card.innerHTML =
+                    '<i class="bi bi-building" style="font-size:2.5rem; color: var(--color-primary);"></i>' +
+                    '<h5 style="color: var(--color-primary); margin-top: 10px;">' + escapeHtml(salon.Descripcion) + '</h5>' +
+                    '<div class="asset-detail">' + escapeHtml(detail) + '</div>' +
+                    '<div class="mb-3"><span class="price-chip"><i class="bi bi-cash-coin"></i> ' +
+                    formatCurrency_(getPolicyPrice_(salon, 'organizado')) + '</span></div>' +
+                    '<span class="badge ' + (salon.disponible ? 'bg-success' : 'bg-danger') + ' fs-6">' +
+                    (salon.disponible ? '<i class="bi bi-check-circle"></i> Disponible' : '<i class="bi bi-x-circle"></i> Ocupado') +
+                    '</span>';
+
+                if (salon.disponible) {
+                    card.addEventListener('click', function() {
+                        selectSalon(salon);
+                    });
+                }
+
+                col.appendChild(card);
+                grid.appendChild(col);
+            });
+        }
+
+        function renderCanchas(canchas) {
+            var grid = document.getElementById('canchas-grid');
+            grid.innerHTML = '';
+
+            canchas.forEach(function(cancha) {
+                var dateReservable = hasAvailableCourtMode_(cancha);
+                var availableCount = cancha.slots
+                    ? cancha.slots.filter(function(slot) {
+                        return slot.disponible && dateReservable;
+                    }).length
+                    : 0;
+                var totalCount = cancha.slots ? cancha.slots.length : 0;
+
+                var section = document.createElement('div');
+                section.className = 'cancha-section';
+
+                var headerDiv = document.createElement('div');
+                headerDiv.className = 'cancha-header';
+                var recreationalPolicy = getPolicy_(cancha, 'recreativo') || {};
+                var organizedPolicy = getPolicy_(cancha, 'organizado') || {};
+                headerDiv.innerHTML =
+                    '<span aria-hidden="true" style="font-size:2rem; line-height:1;">⚽</span>' +
+                    '<div>' +
+                        '<h5 style="color: var(--color-primary);">' + escapeHtml(cancha.Descripcion) + '</h5>' +
+                        '<small class="text-muted d-block">' + availableCount + ' de ' + totalCount + ' horarios disponibles</small>' +
+                        '<span class="price-chip mt-2"><i class="bi bi-people"></i> Recreativo: ' +
+                        escapeHtml(getPolicyCostLabel_(recreationalPolicy)) + '</span>' +
+                        '<div class="court-policy-note">Organizado: ' +
+                        escapeHtml(getPolicyCostLabel_(organizedPolicy)) +
+                        ' · ' + escapeHtml(getPolicyApprovalLabel_(organizedPolicy)) + '</div>' +
+                        getCourtDateRestrictionHtml_(cancha) +
+                    '</div>' +
+                    '<i class="bi bi-chevron-down chevron-icon" id="chevron-' + cancha.BienID + '"></i>';
+
+                headerDiv.addEventListener('click', function() {
+                    toggleCanchaSlots(cancha.BienID);
+                });
+
+                var slotsDiv = document.createElement('div');
+                slotsDiv.className = 'cancha-slots d-none';
+                slotsDiv.id = 'slots-' + cancha.BienID;
+
+                var slotsGrid = document.createElement('div');
+                slotsGrid.className = 'row g-2';
+                slotsGrid.id = 'slots-grid-' + cancha.BienID;
+                slotsDiv.appendChild(slotsGrid);
+
+                section.appendChild(headerDiv);
+                section.appendChild(slotsDiv);
+                grid.appendChild(section);
+
+                renderCanchaSlots(cancha);
+            });
+        }
+
+        function renderCanchaSlots(cancha) {
+            var slotsGrid = document.getElementById('slots-grid-' + cancha.BienID);
+            if (!slotsGrid || !cancha.slots) return;
+            slotsGrid.innerHTML = '';
+            var dateReservable = hasAvailableCourtMode_(cancha);
+
+            cancha.slots.forEach(function(slot) {
+                var col = document.createElement('div');
+                col.className = 'col-6 col-md-4 col-lg-3';
+
+                var selectable = slot.disponible && dateReservable;
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'slot-btn w-100' + (!selectable ? ' slot-occupied' : '');
+                btn.innerHTML =
+                    '<i class="bi ' + (selectable ? 'bi-check-circle' : 'bi-x-circle') + '"></i> ' +
+                    escapeHtml(slot.label) + '<br><small>' + escapeHtml(formatDurationHours_(slot.duracionHoras)) + '</small>';
+
+                if (!selectable) {
+                    btn.disabled = true;
+                    btn.title = slot.motivoNoDisponible ||
+                        getCourtDateRestrictionText_(cancha) ||
+                        'Horario no disponible';
+                } else {
+                    btn.addEventListener('click', function() {
+                        selectCanchaSlot(cancha, slot, btn);
+                    });
+                }
+
+                col.appendChild(btn);
+                slotsGrid.appendChild(col);
+            });
+        }
+
+        function filterSlotsByDuration(bienId, duration) {
+            var tabs = document.querySelectorAll('#tabs-' + bienId + ' .duration-tab');
+            tabs.forEach(function(t) {
+                t.classList.toggle('active', Number(t.getAttribute('data-duration')) === duration);
+            });
+
+            var slots = document.querySelectorAll('#slots-grid-' + bienId + ' > [data-duration]');
+            slots.forEach(function(col) {
+                col.style.display = Number(col.getAttribute('data-duration')) === duration ? '' : 'none';
+            });
+        }
+
+        function toggleCanchaSlots(bienId) {
+            var slotsDiv = document.getElementById('slots-' + bienId);
+            var chevron = document.getElementById('chevron-' + bienId);
+            slotsDiv.classList.toggle('d-none');
+            chevron.classList.toggle('open');
+        }
+
+        // ========== SELECCIÓN ==========
+
+        function selectSalon(salon) {
+            state.selectedBien = salon;
+            state.selectedSlot = null;
+            state.selectedMode = 'ORGANIZADO_CON_INVITADOS';
+
+            document.querySelectorAll('.salon-card').forEach(function(c) { c.classList.remove('selected'); });
+            var card = document.querySelector('[data-bien-id="' + salon.BienID + '"]');
+            if (card) card.classList.add('selected');
+
+            prepareStep3();
+        }
+
+        function selectCanchaSlot(cancha, slot, btnEl) {
+            state.selectedBien = cancha;
+            state.selectedSlot = slot;
+            state.selectedMode = getDefaultCourtMode_(cancha);
+
+            document.querySelectorAll('.slot-btn').forEach(function(b) { b.classList.remove('slot-selected'); });
+            btnEl.classList.add('slot-selected');
+
+            prepareStep3();
+        }
+
+        function prepareStep3() {
+            var parts = state.selectedDate.split('-');
+            var fechaDisplay = parts[2] + '/' + parts[1] + '/' + parts[0];
+            var bien = state.selectedBien;
+            var horarioDisplay;
+            var horarioValue;
+
+            if (bien.Tipo === 'SALON') {
+                horarioDisplay = 'Día completo';
+                horarioValue = bien.horario || '08:00-23:59';
+            } else {
+                horarioDisplay = state.selectedSlot.label;
+                horarioValue = state.selectedSlot.inicio + '-' + state.selectedSlot.fin;
+            }
+
+            document.getElementById('summary-bien').textContent =
+                bien.Descripcion || bien.BienID;
+            document.getElementById('summary-fecha').textContent = fechaDisplay;
+            document.getElementById('summary-horario').textContent = horarioDisplay;
+            state.horarioValue = horarioValue;
+
+            configureModeAvailability_(bien);
+            updateReservationModeUi_();
+            goToStep(3);
+        }
+
+        function setupCourtModeListeners_() {
+            ['mode-recreativo', 'mode-organizado'].forEach(function(id) {
+                var input = document.getElementById(id);
+                if (input) {
+                    input.addEventListener('change', function() {
+                        state.selectedMode = input.value;
+                        updateReservationModeUi_();
+                    });
+                }
+            });
+
+        }
+
+        function configureModeAvailability_(bien) {
+            var isCourt = bien.Tipo === 'CANCHA';
+            document.getElementById('court-mode-section')
+                .classList.toggle('d-none', !isCourt);
+            document.getElementById('court-details-section')
+                .classList.toggle('d-none', !isCourt);
+
+            if (!isCourt) {
+                state.selectedMode = 'ORGANIZADO_CON_INVITADOS';
+                return;
+            }
+
+            var recreational = getPolicy_(bien, 'recreativo');
+            var organized = getPolicy_(bien, 'organizado');
+            configureModeOption_(
+                'recreativo',
+                recreational,
+                'RECREATIVO_RESIDENTES'
+            );
+            configureModeOption_(
+                'organizado',
+                organized,
+                'ORGANIZADO_CON_INVITADOS'
+            );
+
+            var selectedInput = state.selectedMode === 'RECREATIVO_RESIDENTES'
+                ? document.getElementById('mode-recreativo')
+                : document.getElementById('mode-organizado');
+            if (selectedInput && !selectedInput.disabled) {
+                selectedInput.checked = true;
+            }
+        }
+
+        function configureModeOption_(key, policy, value) {
+            var input = document.getElementById('mode-' + key);
+            var label = document.getElementById('mode-option-' + key);
+            var message = document.getElementById('mode-' + key + '-message');
+            var title = document.getElementById('mode-' + key + '-title');
+            var detail = document.getElementById('mode-' + key + '-detail');
+            var configured = !!policy;
+
+            // Las dos modalidades permanecen visibles y seleccionables.
+            // La disponibilidad de la fecha se controla en el botón final.
+            input.disabled = !configured;
+            input.checked = configured && state.selectedMode === value;
+            label.classList.toggle('disabled', !configured);
+            message.textContent = configured ? '' : 'Modalidad no configurada.';
+
+            if (title && policy) {
+                title.textContent = key === 'recreativo'
+                    ? 'Uso recreativo de Bulevar Verde'
+                    : 'Uso organizado y/o con visitantes';
+            }
+            if (detail && policy) {
+                detail.textContent = getPolicyDetailLabel_(policy);
+            }
+        }
+
+        function updateReservationModeUi_() {
+            var bien = state.selectedBien;
+            if (!bien) return;
+
+            var isCourt = bien.Tipo === 'CANCHA';
+            var isRecreational = isCourt &&
+                state.selectedMode === 'RECREATIVO_RESIDENTES';
+            var policyKey = isRecreational ? 'recreativo' : 'organizado';
+            var policy = getPolicy_(bien, policyKey) || {};
+            var requiresPayment = !!policy.requierePago;
+            var requiresApproval = !!policy.requiereAprobacion;
+            var autoConfirm = !!policy.confirmacionAutomatica;
+            var dateAvailable = policy.disponibleFecha !== false;
+
+            document.getElementById('payment-section')
+                .classList.toggle('d-none', !requiresPayment);
+            document.getElementById('free-confirmation-card')
+                .classList.toggle('d-none', !autoConfirm);
+            document.getElementById('summary-price').textContent =
+                formatCurrency_(Number(policy.precio || 0));
+
+            var residentsField = document.getElementById('residents-confirmation-field');
+            var residentsCheck = document.getElementById('check-solo-residentes');
+            residentsField.classList.toggle('d-none', !isRecreational);
+            residentsCheck.required = isRecreational;
+            if (!isRecreational) residentsCheck.checked = false;
+
+            var depositNote = document.getElementById('deposit-note');
+            var deposit = Number(policy.depositoGarantia || 0);
+            if (deposit > 0 && requiresPayment) {
+                depositNote.classList.remove('d-none');
+                depositNote.innerHTML =
+                    '<strong>Depósito de garantía:</strong> ' +
+                    escapeHtml(formatCurrency_(deposit)) +
+                    '. Su devolución queda sujeta a la revisión del estado del espacio.';
+            } else {
+                depositNote.classList.add('d-none');
+                depositNote.innerHTML = '';
+            }
+
+            var deadlineNote = document.getElementById('payment-deadline-note');
+            if (deadlineNote) {
+                var minDays = Number(policy.anticipacionMinHabiles || 0);
+                var paymentAction = requiresApproval
+                    ? 'el pago y la aprobación'
+                    : 'el pago';
+                deadlineNote.innerHTML = minDays > 0
+                    ? '<i class="bi bi-calendar-check"></i> Completa ' + paymentAction +
+                      ' con mínimo ' + minDays + ' día(s) hábil(es) de anticipación.'
+                    : '<i class="bi bi-calendar-check"></i> Completa ' + paymentAction +
+                      ' antes del horario reservado.';
+            }
+
+            var helpItems = [
+                '<li>El apto debe figurar como <strong>Elegible para reservas</strong>.</li>',
+                '<li>Duración permitida: <strong>' +
+                    escapeHtml(getPolicyDurationLabel_(policy)) +
+                    '</strong>.</li>'
+            ];
+
+            if (isRecreational) {
+                helpItems.push('<li>Esta modalidad es exclusiva para residentes de Bulevar Verde.</li>');
+            }
+            if (requiresPayment) {
+                helpItems.push('<li>La solicitud requiere pago por ' +
+                    escapeHtml(formatCurrency_(Number(policy.precio || 0))) +
+                    '.</li>');
+            }
+            if (requiresApproval) {
+                helpItems.push('<li>Vigilancia solo autoriza el ingreso cuando la reserva figure aprobada o confirmada.</li>');
+            }
+            if (autoConfirm) {
+                helpItems.push('<li>La reserva se confirma automáticamente si el horario continúa disponible.</li>');
+            }
+
+            document.getElementById('reservation-help-list').innerHTML =
+                helpItems.join('');
+
+            var submit = document.getElementById('btn-enviar-reserva');
+            var policyAlert = document.getElementById('reservation-policy-alert');
+            var isOrganizedCourt = isCourt && !isRecreational;
+            var organizedProcessingMessage =
+                'Los usos organizados y/o con visitantes requieren un pago que debe ser verificado por la administración. ' +
+                'El procesamiento puede tardar hasta 3 días.';
+
+            submit.innerHTML = autoConfirm
+                ? '<i class="bi bi-check-circle"></i> Confirmar reserva'
+                : '<i class="bi bi-send"></i> Enviar solicitud';
+            submit.disabled = !dateAvailable;
+
+            if (!dateAvailable) {
+                var restrictionMessage = getShortPolicyRestrictionText_(policy) ||
+                    'La modalidad seleccionada no está disponible para esta fecha.';
+                policyAlert.className = 'alert alert-warning';
+                policyAlert.innerHTML =
+                    '<strong>No es posible continuar con esta fecha.</strong> ' +
+                    escapeHtml(restrictionMessage) +
+                    (isOrganizedCourt ? ' ' + escapeHtml(organizedProcessingMessage) : '');
+            } else if (isOrganizedCourt && (requiresPayment || requiresApproval)) {
+                policyAlert.className = 'alert alert-info';
+                policyAlert.innerHTML =
+                    '<strong>Esta modalidad no se confirma inmediatamente.</strong> ' +
+                    escapeHtml(organizedProcessingMessage);
+            } else {
+                policyAlert.className = 'alert alert-warning d-none';
+                policyAlert.innerHTML = '';
+            }
+
+        }
+
+        // ========== NAVEGACIÓN ==========
+
+        window.goToStep = function(step) {
+            document.getElementById('step-1').classList.add('d-none');
+            document.getElementById('step-2').classList.add('d-none');
+            document.getElementById('step-3').classList.add('d-none');
+            document.getElementById('step-' + step).classList.remove('d-none');
+
+            for (var i = 1; i <= 3; i++) {
+                var badge = document.getElementById('step-badge-' + i);
+                badge.classList.remove('active', 'done');
+                if (i < step) badge.classList.add('done');
+                else if (i === step) badge.classList.add('active');
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        // ========== ENVÍO DE RESERVA ==========
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var form = document.getElementById('reservation-form');
+            if (form) {
+                form.addEventListener('submit', handleFormSubmit);
+            }
+        });
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            var form = event.target;
+            
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+
+            submitReservation(form);
+        }
+
+        function submitReservation(form) {
+            var btnSubmit = document.getElementById('btn-enviar-reserva');
+            var alertsDiv = document.getElementById('form-alerts');
+            
+            // Deshabilitar botón
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
+            alertsDiv.innerHTML = '';
+
+            // Obtener horario
+            var horarioValue;
+            var bien = state.selectedBien;
+            
+            if (bien.Tipo === 'SALON') {
+                // Salones: usar horario del bien o fallback de día completo
+                // NO hay restricción de duración para salones
+                horarioValue = bien.horario || '08:00-23:59';
+            } else {
+                horarioValue = state.selectedSlot.inicio + '-' + state.selectedSlot.fin;
+            }
+
+            // Construir payload
+            var payload = {
+                requestId: generateRequestId(),
+                bienId: bien.BienID,
+                fecha: state.selectedDate,
+                horario: horarioValue,
+                torre: document.getElementById('input-torre').value,
+                apto: document.getElementById('input-apto').value,
+                nombre: document.getElementById('input-nombre').value,
+                email: document.getElementById('input-email').value,
+                asunto: document.getElementById('input-asunto').value,
+                modalidadUso: bien.Tipo === 'CANCHA'
+                    ? state.selectedMode
+                    : 'ORGANIZADO_CON_INVITADOS',
+                confirmaSoloResidentes: bien.Tipo === 'CANCHA'
+                    ? document.getElementById('check-solo-residentes').checked
+                    : false,
+                participanMenores14: bien.Tipo === 'CANCHA'
+                    ? document.getElementById('check-menores-14').checked
+                    : false,
+                adultoResponsable: document.getElementById('input-nombre').value,
+                aceptaReglamento: document.getElementById('check-reglamento').checked,
+                aceptaTratamientoDatos: document.getElementById('check-habeas-data').checked
+            };
+
+            // Enviar POST con no-cors (evita preflight OPTIONS que falla en Google Apps Script)
+            // Luego verificamos si se creó consultando por requestId
+            console.log('Enviando reserva con requestId:', payload.requestId);
+            
+            fetch(WEBAPP_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(function() {
+                // Con no-cors no podemos leer la respuesta directamente
+                // Esperamos 4 segundos y verificamos si se creó
+                console.log('POST enviado, esperando para verificar...');
+                
+                alertsDiv.innerHTML = 
+                    '<div class="alert alert-info" role="alert">' +
+                    '<div class="spinner-border spinner-border-sm me-2" role="status"></div>' +
+                    'Procesando tu reserva, por favor espera...' +
+                    '</div>';
+                
+                return new Promise(function(resolve) {
+                    setTimeout(resolve, 4000);
+                });
+            })
+            .then(function() {
+                // Verificar creación o rechazo. Se reintenta porque Apps Script
+                // puede tardar algunos segundos en consultar la fuente oficial.
+                console.log('Verificando resultado de la reserva...');
+                return verifyReservationWithRetry(
+                    payload.requestId,
+                    5,
+                    2500
+                );
+            })
+            .then(function(data) {
+                console.log('Verificación:', data);
+                
+                if (data && data.ok && data.exists) {
+                    // Reserva creada exitosamente
+                    var automatic = !!data.confirmacionAutomatica;
+                    var resultDetail = automatic
+                        ? '<strong>Reserva confirmada.</strong><br>' +
+                          'No debes realizar ningún pago. Conserva este ID y preséntalo en vigilancia al iniciar la franja.<br>'
+                        : '<strong>Próximos pasos:</strong><br>' +
+                          '1️⃣ Realiza el pago correspondiente a la cuenta oficial del conjunto.<br>' +
+                          '2️⃣ Envía el soporte con los datos de la reserva.<br>' +
+                          '3️⃣ Espera la confirmación de la administración antes de presentarte en vigilancia.<br>';
+
+                    alertsDiv.innerHTML =
+                        '<div class="alert alert-success" role="alert">' +
+                        '<i class="bi bi-check-circle-fill me-2"></i>' +
+                        '<strong>¡Reserva registrada exitosamente!</strong><br>' +
+                        'ID de reserva: <strong>' + (data.idReserva || payload.requestId) + '</strong><br>' +
+                        'Estado: <strong>' + (data.estado || 'Pendiente') + '</strong><br><br>' +
+                        resultDetail + '<br>' +
+                        '<hr>' +
+                        '<strong>¿Tus datos están desactualizados?</strong><br>' +
+                        'Te invitamos a revisar o actualizar tus datos personales para futuras gestiones.<br>' +
+                        '<a class="btn btn-outline-success mt-3" href="' +
+                        DATOS_PERSONALES_URL +
+                        '"><i class="bi bi-person-vcard me-1"></i> Actualizar datos personales</a>' +
+                        '</div>';
+                    
+                    // Deshabilitar formulario pero mantener los datos
+                    // NO hacer form.reset() para que el usuario vea los datos enviados
+                    form.querySelectorAll('input, select, textarea, button').forEach(function(el) {
+                        el.disabled = true;
+                    });
+                    
+                    // Ocultar botón de "Enviar Reserva"
+                    btnSubmit.style.display = 'none';
+                    
+                    // Crear botón "Crear Otra Reserva"
+                    var btnOtraReserva = document.createElement('button');
+                    btnOtraReserva.type = 'button';
+                    btnOtraReserva.className = 'btn btn-primary btn-lg';
+                    btnOtraReserva.innerHTML = '<i class="bi bi-plus-circle"></i> Crear Otra Reserva';
+                    btnOtraReserva.onclick = function() {
+                        window.location.reload();
+                    };
+                    
+                    // Insertar el nuevo botón donde estaba el botón de enviar
+                    btnSubmit.parentNode.appendChild(btnOtraReserva);
+                } else if (data && data.ok && !data.exists) {
+                    // Reserva NO creada - probablemente error de validación
+                    var errorMsg = data.error || 'El apartamento o el solicitante no cumplen los requisitos para reservar';
+                    var formattedError = escapeHtml(errorMsg)
+                        .replace(/\r?\n/g, '<br>');
+                    var genericFooter = data.code === 'UNIDAD_NO_ELEGIBLE'
+                        ? ''
+                        : '<br><br><small>Si el problema persiste, comunícate con la administración.</small>';
+
+                    alertsDiv.innerHTML = 
+                        '<div class="alert alert-danger" role="alert">' +
+                        '<i class="bi bi-x-circle-fill me-2"></i>' +
+                        '<strong>Error en la reserva</strong><br><br>' +
+                        formattedError +
+                        genericFooter +
+                        '</div>';
+                    
+                    // Re-habilitar botón para que pueda corregir
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar solicitud';
+                } else {
+                    // No se pudo verificar la creación (error de red o similar)
+                    alertsDiv.innerHTML = 
+                        '<div class="alert alert-warning" role="alert">' +
+                        '<i class="bi bi-exclamation-triangle-fill me-2"></i>' +
+                        '<strong>Solicitud enviada</strong><br>' +
+                        'Tu solicitud fue enviada (ID: ' + payload.requestId + ').<br>' +
+                        'No pudimos confirmar inmediatamente su recepción, pero el sistema la ha procesado.<br>' +
+                        'Recibirás un correo de confirmación si la reserva fue exitosa.<br>' +
+                        'Si no recibes confirmación en 24 horas, contacta a la administración.' +
+                        '</div>';
+                    
+                    // Re-habilitar botón por si quiere reenviar
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar solicitud';
+                }
+                
+                // Scroll al mensaje
+                alertsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            })
+            .catch(function(error) {
+                console.error('Error en el proceso de reserva:', error);
+                
+                alertsDiv.innerHTML = 
+                    '<div class="alert alert-warning" role="alert">' +
+                    '<i class="bi bi-exclamation-triangle-fill me-2"></i>' +
+                    '<strong>Solicitud enviada</strong><br>' +
+                    'Tu solicitud fue enviada (ID: ' + payload.requestId + ').<br>' +
+                    'Hubo un problema verificando su estado, pero el sistema la ha procesado.<br>' +
+                    'Recibirás un correo de confirmación si la reserva fue exitosa.<br>' +
+                    'Si no recibes confirmación en 24 horas, contacta a la administración.' +
+                    '</div>';
+                
+                // Re-habilitar botón
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = '<i class="bi bi-send"></i> Enviar solicitud';
+                
+                // Scroll al mensaje
+                alertsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        }
+
+        function verifyReservationWithRetry(
+            requestId,
+            attemptsRemaining,
+            delayMs
+        ) {
+            var url =
+                WEBAPP_URL +
+                '?action=verifyReservation&requestId=' +
+                encodeURIComponent(requestId);
+
+            return fetch(url)
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
+                    if (
+                        data.exists ||
+                        data.rejected ||
+                        attemptsRemaining <= 1
+                    ) {
+                        return data;
+                    }
+
+                    return new Promise(function(resolve) {
+                        setTimeout(resolve, delayMs);
+                    }).then(function() {
+                        return verifyReservationWithRetry(
+                            requestId,
+                            attemptsRemaining - 1,
+                            delayMs
+                        );
+                    });
+                });
+        }
+
+        function generateRequestId() {
+            // Generar UUID v4 simplificado
+            var timestamp = Date.now().toString(36);
+            var randomPart = Math.random().toString(36).substring(2, 15);
+            return 'REQ-' + timestamp + '-' + randomPart;
+        }
+
+        // ========== CONTADOR DE CARGA ==========
+
+        function startLoadingCountdown_() {
+            stopLoadingCountdown_();
+
+            var elapsedSeconds = 0;
+            updateLoadingSpinnerText_(elapsedSeconds);
+
+            loadingCountdownTimer = setInterval(function () {
+                elapsedSeconds += 1;
+                updateLoadingSpinnerText_(elapsedSeconds);
+            }, 1000);
+        }
+
+        function stopLoadingCountdown_() {
+            if (loadingCountdownTimer) {
+                clearInterval(loadingCountdownTimer);
+                loadingCountdownTimer = null;
+            }
+
+            updateLoadingSpinnerText_();
+        }
+
+        function updateLoadingSpinnerText_(elapsedSeconds) {
+            var textEl = document.getElementById('loading-spinner-text');
+            if (!textEl) {
+                return;
+            }
+
+            if (typeof elapsedSeconds !== 'number') {
+                textEl.textContent = 'Esta operación tarda aproximadamente 30 segundos.';
+                return;
+            }
+
+            textEl.textContent =
+                'Esta operación tarda aproximadamente 30 segundos. Tiempo transcurrido: ' +
+                elapsedSeconds +
+                ' s.';
+        }
+
+        // ========== UTILIDADES ==========
+
+        function addBusinessDays(startDate, businessDays) {
+            var result = new Date(startDate);
+            var added = 0;
+            while (added < businessDays) {
+                result.setDate(result.getDate() + 1);
+                var day = result.getDay();
+                if (day !== 0 && day !== 6) added += 1;
+            }
+            return result;
+        }
+
+        function getPolicy_(bien, key) {
+            return bien && bien.politicas ? bien.politicas[key] : null;
+        }
+
+        function getPolicyPrice_(bien, key) {
+            var policy = getPolicy_(bien, key);
+            return policy && policy.precio !== undefined
+                ? Number(policy.precio)
+                : 0;
+        }
+
+        function getPolicyCostLabel_(policy) {
+            if (!policy) return 'No configurado';
+            return formatCurrency_(Number(policy.precio || 0));
+        }
+
+        function getPolicyApprovalLabel_(policy) {
+            if (!policy) return 'sin configuración';
+            if (policy.confirmacionAutomatica) return 'confirmación automática';
+            if (policy.requierePago && policy.requiereAprobacion) {
+                return 'requiere pago y aprobación';
+            }
+            if (policy.requierePago) return 'requiere pago';
+            if (policy.requiereAprobacion) return 'requiere aprobación';
+            return 'sujeto a confirmación';
+        }
+
+        function formatDurationHours_(hours) {
+            var value = Number(hours || 0);
+            return value + (value === 1 ? ' hora' : ' horas');
+        }
+
+        function getPolicyDurationLabel_(policy) {
+            if (!policy) return 'No configurada';
+            var min = Number(
+                policy.duracionMinHoras !== undefined
+                    ? policy.duracionMinHoras
+                    : policy.duracionHoras
+            );
+            var max = Number(
+                policy.duracionMaxHoras !== undefined
+                    ? policy.duracionMaxHoras
+                    : policy.duracionHoras
+            );
+
+            if (!min || !max) return 'Según el horario del bien';
+            if (min === max) return formatDurationHours_(min);
+            return formatDurationHours_(min) + ' a ' + formatDurationHours_(max);
+        }
+
+        function getPolicyDetailLabel_(policy) {
+            if (!policy) return 'No configurado';
+            var parts = [
+                getPolicyDurationLabel_(policy),
+                getPolicyApprovalLabel_(policy)
+            ];
+            var minDays = Number(policy.anticipacionMinHabiles || 0);
+            var maxDays = Number(policy.anticipacionMaxDias || 0);
+
+            if (minDays > 0) {
+                parts.push('mínimo ' + minDays + ' día(s) hábil(es)');
+            } else {
+                parts.push('sin anticipación mínima');
+            }
+            if (maxDays > 0) {
+                parts.push('máximo ' + maxDays + ' día(s)');
+            }
+
+            return parts.join(' · ');
+        }
+
+        function hasAvailableCourtMode_(court) {
+            var recreational = getPolicy_(court, 'recreativo');
+            var organized = getPolicy_(court, 'organizado');
+            return !!(
+                (recreational && recreational.disponibleFecha) ||
+                (organized && organized.disponibleFecha)
+            );
+        }
+
+        function getDefaultCourtMode_(court) {
+            var organized = getPolicy_(court, 'organizado');
+            if (organized) {
+                return 'ORGANIZADO_CON_INVITADOS';
+            }
+            return 'RECREATIVO_RESIDENTES';
+        }
+
+        function getShortPolicyRestrictionText_(policy) {
+            if (!policy || policy.disponibleFecha !== false) return '';
+
+            var message = String(policy.mensajeFecha || '').trim();
+            var minDays = Number(policy.anticipacionMinHabiles || 0);
+            var maxDays = Number(policy.anticipacionMaxDias || 0);
+
+            if (minDays > 0 && /mínimo/i.test(message)) {
+                return 'Mínimo ' + minDays + ' día(s) hábil(es) de anticipación.';
+            }
+            if (maxDays > 0 && /máximo/i.test(message)) {
+                return 'Máximo ' + maxDays + ' día(s) calendario de anticipación.';
+            }
+
+            return message
+                .replace(/^Esta modalidad requiere\s*/i, '')
+                .replace(/^Esta modalidad permite reservar\s*/i, '')
+                .replace(/^La fecha\s*/i, 'Fecha ');
+        }
+
+        function getCourtDateRestrictionText_(court) {
+            var messages = [];
+            ['recreativo', 'organizado'].forEach(function(key) {
+                var policy = getPolicy_(court, key);
+                var message = getShortPolicyRestrictionText_(policy);
+                if (message && messages.indexOf(message) === -1) {
+                    messages.push(message);
+                }
+            });
+            return messages.join(' ');
+        }
+
+        function getCourtDateRestrictionHtml_(court) {
+            var message = getCourtDateRestrictionText_(court);
+            return message
+                ? '<div class="court-policy-note"><strong>' + escapeHtml(message) + '</strong></div>'
+                : '';
+        }
+
+        function formatCurrency_(value) {
+            var amount = Number(value || 0);
+            if (amount === 0) return 'Gratis';
+            return '$' + amount.toLocaleString('es-CO');
+        }
+
+        function parseLocalIsoDate_(value) {
+            var parts = String(value || '').split('-');
+            return new Date(
+                Number(parts[0]),
+                Number(parts[1]) - 1,
+                Number(parts[2])
+            );
+        }
+
+        function formatShortDate_(date) {
+            return date.toLocaleDateString('es-CO', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short'
+            });
+        }
+
+        function formatAgendaDate_(date) {
+            return date.toLocaleDateString('es-CO', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long'
+            });
+        }
+
+        function getSalonDetail(salon, index) {
+            var description = String(salon.Descripcion || '').toLowerCase();
+            if (description.indexOf('porter') !== -1 || description.indexOf('salón 3') !== -1 || description.indexOf('salon 3') !== -1) {
+                return 'Segundo piso de portería · 18 sillas · 4 mesas · nevera';
+            }
+            if (description.indexOf('ciudad') !== -1 || description.indexOf('salón 1') !== -1 || description.indexOf('salon 1') !== -1 || index === 0) {
+                return 'Sky Club, piso 8 · vista a la ciudad · 23 sillas · 6 mesas';
+            }
+            if (description.indexOf('copropiedad') !== -1 || description.indexOf('salón 2') !== -1 || description.indexOf('salon 2') !== -1 || index === 1) {
+                return 'Sky Club, piso 8 · vista a la copropiedad · 23 sillas · 6 mesas';
+            }
+            return 'Reserva por día completo, sujeta a disponibilidad y aprobación';
+        }
+
+        function formatDateISO(d) {
+            var y = d.getFullYear();
+            var m = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(text));
+            return div.innerHTML;
+        }
+    })();
+    </script>
+</body>
+</html>

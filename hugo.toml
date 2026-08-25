@@ -55,7 +55,7 @@ title = 'Club Residencial Bulevar Verde'
 
   [[menu.main]]
     name = 'Reservas'
-    pageRef = '/datos-personales'
+    pageRef = '/reservas'
     weight = 2
 
   [[menu.main]]
