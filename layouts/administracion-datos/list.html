@@ -100,6 +100,147 @@
       background: var(--p);
       border-color: var(--p);
     }
+
+    /* Calendario de Reservas */
+    .repeat-row {
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--b);
+    }
+
+    .repeat-row:last-child {
+      border-bottom: none;
+    }
+
+    table {
+      font-size: 0.9rem;
+    }
+
+    .calendar-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 0.8rem;
+    }
+
+    .calendar-table th, .calendar-table td {
+      border: 1px solid var(--b);
+      padding: 0.6rem 0.4rem;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .calendar-table th {
+      background: var(--p);
+      color: #fff;
+      font-weight: 700;
+      padding: 0.6rem 0.4rem;
+    }
+
+    .calendar-table .zona-nombre {
+      text-align: left;
+      font-weight: 700;
+      color: var(--p);
+      background: #f5f7f5;
+      min-width: 140px;
+      padding: 0.6rem 0.8rem;
+    }
+
+    .calendar-table .fecha-header {
+      background: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--p);
+      padding: 0.6rem 0.3rem;
+    }
+
+    .fecha-numero {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--p);
+      margin-bottom: 0.15rem;
+    }
+
+    .fecha-dia {
+      display: block;
+      font-size: 0.65rem;
+      color: #888;
+      font-weight: 500;
+    }
+
+    .reserva-block {
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      color: #fff;
+      font-weight: 600;
+      padding: 2px 3px;
+      margin: 2px 0;
+      border-radius: 3px;
+      flex-direction: column;
+      gap: 1px;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    .reserva-emoji {
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+
+    .reserva-texto {
+      font-size: 0.6rem;
+      word-wrap: break-word;
+    }
+
+    .reserva-pendiente {
+      background: #ffc107;
+      color: #000;
+    }
+
+    .reserva-confirmada {
+      background: #28a745;
+      color: #fff;
+    }
+
+    .reserva-cancelada {
+      background: #6c757d;
+      color: #fff;
+    }
+
+    .reserva-rechazada {
+      background: #dc3545;
+      color: #fff;
+    }
+
+    .reserva-vacia {
+      background: #fafafa;
+      border: 1px dashed #ddd;
+    }
+
+    .calendar-legend {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #f9faf9;
+      border-radius: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .legend-emoji {
+      font-size: 1.1rem;
+      min-width: 1.2rem;
+    }
   </style>
 </head>
 
@@ -196,13 +337,115 @@
       </section>
 
       <section id="reservasView" class="hidden">
-        <div class="alert alert-info">
-          <p class="mb-0">
-            Acceder al <a href="/reservas-admin/" class="alert-link" target="_blank">panel de gestión de reservas</a> para administrar zonas comunes y reservas.
-          </p>
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <div>
+            <h3 class="section-title h5 mb-0">Gestión de Reservas</h3>
+          </div>
+          <div class="d-flex gap-2">
+            <button id="showReservasCatalogo" type="button" class="btn btn-outline-success mode-button active">
+              <i class="bi bi-list me-1"></i>Catálogo de Zonas
+            </button>
+            <button id="showReservasAgenda" type="button" class="btn btn-outline-success mode-button">
+              <i class="bi bi-bookmark me-1"></i>Agenda
+            </button>
+          </div>
         </div>
+
+        <section id="reservasCatalogoView">
+          <div class="surface p-4 mb-4">
+            <h3 class="section-title h5 mb-3"><i class="bi bi-plus-circle me-2"></i>Crear nueva zona</h3>
+            <form id="crearZonaForm" class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label small">Código</label>
+                <input id="zonaCodigo" type="text" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small">Tipo</label>
+                <input id="zonaTipo" type="text" class="form-control form-control-sm" placeholder="ej: Salón, Cancha" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small">Descripción</label>
+                <input id="zonaDescripcion" type="text" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small">Hora apertura</label>
+                <input id="zonaHoraApertura" type="time" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small">Hora cierre</label>
+                <input id="zonaHoraCierre" type="time" class="form-control form-control-sm" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small">Dur. mín. (horas)</label>
+                <input id="zonaDuracionMin" type="number" class="form-control form-control-sm" min="1" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small">Dur. máx. (horas)</label>
+                <input id="zonaDuracionMax" type="number" class="form-control form-control-sm" min="1" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small">Costo</label>
+                <input id="zonaCosto" type="number" class="form-control form-control-sm" step="0.01" min="0">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small">Depósito</label>
+                <input id="zonaDeposito" type="number" class="form-control form-control-sm" step="0.01" min="0">
+              </div>
+              <div class="col-md-3">
+                <div class="form-check mt-4">
+                  <input id="zonaRequierePago" type="checkbox" class="form-check-input">
+                  <label class="form-check-label small" for="zonaRequierePago">Requiere pago</label>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="form-check mt-4">
+                  <input id="zonaRequiereAprobacion" type="checkbox" class="form-check-input">
+                  <label class="form-check-label small" for="zonaRequiereAprobacion">Requiere aprobación</label>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="form-check mt-4">
+                  <input id="zonaSoportaRecreativa" type="checkbox" class="form-check-input">
+                  <label class="form-check-label small" for="zonaSoportaRecreativa">Soporta recreativa</label>
+                </div>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus me-1"></i>Crear zona</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="surface p-4">
+            <h3 class="section-title h5 mb-3">Zonas comunes</h3>
+            <div id="reservasCatalogoLoading" class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+            <div id="reservasCatalogoLista"></div>
+          </div>
+        </section>
+
+        <section id="reservasAgendaView" class="hidden">
+          <div class="surface p-4">
+            <h2 class="h5 mb-3"><i class="bi bi-calendar-event me-2"></i>Agenda de Reservas</h2>
+            <div class="row g-3 mb-4">
+              <div class="col-md-6">
+                <label class="form-label small">Rango de fechas</label>
+                <div class="d-flex gap-2">
+                  <input id="agendaDesde" type="date" class="form-control form-control-sm">
+                  <span class="align-self-center text-muted">a</span>
+                  <input id="agendaHasta" type="date" class="form-control form-control-sm">
+                </div>
+              </div>
+              <div class="col-md-6 d-flex gap-2 align-items-end">
+                <button id="agendaSiete" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-calendar me-1"></i>7 días</button>
+                <button id="agendaMes" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-calendar2 me-1"></i>Mes</button>
+                <button id="agendaRefrescar" type="button" class="btn btn-primary btn-sm flex-grow-1"><i class="bi bi-arrow-clockwise me-1"></i>Cargar</button>
+              </div>
+            </div>
+            <div id="agendaLoading" class="text-muted small mb-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+            <div id="agendaError" class="alert alert-danger hidden mb-3"></div>
+            <div id="agendaCalendario" style="overflow-x: auto;"></div>
+          </div>
+        </section>
       </section>
-    </section>
 
     <!-- Modal de importación de cartera -->
     <div class="modal fade" id="modalImportarCartera" tabindex="-1">
@@ -257,6 +500,74 @@
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Rechazar Reserva -->
+    <div class="modal fade" id="reservasModalRechazar" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Rechazar Reserva</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <textarea id="reservasMotivoRechazo" class="form-control" rows="3" placeholder="Motivo del rechazo..."></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="reservasConfirmarRechazo" type="button" class="btn btn-danger">Rechazar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Cancelar Reserva -->
+    <div class="modal fade" id="reservasModalCancelar" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Cancelar Reserva</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <textarea id="reservasMotivoCancelacion" class="form-control" rows="3" placeholder="Motivo de la cancelación (opcional)..."></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="reservasConfirmarCancelacion" type="button" class="btn btn-warning">Cancelar Reserva</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Registrar Pago -->
+    <div class="modal fade" id="reservasModalPago" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Registrar Pago</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body row g-3">
+            <div class="col-12">
+              <label class="form-label small">Estado del pago</label>
+              <select id="reservasEstadoPago" class="form-select form-select-sm">
+                <option value="NO_REQUIERE">No requiere</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="PAGADO">Pagado</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label small">Fecha de pago (opcional)</label>
+              <input id="reservasFechaPago" type="date" class="form-control form-control-sm">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="reservasConfirmarPago" type="button" class="btn btn-primary">Registrar</button>
           </div>
         </div>
       </div>
@@ -692,6 +1003,369 @@
         });
       });
 
+      // ===== FUNCIONES DE RESERVAS =====
+
+      function getEmojiZona(descripcion) {
+        var desc = (descripcion || '').toLowerCase();
+        if (desc.includes('salón social 1') || desc.includes('salon social 1')) return '🏛️🌇';
+        if (desc.includes('salón social 2') || desc.includes('salon social 2')) return '🏛️🏢';
+        if (desc.includes('salón social 3') || desc.includes('salon social 3')) return '🏛️💂';
+        if (desc.includes('cancha')) return '⚽';
+        return '';
+      }
+
+      function getEmojiEstado(estado) {
+        switch ((estado || '').toUpperCase()) {
+          case 'PENDIENTE': return '⏳';
+          case 'CONFIRMADA': return '✅';
+          case 'RECHAZADA': return '❌';
+          case 'CANCELADA': return '⚫';
+          default: return '';
+        }
+      }
+
+      function getNombreDia(fecha) {
+        var dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        return dias[fecha.getDay()];
+      }
+
+      function cargarReservasCatalogo() {
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/catalogo', idToken);
+        }).then(function (result) {
+          renderReservasCatalogo(result.data || []);
+          cargarReservasFiltroZonas(result.data || []);
+        }).catch(function (error) { msg('Error: ' + error.message); });
+      }
+
+      function renderReservasCatalogo(zonas) {
+        var catalogoLista = $('reservasCatalogoLista');
+        if (catalogoLista) {
+          catalogoLista.innerHTML = zonas.length ? zonas.map(function (z) {
+            return '<div class="repeat-row"><div class="row"><div class="col-md-4"><strong>' + esc(z.descripcion) + '</strong>' +
+              '<div class="small-note">' + esc(z.tipo) + ' | ' + esc(z.horaApertura) + '–' + esc(z.horaCierre) + '</div></div>' +
+              '<div class="col-md-8"><button type="button" class="btn btn-outline-primary btn-sm editar-zona" data-id="' + esc(z.id) + '">Editar</button></div></div></div>';
+          }).join('') : '<p class="text-muted">No hay zonas registradas.</p>';
+        }
+      }
+
+      function cargarReservasFiltroZonas(zonas) {
+        var select = $('filtroZona');
+        if (select) {
+          select.innerHTML = '<option value="">Todas</option>' + zonas.map(function (z) {
+            return '<option value="' + esc(z.id) + '">' + esc(z.descripcion) + '</option>';
+          }).join('');
+        }
+      }
+
+      var reservasFrm = $('crearZonaForm');
+      if (reservasFrm) reservasFrm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var btn = this.querySelector('button[type="submit"]');
+        busy(btn, true, 'Creando…');
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/catalogo', idToken, {
+            method: 'POST',
+            body: {
+              codigo: $('zonaCodigo').value.trim(),
+              tipo: $('zonaTipo').value.trim(),
+              descripcion: $('zonaDescripcion').value.trim(),
+              horaApertura: $('zonaHoraApertura').value,
+              horaCierre: $('zonaHoraCierre').value,
+              duracionMinHoras: parseInt($('zonaDuracionMin').value) || 1,
+              duracionMaxHoras: parseInt($('zonaDuracionMax').value) || 2,
+              costoReserva: parseFloat($('zonaCosto').value) || undefined,
+              depositoGarantia: parseFloat($('zonaDeposito').value) || undefined,
+              requierePago: $('zonaRequierePago').checked,
+              requiereAprobacion: $('zonaRequiereAprobacion').checked,
+              soportaModalidadRecreativa: $('zonaSoportaRecreativa').checked
+            }
+          });
+        }).then(function () {
+          msg('Zona creada', 'success');
+          $('crearZonaForm').reset();
+          cargarReservasCatalogo();
+        }).catch(function (error) { msg(error.message); }).finally(function () { busy(btn, false, 'Crear zona'); });
+      });
+
+      function cargarReservasAgenda() {
+        var agendaLoading = $('agendaLoading');
+        var agendaError = $('agendaError');
+        var agendaCalendario = $('agendaCalendario');
+        var agendaDesde = $('agendaDesde');
+        var agendaHasta = $('agendaHasta');
+
+        if (agendaLoading) agendaLoading.classList.remove('hidden');
+        if (agendaError) agendaError.classList.add('hidden');
+        if (agendaCalendario) agendaCalendario.innerHTML = '';
+
+        var desdeStr = agendaDesde ? agendaDesde.value : '';
+        var hastaStr = agendaHasta ? agendaHasta.value : '';
+
+        if (!desdeStr || !hastaStr) {
+          initReservasAgendaFechas();
+          desdeStr = agendaDesde ? agendaDesde.value : '';
+          hastaStr = agendaHasta ? agendaHasta.value : '';
+        }
+
+        if (!desdeStr || !hastaStr) {
+          if (agendaLoading) agendaLoading.classList.add('hidden');
+          if (agendaError) {
+            agendaError.textContent = 'Error al inicializar fechas';
+            agendaError.classList.remove('hidden');
+          }
+          return;
+        }
+
+        var desde = new Date(desdeStr + 'T00:00:00').toISOString();
+        var hasta = new Date(hastaStr + 'T23:59:59').toISOString();
+
+        var queryParams = ['desde=' + encodeURIComponent(desde), 'hasta=' + encodeURIComponent(hasta)];
+        var url = '/api/v1/vigilancia/reservas?' + queryParams.join('&');
+
+        withIdToken(function (idToken) {
+          return apiFetch(url, idToken);
+        }).then(function (result) {
+          if (agendaLoading) agendaLoading.classList.add('hidden');
+          var reservas = result.data || [];
+          renderReservasCalendario(reservas, desdeStr, hastaStr);
+        }).catch(function (error) {
+          if (agendaLoading) agendaLoading.classList.add('hidden');
+          if (agendaError) {
+            agendaError.textContent = 'Error: ' + error.message;
+            agendaError.classList.remove('hidden');
+          }
+        });
+      }
+
+      function renderReservasCalendario(reservas, desdeStr, hastaStr) {
+        var desde = new Date(desdeStr + 'T00:00:00');
+        var hasta = new Date(hastaStr + 'T23:59:59');
+
+        var zonas = {};
+        reservas.forEach(function (r) {
+          var zona = r.zonaComun.descripcion;
+          if (!zonas[zona]) zonas[zona] = [];
+          zonas[zona].push(r);
+        });
+
+        if (Object.keys(zonas).length === 0) {
+          $('agendaCalendario').innerHTML = '<p class="text-muted text-center py-4">No hay reservas en este período</p>';
+          return;
+        }
+
+        var fechas = [];
+        var fecha = new Date(desde);
+        while (fecha <= hasta) {
+          fechas.push(new Date(fecha));
+          fecha.setDate(fecha.getDate() + 1);
+        }
+
+        var html = '<table class="calendar-table"><thead><tr><th style="min-width:160px;">Zona</th>';
+        fechas.forEach(function (f) {
+          var num = f.getDate();
+          var dia = getNombreDia(f);
+          html += '<th class="fecha-header"><span class="fecha-numero">' + num + '</span><span class="fecha-dia">' + dia + '</span></th>';
+        });
+        html += '</tr></thead><tbody>';
+
+        Object.keys(zonas).sort().forEach(function (zona) {
+          var emojiZona = getEmojiZona(zona);
+          html += '<tr><td class="zona-nombre">' + emojiZona + ' ' + esc(zona) + '</td>';
+
+          fechas.forEach(function (f) {
+            var fechaStr = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
+            var reservasDelDia = zonas[zona].filter(function (r) {
+              return r.fechaHoraInicio.substring(0, 10) === fechaStr;
+            });
+
+            if (reservasDelDia.length === 0) {
+              html += '<td class="reserva-vacia"></td>';
+            } else {
+              html += '<td>' + reservasDelDia.map(function (r) {
+                var claseEstado = 'reserva-' + r.estado.toLowerCase();
+                var hora = new Date(r.fechaHoraInicio).toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit'});
+                var emojiEstado = getEmojiEstado(r.estado);
+                var unidad = esc(r.unidad.codigoOficial);
+                var title = unidad + ' ' + hora + ' ' + r.estado;
+                return '<div class="reserva-block ' + claseEstado + '" title="' + title + '"><div class="reserva-emoji">' + emojiEstado + '</div><div class="reserva-texto">' + unidad + '<br>' + hora + '</div></div>';
+              }).join('') + '</td>';
+            }
+          });
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        html += '<div class="calendar-legend">' +
+          '<div class="legend-item"><span class="legend-emoji">⏳</span><small>Pendiente</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">✅</span><small>Confirmada</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">❌</span><small>Rechazada</small></div>' +
+          '<div class="legend-item"><span class="legend-emoji">⚫</span><small>Cancelada</small></div>' +
+          '</div>';
+
+        var agendaCalendario = $('agendaCalendario');
+        if (agendaCalendario) agendaCalendario.innerHTML = html;
+      }
+
+      function initReservasAgendaFechas() {
+        var today = new Date();
+        var hasta = new Date(today);
+        hasta.setDate(hasta.getDate() + 6);
+
+        var agendaDesde = $('agendaDesde');
+        var agendaHasta = $('agendaHasta');
+        if (agendaDesde) agendaDesde.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        if (agendaHasta) agendaHasta.value = hasta.getFullYear() + '-' + String(hasta.getMonth() + 1).padStart(2, '0') + '-' + String(hasta.getDate()).padStart(2, '0');
+      }
+
+      var showReservasCatalogo = $('showReservasCatalogo');
+      var showReservasAgenda = $('showReservasAgenda');
+      if (showReservasCatalogo) showReservasCatalogo.addEventListener('click', function () { modeReservas('catalogo'); });
+      if (showReservasAgenda) showReservasAgenda.addEventListener('click', function () {
+        modeReservas('agenda');
+        var agendaDesdeVal = $('agendaDesde');
+        if (!agendaDesdeVal || !agendaDesdeVal.value) {
+          initReservasAgendaFechas();
+          cargarReservasAgenda();
+        }
+      });
+
+      var agendaSiete = $('agendaSiete');
+      if (agendaSiete) agendaSiete.addEventListener('click', function () {
+        initReservasAgendaFechas();
+        cargarReservasAgenda();
+      });
+
+      var agendaMes = $('agendaMes');
+      if (agendaMes) agendaMes.addEventListener('click', function () {
+        var today = new Date();
+        var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        var monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+        var agendaDesde = $('agendaDesde');
+        var agendaHasta = $('agendaHasta');
+        if (agendaDesde) agendaDesde.value = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-' + String(monthStart.getDate()).padStart(2, '0');
+        if (agendaHasta) agendaHasta.value = monthEnd.getFullYear() + '-' + String(monthEnd.getMonth() + 1).padStart(2, '0') + '-' + String(monthEnd.getDate()).padStart(2, '0');
+        cargarReservasAgenda();
+      });
+
+      var agendaRefrescar = $('agendaRefrescar');
+      if (agendaRefrescar) agendaRefrescar.addEventListener('click', cargarReservasAgenda);
+
+      function modeReservas(name) {
+        var es_catalogo = name === 'catalogo';
+        var catalogoView = $('reservasCatalogoView');
+        var agendaView = $('reservasAgendaView');
+        var showCatalogo = $('showReservasCatalogo');
+        var showAgenda = $('showReservasAgenda');
+        if (catalogoView) catalogoView.classList.toggle('hidden', !es_catalogo);
+        if (agendaView) agendaView.classList.toggle('hidden', es_catalogo);
+        if (showCatalogo) showCatalogo.classList.toggle('active', es_catalogo);
+        if (showAgenda) showAgenda.classList.toggle('active', !es_catalogo);
+      }
+
+      var reservaActualId = null;
+      var reservasModalRechazar = null;
+      var reservasModalCancelar = null;
+      var reservasModalPago = null;
+
+      document.addEventListener('DOMContentLoaded', function() {
+        var modalRechazarEl = $('reservasModalRechazar');
+        var modalCancelarEl = $('reservasModalCancelar');
+        var modalPagoEl = $('reservasModalPago');
+        if (modalRechazarEl) reservasModalRechazar = new bootstrap.Modal(modalRechazarEl);
+        if (modalCancelarEl) reservasModalCancelar = new bootstrap.Modal(modalCancelarEl);
+        if (modalPagoEl) reservasModalPago = new bootstrap.Modal(modalPagoEl);
+      });
+
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.accion-reserva');
+        if (!btn) return;
+        reservaActualId = btn.dataset.id;
+        var estado = btn.dataset.estado;
+
+        if (estado === 'PENDIENTE') {
+          if (confirm('¿Aprobar esta reserva?')) {
+            aprobarReservaAdminPanel();
+          } else if (confirm('¿Rechazar esta reserva?')) {
+            var motivoRechazo = $('reservasMotivoRechazo');
+            if (motivoRechazo) motivoRechazo.value = '';
+            if (reservasModalRechazar) reservasModalRechazar.show();
+          }
+        } else if (estado === 'CONFIRMADA' || estado === 'PENDIENTE') {
+          if (confirm('¿Cancelar esta reserva?')) {
+            var motivoCancelacion = $('reservasMotivoCancelacion');
+            if (motivoCancelacion) motivoCancelacion.value = '';
+            if (reservasModalCancelar) reservasModalCancelar.show();
+          }
+        }
+
+        var accionPago = confirm('¿Registrar pago para esta reserva?');
+        if (accionPago) {
+          var estadoPago = $('reservasEstadoPago');
+          var fechaPago = $('reservasFechaPago');
+          if (estadoPago) estadoPago.value = 'PENDIENTE';
+          if (fechaPago) fechaPago.value = '';
+          if (reservasModalPago) reservasModalPago.show();
+        }
+      });
+
+      function aprobarReservaAdminPanel() {
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/' + reservaActualId + '/aprobar', idToken, { method: 'PATCH' });
+        }).then(function () {
+          msg('Reserva aprobada', 'success');
+          cargarReservasAgenda();
+        }).catch(function (error) { msg(error.message); });
+      }
+
+      var confirmarRechazo = $('reservasConfirmarRechazo');
+      if (confirmarRechazo) confirmarRechazo.addEventListener('click', function () {
+        var motivo = $('reservasMotivoRechazo').value.trim() || 'Rechazada por administrador';
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/' + reservaActualId + '/rechazar', idToken, {
+            method: 'PATCH',
+            body: { motivo: motivo }
+          });
+        }).then(function () {
+          msg('Reserva rechazada', 'success');
+          if (reservasModalRechazar) reservasModalRechazar.hide();
+          cargarReservasAgenda();
+        }).catch(function (error) { msg(error.message); });
+      });
+
+      var confirmarCancelacion = $('reservasConfirmarCancelacion');
+      if (confirmarCancelacion) confirmarCancelacion.addEventListener('click', function () {
+        var motivo = $('reservasMotivoCancelacion').value.trim() || 'Cancelada por administrador';
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/' + reservaActualId + '/cancelar', idToken, {
+            method: 'PATCH',
+            body: { motivo: motivo }
+          });
+        }).then(function () {
+          msg('Reserva cancelada', 'success');
+          if (reservasModalCancelar) reservasModalCancelar.hide();
+          cargarReservasAgenda();
+        }).catch(function (error) { msg(error.message); });
+      });
+
+      var confirmarPago = $('reservasConfirmarPago');
+      if (confirmarPago) confirmarPago.addEventListener('click', function () {
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/' + reservaActualId + '/pago', idToken, {
+            method: 'PATCH',
+            body: {
+              estadoPago: $('reservasEstadoPago').value,
+              fechaPago: $('reservasFechaPago').value ? new Date($('reservasFechaPago').value).toISOString() : undefined
+            }
+          });
+        }).then(function () {
+          msg('Pago registrado', 'success');
+          if (reservasModalPago) reservasModalPago.hide();
+          cargarReservasAgenda();
+        }).catch(function (error) { msg(error.message); });
+      });
+
       firebase.auth().onAuthStateChanged(function (user) {
         if (user) {
           panel('app');
@@ -717,7 +1391,15 @@
 
       $('showDashboard').addEventListener('click', function () { mode('dashboard'); });
       $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
-      $('showReservas').addEventListener('click', function () { mode('reservas'); });
+
+      var reservasCargada = false;
+      $('showReservas').addEventListener('click', function () {
+        mode('reservas');
+        if (!reservasCargada) {
+          cargarReservasCatalogo();
+          reservasCargada = true;
+        }
+      });
 
       // ===== IMPORTACIÓN DE CARTERA =====
       

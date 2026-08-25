@@ -9,7 +9,7 @@
 **Key Routes**:
 - `/` — Public landing page (unauthenticated)
 - `/datos-personales/` — Resident portal: profile, family members, vehicles, pets, emergency contacts, **reservations**
-- `/reservas-admin/` — Staff admin panel (admin/superadmin only): zone catalog management, reservation calendar view
+- `/administracion-datos/` — Admin panel (admin/superadmin only): data master, case registration, **zone catalog & reservation calendar**
 - `/vigilancia-datos/` — Surveillance staff calendar view (vigilancia role)
 
 **Deployment**: Auto-triggered by push to `origin/firebase` → Firebase Hosting (automatic)
@@ -32,7 +32,7 @@ if (el) el.classList.add('hidden');  // ✅
 el.classList.add('hidden');  // ❌ Crashes if element missing
 ```
 
-This is critical in `/reservas-admin/` where DOM might be conditionally rendered based on Firebase auth state.
+This is critical in admin panels where DOM might be conditionally rendered based on Firebase auth state.
 
 ### 2. Firebase Authentication
 
@@ -82,7 +82,7 @@ All admin endpoints (`/reservas/catalogo`, `/reservas/`, `/reservas/disponibilid
 
 ### 5. Reservation Calendar (Staff View)
 
-**`/reservas-admin/` → Agenda view**:
+**`/administracion-datos/` → Reservas tab → Agenda view**:
 - Table layout: zones as rows, dates as columns
 - Cells color-coded by reservation state (⏳ pending, ✅ confirmed, ❌ rejected, ⚫ cancelled)
 - Each cell shows compact reservation blocks: emoji + unit code + time
@@ -90,10 +90,10 @@ All admin endpoints (`/reservas/catalogo`, `/reservas/`, `/reservas/disponibilid
 - Modal dialogs for approve/reject/cancel/payment actions
 
 **`/vigilancia-datos/` → Surveillance calendar**:
-- Same calendar layout as reservas-admin (template-driven via Hugo)
+- Same calendar layout (template-driven via Hugo)
 - Used by vigilancia role to monitor zone usage (read-only, no mutation buttons)
 
-### 6. Zone Management (`/reservas-admin/` → Catálogo)
+### 6. Zone Management (`/administracion-datos/` → Reservas tab → Catálogo)
 
 Zone fields and validation:
 - `codigo` — unique zone code (e.g., "CANCHA-1")
@@ -156,8 +156,8 @@ layouts/
   index.html                 # Public landing page
   datos-personales/
     list.html              # Resident portal (profile, reservations, etc.)
-  reservas-admin/
-    list.html              # Admin zone management + reservation calendar
+  administracion-datos/
+    list.html              # Admin panel: data master, case registration, zone management + reservation calendar
   vigilancia-datos/
     list.html              # Surveillance officer calendar view
   header.html              # Navigation bar (included via Hugo partial)
@@ -169,9 +169,9 @@ layouts/
 
 ### Add a New Field to Zone Creation Form
 
-1. Edit `/reservas-admin/list.html`, find the zone creation form (id="crearZonaForm")
+1. Edit `/administracion-datos/list.html`, find the zone creation form (id="crearZonaForm")
 2. Add a new `<input>` or `<select>` with a unique id
-3. In the form submit handler, extract the value: `var newField = $('newFieldId').value;`
+3. In the form submit handler (inside the reservas-specific functions), extract the value: `var newField = $('newFieldId').value;`
 4. Include in POST body sent to `/api/v1/reservas/catalogo` (backend schema must also accept it)
 5. Reload admin panel and test
 
@@ -184,8 +184,8 @@ layouts/
 
 ### Add a New Zone Type or Emoji
 
-1. Edit `/datos-personales/list.html` or `/reservas-admin/list.html`, find `function getEmojiZona(tipo)`
-2. Add new case: `case 'NEW_TYPE': return '🆕';`
+1. Edit `/datos-personales/list.html` or `/administracion-datos/list.html` (Reservas tab), find `function getEmojiZona(descripcion)`
+2. Add new case: `if (desc.includes('new_type')) return '🆕';`
 3. Same for `getEmojiEstado()` if adding new reservation states
 4. Backend schema must also define the enum value
 
