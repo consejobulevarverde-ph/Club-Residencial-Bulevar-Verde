@@ -86,6 +86,94 @@
     .registration-result {
       border-left: 6px solid #198754;
     }
+
+    /* Calendario de Reservas */
+    .calendar-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      font-size: 0.85rem;
+    }
+
+    .calendar-table th, .calendar-table td {
+      border: 1px solid var(--b);
+      padding: 0.5rem;
+      text-align: center;
+    }
+
+    .calendar-table th {
+      background: var(--p);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .calendar-table .zona-nombre {
+      text-align: left;
+      font-weight: 600;
+      color: var(--p);
+      background: #f9faf9;
+    }
+
+    .calendar-table .fecha-header {
+      background: #f5f7f5;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .reserva-block {
+      min-height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      color: #fff;
+      font-weight: 600;
+      padding: 2px 4px;
+      border-radius: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .reserva-pendiente {
+      background: #ffc107;
+      color: #000;
+    }
+
+    .reserva-confirmada {
+      background: #28a745;
+    }
+
+    .reserva-cancelada {
+      background: #6c757d;
+    }
+
+    .reserva-rechazada {
+      background: #dc3545;
+    }
+
+    .calendar-legend {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #f9faf9;
+      border-radius: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+    }
   </style>
 </head>
 
@@ -526,7 +614,14 @@
       $('showRegistration').addEventListener('click', function () { mode('registration'); });
       $('showVehicleRegistration').addEventListener('click', function () { mode('vehicle'); });
       $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
-      $('showReservasAgenda').addEventListener('click', function () { mode('reservas'); });
+      $('showReservasAgenda').addEventListener('click', function () {
+        mode('reservas');
+        if (!$('agendaMes').value) {
+          var today = new Date();
+          $('agendaMes').value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+          cargarAgendaReservas();
+        }
+      });
       $('agendaRefrescar').addEventListener('click', cargarAgendaReservas);
 
       $('openReservas').addEventListener('click', function () {
@@ -862,29 +957,32 @@
       function cargarAgendaReservas() {
         $('agendaLoading').classList.remove('hidden');
         $('agendaError').classList.add('hidden');
-        $('agendaTabla').innerHTML = '';
+        $('agendaCalendario').innerHTML = '';
 
-        var desde = $('agendaDesde').value;
-        var hasta = $('agendaHasta').value;
+        var mesAño = $('agendaMes').value;
+        if (!mesAño) {
+          $('agendaLoading').classList.add('hidden');
+          $('agendaError').textContent = 'Selecciona un mes';
+          $('agendaError').classList.remove('hidden');
+          return;
+        }
+
+        var parts = mesAño.split('-');
+        var desde = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1).toISOString();
+        var hasta = new Date(parseInt(parts[0]), parseInt(parts[1]), 0, 23, 59, 59).toISOString();
         var estado = $('agendaEstado').value;
 
-        var queryParams = [];
-        if (desde) queryParams.push('desde=' + encodeURIComponent(desde + 'T00:00:00Z'));
-        if (hasta) queryParams.push('hasta=' + encodeURIComponent(hasta + 'T23:59:59Z'));
+        var queryParams = ['desde=' + encodeURIComponent(desde), 'hasta=' + encodeURIComponent(hasta)];
         if (estado) queryParams.push('estado=' + encodeURIComponent(estado));
 
-        var url = '/api/v1/vigilancia/reservas' + (queryParams.length ? '?' + queryParams.join('&') : '');
+        var url = '/api/v1/vigilancia/reservas?' + queryParams.join('&');
 
         withIdToken(function (idToken) {
           return apiFetch(url, idToken);
         }).then(function (result) {
           $('agendaLoading').classList.add('hidden');
           var reservas = result.data || [];
-          if (reservas.length === 0) {
-            $('agendaTabla').innerHTML = '<p class="text-muted mb-0">No hay reservas en el rango especificado.</p>';
-            return;
-          }
-          renderAgendaReservas(reservas);
+          renderCalendarioReservas(reservas, mesAño);
         }).catch(function (error) {
           $('agendaLoading').classList.add('hidden');
           $('agendaError').textContent = 'Error: ' + error.message;
@@ -892,38 +990,58 @@
         });
       }
 
-      function renderAgendaReservas(reservas) {
-        $('agendaTabla').innerHTML =
-          '<div class="table-responsive">' +
-          '<table class="table table-sm table-hover mb-0">' +
-          '<thead class="table-light"><tr>' +
-          '<th>Inicio</th>' +
-          '<th>Fin</th>' +
-          '<th>Unidad</th>' +
-          '<th>Zona</th>' +
-          '<th>Estado</th>' +
-          '</tr></thead><tbody>' +
-          reservas.map(function (r) {
-            var estadoBadge = (function() {
-              var badges = {
-                'PENDIENTE': '<span class="badge text-bg-warning">Pendiente</span>',
-                'CONFIRMADA': '<span class="badge text-bg-success">Confirmada</span>',
-                'RECHAZADA': '<span class="badge text-bg-danger">Rechazada</span>',
-                'CANCELADA': '<span class="badge text-bg-secondary">Cancelada</span>'
-              };
-              return badges[r.estado] || '<span class="badge text-bg-secondary">' + esc(r.estado) + '</span>';
-            })();
-            var inicio = new Date(r.fechaHoraInicio).toLocaleString('es-CO', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-            var fin = new Date(r.fechaHoraFin).toLocaleString('es-CO', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-            return '<tr>' +
-              '<td><small>' + esc(inicio) + '</small></td>' +
-              '<td><small>' + esc(fin) + '</small></td>' +
-              '<td><strong>' + esc(r.unidad.codigoOficial) + '</strong></td>' +
-              '<td>' + esc(r.zonaComun.descripcion) + '</td>' +
-              '<td>' + estadoBadge + '</td>' +
-              '</tr>';
-          }).join('') +
-          '</tbody></table></div>';
+      function renderCalendarioReservas(reservas, mesAño) {
+        var parts = mesAño.split('-');
+        var año = parseInt(parts[0]);
+        var mes = parseInt(parts[1]);
+        var primerDia = new Date(año, mes - 1, 1);
+        var ultimoDia = new Date(año, mes, 0).getDate();
+
+        // Agrupar por zona
+        var zonas = {};
+        reservas.forEach(function (r) {
+          var zona = r.zonaComun.descripcion;
+          if (!zonas[zona]) zonas[zona] = [];
+          zonas[zona].push(r);
+        });
+
+        var html = '<table class="calendar-table"><thead><tr><th style="min-width:150px;">Zona</th>';
+        for (var d = 1; d <= ultimoDia; d++) {
+          html += '<th class="fecha-header">' + d + '</th>';
+        }
+        html += '</tr></thead><tbody>';
+
+        Object.keys(zonas).sort().forEach(function (zona) {
+          html += '<tr><td class="zona-nombre">' + esc(zona) + '</td>';
+          for (var d = 1; d <= ultimoDia; d++) {
+            var fecha = new Date(año, mes - 1, d);
+            var fechaStr = fecha.getFullYear() + '-' + String(fecha.getMonth() + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+            var reservasDelDia = zonas[zona].filter(function (r) {
+              return r.fechaHoraInicio.substring(0, 10) === fechaStr;
+            });
+
+            if (reservasDelDia.length === 0) {
+              html += '<td style="background:#fafafa;"></td>';
+            } else {
+              html += '<td>' + reservasDelDia.map(function (r) {
+                var claseEstado = 'reserva-' + r.estado.toLowerCase();
+                var hora = new Date(r.fechaHoraInicio).toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit'});
+                return '<div class="reserva-block ' + claseEstado + '" title="' + esc(r.unidad.codigoOficial) + ' ' + hora + '">' + esc(r.unidad.codigoOficial) + ' ' + hora + '</div>';
+              }).join('') + '</td>';
+            }
+          }
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        html += '<div class="calendar-legend">' +
+          '<div class="legend-item"><div class="legend-color" style="background:#ffc107;"></div><small>Pendiente</small></div>' +
+          '<div class="legend-item"><div class="legend-color" style="background:#28a745;"></div><small>Confirmada</small></div>' +
+          '<div class="legend-item"><div class="legend-color" style="background:#dc3545;"></div><small>Rechazada</small></div>' +
+          '<div class="legend-item"><div class="legend-color" style="background:#6c757d;"></div><small>Cancelada</small></div>' +
+          '</div>';
+
+        $('agendaCalendario').innerHTML = html;
       }
 
       firebase.auth().onAuthStateChanged(function (user) {
