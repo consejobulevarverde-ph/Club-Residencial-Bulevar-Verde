@@ -519,44 +519,71 @@
             <strong>No elegible para reservar:</strong> Tu unidad no cumple los requisitos de elegibilidad en este momento. Contacta a administración para más información.
           </div>
 
-          <div class="mb-4">
-            <h4 class="h6 mb-3">Nueva reserva</h4>
-            <form id="nuevaReservaForm" class="row g-3">
-              <div class="col-md-4">
-                <label class="form-label small">Zona común</label>
-                <select id="reservaZonaSelect" class="form-select form-select-sm" required>
-                  <option value="">Selecciona una zona</option>
-                </select>
+          <div id="reservasWizard" class="mb-4">
+            <div class="d-flex justify-content-center gap-2 mb-4">
+              <div class="step-badge active" id="step1Badge">1</div>
+              <div class="step-badge" id="step2Badge">2</div>
+              <div class="step-badge" id="step3Badge">3</div>
+            </div>
+
+            <div id="reservasStep1" class="step-content">
+              <h4 class="h6 mb-3">Paso 1: Selecciona zona y fecha</h4>
+              <div id="zonasContainer" class="row g-3 mb-4"></div>
+              <div class="mb-3">
+                <label class="form-label small">Fecha para consultar disponibilidad</label>
+                <input id="reservaFechaConsulta" type="date" class="form-control form-control-sm" required>
               </div>
-              <div class="col-md-4" id="modalidadUsoDiv" style="display:none;">
-                <label class="form-label small">Modalidad de uso</label>
-                <div>
-                  <div class="form-check">
-                    <input class="form-check-input" type="radio" name="modalidadUso" id="modalidadOrganizado" value="ORGANIZADO_CON_INVITADOS" checked>
-                    <label class="form-check-label small" for="modalidadOrganizado">Organizado</label>
-                  </div>
-                  <div class="form-check" id="modalidadRecreativaDiv" style="display:none;">
-                    <input class="form-check-input" type="radio" name="modalidadUso" id="modalidadRecreativo" value="RECREATIVO_RESIDENTES">
-                    <label class="form-check-label small" for="modalidadRecreativo">Recreativo</label>
+              <button type="button" class="btn btn-primary btn-sm" id="irPaso2"><i class="bi bi-arrow-right me-1"></i>Siguiente</button>
+            </div>
+
+            <div id="reservasStep2" class="step-content hidden">
+              <h4 class="h6 mb-3">Paso 2: Verifica disponibilidad</h4>
+              <div class="alert alert-info small mb-3">
+                <strong id="reservasDisponibilidadTitulo"></strong>
+              </div>
+              <div id="disponibilidadContainer" class="mb-4" style="max-height: 300px; overflow-y: auto;"></div>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-secondary btn-sm" id="volverPaso1"><i class="bi bi-arrow-left me-1"></i>Atrás</button>
+                <button type="button" class="btn btn-primary btn-sm" id="irPaso3"><i class="bi bi-arrow-right me-1"></i>Siguiente</button>
+              </div>
+            </div>
+
+            <div id="reservasStep3" class="step-content hidden">
+              <h4 class="h6 mb-3">Paso 3: Confirma tu reserva</h4>
+              <form id="confirmarReservaForm" class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label small">Hora de inicio</label>
+                  <input id="reservaInicio" type="time" class="form-control form-control-sm" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small">Hora de fin</label>
+                  <input id="reservaFin" type="time" class="form-control form-control-sm" required>
+                </div>
+                <div class="col-12" id="modalidadUsoDiv" style="display:none;">
+                  <label class="form-label small">Modalidad de uso</label>
+                  <div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="modalidadUso" id="modalidadOrganizado" value="ORGANIZADO_CON_INVITADOS" checked>
+                      <label class="form-check-label small" for="modalidadOrganizado">Organizado</label>
+                    </div>
+                    <div class="form-check" id="modalidadRecreativaDiv" style="display:none;">
+                      <input class="form-check-input" type="radio" name="modalidadUso" id="modalidadRecreativo" value="RECREATIVO_RESIDENTES">
+                      <label class="form-check-label small" for="modalidadRecreativo">Recreativo</label>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label small">Fecha y hora de inicio</label>
-                <input id="reservaInicio" type="datetime-local" class="form-control form-control-sm" required>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label small">Fecha y hora de fin</label>
-                <input id="reservaFin" type="datetime-local" class="form-control form-control-sm" required>
-              </div>
-              <div class="col-12">
-                <label class="form-label small">Observaciones (opcional)</label>
-                <textarea id="reservaObservaciones" class="form-control form-control-sm" rows="2" placeholder="Detalles adicionales..."></textarea>
-              </div>
-              <div class="col-12">
-                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Crear reserva</button>
-              </div>
-            </form>
+                <div class="col-12">
+                  <label class="form-label small">Observaciones (opcional)</label>
+                  <textarea id="reservaObservaciones" class="form-control form-control-sm" rows="2" placeholder="Detalles adicionales..."></textarea>
+                </div>
+                <div class="col-12">
+                  <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" id="volverPaso2"><i class="bi bi-arrow-left me-1"></i>Atrás</button>
+                    <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-lg me-1"></i>Confirmar reserva</button>
+                  </div>
+                </div>
+              </form>
+            </div>
           </div>
 
           <hr class="my-4">
@@ -1343,7 +1370,14 @@
         }).join('');
       }
 
-      /* ---------- Reservas de zonas comunes ---------- */
+      /* ---------- Reservas de zonas comunes (3 pasos) ---------- */
+
+      var reservasData = {
+        zonas: [],
+        zonaSeleccionada: null,
+        fechaSeleccionada: null,
+        disponibilidad: []
+      };
 
       function cargarReservas() {
         reservasCargados = true;
@@ -1354,19 +1388,183 @@
       function cargarZonasComunes() {
         apiFetch('/zonas-comunes')
           .then(function (result) {
-            var zonas = result.data || [];
-            var select = $('reservaZonaSelect');
-            select.innerHTML = '<option value="">Selecciona una zona</option>' +
-              zonas.map(function (zona) {
-                return '<option value="' + esc(zona.id) + '" data-recreativa="' + (zona.soportaModalidadRecreativa ? 'true' : 'false') + '">' +
-                  esc(zona.descripcion) + ' (' + esc(zona.tipo) + ')' +
-                  '</option>';
-              }).join('');
+            reservasData.zonas = result.data || [];
+            renderZonasCards();
           })
           .catch(function (error) {
             alertMessage('Error al cargar zonas: ' + error.message);
           });
       }
+
+      function renderZonasCards() {
+        var html = reservasData.zonas.map(function (zona) {
+          return '<div class="col-md-6 col-lg-4">' +
+            '<div class="card border zona-card available" data-id="' + esc(zona.id) + '" data-recreativa="' + (zona.soportaModalidadRecreativa ? 'true' : 'false') + '" style="cursor:pointer;">' +
+            '<div class="card-body text-center">' +
+            '<i class="bi bi-door-closed" style="font-size:2rem;color:var(--bv-primary);"></i>' +
+            '<h6 class="card-title mt-2">' + esc(zona.descripcion) + '</h6>' +
+            '<small class="text-muted">' + esc(zona.tipo) + '</small>' +
+            (zona.soportaModalidadRecreativa ? '<div class="small-note mt-2">Permite uso recreativo</div>' : '') +
+            '</div>' +
+            '</div>' +
+            '</div>';
+        }).join('');
+        $('zonasContainer').innerHTML = html;
+      }
+
+      document.addEventListener('click', function (event) {
+        var card = event.target.closest('.zona-card');
+        if (!card) return;
+        document.querySelectorAll('.zona-card').forEach(function (c) { c.classList.remove('selected'); });
+        card.classList.add('selected');
+        reservasData.zonaSeleccionada = card.dataset.id;
+        var esRecreativa = card.dataset.recreativa === 'true';
+        $('modalidadUsoDiv').style.display = 'block';
+        $('modalidadRecreativaDiv').style.display = esRecreativa ? 'block' : 'none';
+      });
+
+      $('irPaso2').addEventListener('click', function () {
+        clearAlert();
+        if (!reservasData.zonaSeleccionada) { alertMessage('Selecciona una zona.'); return; }
+        if (!$('reservaFechaConsulta').value) { alertMessage('Selecciona una fecha.'); return; }
+
+        reservasData.fechaSeleccionada = new Date($('reservaFechaConsulta').value);
+        var desde = new Date(reservasData.fechaSeleccionada);
+        desde.setHours(0, 0, 0, 0);
+        var hasta = new Date(reservasData.fechaSeleccionada);
+        hasta.setHours(23, 59, 59, 999);
+
+        loading($('irPaso2'), true, 'Cargando disponibilidad…');
+        apiFetch('/reservas/disponibilidad?zonaComunId=' + esc(reservasData.zonaSeleccionada) + '&desde=' + desde.toISOString() + '&hasta=' + hasta.toISOString())
+          .then(function (result) {
+            reservasData.disponibilidad = result.data || [];
+            var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
+            $('reservasDisponibilidadTitulo').textContent = (zona ? zona.descripcion + ' - ' : '') + new Date(reservasData.fechaSeleccionada).toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            renderDisponibilidad();
+            mostrarStep(2);
+          })
+          .catch(function (error) {
+            alertMessage('Error al cargar disponibilidad: ' + error.message);
+          })
+          .finally(function () {
+            loading($('irPaso2'), false, 'Siguiente');
+          });
+      });
+
+      function renderDisponibilidad() {
+        var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
+        var horaInicio = zona.horaApertura.split(':');
+        var horaFin = zona.horaCierre.split(':');
+        var durMinutes = Math.max(30, zona.duracionMinHoras * 60);
+
+        var html = '<p class="small mb-2 text-muted">Horarios disponibles (mínimo ' + zona.duracionMinHoras + ' horas):</p>';
+        var slots = [];
+        var currentHour = parseInt(horaInicio[0]);
+        var currentMin = parseInt(horaInicio[1]);
+        var endHour = parseInt(horaFin[0]);
+        var endMin = parseInt(horaFin[1]);
+
+        while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
+          var slotStart = new Date(reservasData.fechaSeleccionada);
+          slotStart.setHours(currentHour, currentMin, 0);
+          var slotEnd = new Date(slotStart);
+          slotEnd.setMinutes(slotEnd.getMinutes() + durMinutes);
+
+          var isOccupied = reservasData.disponibilidad.some(function (res) {
+            var resStart = new Date(res.fechaHoraInicio);
+            var resEnd = new Date(res.fechaHoraFin);
+            return (slotStart < resEnd && slotEnd > resStart);
+          });
+
+          var slotHTML = '<button type="button" class="btn btn-sm m-1 ' +
+            (isOccupied ? 'btn-danger disabled' : 'btn-outline-success slot-disponible') +
+            '" ' + (isOccupied ? 'disabled' : 'data-hora="' + slotStart.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}) + '"') +
+            '>' +
+            slotStart.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}) + ' - ' +
+            slotEnd.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}) +
+            (isOccupied ? ' (Ocupado)' : '') +
+            '</button>';
+          html += slotHTML;
+
+          currentMin += 30;
+          if (currentMin >= 60) {
+            currentHour += Math.floor(currentMin / 60);
+            currentMin = currentMin % 60;
+          }
+        }
+
+        $('disponibilidadContainer').innerHTML = html;
+
+        document.querySelectorAll('.slot-disponible').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            $('reservaInicio').value = this.dataset.hora;
+            mostrarStep(3);
+          });
+        });
+      }
+
+      $('volverPaso1').addEventListener('click', function () { mostrarStep(1); });
+      $('irPaso3').addEventListener('click', function () { mostrarStep(3); });
+      $('volverPaso2').addEventListener('click', function () { mostrarStep(2); });
+
+      function mostrarStep(stepNum) {
+        document.querySelectorAll('.step-content').forEach(function (el) { el.classList.add('hidden'); });
+        document.querySelectorAll('.step-badge').forEach(function (el) { el.classList.remove('active', 'done'); });
+
+        for (var i = 1; i < stepNum; i++) {
+          $('step' + i + 'Badge').classList.add('done');
+        }
+        $('step' + stepNum + 'Badge').classList.add('active');
+        $('reservasStep' + stepNum).classList.remove('hidden');
+      }
+
+      $('confirmarReservaForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        clearAlert();
+
+        var horaInicio = $('reservaInicio').value;
+        var horaFin = $('reservaFin').value;
+
+        if (!horaInicio) { alertMessage('Selecciona hora de inicio.'); return; }
+        if (!horaFin) { alertMessage('Selecciona hora de fin.'); return; }
+
+        var start = new Date(reservasData.fechaSeleccionada);
+        var [hI, mI] = horaInicio.split(':');
+        start.setHours(parseInt(hI), parseInt(mI), 0);
+
+        var end = new Date(reservasData.fechaSeleccionada);
+        var [hF, mF] = horaFin.split(':');
+        end.setHours(parseInt(hF), parseInt(mF), 0);
+
+        if (start >= end) { alertMessage('La hora de fin debe ser posterior a la de inicio.'); return; }
+
+        var submitBtn = this.querySelector('button[type="submit"]');
+        loading(submitBtn, true, 'Creando reserva…');
+
+        apiFetch('/reservas', {
+          method: 'POST',
+          body: {
+            zonaComunId: reservasData.zonaSeleccionada,
+            modalidadUso: $('modalidadRecreativo').checked ? 'RECREATIVO_RESIDENTES' : 'ORGANIZADO_CON_INVITADOS',
+            fechaHoraInicio: start.toISOString(),
+            fechaHoraFin: end.toISOString(),
+            observaciones: $('reservaObservaciones').value.trim() || undefined
+          }
+        }).then(function (result) {
+          alertMessage('Reserva creada exitosamente!', 'success');
+          mostrarStep(1);
+          $('confirmarReservaForm').reset();
+          $('reservaFechaConsulta').value = '';
+          document.querySelectorAll('.zona-card').forEach(function (c) { c.classList.remove('selected'); });
+          reservasData.zonaSeleccionada = null;
+          reservasData.fechaSeleccionada = null;
+          cargarMisReservas();
+        }).catch(function (error) {
+          alertMessage(error.message);
+        }).finally(function () {
+          loading(submitBtn, false, 'Confirmar reserva');
+        });
+      });
 
       function cargarMisReservas() {
         $('misReservasLoading').style.display = 'block';
@@ -1411,50 +1609,6 @@
             '</div>';
         }).join('');
       }
-
-      $('reservaZonaSelect').addEventListener('change', function () {
-        var option = this.options[this.selectedIndex];
-        var esRecreativa = option.dataset.recreativa === 'true';
-        $('modalidadUsoDiv').style.display = this.value ? 'block' : 'none';
-        $('modalidadRecreativaDiv').style.display = esRecreativa ? 'block' : 'none';
-      });
-
-      $('nuevaReservaForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        clearAlert();
-
-        var zonaid = $('reservaZonaSelect').value;
-        var inicio = new Date($('reservaInicio').value);
-        var fin = new Date($('reservaFin').value);
-
-        if (!zonaid) { alertMessage('Selecciona una zona.'); return; }
-        if (!inicio || isNaN(inicio.getTime())) { alertMessage('Ingresa una fecha/hora de inicio válida.'); return; }
-        if (!fin || isNaN(fin.getTime())) { alertMessage('Ingresa una fecha/hora de fin válida.'); return; }
-        if (inicio >= fin) { alertMessage('La hora de inicio debe ser anterior a la de fin.'); return; }
-
-        var submitBtn = this.querySelector('button[type="submit"]');
-        loading(submitBtn, true, 'Creando reserva…');
-
-        apiFetch('/reservas', {
-          method: 'POST',
-          body: {
-            zonaComunId: zonaid,
-            modalidadUso: $('modalidadRecreativo').checked ? 'RECREATIVO_RESIDENTES' : 'ORGANIZADO_CON_INVITADOS',
-            fechaHoraInicio: inicio.toISOString(),
-            fechaHoraFin: fin.toISOString(),
-            observaciones: $('reservaObservaciones').value.trim() || undefined
-          }
-        }).then(function (result) {
-          alertMessage('Reserva creada exitosamente!', 'success');
-          $('nuevaReservaForm').reset();
-          $('modalidadUsoDiv').style.display = 'none';
-          cargarMisReservas();
-        }).catch(function (error) {
-          alertMessage(error.message);
-        }).finally(function () {
-          loading(submitBtn, false, 'Crear reserva');
-        });
-      });
 
       document.addEventListener('click', function (event) {
         var button = event.target.closest('.cancelar-reserva');

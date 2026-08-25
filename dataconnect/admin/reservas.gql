@@ -339,3 +339,26 @@ query ObtenerReservaAdmin($id: UUID!)
     }
   }
 }
+
+query ObtenerDisponibilidadZonaAdmin(
+  $zonaComunId: UUID!
+  $desde: Timestamp!
+  $hasta: Timestamp!
+)
+@auth(level: NO_ACCESS)
+{
+  reservas(
+    where: {
+      zonaComunId: {eq: $zonaComunId}
+      fechaHoraInicio: {ge: $desde}
+      fechaHoraFin: {le: $hasta}
+      estado: {in: ["PENDIENTE", "CONFIRMADA"]}
+    }
+    orderBy: [{fechaHoraInicio: ASC}]
+  ) {
+    id
+    fechaHoraInicio
+    fechaHoraFin
+    estado
+  }
+}
