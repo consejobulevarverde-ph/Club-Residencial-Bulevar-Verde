@@ -393,13 +393,14 @@
 
       function msg(text, type) {
         var box = $('alert');
+        if (!box) { console.error('Alert element not found'); return; }
         box.className = 'alert alert-' + (type || 'danger');
         box.textContent = text;
         box.classList.remove('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
-      function hideMsg() { $('alert').classList.add('hidden'); }
+      function hideMsg() { var box = $('alert'); if (box) box.classList.add('hidden'); }
 
       function panel(id) {
         ['login', 'app'].forEach(function (p) { $(p).classList.toggle('hidden', p !== id); });
@@ -472,7 +473,8 @@
         }).join('');
       }
 
-      $('crearZonaForm').addEventListener('submit', function (e) {
+      var frm = $('crearZonaForm');
+      if (frm) frm.addEventListener('submit', function (e) {
         e.preventDefault();
         var btn = this.querySelector('button[type="submit"]');
         busy(btn, true, 'Creando…');
