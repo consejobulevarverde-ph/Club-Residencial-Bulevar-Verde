@@ -3,6 +3,9 @@ public/
 resources/_gen/
 .hugo_build.lock
 
+# Firebase
+.firebase/
+
 # Fonts (commercial licenses - not for version control)
 static/fonts/*.woff
 static/fonts/*.woff2
