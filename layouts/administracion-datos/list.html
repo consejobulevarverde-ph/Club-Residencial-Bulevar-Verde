@@ -885,6 +885,10 @@
 
       var $ = function (id) { return document.getElementById(id); };
       var currentUnidadId = null;
+      var reservarUnidadId = null;
+      var reservarReservasDelDiaCache = [];
+      var editarReservaDelDiaCache = [];
+      var reservaEditandoId = null;
 
       function esc(value) {
         return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
@@ -2298,11 +2302,6 @@
           });
         });
       }
-
-      var reservarUnidadId = null;
-      var reservarReservasDelDiaCache = [];
-      var reservaEditandoId = null;
-      var editarReservaDelDiaCache = [];
 
       var reservaActualId = null;
       var reservasModalAcciones = null;
