@@ -1833,11 +1833,10 @@
 
         var fechaObj = new Date(fechaStr + 'T00:00:00');
         var [h1, m1] = horaInicioStr.split(':');
-        var [h2, m2] = horaFinStr.split(':');
         var inicio = new Date(fechaObj);
         inicio.setHours(parseInt(h1), parseInt(m1), 0);
-        var fin = new Date(fechaObj);
-        fin.setHours(parseInt(h2), parseInt(m2), 0);
+        var duracion = parseInt($('reservarDuracion').value) || 0;
+        var fin = new Date(inicio.getTime() + duracion * 3600000);
 
         var conflicto = false;
         for (var i = 0; i < reservarReservasDelDiaCache.length; i++) {
@@ -1978,12 +1977,11 @@
           busy(btn, true, 'Creando…');
 
           var [h1, m1] = horaInicioStr.split(':');
-          var [h2, m2] = horaFinStr.split(':');
           var fechaObj = new Date(fechaStr + 'T00:00:00');
           var inicio = new Date(fechaObj);
           inicio.setHours(parseInt(h1), parseInt(m1), 0);
-          var fin = new Date(fechaObj);
-          fin.setHours(parseInt(h2), parseInt(m2), 0);
+          var duracion = parseInt($('reservarDuracion').value) || 0;
+          var fin = new Date(inicio.getTime() + duracion * 3600000);
 
           var payload = {
             unidadId: reservarUnidadId,
@@ -2198,11 +2196,10 @@
 
         var fechaObj = new Date(fechaStr + 'T00:00:00');
         var [h1, m1] = horaInicioStr.split(':');
-        var [h2, m2] = horaFinStr.split(':');
         var inicio = new Date(fechaObj);
         inicio.setHours(parseInt(h1), parseInt(m1), 0);
-        var fin = new Date(fechaObj);
-        fin.setHours(parseInt(h2), parseInt(m2), 0);
+        var duracion = parseInt($('editarReservaDuracion').value) || 0;
+        var fin = new Date(inicio.getTime() + duracion * 3600000);
 
         var conflicto = false;
         for (var i = 0; i < editarReservaDelDiaCache.length; i++) {
@@ -2278,12 +2275,11 @@
           busy(editarReservaSubmitBtn, true, 'Guardando…');
 
           var [h1, m1] = horaInicioStr.split(':');
-          var [h2, m2] = horaFinStr.split(':');
           var fechaObj = new Date(fechaStr + 'T00:00:00');
           var inicio = new Date(fechaObj);
           inicio.setHours(parseInt(h1), parseInt(m1), 0);
-          var fin = new Date(fechaObj);
-          fin.setHours(parseInt(h2), parseInt(m2), 0);
+          var duracion = parseInt($('editarReservaDuracion').value) || 0;
+          var fin = new Date(inicio.getTime() + duracion * 3600000);
 
           var payload = {
             zonaComunId: zonaId,
