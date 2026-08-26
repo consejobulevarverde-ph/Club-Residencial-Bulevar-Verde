@@ -226,6 +226,36 @@ mutation CancelarReservaAdmin($id: UUID!, $motivo: String!)
   reserva_update(id: $id, data: {estado: "CANCELADA", motivoCancelacion: $motivo})
 }
 
+mutation ActualizarReservaAdmin(
+  $id: UUID!
+  $zonaComunId: UUID!
+  $modalidadUso: String!
+  $fechaHoraInicio: Timestamp!
+  $fechaHoraFin: Timestamp!
+  $observaciones: String
+  $precio: Float
+  $depositoGarantia: Float
+  $requierePago: Boolean!
+  $requiereAprobacion: Boolean!
+  $confirmacionAutomatica: Boolean!
+)
+@auth(level: NO_ACCESS)
+@transaction
+{
+  reserva_update(id: $id, data: {
+    zonaComunId: $zonaComunId
+    modalidadUso: $modalidadUso
+    fechaHoraInicio: $fechaHoraInicio
+    fechaHoraFin: $fechaHoraFin
+    observaciones: $observaciones
+    precio: $precio
+    depositoGarantia: $depositoGarantia
+    requierePago: $requierePago
+    requiereAprobacion: $requiereAprobacion
+    confirmacionAutomatica: $confirmacionAutomatica
+  })
+}
+
 query ListarReservasUnidadAdmin($unidadId: UUID!, $limit: Int, $offset: Int)
 @auth(level: NO_ACCESS)
 {
