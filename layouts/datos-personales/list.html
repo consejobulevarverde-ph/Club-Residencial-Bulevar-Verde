@@ -1102,7 +1102,7 @@
         if (!button || button.closest('.hidden')) return;
         showTab(button.dataset.target);
         if (button.dataset.target === 'tabSanciones' && !sancionesCargados) cargarSanciones();
-        if (button.dataset.target === 'tabDocumentos' && !documentosCargados) cargarDocumentos();
+        if (button.dataset.target === 'tabDocumentos' && !documentosCargados) renderBotonesDocumentos();
         if (button.dataset.target === 'tabReservas' && !reservasCargados) cargarReservas();
       });
 
@@ -1556,57 +1556,72 @@
         { id: 'paz-y-salvo', label: 'Paz y Salvo', icono: 'bi-check-circle' },
       ];
 
-      function cargarDocumentos() {
-        $('documentosLoading').classList.remove('hidden');
+      function renderBotonesDocumentos() {
         $('documentosError').classList.add('hidden');
-        $('documentosVacio').classList.add('hidden');
-        $('documentosGrid').innerHTML = '';
-        documentosCargados = true;
-
-        Promise.all([
-          apiFetch('/cuenta-cobro'),
-          apiFetch('/informes/estado-cuenta'),
-          apiFetch('/informes/recibo'),
-          apiFetch('/informes/certificado'),
-          apiFetch('/informes/paz-y-salvo'),
-        ]).then(function (responses) {
-          $('documentosLoading').classList.add('hidden');
-          var documentos = responses.map(function (resp, idx) {
-            var tipo = tiposDocumentos[idx];
-            return { tipo: tipo, success: resp.data && resp.data.informe ? resp.data.informe.success : false, url: resp.data && resp.data.informe ? resp.data.informe.url : null, error: null };
-          });
-          var algunoDisponible = documentos.some(function (d) { return d.success; });
-          if (!algunoDisponible) {
-            $('documentosVacio').classList.remove('hidden');
-          } else {
-            renderizarDocumentos(documentos);
-          }
-        }).catch(function (error) {
-          $('documentosLoading').classList.add('hidden');
-          $('documentosError').textContent = 'Error al cargar documentos: ' + error.message;
-          $('documentosError').classList.remove('hidden');
-        });
-      }
-
-      function renderizarDocumentos(documentos) {
-        $('documentosGrid').innerHTML = documentos.map(function (doc) {
-          var disponible = doc.success && doc.url;
-          var btnClass = disponible ? 'btn-primary' : 'btn-secondary';
-          var btnDisabled = !disponible ? ' disabled' : '';
-          var icon = '<i class="bi ' + esc(doc.tipo.icono) + ' me-2"></i>';
-          var btnText = disponible ? icon + 'Descargar' : icon + 'No disponible';
+        $('documentosGrid').innerHTML = tiposDocumentos.map(function (tipo) {
+          var icon = '<i class="bi ' + esc(tipo.icono) + ' me-2"></i>';
           return '<div class="col-md-6 col-lg-4">' +
             '<div class="card border-0 h-100" style="box-shadow:0 2px 8px rgba(0,0,0,0.08)">' +
             '<div class="card-body d-flex flex-column">' +
-            '<h6 class="card-title mb-3" style="color:var(--bv-primary);font-weight:700">' + esc(doc.tipo.label) + '</h6>' +
+            '<h6 class="card-title mb-3" style="color:var(--bv-primary);font-weight:700">' + esc(tipo.label) + '</h6>' +
             '<p class="card-text small text-muted mb-3 flex-grow-1">Período actual de facturación</p>' +
-            (disponible
-              ? '<a href="' + esc(doc.url) + '" target="_blank" rel="noopener noreferrer" class="btn ' + btnClass + ' btn-sm mt-auto">' + btnText + '</a>'
-              : '<button type="button" class="btn ' + btnClass + '" disabled>' + btnText + '</button>') +
+            '<button type="button" class="btn btn-primary btn-sm mt-auto btn-descargar-documento" data-doc-tipo="' + esc(tipo.id) + '">' +
+            icon + 'Descargar</button>' +
             '</div>' +
             '</div>' +
             '</div>';
         }).join('');
+        documentosCargados = true;
+      }
+
+      $('documentosGrid').addEventListener('click', function (event) {
+        var button = event.target.closest('.btn-descargar-documento');
+        if (button) {
+          descargarDocumento(button);
+        }
+      });
+
+      function descargarDocumento(button) {
+        var docTipo = button.dataset.docTipo;
+        var tipoInfo = tiposDocumentos.find(function (t) { return t.id === docTipo; });
+        if (!tipoInfo) return;
+
+        var ventana = window.open('', '_blank');
+        button.disabled = true;
+        button.dataset.old = button.innerHTML;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Descargando…';
+
+        var endpoint = docTipo === 'cuenta-cobro' ? '/cuenta-cobro' : '/informes/' + docTipo;
+
+        apiFetch(endpoint).then(function (resp) {
+          var cuenta = resp.data && resp.data.cuenta;
+          var informe = resp.data && resp.data.informe;
+          var success = (cuenta && cuenta.success) || (informe && informe.success) || false;
+          var url = (cuenta && cuenta.ruta) || (informe && informe.url) || null;
+
+          if (success && url) {
+            ventana.location.href = url;
+            button.disabled = false;
+            button.innerHTML = button.dataset.old;
+          } else {
+            ventana.close();
+            marcarDocumentoNoDisponible(button, tipoInfo);
+          }
+        }).catch(function (error) {
+          ventana.close();
+          button.disabled = false;
+          button.innerHTML = button.dataset.old;
+          $('documentosError').textContent = 'Error al descargar ' + tipoInfo.label + ': ' + esc(error.message);
+          $('documentosError').classList.remove('hidden');
+        });
+      }
+
+      function marcarDocumentoNoDisponible(button, tipoInfo) {
+        var icon = '<i class="bi ' + esc(tipoInfo.icono) + ' me-2"></i>';
+        button.className = 'btn btn-secondary btn-sm mt-auto btn-descargar-documento';
+        button.disabled = true;
+        button.dataset.old = undefined;
+        button.innerHTML = icon + 'No disponible';
       }
 
       /* ---------- Reservas de zonas comunes (3 pasos) ---------- */
