@@ -694,6 +694,100 @@
       </div>
     </div>
 
+    <!-- Modal: Editar Reserva -->
+    <div class="modal fade" id="reservasModalEditar" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Editar Reserva</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="editarReservaForm" class="row g-3">
+              <!-- Selección de zona -->
+              <div class="col-md-6">
+                <label class="form-label small"><strong>Zona Común</strong></label>
+                <select id="editarReservaZona" class="form-select form-select-sm" required>
+                  <option value="">-- Seleccionar zona --</option>
+                </select>
+              </div>
+
+              <!-- Modalidad de uso -->
+              <div class="col-md-6">
+                <label class="form-label small"><strong>Modalidad</strong></label>
+                <select id="editarReservaModalidad" class="form-select form-select-sm" required>
+                  <option value="ORGANIZADO_CON_INVITADOS">Organizado / con invitados</option>
+                </select>
+              </div>
+
+              <!-- Panel informativo de la zona -->
+              <div id="editarReservaZonaInfo" class="alert alert-info hidden col-12" style="font-size: 0.9rem;">
+                <strong>Información de la zona:</strong>
+                <div><span id="editarReservaZonaHorario">Horario: </span></div>
+                <div><span id="editarReservaZonaDuracion">Duración: </span></div>
+                <div><span id="editarReservaZonaPrecio">Costo: </span></div>
+                <div style="margin-top: 0.5rem; color: #856404;"><span id="editarReservaZonaAprobacion"></span></div>
+              </div>
+
+              <!-- Fecha -->
+              <div class="col-md-4">
+                <label class="form-label small"><strong>Fecha</strong></label>
+                <input id="editarReservaFecha" type="date" class="form-control form-control-sm" required>
+              </div>
+
+              <!-- Hora de inicio -->
+              <div class="col-md-4">
+                <label class="form-label small"><strong>Hora de Inicio</strong></label>
+                <select id="editarReservaHoraInicio" class="form-select form-select-sm" required disabled>
+                  <option value="">-- Seleccionar --</option>
+                </select>
+              </div>
+
+              <!-- Duración -->
+              <div class="col-md-4">
+                <label class="form-label small"><strong>Duración (horas)</strong></label>
+                <select id="editarReservaDuracion" class="form-select form-select-sm" required disabled>
+                  <option value="">-- Seleccionar --</option>
+                </select>
+              </div>
+
+              <!-- Hora de fin (readonly) -->
+              <div class="col-md-4">
+                <label class="form-label small"><strong>Hora de Fin</strong></label>
+                <input id="editarReservaHoraFin" type="text" class="form-control form-control-sm" disabled>
+              </div>
+
+              <!-- Panel de reservas existentes -->
+              <div id="editarReservasExistentes" class="col-12 hidden">
+                <div class="alert alert-light border">
+                  <strong class="small">Reservas activas ese día para esta zona:</strong>
+                  <div id="editarReservasExistentesList" style="font-size: 0.9rem; margin-top: 0.5rem;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Panel de conflicto -->
+              <div id="editarReservasConflicto" class="alert alert-danger hidden col-12" role="alert">
+                <strong>⚠️ Conflicto de horario:</strong> <span id="editarReservasConflictoMsg"></span>
+              </div>
+
+              <!-- Observaciones -->
+              <div class="col-12">
+                <label class="form-label small">Observaciones (opcional)</label>
+                <textarea id="editarReservaObservaciones" class="form-control form-control-sm" rows="2" placeholder="Notas adicionales sobre esta reserva..."></textarea>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="editarReservaSubmit" type="button" class="btn btn-primary" disabled>
+              <i class="bi bi-check-circle me-1"></i>Guardar Cambios
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal: Editar Zona -->
     <div class="modal fade" id="modalEditarZona" tabindex="-1">
       <div class="modal-dialog modal-xl">
@@ -1915,14 +2009,307 @@
         });
       }
 
+      // Funciones para editar reserva (duplicadas de "Reservar" para mantener flujos independientes)
+      function renderEditarReservaZonaOptions() {
+        var select = $('editarReservaZona');
+        if (!select) return;
+        select.innerHTML = '<option value="">-- Seleccionar zona --</option>' + zonasCatalogoCache.filter(function (z) { return z.activo; }).map(function (z) {
+          return '<option value="' + esc(z.id) + '">' + esc(z.descripcion) + ' (' + esc(z.tipo) + ')</option>';
+        }).join('');
+      }
+
+      function onEditarReservaZonaChange() {
+        var zonaId = $('editarReservaZona').value;
+        var zona = zonasCatalogoCache.find(function (z) { return z.id === zonaId; });
+        var zonaInfo = $('editarReservaZonaInfo');
+        var modalidad = $('editarReservaModalidad');
+
+        if (!zona) {
+          if (zonaInfo) zonaInfo.classList.add('hidden');
+          if (modalidad) modalidad.innerHTML = '<option value="ORGANIZADO_CON_INVITADOS">Organizado / con invitados</option>';
+          return;
+        }
+
+        if (zonaInfo) {
+          zonaInfo.classList.remove('hidden');
+          $('editarReservaZonaHorario').textContent = 'Horario: ' + zona.horaApertura + ' - ' + zona.horaCierre;
+          $('editarReservaZonaDuracion').textContent = 'Duración: ' + zona.duracionMinHoras + 'h - ' + zona.duracionMaxHoras + 'h';
+          var costText = zona.costoReserva ? '$' + zona.costoReserva : 'Sin costo';
+          $('editarReservaZonaPrecio').textContent = 'Costo: ' + costText;
+
+          var warnings = [];
+          if (zona.requiereAprobacion) warnings.push('⚠️ Requiere aprobación — quedará PENDIENTE');
+          if (zona.requierePago) warnings.push('⚠️ Requiere pago');
+          $('editarReservaZonaAprobacion').innerHTML = warnings.join(' | ');
+        }
+
+        if (modalidad) {
+          modalidad.innerHTML = '<option value="ORGANIZADO_CON_INVITADOS">Organizado / con invitados</option>';
+          if (zona.soportaModalidadRecreativa) {
+            modalidad.innerHTML += '<option value="RECREATIVO_RESIDENTES">Recreativo (residentes)</option>';
+          }
+        }
+
+        renderEditarReservaHoraInicioOptions();
+        limpiarEditarReservaDuracion();
+        revisarConflictoEditarReserva();
+      }
+
+      function renderEditarReservaHoraInicioOptions() {
+        var zonaId = $('editarReservaZona').value;
+        var zona = zonasCatalogoCache.find(function (z) { return z.id === zonaId; });
+        var fechaStr = $('editarReservaFecha').value;
+        var select = $('editarReservaHoraInicio');
+
+        if (!zona || !fechaStr || !select) return;
+
+        var [horaAperStr, minAperStr] = zona.horaApertura.split(':');
+        var [horaCierStr, minCierStr] = zona.horaCierre.split(':');
+        var horaAper = parseInt(horaAperStr);
+        var horaCier = parseInt(horaCierStr);
+
+        var fechaObj = new Date(fechaStr + 'T00:00:00');
+        var ahora = new Date();
+        var esHoy = fechaObj.toDateString() === ahora.toDateString();
+        var horaActual = ahora.getHours();
+
+        select.innerHTML = '<option value="">-- Seleccionar --</option>';
+        for (var h = horaAper; h < horaCier; h++) {
+          if (esHoy && h <= horaActual) continue;
+          var horaStr = String(h).padStart(2, '0') + ':00';
+          select.innerHTML += '<option value="' + horaStr + '">' + horaStr + '</option>';
+        }
+        select.disabled = false;
+      }
+
+      function renderEditarReservaDuracionOptions() {
+        var zonaId = $('editarReservaZona').value;
+        var zona = zonasCatalogoCache.find(function (z) { return z.id === zonaId; });
+        var horaInicioStr = $('editarReservaHoraInicio').value;
+        var select = $('editarReservaDuracion');
+
+        if (!zona || !horaInicioStr || !select) return;
+
+        var [horaInicioStr_h] = horaInicioStr.split(':');
+        var horaInicio = parseInt(horaInicioStr_h);
+        var [horaCierStr] = zona.horaCierre.split(':');
+        var horaCier = parseInt(horaCierStr);
+
+        var maxDuracionDisponible = horaCier - horaInicio;
+        var maxDuracion = Math.min(zona.duracionMaxHoras, maxDuracionDisponible);
+
+        select.innerHTML = '<option value="">-- Seleccionar --</option>';
+        for (var d = zona.duracionMinHoras; d <= maxDuracion; d++) {
+          select.innerHTML += '<option value="' + d + '">' + d + 'h</option>';
+        }
+        select.disabled = false;
+      }
+
+      function limpiarEditarReservaDuracion() {
+        var select = $('editarReservaDuracion');
+        if (select) {
+          select.innerHTML = '<option value="">-- Seleccionar --</option>';
+          select.disabled = true;
+        }
+        var horaFin = $('editarReservaHoraFin');
+        if (horaFin) horaFin.value = '';
+      }
+
+      function actualizarEditarReservaHoraFin() {
+        var horaInicioStr = $('editarReservaHoraInicio').value;
+        var duracion = parseInt($('editarReservaDuracion').value) || 0;
+        var horaFin = $('editarReservaHoraFin');
+
+        if (!horaInicioStr || !duracion || !horaFin) return;
+
+        var [h, m] = horaInicioStr.split(':');
+        var horaInicioObj = new Date();
+        horaInicioObj.setHours(parseInt(h), parseInt(m), 0);
+        horaInicioObj.setHours(horaInicioObj.getHours() + duracion);
+
+        var horaFinStr = String(horaInicioObj.getHours()).padStart(2, '0') + ':' + String(horaInicioObj.getMinutes()).padStart(2, '0');
+        horaFin.value = horaFinStr;
+
+        cargarEditarReservaExistentesDelDia();
+      }
+
+      function cargarEditarReservaExistentesDelDia() {
+        var zonaId = $('editarReservaZona').value;
+        var fechaStr = $('editarReservaFecha').value;
+
+        if (!zonaId || !fechaStr) return;
+
+        var fechaObj = new Date(fechaStr + 'T00:00:00');
+        var desdeStr = fechaObj.toISOString();
+        var hastaObj = new Date(fechaObj);
+        hastaObj.setDate(hastaObj.getDate() + 1);
+        var hastaStr = hastaObj.toISOString();
+
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/?zonaComunId=' + encodeURIComponent(zonaId) + '&desde=' + encodeURIComponent(desdeStr) + '&hasta=' + encodeURIComponent(hastaStr), idToken);
+        }).then(function (result) {
+          var reservas = (result.data || []).filter(function (r) {
+            return (r.estado !== 'CANCELADA' && r.estado !== 'RECHAZADA') && r.id !== reservaEditandoId;
+          });
+          editarReservaDelDiaCache = reservas;
+
+          var container = $('editarReservasExistentes');
+          var listDiv = $('editarReservasExistentesList');
+
+          if (reservas.length === 0) {
+            if (container) container.classList.add('hidden');
+          } else {
+            if (container) container.classList.remove('hidden');
+            var listaHTML = reservas.map(function (r) {
+              var inicio = new Date(r.fechaHoraInicio).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+              var fin = new Date(r.fechaHoraFin).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+              var unidad = esc(r.unidad.codigoOficial);
+              return '<div style="padding: 0.25rem 0; font-size: 0.85rem;">• ' + unidad + ' (' + inicio + ' - ' + fin + ')</div>';
+            }).join('');
+            if (listDiv) listDiv.innerHTML = listaHTML;
+          }
+
+          revisarConflictoEditarReserva();
+        }).catch(function (error) {
+          console.error('Error cargando reservas:', error.message);
+        });
+      }
+
+      function revisarConflictoEditarReserva() {
+        var horaInicioStr = $('editarReservaHoraInicio').value;
+        var horaFinStr = $('editarReservaHoraFin').value;
+        var fechaStr = $('editarReservaFecha').value;
+        var conflictoDiv = $('editarReservasConflicto');
+        var submitBtn = $('editarReservaSubmit');
+
+        if (!horaInicioStr || !horaFinStr || !fechaStr) {
+          if (conflictoDiv) conflictoDiv.classList.add('hidden');
+          if (submitBtn) submitBtn.disabled = true;
+          return;
+        }
+
+        var fechaObj = new Date(fechaStr + 'T00:00:00');
+        var [h1, m1] = horaInicioStr.split(':');
+        var [h2, m2] = horaFinStr.split(':');
+        var inicio = new Date(fechaObj);
+        inicio.setHours(parseInt(h1), parseInt(m1), 0);
+        var fin = new Date(fechaObj);
+        fin.setHours(parseInt(h2), parseInt(m2), 0);
+
+        var conflicto = false;
+        for (var i = 0; i < editarReservaDelDiaCache.length; i++) {
+          var r = editarReservaDelDiaCache[i];
+          var rInicio = new Date(r.fechaHoraInicio);
+          var rFin = new Date(r.fechaHoraFin);
+          if (inicio < rFin && fin > rInicio) {
+            conflicto = true;
+            if (conflictoDiv) {
+              $('editarReservasConflictoMsg').textContent = 'La zona ya está reservada de ' + rInicio.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) + ' a ' + rFin.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+              conflictoDiv.classList.remove('hidden');
+            }
+            break;
+          }
+        }
+
+        if (!conflicto && conflictoDiv) {
+          conflictoDiv.classList.add('hidden');
+        }
+
+        var esValido = $('editarReservaZona').value && fechaStr && horaInicioStr && horaFinStr && !conflicto;
+        if (submitBtn) submitBtn.disabled = !esValido;
+      }
+
+      // Event listeners para editar reserva
+      var editarReservaZonaSelect = $('editarReservaZona');
+      if (editarReservaZonaSelect) {
+        editarReservaZonaSelect.addEventListener('change', onEditarReservaZonaChange);
+      }
+
+      var editarReservaFechaInput = $('editarReservaFecha');
+      if (editarReservaFechaInput) {
+        editarReservaFechaInput.addEventListener('change', function () {
+          renderEditarReservaHoraInicioOptions();
+          limpiarEditarReservaDuracion();
+          cargarEditarReservaExistentesDelDia();
+        });
+      }
+
+      var editarReservaHoraInicioSelect = $('editarReservaHoraInicio');
+      if (editarReservaHoraInicioSelect) {
+        editarReservaHoraInicioSelect.addEventListener('change', function () {
+          renderEditarReservaDuracionOptions();
+          var horaFin = $('editarReservaHoraFin');
+          if (horaFin) horaFin.value = '';
+          revisarConflictoEditarReserva();
+        });
+      }
+
+      var editarReservaDuracionSelect = $('editarReservaDuracion');
+      if (editarReservaDuracionSelect) {
+        editarReservaDuracionSelect.addEventListener('change', actualizarEditarReservaHoraFin);
+      }
+
+      // Submit del formulario de editar reserva
+      var editarReservaSubmitBtn = $('editarReservaSubmit');
+      if (editarReservaSubmitBtn) {
+        editarReservaSubmitBtn.addEventListener('click', function () {
+          hideMsg();
+
+          var zonaId = $('editarReservaZona').value;
+          var modalidad = $('editarReservaModalidad').value;
+          var fechaStr = $('editarReservaFecha').value;
+          var horaInicioStr = $('editarReservaHoraInicio').value;
+          var horaFinStr = $('editarReservaHoraFin').value;
+          var observaciones = $('editarReservaObservaciones').value.trim();
+
+          if (!zonaId || !fechaStr || !horaInicioStr || !horaFinStr) {
+            msg('Faltan campos requeridos');
+            return;
+          }
+
+          busy(editarReservaSubmitBtn, true, 'Guardando…');
+
+          var [h1, m1] = horaInicioStr.split(':');
+          var [h2, m2] = horaFinStr.split(':');
+          var fechaObj = new Date(fechaStr + 'T00:00:00');
+          var inicio = new Date(fechaObj);
+          inicio.setHours(parseInt(h1), parseInt(m1), 0);
+          var fin = new Date(fechaObj);
+          fin.setHours(parseInt(h2), parseInt(m2), 0);
+
+          var payload = {
+            zonaComunId: zonaId,
+            modalidadUso: modalidad,
+            fechaHoraInicio: inicio.toISOString(),
+            fechaHoraFin: fin.toISOString()
+          };
+          if (observaciones) payload.observaciones = observaciones;
+
+          withIdToken(function (idToken) {
+            return apiFetch('/api/v1/reservas/' + reservaEditandoId, idToken, { method: 'PATCH', body: payload });
+          }).then(function () {
+            msg('Reserva actualizada', 'success');
+            if (reservasModalEditar) reservasModalEditar.hide();
+            cargarReservasAgenda();
+          }).catch(function (error) {
+            msg(error.message);
+          }).finally(function () {
+            busy(editarReservaSubmitBtn, false, 'Guardar Cambios');
+          });
+        });
+      }
+
       var reservarUnidadId = null;
       var reservarReservasDelDiaCache = [];
+      var reservaEditandoId = null;
+      var editarReservaDelDiaCache = [];
 
       var reservaActualId = null;
       var reservasModalAcciones = null;
       var reservasModalRechazar = null;
       var reservasModalCancelar = null;
       var reservasModalPago = null;
+      var reservasModalEditar = null;
       var modalEditarZona = null;
       var zonaEditandoId = null;
 
@@ -1931,11 +2318,13 @@
         var modalRechazarEl = $('reservasModalRechazar');
         var modalCancelarEl = $('reservasModalCancelar');
         var modalPagoEl = $('reservasModalPago');
+        var modalEditarReservaEl = $('reservasModalEditar');
         var modalEditarEl = $('modalEditarZona');
         if (modalAccionesEl) reservasModalAcciones = new bootstrap.Modal(modalAccionesEl);
         if (modalRechazarEl) reservasModalRechazar = new bootstrap.Modal(modalRechazarEl);
         if (modalCancelarEl) reservasModalCancelar = new bootstrap.Modal(modalCancelarEl);
         if (modalPagoEl) reservasModalPago = new bootstrap.Modal(modalPagoEl);
+        if (modalEditarReservaEl) reservasModalEditar = new bootstrap.Modal(modalEditarReservaEl);
         if (modalEditarEl) modalEditarZona = new bootstrap.Modal(modalEditarEl);
       });
 
@@ -1949,11 +2338,13 @@
 
         if (estado === 'PENDIENTE') {
           info.textContent = 'Esta reserva está pendiente de aprobación.';
+          html += '<button type="button" class="btn btn-outline-primary" data-accion="editar">✏️ Editar</button>';
           html += '<button type="button" class="btn btn-success" data-accion="aprobar">✅ Aprobar</button>';
           html += '<button type="button" class="btn btn-danger" data-accion="rechazar">❌ Rechazar</button>';
           html += '<button type="button" class="btn btn-outline-secondary" data-accion="cancelar">⚫ Cancelar</button>';
         } else if (estado === 'CONFIRMADA') {
           info.textContent = 'Esta reserva está confirmada.';
+          html += '<button type="button" class="btn btn-outline-primary" data-accion="editar">✏️ Editar</button>';
           html += '<button type="button" class="btn btn-outline-secondary" data-accion="cancelar">⚫ Cancelar</button>';
           html += '<button type="button" class="btn btn-primary" data-accion="pago">💳 Registrar Pago</button>';
         } else {
@@ -1982,7 +2373,30 @@
           aprobarReservaAdminPanel();
           return;
         }
-        if (accion === 'rechazar') {
+        if (accion === 'editar') {
+          accionesPendiente = function () {
+            reservaEditandoId = reservaActualId;
+            withIdToken(function (idToken) {
+              return apiFetch('/api/v1/reservas/' + reservaActualId, idToken);
+            }).then(function (result) {
+              var r = result.data;
+              renderEditarReservaZonaOptions();
+              $('editarReservaZona').value = r.zonaComun.id;
+              onEditarReservaZonaChange();
+              $('editarReservaModalidad').value = r.modalidadUso;
+              var inicio = new Date(r.fechaHoraInicio);
+              $('editarReservaFecha').value = inicio.getFullYear() + '-' + String(inicio.getMonth() + 1).padStart(2, '0') + '-' + String(inicio.getDate()).padStart(2, '0');
+              renderEditarReservaHoraInicioOptions();
+              $('editarReservaHoraInicio').value = String(inicio.getHours()).padStart(2, '0') + ':00';
+              renderEditarReservaDuracionOptions();
+              var duracionHoras = Math.round((new Date(r.fechaHoraFin) - inicio) / 3600000);
+              $('editarReservaDuracion').value = String(duracionHoras);
+              actualizarEditarReservaHoraFin();
+              $('editarReservaObservaciones').value = r.observaciones || '';
+              if (reservasModalEditar) reservasModalEditar.show();
+            }).catch(function (error) { msg(error.message); });
+          };
+        } else if (accion === 'rechazar') {
           accionesPendiente = function () {
             var m = $('reservasMotivoRechazo'); if (m) m.value = '';
             if (reservasModalRechazar) reservasModalRechazar.show();
