@@ -1710,6 +1710,7 @@
         var [horaCierStr, minCierStr] = zona.horaCierre.split(':');
         var horaAper = parseInt(horaAperStr);
         var horaCier = parseInt(horaCierStr);
+        if (horaCier === 0) horaCier = 24;
 
         var fechaObj = new Date(fechaStr + 'T00:00:00');
         var ahora = new Date();
@@ -1737,6 +1738,7 @@
         var horaInicio = parseInt(horaInicioStr_h);
         var [horaCierStr] = zona.horaCierre.split(':');
         var horaCier = parseInt(horaCierStr);
+        if (horaCier === 0) horaCier = 24;
 
         var maxDuracionDisponible = horaCier - horaInicio;
         var maxDuracion = Math.min(zona.duracionMaxHoras, maxDuracionDisponible);
@@ -2071,6 +2073,7 @@
         var [horaCierStr, minCierStr] = zona.horaCierre.split(':');
         var horaAper = parseInt(horaAperStr);
         var horaCier = parseInt(horaCierStr);
+        if (horaCier === 0) horaCier = 24;
 
         var fechaObj = new Date(fechaStr + 'T00:00:00');
         var ahora = new Date();
@@ -2098,6 +2101,7 @@
         var horaInicio = parseInt(horaInicioStr_h);
         var [horaCierStr] = zona.horaCierre.split(':');
         var horaCier = parseInt(horaCierStr);
+        if (horaCier === 0) horaCier = 24;
 
         var maxDuracionDisponible = horaCier - horaInicio;
         var maxDuracion = Math.min(zona.duracionMaxHoras, maxDuracionDisponible);
