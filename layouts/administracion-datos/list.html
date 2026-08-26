@@ -433,10 +433,10 @@
               <!-- Búsqueda de unidad -->
               <div class="col-12">
                 <label class="form-label small"><strong>1. Seleccionar Unidad</strong></label>
-                <form id="reservarUnidadSearchForm" class="input-group mb-3">
+                <div id="reservarUnidadSearchForm" class="input-group mb-3">
                   <input id="reservarUnidadQuery" type="text" class="form-control form-control-sm" placeholder="Código, placa, correo, documento o nombre">
-                  <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
-                </form>
+                  <button type="button" id="reservarUnidadBuscarBtn" class="btn btn-primary btn-sm">Buscar</button>
+                </div>
                 <div id="reservarUnidadResults" class="text-muted small mb-3">Ingresa un término para buscar.</div>
                 <div id="reservarUnidadSeleccionada" class="alert alert-info hidden mb-3" style="display: flex; justify-content: space-between; align-items: center;">
                   <span><strong>Unidad: </strong><span id="reservarUnidadSeleccionadaTexto"></span></span>
@@ -1581,7 +1581,7 @@
 
         renderReservarHoraInicioOptions();
         limpiarReservarDuracion();
-        actualizarReservarConflictoUI();
+        revisarConflictoReservar();
       }
 
       function renderReservarHoraInicioOptions() {
@@ -1659,7 +1659,6 @@
         var horaFinStr = String(horaInicioObj.getHours()).padStart(2, '0') + ':' + String(horaInicioObj.getMinutes()).padStart(2, '0');
         horaFin.value = horaFinStr;
 
-        renderReservarDuracionOptions();
         cargarReservasExistentesDelDia();
       }
 
@@ -1748,9 +1747,8 @@
       }
 
       // Buscador de unidad para reservar
-      var reservarUnidadSearchForm = $('reservarUnidadSearchForm');
-      if (reservarUnidadSearchForm) reservarUnidadSearchForm.addEventListener('submit', function (event) {
-        event.preventDefault();
+      var reservarUnidadBuscarBtn = $('reservarUnidadBuscarBtn');
+      if (reservarUnidadBuscarBtn) reservarUnidadBuscarBtn.addEventListener('click', function () {
         hideMsg();
 
         var termino = $('reservarUnidadQuery').value.trim();
@@ -1825,7 +1823,9 @@
       if (reservarHoraInicioSelect) {
         reservarHoraInicioSelect.addEventListener('change', function () {
           renderReservarDuracionOptions();
-          limpiarReservarDuracion();
+          var horaFin = $('reservarHoraFin');
+          if (horaFin) horaFin.value = '';
+          revisarConflictoReservar();
         });
       }
 
@@ -1898,6 +1898,9 @@
           });
         });
       }
+
+      var reservarUnidadId = null;
+      var reservarReservasDelDiaCache = [];
 
       var reservaActualId = null;
       var reservasModalRechazar = null;
