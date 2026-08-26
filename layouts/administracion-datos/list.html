@@ -610,6 +610,22 @@
       </div>
     </div>
 
+    <!-- Modal: Acciones de Reserva (chooser) -->
+    <div class="modal fade" id="reservasModalAcciones" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Acciones de Reserva</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p id="reservasAccionesInfo" class="text-muted small mb-3"></p>
+            <div id="reservasAccionesBotones" class="d-grid gap-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal: Rechazar Reserva -->
     <div class="modal fade" id="reservasModalRechazar" tabindex="-1">
       <div class="modal-dialog">
@@ -1903,6 +1919,7 @@
       var reservarReservasDelDiaCache = [];
 
       var reservaActualId = null;
+      var reservasModalAcciones = null;
       var reservasModalRechazar = null;
       var reservasModalCancelar = null;
       var reservasModalPago = null;
@@ -1910,45 +1927,87 @@
       var zonaEditandoId = null;
 
       document.addEventListener('DOMContentLoaded', function() {
+        var modalAccionesEl = $('reservasModalAcciones');
         var modalRechazarEl = $('reservasModalRechazar');
         var modalCancelarEl = $('reservasModalCancelar');
         var modalPagoEl = $('reservasModalPago');
         var modalEditarEl = $('modalEditarZona');
+        if (modalAccionesEl) reservasModalAcciones = new bootstrap.Modal(modalAccionesEl);
         if (modalRechazarEl) reservasModalRechazar = new bootstrap.Modal(modalRechazarEl);
         if (modalCancelarEl) reservasModalCancelar = new bootstrap.Modal(modalCancelarEl);
         if (modalPagoEl) reservasModalPago = new bootstrap.Modal(modalPagoEl);
         if (modalEditarEl) modalEditarZona = new bootstrap.Modal(modalEditarEl);
       });
 
+      var accionesPendiente = null;
+
+      function abrirAccionesReserva(id, estado) {
+        reservaActualId = id;
+        var info = $('reservasAccionesInfo');
+        var botones = $('reservasAccionesBotones');
+        var html = '';
+
+        if (estado === 'PENDIENTE') {
+          info.textContent = 'Esta reserva está pendiente de aprobación.';
+          html += '<button type="button" class="btn btn-success" data-accion="aprobar">✅ Aprobar</button>';
+          html += '<button type="button" class="btn btn-danger" data-accion="rechazar">❌ Rechazar</button>';
+          html += '<button type="button" class="btn btn-outline-secondary" data-accion="cancelar">⚫ Cancelar</button>';
+        } else if (estado === 'CONFIRMADA') {
+          info.textContent = 'Esta reserva está confirmada.';
+          html += '<button type="button" class="btn btn-outline-secondary" data-accion="cancelar">⚫ Cancelar</button>';
+          html += '<button type="button" class="btn btn-primary" data-accion="pago">💳 Registrar Pago</button>';
+        } else {
+          info.textContent = 'Esta reserva está ' + estado + '. No hay acciones disponibles.';
+        }
+
+        botones.innerHTML = html;
+        if (reservasModalAcciones) reservasModalAcciones.show();
+      }
+
       document.addEventListener('click', function (e) {
         var btn = e.target.closest('.accion-reserva');
         if (!btn) return;
-        reservaActualId = btn.dataset.id;
-        var estado = btn.dataset.estado;
+        abrirAccionesReserva(btn.dataset.id, btn.dataset.estado);
+      });
 
-        if (estado === 'PENDIENTE') {
-          if (confirm('¿Aprobar esta reserva?')) {
-            aprobarReservaAdminPanel();
-          } else if (confirm('¿Rechazar esta reserva?')) {
-            var motivoRechazo = $('reservasMotivoRechazo');
-            if (motivoRechazo) motivoRechazo.value = '';
-            if (reservasModalRechazar) reservasModalRechazar.show();
-          }
-        } else if (estado === 'CONFIRMADA' || estado === 'PENDIENTE') {
-          if (confirm('¿Cancelar esta reserva?')) {
-            var motivoCancelacion = $('reservasMotivoCancelacion');
-            if (motivoCancelacion) motivoCancelacion.value = '';
-            if (reservasModalCancelar) reservasModalCancelar.show();
-          }
+      var accionesBotonesEl = $('reservasAccionesBotones');
+      if (accionesBotonesEl) accionesBotonesEl.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-accion]');
+        if (!btn) return;
+        var accion = btn.dataset.accion;
+
+        if (accion === 'aprobar') {
+          accionesPendiente = null;
+          reservasModalAcciones.hide();
+          aprobarReservaAdminPanel();
+          return;
         }
+        if (accion === 'rechazar') {
+          accionesPendiente = function () {
+            var m = $('reservasMotivoRechazo'); if (m) m.value = '';
+            if (reservasModalRechazar) reservasModalRechazar.show();
+          };
+        } else if (accion === 'cancelar') {
+          accionesPendiente = function () {
+            var m = $('reservasMotivoCancelacion'); if (m) m.value = '';
+            if (reservasModalCancelar) reservasModalCancelar.show();
+          };
+        } else if (accion === 'pago') {
+          accionesPendiente = function () {
+            var ep = $('reservasEstadoPago'); if (ep) ep.value = 'PENDIENTE';
+            var fp = $('reservasFechaPago'); if (fp) fp.value = '';
+            if (reservasModalPago) reservasModalPago.show();
+          };
+        }
+        reservasModalAcciones.hide();
+      });
 
-        var accionPago = confirm('¿Registrar pago para esta reserva?');
-        if (accionPago) {
-          var estadoPago = $('reservasEstadoPago');
-          var fechaPago = $('reservasFechaPago');
-          if (estadoPago) estadoPago.value = 'PENDIENTE';
-          if (fechaPago) fechaPago.value = '';
-          if (reservasModalPago) reservasModalPago.show();
+      var reservasModalAccionesEl = $('reservasModalAcciones');
+      if (reservasModalAccionesEl) reservasModalAccionesEl.addEventListener('hidden.bs.modal', function () {
+        if (accionesPendiente) {
+          var fn = accionesPendiente;
+          accionesPendiente = null;
+          fn();
         }
       });
 
