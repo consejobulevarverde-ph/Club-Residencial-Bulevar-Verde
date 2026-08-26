@@ -782,6 +782,16 @@
         });
       }
 
+      function toLocalISOString(date) {
+        var year = date.getFullYear();
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var day = String(date.getDate()).padStart(2, '0');
+        var hours = String(date.getHours()).padStart(2, '0');
+        var minutes = String(date.getMinutes()).padStart(2, '0');
+        var seconds = String(date.getSeconds()).padStart(2, '0');
+        return year + '-' + month + '-' + day + 'T' + hours + ':' + minutes + ':' + seconds;
+      }
+
       function msg(text, type) {
         var alertBox = $('alert');
         alertBox.className = 'alert alert-' + (type || 'danger');
@@ -1873,8 +1883,8 @@
             unidadId: reservarUnidadId,
             zonaComunId: zonaId,
             modalidadUso: modalidad,
-            fechaHoraInicio: inicio.toISOString(),
-            fechaHoraFin: fin.toISOString()
+            fechaHoraInicio: toLocalISOString(inicio),
+            fechaHoraFin: toLocalISOString(fin)
           };
           if (observaciones) payload.observaciones = observaciones;
 
