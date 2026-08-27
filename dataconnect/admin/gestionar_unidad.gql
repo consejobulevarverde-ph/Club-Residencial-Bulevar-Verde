@@ -66,6 +66,27 @@ mutation CrearVinculoUnidadPersona(
   vinculo_unidad_persona_insert(data: $input)
 }
 
+query BuscarVinculoUnidadPersona(
+  $personaId: UUID!
+  $unidadId: UUID!
+  $tipoRelacion: String!
+  $fechaInicio: Date!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la consulta.") {
+  vinculos_unidad_persona(
+    where: {
+      personaId: { eq: $personaId }
+      unidadId: { eq: $unidadId }
+      tipoRelacion: { eq: $tipoRelacion }
+      fechaInicio: { eq: $fechaInicio }
+    }
+    limit: 1
+  ) {
+    id
+    activo
+  }
+}
+
 mutation RetirarVinculoUnidadPersona(
   $id: UUID!
   $fechaFin: Date!
@@ -75,5 +96,16 @@ mutation RetirarVinculoUnidadPersona(
   vinculo_unidad_persona_updateMany(
     where: { id: { eq: $id } }
     data: { activo: false, fechaFin: $fechaFin }
+  )
+}
+
+mutation ReactivarVinculoUnidadPersona(
+  $id: UUID!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la mutación.")
+@transaction {
+  vinculo_unidad_persona_updateMany(
+    where: { id: { eq: $id } }
+    data: { activo: true, fechaFin: null }
   )
 }
