@@ -1362,9 +1362,16 @@
         var catalogoLista = $('reservasCatalogoLista');
         if (catalogoLista) {
           catalogoLista.innerHTML = zonas.length ? zonas.map(function (z) {
-            return '<div class="repeat-row"><div class="row"><div class="col-md-4"><strong>' + esc(z.descripcion) + '</strong>' +
-              '<div class="small-note">' + esc(z.tipo) + ' | ' + esc(z.horaApertura) + '–' + esc(z.horaCierre) + '</div></div>' +
-              '<div class="col-md-8"><button type="button" class="btn btn-outline-primary btn-sm editar-zona" data-id="' + esc(z.id) + '">Editar</button></div></div></div>';
+            var badges = '';
+            if (z.requierePago) badges += '<span class="badge bg-warning text-dark me-2">💳 Pago</span>';
+            if (z.requiereAprobacion) badges += '<span class="badge bg-info text-dark me-2">✓ Aprobación</span>';
+            var costoText = z.costoReserva ? '$' + z.costoReserva.toLocaleString('es-CO') : 'Sin costo';
+            var depositoText = z.depositoGarantia ? '$' + z.depositoGarantia.toLocaleString('es-CO') : '—';
+            return '<div class="repeat-row"><div class="row"><div class="col-md-5"><strong>' + esc(z.descripcion) + '</strong>' +
+              '<div class="small-note">' + esc(z.tipo) + ' | ' + esc(z.horaApertura) + '–' + esc(z.horaCierre) + '</div>' +
+              '<div class="small-note">Duración: ' + z.duracionMinHoras + 'h - ' + z.duracionMaxHoras + 'h</div></div>' +
+              '<div class="col-md-3"><div class="small-note">Costo: ' + costoText + '</div><div class="small-note">Depósito: ' + depositoText + '</div></div>' +
+              '<div class="col-md-4">' + badges + '<button type="button" class="btn btn-outline-primary btn-sm editar-zona" data-id="' + esc(z.id) + '">Editar</button></div></div></div>';
           }).join('') : '<p class="text-muted">No hay zonas registradas.</p>';
         }
       }
