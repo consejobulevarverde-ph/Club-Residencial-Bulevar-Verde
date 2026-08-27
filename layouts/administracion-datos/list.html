@@ -1273,6 +1273,9 @@
           event.preventDefault();
           hideMsg();
 
+          var button = event.target.querySelector('button[type="submit"]');
+          busy(button, true, 'Agregando…');
+
           var payload = {
             tipoDocumento: $('addTipoDocumento').value.trim(),
             numeroDocumento: $('addNumeroDocumento').value.trim(),
@@ -1290,6 +1293,8 @@
             loadDashboard();
           }).catch(function (error) {
             msg(error.message);
+          }).finally(function () {
+            busy(button, false, 'Agregar');
           });
         }
       });

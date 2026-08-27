@@ -70,7 +70,6 @@ query BuscarVinculoUnidadPersona(
   $personaId: UUID!
   $unidadId: UUID!
   $tipoRelacion: String!
-  $fechaInicio: Date!
 )
 @auth(level: USER, insecureReason: "La API restringe este endpoint a roles administrador/superadmin antes de invocar la consulta.") {
   vinculos_unidad_persona(
@@ -78,8 +77,8 @@ query BuscarVinculoUnidadPersona(
       personaId: { eq: $personaId }
       unidadId: { eq: $unidadId }
       tipoRelacion: { eq: $tipoRelacion }
-      fechaInicio: { eq: $fechaInicio }
     }
+    orderBy: [{ fechaInicio: DESC }]
     limit: 1
   ) {
     id
