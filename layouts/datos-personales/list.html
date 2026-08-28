@@ -2222,7 +2222,7 @@
             return badges[r.estado] || '<span class="badge text-bg-secondary">' + esc(r.estado) + '</span>';
           })();
           var puedeCancel = (r.estado === 'PENDIENTE' || r.estado === 'CONFIRMADA');
-          var necesitaPago = r.requierePago && r.estadoPago === 'PENDIENTE';
+          var necesitaPago = r.requierePago && r.estado === 'PENDIENTE';
           var inicio = new Date(r.fechaHoraInicio).toLocaleString('es-CO', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
           var fin = new Date(r.fechaHoraFin).toLocaleString('es-CO', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
           return '<div class="repeat-row d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">' +
