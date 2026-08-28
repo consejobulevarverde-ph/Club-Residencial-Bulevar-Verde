@@ -5698,6 +5698,50 @@ function obtenerCorreosNotificacionUnidad_(apto, mapaCorreosLegado) {
   return { email: '', fuente: 'NINGUNO' };
 }
 
+/**
+ * Envía un correo a través del API de Bulevar Verde.
+ * Siempre incluye replyTo: bulevarverdeadmon@gmail.com
+ *
+ * @param {Object} options - { to, subject, htmlBody, replyTo (opcional), name (ignorado) }
+ * @return {boolean} - true si fue enviado/encolado exitosamente, false si falló
+ */
+function enviarCorreoViaSancionesAPI_(options) {
+  const apiToken = PropertiesService.getScriptProperties().getProperty('SANCIONES_API_TOKEN');
+  const apiEndpoint = API_BULEVAR_VERDE_BASE_URL + '/api/v1/notificaciones/enviar';
+
+  const payload = {
+    to: options.to,
+    subject: options.subject,
+    html: options.htmlBody,
+    replyTo: options.replyTo || 'bulevarverdeadmon@gmail.com'
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + (apiToken || ''),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+      timeout: 15
+    });
+
+    if (response.getResponseCode() === 202) {
+      Logger.log('enviarCorreoViaSancionesAPI_: correo enviado/encolado exitosamente para ' + options.to);
+      return true;
+    } else {
+      Logger.log('enviarCorreoViaSancionesAPI_: error HTTP ' + response.getResponseCode() + ' para ' + options.to + ': ' + response.getContentText());
+      return false;
+    }
+  } catch (error) {
+    Logger.log('enviarCorreoViaSancionesAPI_: error enviando correo para ' + options.to + ': ' + error);
+    return false;
+  }
+}
+
 function getOrCreateHojaResumenEnvio_(ss) {
   let sheet = ss.getSheetByName(SHEET_RESUMEN_ENVIO_SANCIONES);
 
@@ -5781,42 +5825,28 @@ function enviarCorreosResumenSanciones() {
 
     Logger.log("Preparando correo para apto " + apto + " -> " + email);
 
-    const ccCorreo = "";
     const replyToCorreo = "bulevarverdeadmon@gmail.com";
 
-    const destinatariosNecesarios = contarDestinatariosCorreo_(email, ccCorreo, "");
-    const cuotaRestante = MailApp.getRemainingDailyQuota();
-    const cuotaDisponible = cuotaRestante - SANCIONES_CUOTA_RESERVA;
-
-    if (cuotaDisponible < destinatariosNecesarios) {
-      Logger.log(
-        "CUOTA INSUFICIENTE. Apto: " + apto +
-        " | Cuota restante: " + cuotaRestante +
-        " | Disponible (con reserva de " + SANCIONES_CUOTA_RESERVA + "): " + cuotaDisponible +
-        " | Necesarios: " + destinatariosNecesarios
-      );
-
-      sheet.getRange(sheetRow, idxObs + 1).setValue(
-        "PENDIENTE POR CUOTA. Restante: " + cuotaRestante + " - " +
-        Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
-      );
-
-      return;
-    }
-
     if (!EMAIL_DRY_RUN) {
-      MailApp.sendEmail({
+      const enviado = enviarCorreoViaSancionesAPI_({
         to: email,
-        replyTo: replyToCorreo,
         subject: subject,
         htmlBody: htmlBody,
+        replyTo: replyToCorreo,
         name: "Administración Bulevar Verde"
       });
 
-      sheet.getRange(sheetRow, idxEstado + 1).setValue("ENVIADO");
-      sheet.getRange(sheetRow, idxObs + 1).setValue(
-        "Enviado: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
-      );
+      if (enviado) {
+        sheet.getRange(sheetRow, idxEstado + 1).setValue("ENVIADO");
+        sheet.getRange(sheetRow, idxObs + 1).setValue(
+          "Enviado: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+        );
+      } else {
+        sheet.getRange(sheetRow, idxEstado + 1).setValue("ERROR");
+        sheet.getRange(sheetRow, idxObs + 1).setValue(
+          "Error al enviar: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+        );
+      }
     } else {
       sheet.getRange(sheetRow, idxEstado + 1).setValue("SIMULADO");
       sheet.getRange(sheetRow, idxObs + 1).setValue(
@@ -6456,38 +6486,45 @@ function enviarNotificacionesDebidoProceso() {
     Logger.log("Preparando notificación debido proceso apto " + apto + " -> " + email);
 
     if (!EMAIL_DRY_RUN) {
-      MailApp.sendEmail({
+      const enviado = enviarCorreoViaSancionesAPI_({
         to: email,
-        replyTo: replyToCorreo,
         subject: subject,
         htmlBody: htmlBody,
+        replyTo: replyToCorreo,
         name: "Administración Bulevar Verde"
       });
 
-      registrarNotificacionDebidoProceso_({
-        apartamento: apto,
-        email: email,
-        placasDetectadas: placasDetectadas,
-        cantidadRegistros: cantidadRegistros,
-        detalleRegistros: detalleRegistros,
-        estado: "ENVIADO",
-        asunto: subject,
-        plantillaNotificacion: PLANTILLA_NOTIFICACION_DEBIDO_PROCESO,
-        observaciones: "Notificación preventiva única enviada correctamente."
-      });
+      if (enviado) {
+        registrarNotificacionDebidoProceso_({
+          apartamento: apto,
+          email: email,
+          placasDetectadas: placasDetectadas,
+          cantidadRegistros: cantidadRegistros,
+          detalleRegistros: detalleRegistros,
+          estado: "ENVIADO",
+          asunto: subject,
+          plantillaNotificacion: PLANTILLA_NOTIFICACION_DEBIDO_PROCESO,
+          observaciones: "Notificación preventiva única enviada correctamente."
+        });
 
-      mapaNotificados[clave] = {
-        clave: clave,
-        aptoNorm: normalizeApto_(apto),
-        fechaHora: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
-        email: email,
-        estado: "ENVIADO"
-      };
+        mapaNotificados[clave] = {
+          clave: clave,
+          aptoNorm: normalizeApto_(apto),
+          fechaHora: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
+          email: email,
+          estado: "ENVIADO"
+        };
 
-      sheet.getRange(sheetRow, idxEstado + 1).setValue("ENVIADO");
-      sheet.getRange(sheetRow, idxObs + 1).setValue(
-        "Notificación enviada: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
-      );
+        sheet.getRange(sheetRow, idxEstado + 1).setValue("ENVIADO");
+        sheet.getRange(sheetRow, idxObs + 1).setValue(
+          "Notificación enviada: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+        );
+      } else {
+        sheet.getRange(sheetRow, idxEstado + 1).setValue("ERROR");
+        sheet.getRange(sheetRow, idxObs + 1).setValue(
+          "Error al enviar por API: " + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm")
+        );
+      }
 
     } else {
       sheet.getRange(sheetRow, idxEstado + 1).setValue("SIMULADO");
