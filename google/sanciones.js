@@ -166,6 +166,7 @@ const EMAIL_DRY_RUN = false; // true = prueba, false = envía correos reales
 const SANCIONES_CUOTA_RESERVA = 3; // correos que siempre se dejan sin usar de la cuota diaria
 const MOSTRAR_PLACAS_SIMILARES_DESCARTADAS = true;
 const URL_CONSULTA_SANCIONES = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/sanciones/';
+const API_BULEVAR_VERDE_BASE_URL = 'https://bulevar-verde-api-739757275794.us-east4.run.app';
 const PLANTILLA_NOTIFICACION_DEBIDO_PROCESO = "NOTIFICACION_DEBIDO_PROCESO_PARQUEADERO_VISITANTES_V1";
 const TIPO_NOTIFICACION_DEBIDO_PROCESO = "DEBIDO_PROCESO_PARQUEADERO_VISITANTES";
 const ESTADO_MAESTRA_REQUIERE_VERIFICACION = "REQUIERE_VERIFICACION_CONSULTA_WEB";
@@ -5394,7 +5395,7 @@ function prepararResumenSancionesPorApartamento() {
   const rows = contextoPlanilla.rows;
   const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
 
-  const mapaCorreos = leerMapaCorreosApartamentos_();
+  const mapaCorreosLegado = leerMapaCorreosApartamentos_();
   const resumenPorApto = agruparSancionesPorApartamento_(registros);
 
   const hojaResumen = getOrCreateHojaResumenEnvio_(ss);
@@ -5421,7 +5422,7 @@ function prepararResumenSancionesPorApartamento() {
   const values = Object.keys(resumenPorApto)
     .map(function (aptoNorm) {
       const item = resumenPorApto[aptoNorm];
-      const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(item.apartamento)];
+      const correoInfo = obtenerCorreosNotificacionUnidad_(item.apartamento, mapaCorreosLegado);
 
       const cantidad = item.sanciones.length;
 
@@ -5440,8 +5441,10 @@ function prepararResumenSancionesPorApartamento() {
 
       let observaciones = "";
 
-      if (!correoInfo) {
+      if (!correoInfo.email) {
         observaciones = "No se encontró correo para este apartamento.";
+      } else if (correoInfo.fuente === "LEGADO") {
+        observaciones = "Correo obtenido de la hoja legada (pendiente de migrar a datos maestros).";
       }
 
       if (cantidadSinTipo > 0) {
@@ -5452,11 +5455,11 @@ function prepararResumenSancionesPorApartamento() {
         valorTotal: valorTotal,
         fila: [
           item.apartamento,
-          correoInfo ? correoInfo.email : "",
+          correoInfo.email,
           cantidad,
           "Moto: " + formatCOP_(VALOR_UNITARIO_SANCION_MOTO) + " / Carro: " + formatCOP_(VALOR_UNITARIO_SANCION_CARRO),
           valorTotal,
-          correoInfo ? "PENDIENTE" : "SIN_CORREO",
+          correoInfo.email ? "PENDIENTE" : "SIN_CORREO",
           now,
           detalle,
           observaciones
@@ -5619,6 +5622,80 @@ function leerMapaCorreosApartamentos_() {
   }
 
   return mapa;
+}
+
+/**
+ * Obtiene los correos de notificación para una unidad (apartamento) de sanciones.
+ * Prioriza los datos maestros consultando el API de Bulevar Verde (propietario(s) +
+ * residente principal vigente), y usa como fallback la hoja legada de correos
+ * cuando el API no devuelve datos o falla.
+ *
+ * @param {string} apto - Número de apartamento tal como aparece en la planilla.
+ * @param {Object} [mapaCorreosLegado] - Mapa cargado por leerMapaCorreosApartamentos_()
+ *        para evitar releer la hoja legada en cada llamada.
+ * @return {{email: string, fuente: string}} - Objeto con {email, fuente} donde fuente
+ *        es 'MASTER_DATA', 'LEGADO', o 'NINGUNO'.
+ */
+function obtenerCorreosNotificacionUnidad_(apto, mapaCorreosLegado) {
+  const apiToken = PropertiesService.getScriptProperties().getProperty('SANCIONES_API_TOKEN');
+  const apiEndpoint = API_BULEVAR_VERDE_BASE_URL + '/api/v1/notificaciones/correos-sanciones?apartamento=' + encodeURIComponent(apto);
+
+  const MAX_REINTENTOS = 2;
+  const DELAY_MS = 100;
+
+  for (let intento = 0; intento <= MAX_REINTENTOS; intento++) {
+    try {
+      // Agregar delay con backoff exponencial antes de cada reintento
+      if (intento > 0) {
+        Utilities.sleep(DELAY_MS * Math.pow(2, intento - 1));
+      }
+
+      const response = UrlFetchApp.fetch(apiEndpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer ' + (apiToken || ''),
+          'Accept': 'application/json'
+        },
+        muteHttpExceptions: true,
+        timeout: 15
+      });
+
+      if (response.getResponseCode() === 200) {
+        const data = JSON.parse(response.getContentText());
+        if (data.emails && data.emails.length > 0) {
+          Logger.log('obtenerCorreosNotificacionUnidad_: apto=' + apto + ' fuente=MASTER_DATA emails=' + data.emails.length);
+          return { email: data.emails.join(', '), fuente: 'MASTER_DATA' };
+        }
+        break;
+      } else if (response.getResponseCode() === 404) {
+        break;
+      } else if (response.getResponseCode() >= 500 && intento < MAX_REINTENTOS) {
+        Logger.log('obtenerCorreosNotificacionUnidad_: error HTTP ' + response.getResponseCode() + ' para apto ' + apto + ', reintentando...');
+        continue;
+      } else {
+        Logger.log('obtenerCorreosNotificacionUnidad_: error HTTP ' + response.getResponseCode() + ' para apto ' + apto);
+        break;
+      }
+    } catch (error) {
+      if (intento < MAX_REINTENTOS) {
+        Logger.log('obtenerCorreosNotificacionUnidad_: error consultando API para apto ' + apto + ' (intento ' + (intento + 1) + '): ' + error);
+        continue;
+      } else {
+        Logger.log('obtenerCorreosNotificacionUnidad_: error consultando API para apto ' + apto + ' (sin reintentos): ' + error);
+        break;
+      }
+    }
+  }
+
+  // Fallback a hoja legada
+  const legadoInfo = mapaCorreosLegado[normalizarApartamentoDesdeCorreo_(apto)];
+  if (legadoInfo && legadoInfo.email) {
+    Logger.log('obtenerCorreosNotificacionUnidad_: apto=' + apto + ' fuente=LEGADO');
+    return { email: legadoInfo.email, fuente: 'LEGADO' };
+  }
+
+  Logger.log('obtenerCorreosNotificacionUnidad_: apto=' + apto + ' fuente=NINGUNO');
+  return { email: '', fuente: 'NINGUNO' };
 }
 
 function getOrCreateHojaResumenEnvio_(ss) {
@@ -6109,7 +6186,7 @@ function prepararResumenNotificacionesDebidoProceso() {
   const rows = contextoPlanilla.rows;
 
   const registros = construirRegistrosNormalizados_(rows, IDX, richData, allData);
-  const mapaCorreos = leerMapaCorreosApartamentos_();
+  const mapaCorreosLegado = leerMapaCorreosApartamentos_();
   const resumenPorApto = agruparSancionesPorApartamento_(registros);
   const mapaNotificados = leerMapaApartamentosYaNotificadosDebidoProceso_(ss);
 
@@ -6143,7 +6220,7 @@ function prepararResumenNotificacionesDebidoProceso() {
       const item = resumenPorApto[aptoNorm];
       const apto = item.apartamento;
       const clave = construirClaveNotificacionDebidoProceso_(apto);
-      const correoInfo = mapaCorreos[normalizarApartamentoDesdeCorreo_(apto)];
+      const correoInfo = obtenerCorreosNotificacionUnidad_(apto, mapaCorreosLegado);
 
       const yaNotificado = !!mapaNotificados[clave];
 
@@ -6157,18 +6234,20 @@ function prepararResumenNotificacionesDebidoProceso() {
       let estado = "";
       let observaciones = "";
 
-      if (!correoInfo || !correoInfo.email) {
+      if (!correoInfo.email) {
         estado = "SIN_CORREO";
         observaciones = "No se encontró correo para este apartamento.";
       } else {
         estado = "PENDIENTE";
-        observaciones = "Pendiente por notificar por única vez.";
+        observaciones = correoInfo.fuente === "LEGADO"
+          ? "Pendiente por notificar por única vez. (Correo desde hoja legada)"
+          : "Pendiente por notificar por única vez.";
       }
 
       return [
         apto,
         normalizeApto_(apto),
-        correoInfo ? correoInfo.email : "",
+        correoInfo.email,
         item.sanciones.length,
         placasDetectadas,
         estado,
