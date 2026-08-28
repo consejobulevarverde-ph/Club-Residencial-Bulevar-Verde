@@ -322,6 +322,22 @@
       margin-bottom: .25rem
     }
 
+    .zona-group + .zona-group {
+      margin-top: 2rem
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-weight: 700;
+      color: var(--bv-primary);
+      font-size: 1.05rem;
+      padding-bottom: .5rem;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--bv-border)
+    }
+
     .flatpickr-calendar {
       background: #fff;
       box-shadow: 0 2px 8px rgba(44, 95, 45, .15) !important;
@@ -417,6 +433,35 @@
       opacity: .7
     }
 
+    .quick-date-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-top: .75rem
+    }
+
+    .quick-date-btn {
+      border: 1px solid var(--bv-border);
+      background: #fff;
+      color: var(--bv-primary);
+      border-radius: 999px;
+      padding: .4rem .8rem;
+      font-size: .82rem;
+      font-weight: 600;
+      transition: all .2s ease
+    }
+
+    .quick-date-btn:hover:not(:disabled) {
+      border-color: var(--bv-secondary);
+      background: var(--bv-light)
+    }
+
+    .quick-date-btn.active {
+      background: var(--bv-primary);
+      border-color: var(--bv-primary);
+      color: #fff
+    }
+
     .selection-summary {
       background: var(--bv-light);
       border-radius: .8rem;
@@ -437,6 +482,49 @@
       font-weight: 700;
       color: var(--bv-primary);
       font-size: 1.1rem
+    }
+
+    .costo-etiqueta {
+      display: inline-block;
+      margin-left: .75rem;
+      font-weight: 600;
+      color: var(--bv-primary);
+      font-size: .9rem
+    }
+
+    /* Información de pago modal */
+    .info-card {
+      background-color: var(--bv-light);
+      border-left: 4px solid var(--bv-primary);
+      padding: 20px;
+      margin-bottom: 30px;
+      border-radius: 5px;
+    }
+
+    .bank-card {
+      background: #fff;
+      border: 1px solid #d8ead9;
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .bank-card img {
+      display: block;
+      width: 100%;
+      max-width: 720px;
+      height: auto;
+      margin: 0 auto;
+      border-radius: 8px;
+      border: 1px solid #dee2e6;
+    }
+
+    .security-note {
+      background: #fff8e1;
+      border-left: 4px solid #f0ad4e;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: .88rem;
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
@@ -730,12 +818,13 @@
 
               <div class="mb-4">
                 <p class="small text-muted mb-3">Elige la zona común donde deseas hacer tu reserva:</p>
-                <div id="zonasContainer" class="row g-3 mb-4"></div>
+                <div id="zonasContainer" class="mb-4"></div>
               </div>
 
               <div class="mb-4">
                 <label class="form-label small">Fecha para consultar disponibilidad</label>
-                <input id="reservaFechaConsulta" type="date" class="form-control form-control-sm" required>
+                <input id="reservaFechaConsulta" type="date" class="form-control form-control-lg" required>
+                <div id="quickDateButtons" class="quick-date-buttons"></div>
                 <small class="text-muted d-block mt-1"><i class="bi bi-info-circle me-1"></i>Selecciona la fecha en la que deseas reservar la zona</small>
               </div>
 
@@ -774,15 +863,19 @@
 
               <div class="selection-summary mb-4">
                 <div class="row">
-                  <div class="col-md-4">
+                  <div class="col-md-6 col-lg-3">
                     <div class="label">Zona</div>
                     <div class="value" id="confirmarZonaNombre">-</div>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-md-6 col-lg-3">
                     <div class="label">Fecha</div>
                     <div class="value" id="confirmarFechaNombre">-</div>
                   </div>
-                  <div class="col-md-4">
+                  <div class="col-md-6 col-lg-3">
+                    <div class="label">Horario reservado</div>
+                    <div class="value" id="confirmarHorario">-</div>
+                  </div>
+                  <div class="col-md-6 col-lg-3">
                     <div class="label">Duración permitida</div>
                     <div class="value" id="confirmarDuracion">-</div>
                   </div>
@@ -790,30 +883,28 @@
               </div>
 
               <form id="confirmarReservaForm" class="row g-3">
-                <div class="col-md-6">
-                  <label class="form-label small">Hora de inicio</label>
-                  <input id="reservaInicio" type="time" class="form-control form-control-sm" required step="3600">
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label small">Hora de fin</label>
-                  <input id="reservaFin" type="time" class="form-control form-control-sm" required step="3600">
-                </div>
                 <div class="col-12" id="modalidadUsoDiv" style="display:none;">
-                  <label class="form-label small">Modalidad de uso</label>
+                  <label class="form-label">Modalidad de uso</label>
                   <div>
                     <div class="form-check">
                       <input class="form-check-input" type="radio" name="modalidadUso" id="modalidadOrganizado" value="ORGANIZADO_CON_INVITADOS" checked>
-                      <label class="form-check-label small" for="modalidadOrganizado">Organizado</label>
+                      <label class="form-check-label" for="modalidadOrganizado">
+                        <span>Organizado con invitados</span>
+                        <span class="costo-etiqueta" id="costoOrganizado"></span>
+                      </label>
                     </div>
                     <div class="form-check" id="modalidadRecreativaDiv" style="display:none;">
                       <input class="form-check-input" type="radio" name="modalidadUso" id="modalidadRecreativo" value="RECREATIVO_RESIDENTES">
-                      <label class="form-check-label small" for="modalidadRecreativo">Recreativo</label>
+                      <label class="form-check-label" for="modalidadRecreativo">
+                        <span>Recreativo (solo residentes)</span>
+                        <span class="costo-etiqueta" id="costoRecreativo"></span>
+                      </label>
                     </div>
                   </div>
                 </div>
                 <div class="col-12">
-                  <label class="form-label small">Observaciones (opcional)</label>
-                  <textarea id="reservaObservaciones" class="form-control form-control-sm" rows="2" placeholder="Detalles adicionales..."></textarea>
+                  <label class="form-label">Observaciones (opcional)</label>
+                  <textarea id="reservaObservaciones" class="form-control" rows="2" placeholder="Detalles adicionales..."></textarea>
                 </div>
                 <div class="col-12">
                   <div class="d-flex gap-2">
@@ -979,6 +1070,42 @@
               <button type="submit" class="btn btn-primary">Guardar cambios</button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment Info Modal -->
+    <div class="modal fade" id="paymentInfoModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-bank"></i> Información para el pago</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-4">
+              <div class="col-lg-7">
+                <div class="bank-card h-100">
+                  <p class="mb-2">Valor de la reserva: <strong id="paymentInfoPrice">—</strong></p>
+                  <img src="{{ "images/bancario.jpeg" | relURL }}" alt="Datos bancarios oficiales del Club Residencial Bulevar Verde" loading="lazy">
+                  <div class="security-note mt-3 text-start">
+                    <i class="bi bi-shield-check"></i>
+                    Verifica que la imagen corresponda a los datos bancarios oficiales antes de realizar el pago. La administración nunca solicitará consignaciones a cuentas personales.
+                  </div>
+                </div>
+              </div>
+              <div class="col-lg-5">
+                <div class="info-card h-100 mb-0">
+                  <h5><i class="bi bi-receipt"></i> Envío del comprobante</h5>
+                  <p>Envía el soporte indicando <strong>nombre, torre, apartamento, fecha y espacio reservado</strong>.</p>
+                  <p class="mb-2"><i class="bi bi-whatsapp"></i> <a href="https://wa.me/573222289066" target="_blank" rel="noopener noreferrer">WhatsApp +57 322 228 9066</a></p>
+                  <p class="mb-2"><i class="bi bi-envelope"></i> <a href="mailto:bulevarverdeadmon@gmail.com">bulevarverdeadmon@gmail.com</a></p>
+                  <p class="mb-0"><i class="bi bi-calendar-check"></i> Realiza el pago antes de la fecha de tu reserva; de lo contrario podría cancelarse.</p>
+                  <div id="paymentInfoDepositNote" class="alert alert-secondary mt-3 mb-0 d-none" role="note"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1630,8 +1757,24 @@
         zonas: [],
         zonaSeleccionada: null,
         fechaSeleccionada: null,
-        disponibilidad: []
+        disponibilidad: [],
+        horaInicioSeleccionada: null,
+        horaFinSeleccionada: null
       };
+
+      var misReservasData = [];
+
+      function mostrarInfoPago(reserva) {
+        $('paymentInfoPrice').textContent = formatCurrency(reserva.precio || 0);
+        var depositNote = $('paymentInfoDepositNote');
+        if (reserva.depositoGarantia > 0) {
+          depositNote.classList.remove('d-none');
+          depositNote.innerHTML = '<strong>Depósito de garantía:</strong> ' + formatCurrency(reserva.depositoGarantia) + '. Su devolución queda sujeta a la revisión del estado del espacio.';
+        } else {
+          depositNote.classList.add('d-none');
+        }
+        new bootstrap.Modal($('paymentInfoModal')).show();
+      }
 
       function cargarReservas() {
         reservasCargados = true;
@@ -1650,19 +1793,68 @@
           });
       }
 
+      function getTypeLabel(tipo) {
+        var labels = {
+          'SALON': { label: 'Salones Sociales', icon: '<i class="bi bi-building"></i>' },
+          'CANCHA': { label: 'Canchas Deportivas', icon: '⚽' }
+        };
+        return labels[tipo] || { label: tipo.charAt(0).toUpperCase() + tipo.slice(1).toLowerCase(), icon: '<i class="bi bi-geo-alt"></i>' };
+      }
+
       function renderZonasCards() {
-        var html = reservasData.zonas.map(function (zona) {
-          return '<div class="col-md-6 col-lg-4">' +
-            '<div class="card border zona-card available" data-id="' + esc(zona.id) + '" data-recreativa="' + (zona.soportaModalidadRecreativa ? 'true' : 'false') + '" style="cursor:pointer;">' +
-            '<div class="card-body text-center">' +
-            '<i class="bi bi-door-closed" style="font-size:2rem;color:var(--bv-primary);"></i>' +
-            '<h6 class="card-title mt-2">' + esc(zona.descripcion) + '</h6>' +
-            '<small class="text-muted">' + esc(zona.tipo) + '</small>' +
-            (zona.soportaModalidadRecreativa ? '<div class="small-note mt-2">Permite uso recreativo</div>' : '') +
-            '</div>' +
-            '</div>' +
-            '</div>';
-        }).join('');
+        var grouped = {};
+        var order = ['SALON', 'CANCHA'];
+
+        reservasData.zonas.forEach(function (zona) {
+          if (!grouped[zona.tipo]) grouped[zona.tipo] = [];
+          grouped[zona.tipo].push(zona);
+        });
+
+        var html = '';
+        order.forEach(function (tipo) {
+          if (grouped[tipo]) {
+            var typeInfo = getTypeLabel(tipo);
+            html += '<div class="zona-group">' +
+              '<div class="section-heading">' + typeInfo.icon + '<span>' + typeInfo.label + '</span></div>' +
+              '<div class="row g-3">';
+            grouped[tipo].forEach(function (zona) {
+              html += '<div class="col-md-6 col-lg-4">' +
+                '<div class="card border zona-card available" data-id="' + esc(zona.id) + '" data-recreativa="' + (zona.soportaModalidadRecreativa ? 'true' : 'false') + '" style="cursor:pointer;">' +
+                '<div class="card-body text-center">' +
+                '<i class="bi bi-door-closed" style="font-size:2rem;color:var(--bv-primary);"></i>' +
+                '<h6 class="card-title mt-2">' + esc(zona.descripcion) + '</h6>' +
+                '<small class="text-muted">' + esc(zona.tipo) + '</small>' +
+                (zona.soportaModalidadRecreativa ? '<div class="small-note mt-2">Permite uso recreativo</div>' : '') +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            });
+            html += '</div></div>';
+          }
+        });
+
+        Object.keys(grouped).forEach(function (tipo) {
+          if (order.indexOf(tipo) === -1) {
+            var typeInfo = getTypeLabel(tipo);
+            html += '<div class="zona-group">' +
+              '<div class="section-heading">' + typeInfo.icon + '<span>' + typeInfo.label + '</span></div>' +
+              '<div class="row g-3">';
+            grouped[tipo].forEach(function (zona) {
+              html += '<div class="col-md-6 col-lg-4">' +
+                '<div class="card border zona-card available" data-id="' + esc(zona.id) + '" data-recreativa="' + (zona.soportaModalidadRecreativa ? 'true' : 'false') + '" style="cursor:pointer;">' +
+                '<div class="card-body text-center">' +
+                '<i class="bi bi-door-closed" style="font-size:2rem;color:var(--bv-primary);"></i>' +
+                '<h6 class="card-title mt-2">' + esc(zona.descripcion) + '</h6>' +
+                '<small class="text-muted">' + esc(zona.tipo) + '</small>' +
+                (zona.soportaModalidadRecreativa ? '<div class="small-note mt-2">Permite uso recreativo</div>' : '') +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            });
+            html += '</div></div>';
+          }
+        });
+
         $('zonasContainer').innerHTML = html;
       }
 
@@ -1688,6 +1880,110 @@
         return { minDate: minDate, maxDate: maxDate };
       }
 
+      function formatDateISO(date) {
+        var y = date.getFullYear();
+        var m = String(date.getMonth() + 1).padStart(2, '0');
+        var d = String(date.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + d;
+      }
+
+      function parseLocalDateString(dateStr) {
+        var parts = dateStr.split('-');
+        return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      }
+
+      function construirFechasRapidas(minDate, maxDate) {
+        var hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        var candidates = [];
+
+        // Lo antes posible (minDate)
+        var earliest = new Date(minDate);
+        earliest.setHours(0, 0, 0, 0);
+        if (earliest <= maxDate) {
+          candidates.push({ date: earliest, label: 'Lo antes posible' });
+        }
+
+        // Mañana (minDate + 1 día, si está en rango)
+        var tomorrow = new Date(earliest);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        if (tomorrow <= maxDate) {
+          var isMañana = (tomorrow.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24) === 1;
+          var label = isMañana ? 'Mañana' : tomorrow.toLocaleDateString('es-CO', { weekday: 'short' });
+          candidates.push({ date: tomorrow, label: label });
+        }
+
+        // Próximo sábado
+        var nextSat = new Date(minDate);
+        var dayOfWeek = nextSat.getDay();
+        var daysUntilSat = dayOfWeek === 6 ? 0 : (6 - dayOfWeek + 7) % 7;
+        if (daysUntilSat === 0 && nextSat > minDate) daysUntilSat = 7;
+        nextSat.setDate(nextSat.getDate() + daysUntilSat);
+        nextSat.setHours(0, 0, 0, 0);
+        if (nextSat <= maxDate && candidates.length < 4) {
+          candidates.push({ date: nextSat, label: 'Este sábado' });
+        }
+
+        // Próximo domingo
+        var nextSun = new Date(nextSat);
+        nextSun.setDate(nextSun.getDate() + 1);
+        nextSun.setHours(0, 0, 0, 0);
+        if (nextSun <= maxDate && candidates.length < 4) {
+          candidates.push({ date: nextSun, label: 'Este domingo' });
+        }
+
+        return candidates.slice(0, 4);
+      }
+
+      function renderQuickDateButtons(zona) {
+        var dates = calcularFechasAnticipacion(zona);
+        var candidates = construirFechasRapidas(dates.minDate, dates.maxDate);
+        var container = $('quickDateButtons');
+        container.innerHTML = '';
+        candidates.forEach(function (c) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'quick-date-btn';
+          btn.setAttribute('data-date', formatDateISO(c.date));
+          btn.textContent = c.label;
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            window.reservaFechaConsultaPicker.setDate(c.date, true);
+          });
+          container.appendChild(btn);
+        });
+      }
+
+      function formatCurrency(value) {
+        if (value === null || value === undefined || value === 0) return 'Sin costo';
+        return new Intl.NumberFormat('es-CO', {
+          style: 'currency',
+          currency: 'COP',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(value);
+      }
+
+      function actualizarCostosModalidad(zona) {
+        var costoOrganizado = zona.costoReserva || 0;
+        var costoRecreativo = zona.costoRecreativo || 0;
+        var labelOrganizado = ' — ' + formatCurrency(costoOrganizado);
+        var labelRecreativo = ' — ' + formatCurrency(costoRecreativo);
+        $('costoOrganizado').textContent = labelOrganizado;
+        $('costoRecreativo').textContent = labelRecreativo;
+      }
+
+      function resetearCostosModalidad() {
+        $('costoOrganizado').textContent = '';
+        $('costoRecreativo').textContent = '';
+      }
+
+      function resetearHorarioSeleccionado() {
+        reservasData.horaInicioSeleccionada = null;
+        reservasData.horaFinSeleccionada = null;
+        $('confirmarHorario').textContent = '-';
+      }
+
       function initFlatpickr(zona) {
         var dates = calcularFechasAnticipacion(zona);
         if (window.reservaFechaConsultaPicker) {
@@ -1699,7 +1995,19 @@
           locale: 'es',
           mode: 'single',
           dateFormat: 'Y-m-d',
-          disableMobile: true
+          disableMobile: true,
+          onChange: function (selectedDates) {
+            var quickBtns = document.querySelectorAll('.quick-date-btn');
+            var selectedISO = selectedDates.length > 0 ? formatDateISO(selectedDates[0]) : null;
+            quickBtns.forEach(function (btn) {
+              var btnDate = btn.getAttribute('data-date');
+              if (btnDate === selectedISO) {
+                btn.classList.add('active');
+              } else {
+                btn.classList.remove('active');
+              }
+            });
+          }
         });
       }
 
@@ -1711,6 +2019,7 @@
         reservasData.zonaSeleccionada = card.dataset.id;
         var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
         initFlatpickr(zona);
+        renderQuickDateButtons(zona);
         var esRecreativa = card.dataset.recreativa === 'true';
         $('modalidadUsoDiv').style.display = 'block';
         $('modalidadRecreativaDiv').style.display = esRecreativa ? 'block' : 'none';
@@ -1721,7 +2030,7 @@
         if (!reservasData.zonaSeleccionada) { alertMessage('Selecciona una zona.'); return; }
         if (!$('reservaFechaConsulta').value) { alertMessage('Selecciona una fecha.'); return; }
 
-        reservasData.fechaSeleccionada = new Date($('reservaFechaConsulta').value);
+        reservasData.fechaSeleccionada = parseLocalDateString($('reservaFechaConsulta').value);
         var desde = new Date(reservasData.fechaSeleccionada);
         desde.setHours(0, 0, 0, 0);
         var hasta = new Date(reservasData.fechaSeleccionada);
@@ -1741,6 +2050,7 @@
             $('confirmarFechaNombre').textContent = fechaFormato;
             $('confirmarDuracion').textContent = zona.duracionMinHoras + 'h – ' + zona.duracionMaxHoras + 'h';
 
+            actualizarCostosModalidad(zona);
             renderDisponibilidad();
             mostrarStep(2);
           })
@@ -1756,12 +2066,6 @@
         var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
         var horaInicio = zona.horaApertura.split(':');
         var horaFin = zona.horaCierre.split(':');
-
-        // Establecer min/max de los inputs de hora según el horario de la zona
-        $('reservaInicio').min = zona.horaApertura;
-        $('reservaInicio').max = zona.horaCierre;
-        $('reservaFin').min = zona.horaApertura;
-        $('reservaFin').max = zona.horaCierre;
 
         var html = '<p class="small mb-0 text-muted">Horarios disponibles (mínimo ' + zona.duracionMinHoras + 'h):</p><div style="margin-top:0.75rem;">';
         var slots = [];
@@ -1784,9 +2088,12 @@
 
           var startStr = slotStart.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
           var endStr = slotEnd.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+          var start24h = String(slotStart.getHours()).padStart(2,'0') + ':' + String(slotStart.getMinutes()).padStart(2,'0');
+          var end24h = String(slotEnd.getHours()).padStart(2,'0') + ':' + String(slotEnd.getMinutes()).padStart(2,'0');
+
           var slotHTML = '<button type="button" class="btn btn-sm ' +
             (isOccupied ? 'btn-danger disabled' : 'btn-outline-success slot-disponible') +
-            '" ' + (isOccupied ? 'disabled' : 'data-hora="' + startStr + '" data-hora-fin="' + endStr + '"') +
+            '" ' + (isOccupied ? 'disabled' : 'data-hora="' + start24h + '" data-hora-fin="' + end24h + '" data-hora-label="' + startStr + '" data-hora-fin-label="' + endStr + '"') +
             '>' +
             startStr + ' - ' + endStr +
             (isOccupied ? '<br><small>(Ocupado)</small>' : '') +
@@ -1805,14 +2112,15 @@
 
         document.querySelectorAll('.slot-disponible').forEach(function (btn) {
           btn.addEventListener('click', function () {
-            $('reservaInicio').value = this.dataset.hora;
-            $('reservaFin').value = this.dataset.horaFin;
+            reservasData.horaInicioSeleccionada = this.dataset.hora;
+            reservasData.horaFinSeleccionada = this.dataset.horaFin;
+            $('confirmarHorario').textContent = this.dataset.horaLabel + ' – ' + this.dataset.horaFinLabel;
             mostrarStep(3);
           });
         });
       }
 
-      $('volverPaso1').addEventListener('click', function () { mostrarStep(1); });
+      $('volverPaso1').addEventListener('click', function () { resetearCostosModalidad(); resetearHorarioSeleccionado(); mostrarStep(1); });
       $('irPaso3').addEventListener('click', function () { mostrarStep(3); });
       $('volverPaso2').addEventListener('click', function () { mostrarStep(2); });
 
@@ -1831,11 +2139,10 @@
         event.preventDefault();
         clearAlert();
 
-        var horaInicio = $('reservaInicio').value;
-        var horaFin = $('reservaFin').value;
+        var horaInicio = reservasData.horaInicioSeleccionada;
+        var horaFin = reservasData.horaFinSeleccionada;
 
-        if (!horaInicio) { alertMessage('Selecciona hora de inicio.'); return; }
-        if (!horaFin) { alertMessage('Selecciona hora de fin.'); return; }
+        if (!horaInicio || !horaFin) { alertMessage('Selecciona un horario disponible en el paso anterior.'); return; }
 
         var start = new Date(reservasData.fechaSeleccionada);
         var [hI, mI] = horaInicio.split(':');
@@ -1864,10 +2171,18 @@
           mostrarStep(1);
           $('confirmarReservaForm').reset();
           $('reservaFechaConsulta').value = '';
+          $('quickDateButtons').innerHTML = '';
+          resetearCostosModalidad();
+          resetearHorarioSeleccionado();
           document.querySelectorAll('.zona-card').forEach(function (c) { c.classList.remove('selected'); });
           reservasData.zonaSeleccionada = null;
           reservasData.fechaSeleccionada = null;
-          cargarMisReservas();
+          cargarMisReservas().then(function () {
+            var creada = misReservasData.find(function (r) { return r.id === result.data.id; });
+            if (creada && creada.requierePago && creada.estadoPago === 'PENDIENTE') {
+              mostrarInfoPago(creada);
+            }
+          });
         }).catch(function (error) {
           alertMessage(error.message);
         }).finally(function () {
@@ -1878,10 +2193,11 @@
       function cargarMisReservas() {
         $('misReservasLoading').style.display = 'block';
         $('misReservasList').innerHTML = '';
-        apiFetch('/reservas')
+        return apiFetch('/reservas')
           .then(function (result) {
             $('misReservasLoading').style.display = 'none';
             var reservas = result.data || [];
+            misReservasData = reservas;
             if (reservas.length === 0) {
               $('misReservasList').innerHTML = '<p class="text-muted mb-0">No tienes reservas registradas.</p>';
               return;
@@ -1906,6 +2222,7 @@
             return badges[r.estado] || '<span class="badge text-bg-secondary">' + esc(r.estado) + '</span>';
           })();
           var puedeCancel = (r.estado === 'PENDIENTE' || r.estado === 'CONFIRMADA');
+          var necesitaPago = r.requierePago && r.estadoPago === 'PENDIENTE';
           var inicio = new Date(r.fechaHoraInicio).toLocaleString('es-CO', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
           var fin = new Date(r.fechaHoraFin).toLocaleString('es-CO', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
           return '<div class="repeat-row d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">' +
@@ -1913,6 +2230,7 @@
             '<strong>' + esc(r.zonaComun.descripcion) + '</strong>' +
             '<div class="small-note">' + inicio + ' hasta ' + fin + '</div>' +
             '<div class="small-note">' + estadoBadge + '</div>' +
+            (necesitaPago ? '<button type="button" class="btn btn-link btn-sm ps-0 ver-pago-reserva" data-id="' + esc(r.id) + '">Ver instrucciones de pago</button>' : '') +
             '</div>' +
             (puedeCancel ? '<button type="button" class="btn btn-outline-danger btn-sm cancelar-reserva" data-id="' + esc(r.id) + '">Cancelar</button>' : '') +
             '</div>';
@@ -1920,6 +2238,14 @@
       }
 
       document.addEventListener('click', function (event) {
+        var pagoBtn = event.target.closest('.ver-pago-reserva');
+        if (pagoBtn) {
+          var reservaId = pagoBtn.dataset.id;
+          var reserva = misReservasData.find(function (r) { return r.id === reservaId; });
+          if (reserva) mostrarInfoPago(reserva);
+          return;
+        }
+
         var button = event.target.closest('.cancelar-reserva');
         if (!button) return;
         if (!confirm('¿Estás seguro de que deseas cancelar esta reserva?')) return;
