@@ -1810,12 +1810,21 @@
           grouped[zona.tipo].push(zona);
         });
 
-        var html = '';
+        var html = '<div class="accordion" id="zonasAccordion">';
+        var itemIndex = 0;
+
         order.forEach(function (tipo) {
           if (grouped[tipo]) {
             var typeInfo = getTypeLabel(tipo);
-            html += '<div class="zona-group">' +
-              '<div class="section-heading">' + typeInfo.icon + '<span>' + typeInfo.label + '</span></div>' +
+            var collapseId = 'zonas-' + tipo.toLowerCase() + '-' + itemIndex;
+            html += '<div class="accordion-item">' +
+              '<h2 class="accordion-header">' +
+              '<button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">' +
+              typeInfo.icon + ' ' + typeInfo.label +
+              '</button>' +
+              '</h2>' +
+              '<div id="' + collapseId + '" class="accordion-collapse collapse" data-bs-parent="#zonasAccordion">' +
+              '<div class="accordion-body p-3">' +
               '<div class="row g-3">';
             grouped[tipo].forEach(function (zona) {
               html += '<div class="col-md-6 col-lg-4">' +
@@ -1829,15 +1838,23 @@
                 '</div>' +
                 '</div>';
             });
-            html += '</div></div>';
+            html += '</div></div></div></div>';
+            itemIndex++;
           }
         });
 
         Object.keys(grouped).forEach(function (tipo) {
           if (order.indexOf(tipo) === -1) {
             var typeInfo = getTypeLabel(tipo);
-            html += '<div class="zona-group">' +
-              '<div class="section-heading">' + typeInfo.icon + '<span>' + typeInfo.label + '</span></div>' +
+            var collapseId = 'zonas-' + tipo.toLowerCase() + '-' + itemIndex;
+            html += '<div class="accordion-item">' +
+              '<h2 class="accordion-header">' +
+              '<button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">' +
+              typeInfo.icon + ' ' + typeInfo.label +
+              '</button>' +
+              '</h2>' +
+              '<div id="' + collapseId + '" class="accordion-collapse collapse" data-bs-parent="#zonasAccordion">' +
+              '<div class="accordion-body p-3">' +
               '<div class="row g-3">';
             grouped[tipo].forEach(function (zona) {
               html += '<div class="col-md-6 col-lg-4">' +
@@ -1851,10 +1868,12 @@
                 '</div>' +
                 '</div>';
             });
-            html += '</div></div>';
+            html += '</div></div></div></div>';
+            itemIndex++;
           }
         });
 
+        html += '</div>';
         $('zonasContainer').innerHTML = html;
       }
 
