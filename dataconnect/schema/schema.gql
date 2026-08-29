@@ -25,6 +25,21 @@ type Persona @table(name: "personas", singular: "persona", plural: "personas", k
   fechaActualizacion: Timestamp! @default(expr: "request.time")
 }
 
+type Colaborador
+  @table(name: "colaboradores", singular: "colaborador", plural: "colaboradores", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  tipoDocumento: String!
+  numeroDocumento: String! @unique
+  nombreCompleto: String!
+  rol: String!
+  correo: String
+  telefono: String
+  firebaseUid: String @unique
+  activo: Boolean! @default(value: true)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
 type VinculoUnidadPersona
   @table(
     name: "vinculo_unidad_persona"

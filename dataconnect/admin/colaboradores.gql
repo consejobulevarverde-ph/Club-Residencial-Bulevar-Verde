@@ -1,0 +1,130 @@
+# Operaciones CRUD para el personal (vigilantes, aseadores, etc.) que colabora con la copropiedad.
+# La API restringe las operaciones de gestión al rol administrador/superadmin.
+# El login sin sesión Firebase previa usa la única operación NO_ACCESS.
+
+query ListarColaboradores(
+  $limit: Int!
+  $offset: Int!
+  $rol: String
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin.") {
+  colaboradores(
+    where: { rol: { eq: $rol } }
+    limit: $limit
+    offset: $offset
+    orderBy: [{ nombreCompleto: ASC }]
+  ) {
+    id
+    tipoDocumento
+    numeroDocumento
+    nombreCompleto
+    rol
+    correo
+    telefono
+    firebaseUid
+    activo
+    fechaCreacion
+    fechaActualizacion
+  }
+}
+
+query ObtenerColaborador(
+  $id: UUID!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin.") {
+  colaborador(id: $id) {
+    id
+    tipoDocumento
+    numeroDocumento
+    nombreCompleto
+    rol
+    correo
+    telefono
+    firebaseUid
+    activo
+  }
+}
+
+query BuscarColaboradorPorDocumento(
+  $numeroDocumento: String!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin.") {
+  colaboradores(where: { numeroDocumento: { eq: $numeroDocumento } }, limit: 1) {
+    id
+    nombreCompleto
+    rol
+    activo
+  }
+}
+
+mutation CrearColaborador(
+  $input: Colaborador_Data!
+    @allow(
+      fields: """
+        tipoDocumento
+        numeroDocumento
+        nombreCompleto
+        rol
+        correo
+        telefono
+        firebaseUid
+        activo
+      """
+    )
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin.")
+@transaction {
+  colaborador_insert(data: $input)
+}
+
+mutation ActualizarColaborador(
+  $id: UUID!
+  $tipoDocumento: String
+  $numeroDocumento: String
+  $nombreCompleto: String
+  $rol: String
+  $correo: String
+  $telefono: String
+  $activo: Boolean
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin.")
+@transaction {
+  colaborador_update(
+    id: $id
+    data: {
+      tipoDocumento: $tipoDocumento
+      numeroDocumento: $numeroDocumento
+      nombreCompleto: $nombreCompleto
+      rol: $rol
+      correo: $correo
+      telefono: $telefono
+      activo: $activo
+    }
+  )
+}
+
+mutation ActualizarFirebaseUidColaborador(
+  $id: UUID!
+  $firebaseUid: String
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin.")
+@transaction {
+  colaborador_update(id: $id, data: { firebaseUid: $firebaseUid })
+}
+
+# ============ NO_ACCESS: login sin sesión Firebase previa ============
+
+query BuscarColaboradorPorDocumentoAdmin(
+  $numeroDocumento: String!
+)
+@auth(level: NO_ACCESS) {
+  colaboradores(
+    where: { numeroDocumento: { eq: $numeroDocumento }, activo: { eq: true }, rol: { eq: "VIGILANTE" } }
+    limit: 1
+  ) {
+    id
+    nombreCompleto
+    firebaseUid
+    activo
+  }
+}

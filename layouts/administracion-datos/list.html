@@ -294,6 +294,9 @@
           <button id="showReservas" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-calendar-check me-1"></i>Reservas
           </button>
+          <button id="showPersonal" type="button" class="btn btn-outline-success mode-button">
+            <i class="bi bi-person-badge me-1"></i>Personal
+          </button>
           <button id="btnImportarCartera" class="btn btn-success">
             <i class="bi bi-file-earmark-excel me-1"></i>Importar Cartera
           </button>
@@ -551,6 +554,53 @@
           </div>
         </section>
       </section>
+
+      <section id="personalView" class="hidden">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <h3 class="section-title h5 mb-0">Personal de la copropiedad</h3>
+          <select id="personalFiltroRol" class="form-select form-select-sm" style="max-width:200px">
+            <option value="">Todos los roles</option>
+            <option value="VIGILANTE">Vigilantes</option>
+            <option value="ASEADOR">Aseadores</option>
+          </select>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-lg-7">
+            <div class="surface p-4">
+              <div id="personalTabla">Cargando…</div>
+            </div>
+          </div>
+          <div class="col-lg-5">
+            <div class="surface p-4">
+              <h3 class="section-title h6" id="personalFormTitulo">Agregar personal</h3>
+              <form id="personalForm" class="row g-2">
+                <input type="hidden" id="personalId" value="">
+                <div class="col-md-6"><label class="form-label small">Tipo doc.</label>
+                  <input id="personalTipoDocumento" class="form-control form-control-sm text-uppercase" value="CC" required></div>
+                <div class="col-md-6"><label class="form-label small">Número doc.</label>
+                  <input id="personalNumeroDocumento" class="form-control form-control-sm text-uppercase" required></div>
+                <div class="col-12"><label class="form-label small">Nombre completo</label>
+                  <input id="personalNombreCompleto" class="form-control form-control-sm text-uppercase" required></div>
+                <div class="col-md-6"><label class="form-label small">Rol</label>
+                  <select id="personalRol" class="form-select form-select-sm" required>
+                    <option value="VIGILANTE">VIGILANTE</option>
+                    <option value="ASEADOR">ASEADOR</option>
+                  </select></div>
+                <div class="col-md-6"><label class="form-label small">Teléfono (opcional)</label>
+                  <input id="personalTelefono" class="form-control form-control-sm"></div>
+                <div class="col-12"><label class="form-label small">Correo (opcional)</label>
+                  <input id="personalCorreo" type="email" class="form-control form-control-sm"></div>
+                <div class="col-12 d-flex gap-2">
+                  <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                  <button type="button" id="personalCancelarEdicion" class="btn btn-outline-secondary btn-sm hidden">Cancelar edición</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
 
     <!-- Modal de importación de cartera -->
     <div class="modal fade" id="modalImportarCartera" tabindex="-1">
@@ -2507,12 +2557,15 @@
         var isDashboard = name === 'dashboard';
         var isConvivencia = name === 'convivencia';
         var isReservas = name === 'reservas';
+        var isPersonal = name === 'personal';
         $('dashboardView').classList.toggle('hidden', !isDashboard);
         $('convivenciaView').classList.toggle('hidden', !isConvivencia);
         $('reservasView').classList.toggle('hidden', !isReservas);
+        $('personalView').classList.toggle('hidden', !isPersonal);
         $('showDashboard').classList.toggle('active', isDashboard);
         $('showConvivencia').classList.toggle('active', isConvivencia);
         $('showReservas').classList.toggle('active', isReservas);
+        $('showPersonal').classList.toggle('active', isPersonal);
       }
 
       $('showDashboard').addEventListener('click', function () { mode('dashboard'); });
@@ -2525,6 +2578,108 @@
           cargarReservasCatalogo();
           reservasCargada = true;
         }
+      });
+
+      var personalCargado = false;
+      $('showPersonal').addEventListener('click', function () {
+        mode('personal');
+        if (!personalCargado) { loadPersonal(); personalCargado = true; }
+      });
+
+      // ===== PERSONAL CRUD =====
+
+      function loadPersonal() {
+        return withIdToken(function (idToken) {
+          var rol = $('personalFiltroRol').value;
+          var qs = rol ? ('?rol=' + encodeURIComponent(rol)) : '';
+          return apiFetch('/api/v1/personal' + qs, idToken).then(function (resp) {
+            renderPersonalTabla(resp.data.colaboradores || resp.data);
+          });
+        }).catch(function (error) { msg(error.message); });
+      }
+
+      function renderPersonalTabla(items) {
+        if (!items.length) { $('personalTabla').innerHTML = '<p class="text-muted">Sin registros.</p>'; return; }
+        var rows = items.map(function (c) {
+          return '<tr>' +
+            '<td>' + esc(c.nombreCompleto) + '</td>' +
+            '<td>' + esc(c.rol) + '</td>' +
+            '<td>' + esc(c.tipoDocumento) + ' ' + esc(c.numeroDocumento) + '</td>' +
+            '<td>' + (c.activo ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>') + '</td>' +
+            '<td class="text-end">' +
+            '<button class="btn btn-sm btn-outline-primary personal-editar" data-id="' + esc(c.id) + '">Editar</button> ' +
+            '<button class="btn btn-sm btn-outline-danger personal-desactivar" data-id="' + esc(c.id) + '" ' + (c.activo ? '' : 'disabled') + '>Desactivar</button>' +
+            '</td></tr>';
+        }).join('');
+        $('personalTabla').innerHTML = '<table class="table table-sm"><thead><tr><th>Nombre</th><th>Rol</th><th>Documento</th><th>Estado</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      }
+
+      $('personalFiltroRol').addEventListener('change', loadPersonal);
+
+      $('personalForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        hideMsg();
+        var id = $('personalId').value;
+        var payload = {
+          tipoDocumento: $('personalTipoDocumento').value.trim(),
+          numeroDocumento: $('personalNumeroDocumento').value.trim(),
+          nombreCompleto: $('personalNombreCompleto').value.trim(),
+          rol: $('personalRol').value,
+          correo: $('personalCorreo').value.trim() || undefined,
+          telefono: $('personalTelefono').value.trim() || undefined
+        };
+        var button = event.target.querySelector('button[type="submit"]');
+        busy(button, true, 'Guardando…');
+        withIdToken(function (idToken) {
+          return id
+            ? apiFetch('/api/v1/personal/' + id, idToken, { method: 'PATCH', body: payload })
+            : apiFetch('/api/v1/personal', idToken, { method: 'POST', body: payload });
+        }).then(function () {
+          msg('Personal guardado.', 'success');
+          $('personalForm').reset();
+          $('personalId').value = '';
+          $('personalCancelarEdicion').classList.add('hidden');
+          loadPersonal();
+        }).catch(function (error) { msg(error.message); })
+          .finally(function () { busy(button, false, 'Guardar'); });
+      });
+
+      $('personalTabla').addEventListener('click', function (event) {
+        var editBtn = event.target.closest('.personal-editar');
+        if (editBtn) { cargarPersonalEnFormulario(editBtn.dataset.id); return; }
+        var delBtn = event.target.closest('.personal-desactivar');
+        if (delBtn) {
+          if (!confirm('¿Desactivar este miembro del personal?')) return;
+          var button = delBtn;
+          busy(button, true, 'Desactivando…');
+          withIdToken(function (idToken) {
+            return apiFetch('/api/v1/personal/' + delBtn.dataset.id, idToken, { method: 'DELETE' });
+          }).then(function () { msg('Personal desactivado.', 'success'); loadPersonal(); })
+            .catch(function (error) { msg(error.message); })
+            .finally(function () { busy(button, false, 'Desactivar'); });
+        }
+      });
+
+      function cargarPersonalEnFormulario(id) {
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/personal/' + id, idToken);
+        }).then(function (resp) {
+          var c = resp.data;
+          $('personalId').value = c.id;
+          $('personalTipoDocumento').value = c.tipoDocumento;
+          $('personalNumeroDocumento').value = c.numeroDocumento;
+          $('personalNombreCompleto').value = c.nombreCompleto;
+          $('personalRol').value = c.rol;
+          $('personalCorreo').value = c.correo || '';
+          $('personalTelefono').value = c.telefono || '';
+          $('personalCancelarEdicion').classList.remove('hidden');
+        }).catch(function (error) { msg(error.message); });
+      }
+
+      $('personalCancelarEdicion').addEventListener('click', function () {
+        $('personalForm').reset();
+        $('personalId').value = '';
+        this.classList.add('hidden');
       });
 
       // ===== IMPORTACIÓN DE CARTERA =====
