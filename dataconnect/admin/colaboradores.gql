@@ -5,11 +5,11 @@
 query ListarColaboradores(
   $limit: Int!
   $offset: Int!
-  $rol: String
+  $roles: [String!]
 )
 @auth(level: USER, insecureReason: "La API restringe este endpoint a administrador/superadmin.") {
   colaboradores(
-    where: { rol: { eq: $rol } }
+    where: { rol: { in: $roles } }
     limit: $limit
     offset: $offset
     orderBy: [{ nombreCompleto: ASC }]
