@@ -2,15 +2,42 @@
  * SISTEMA DE GESTIÓN DE SANCIONES - PARQUEADERO VISITANTES
  * Club Residencial Bulevar Verde
  *
- * INSTRUCCIONES DE EJECUCIÓN:
- * 1. Ejecutar la función: normalizarTodoElArchivoSanciones()
- *    - Esta función normaliza placas, corrige inconsistencias y crea/actualiza la hoja maestra
- *    - Presta atención al log y realiza las correcciones manuales necesarias
- * 2. Ejecutar las veces necesarias la normalización hasta estar conforme con los resultados
- * 3. Preparar el resumen de notificaciones de debido proceso:
- *    Ejecutar: prepararResumenNotificacionesDebidoProceso()
- * 4. Enviar notificaciones de debido proceso:
- *    Ejecutar: enviarNotificacionesDebidoProcesoDesdeResumen()
+ * INSTRUCCIONES DE EJECUCIÓN - INICIO DEL MES:
+ * ═══════════════════════════════════════════════════════════
+ *
+ * GENERACIÓN DE IMÁGENES (Solo se ejecuta UNA VEZ al inicio del mes):
+ * ───────────────────────────────────────────────────────────────────
+ * 1. Ejecutar PRIMERO: prepararIndiceImagenesSanciones()
+ *    - Indexa todos los archivos FOTO/FIRMA necesarios desde la carpeta de Dorchester
+ *    - Se ejecuta automáticamente por lotes
+ *    - Estado inicial: "EN_PROCESO" → estado final: "COMPLETADO"
+ *    - Monitorear: mostrarEstadoPreparacionIndiceImagenesSanciones()
+ *    - Tiempo estimado: 5-15 minutos según cantidad de archivos
+ *
+ * 2. Una vez COMPLETADO el índice, ejecutar: generarImagenes()
+ *    - Crea enlaces permanentes a los archivos originales de Dorchester
+ *    - No crea copias, solo referencias (URLs públicas permanentes)
+ *    - Se ejecuta automáticamente por lotes
+ *    - Monitorear: mostrarProgresoGeneracionImagenes()
+ *    - Tiempo estimado: 10-30 minutos según cantidad de sanciones
+ *
+ * NORMALIZACIÓN DE DATOS (Ejecutar después de generar imágenes):
+ * ─────────────────────────────────────────────────────────────
+ * 3. Ejecutar: normalizarTodoElArchivoSanciones()
+ *    - Normaliza placas, corrige aptos, define tipos de vehículo
+ *    - Crea/actualiza la hoja maestra de sanciones
+ *    - Presta atención al log y realiza correcciones manuales si es necesario
+ * 4. Ejecutar las veces necesarias hasta estar conforme con resultados
+ *
+ * NOTIFICACIONES DE DEBIDO PROCESO (Diaria a las 10:00 AM):
+ * ──────────────────────────────────────────────────────────
+ * 5. Preparar: prepararResumenNotificacionesDebidoProceso()
+ * 6. Enviar: enviarNotificacionesDebidoProcesoDesdeResumen()
+ *
+ * REINICIO (Si algo falla):
+ * ─────────────────────────
+ * - Solo generar imágenes: reiniciarSoloGeneracionImagenes()
+ * - Todo: reiniciarGeneracionImagenes()
  *
  * ═══════════════════════════════════════════════════════════
  *
@@ -93,6 +120,7 @@ const PREPARAR_INDICE_TIEMPO_MAX_MS = 4 * 60 * 1000;
 const PREPARAR_INDICE_MARGEN_CORTE_MS = 20 * 1000;
 const PREPARAR_INDICE_LOG_CADA_ARCHIVOS = 500;
 const PREPARAR_INDICE_TRIGGER_MS = 30 * 1000;
+const PREPARAR_INDICE_MESES_ANTIGUEDAD_BUFFER = 1;
 const FUNCION_TRIGGER_GENERAR_IMAGENES = 'continuarGeneracionImagenes_';
 const FUNCION_TRIGGER_PREPARAR_INDICE =
   'continuarPreparacionIndiceImagenesSanciones_';
@@ -1426,9 +1454,10 @@ function procesarLoteIndiceImagenesSanciones_() {
     const continuationToken = safeTrim_(
       props.getProperty(PROP_PREPARAR_INDICE_TOKEN)
     );
+    const consultaFecha = construirConsultaFechaIndiceImagenes_();
     const iterator = continuationToken
       ? DriveApp.continueFileIterator(continuationToken)
-      : sourceFolder.getFiles();
+      : sourceFolder.searchFiles(consultaFecha);
     const updated = new Date().toISOString();
     const rows = [];
     const nombresLote = {};
@@ -1446,6 +1475,7 @@ function procesarLoteIndiceImagenesSanciones_() {
 
     logGeneracionImagenes_('Inicio de lote del indice filtrado', {
       reanudadoConToken: !!continuationToken,
+      consultaFecha: continuationToken ? '(reanudado, no aplica)' : consultaFecha,
       archivosNecesarios: necesarios.total,
       archivosEncontrados: Object.keys(indexados).length,
       archivosPendientes: pendientesRestantes,
@@ -2000,6 +2030,21 @@ function construirMapaPendientesIndiceImagenesSanciones_(
   return pendientes;
 }
 
+function construirConsultaFechaIndiceImagenes_() {
+  const fecha = new Date();
+  fecha.setDate(1);
+  fecha.setMonth(fecha.getMonth() - PREPARAR_INDICE_MESES_ANTIGUEDAD_BUFFER);
+  fecha.setHours(0, 0, 0, 0);
+
+  const fechaTexto = Utilities.formatDate(
+    fecha,
+    Session.getScriptTimeZone(),
+    "yyyy-MM-dd'T'HH:mm:ss"
+  );
+
+  return 'modifiedDate > "' + fechaTexto + '" and trashed = false';
+}
+
 function validarCarpetaOrigenImagenesPublica_() {
   const folder = DriveApp.getFolderById(
     FOLDER_ID_IMAGENES_SANCIONES_ORIGEN
@@ -2139,10 +2184,11 @@ function obtenerUrlImagenSancionDesdeIndice_(recordId, mediaType) {
  *
  * Optimizaciones:
  * 1. Solo se indexan los nombres FOTO/FIRMA realmente usados por PLANILLA.
- * 2. El recorrido de Drive se detiene apenas encuentra todas las referencias.
- * 3. Durante generarImagenes() no se llama a Drive por cada FOTO/FIRMA.
- * 4. Cada ejecucion procesa hasta 500 filas y guarda checkpoints cada 50.
- * 5. No se escriben notas nuevas, reduciendo operaciones sobre Sheets.
+ * 2. La búsqueda se filtra por fecha (mes actual + 1 mes de margen) con Folder.searchFiles().
+ * 3. El recorrido de Drive se detiene apenas encuentra todas las referencias.
+ * 4. Durante generarImagenes() no se llama a Drive por cada FOTO/FIRMA.
+ * 5. Cada ejecucion procesa hasta 500 filas y guarda checkpoints cada 50.
+ * 6. No se escriben notas nuevas, reduciendo operaciones sobre Sheets.
  ***************************************/
 function generarImagenes() {
   const lock = LockService.getScriptLock();
