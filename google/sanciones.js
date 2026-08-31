@@ -193,7 +193,7 @@ const DRY_RUN = false;
 const EMAIL_DRY_RUN = false; // true = prueba, false = envía correos reales
 const SANCIONES_CUOTA_RESERVA = 3; // correos que siempre se dejan sin usar de la cuota diaria
 const MOSTRAR_PLACAS_SIMILARES_DESCARTADAS = true;
-const URL_CONSULTA_SANCIONES = 'https://consejobulevarverde-ph.github.io/Club-Residencial-Bulevar-Verde/sanciones/';
+const URL_CONSULTA_SANCIONES = 'https://bulevar-verde-app.web.app/sanciones/';
 const API_BULEVAR_VERDE_BASE_URL = 'https://bulevar-verde-api-739757275794.us-east4.run.app';
 const PLANTILLA_NOTIFICACION_DEBIDO_PROCESO = "NOTIFICACION_DEBIDO_PROCESO_PARQUEADERO_VISITANTES_V1";
 const TIPO_NOTIFICACION_DEBIDO_PROCESO = "DEBIDO_PROCESO_PARQUEADERO_VISITANTES";
@@ -5755,8 +5755,13 @@ function enviarCorreoViaSancionesAPI_(options) {
   const apiToken = PropertiesService.getScriptProperties().getProperty('SANCIONES_API_TOKEN');
   const apiEndpoint = API_BULEVAR_VERDE_BASE_URL + '/api/v1/notificaciones/enviar';
 
+  const destinatarios = safeTrim_(options.to)
+    .split(',')
+    .map(function (email) { return safeTrim_(email); })
+    .filter(Boolean);
+
   const payload = {
-    to: options.to,
+    to: destinatarios,
     subject: options.subject,
     html: options.htmlBody,
     replyTo: options.replyTo || 'bulevarverdeadmon@gmail.com'
@@ -5963,6 +5968,14 @@ function construirHtmlCorreoSanciones_(data) {
         <br>
         <a href="${URL_CONSULTA_SANCIONES}" target="_blank">
           ${URL_CONSULTA_SANCIONES}
+        </a>
+      </p>
+
+      <p>
+        También puede mantener sus datos actualizados en el portal de residentes:
+        <br>
+        <a href="https://bulevar-verde-app.web.app/datos-personales/" target="_blank">
+          https://bulevar-verde-app.web.app/datos-personales/
         </a>
       </p>
 
@@ -6372,6 +6385,14 @@ function construirHtmlNotificacionDebidoProceso_(data) {
         <br>
         <a href="${URL_CONSULTA_SANCIONES}" target="_blank">
           ${URL_CONSULTA_SANCIONES}
+        </a>
+      </p>
+
+      <p>
+        También puede mantener sus datos actualizados en el portal de residentes:
+        <br>
+        <a href="https://bulevar-verde-app.web.app/datos-personales/" target="_blank">
+          https://bulevar-verde-app.web.app/datos-personales/
         </a>
       </p>
 
