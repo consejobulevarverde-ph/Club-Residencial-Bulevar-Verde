@@ -276,7 +276,11 @@
       var reviewSection = $('convivenciaReviewEvidenciasSection');
       if (reviewSection) reviewSection.classList.remove('hidden');
       var html = evidencias.map(function (evidence, idx) {
-        return '<div class="mb-2"><img src="' + evidence.dataUrl + '" style="max-width: 200px; max-height: 150px; border-radius: 4px;" alt="Evidencia ' + (idx + 1) + '">' +
+        var isVideo = /^video\//i.test(evidence.type);
+        var media = isVideo
+          ? '<video controls style="max-width: 200px; max-height: 150px; border-radius: 4px;" src="' + evidence.dataUrl + '" />'
+          : '<img src="' + evidence.dataUrl + '" style="max-width: 200px; max-height: 150px; border-radius: 4px;" alt="Evidencia ' + (idx + 1) + '">';
+        return '<div class="mb-2">' + media +
           '<p class="small text-muted mt-1">' + esc(evidence.name) + ' (' + (evidence.size / 1024).toFixed(1) + ' KB)</p></div>';
       }).join('');
       $('convivenciaReviewEvidencias').innerHTML = html;
@@ -419,6 +423,12 @@
                   item.evidenciasSubidas.push({ name: evidenciasRestantes[i].name, url: uploadResult.url });
                   await putQueueItem(item);
                   log('info', 'Evidencia subida.', { name: evidenciasRestantes[i].name });
+                } else {
+                  log('error', 'Error al subir evidencia (rechazada por servidor).', { name: evidenciasRestantes[i].name, error: uploadResult.error });
+                  item.lastError = uploadResult.error || 'La evidencia fue rechazada por el servidor';
+                  await putQueueItem(item);
+                  showStatus('warning', 'La evidencia "' + evidenciasRestantes[i].name + '" fue rechazada: ' + (uploadResult.error || 'error desconocido') + '. El caso permanece en la cola.');
+                  break;
                 }
               } catch (uploadError) {
                 var transportFailure = Boolean(
@@ -555,7 +565,7 @@
         headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify({
           name: evidence.name,
-          mimeType: 'image/jpeg',
+          mimeType: evidence.type || 'image/jpeg',
           dataUrl: evidence.dataUrl,
           contexto: 'caso_offline',
           apto: apto || '',
@@ -563,7 +573,16 @@
         })
       });
 
-      var result = await response.json();
+      if (!response.ok) {
+        throw new Error('Respuesta inválida del servidor: ' + response.status);
+      }
+
+      var result = null;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        throw new Error('Respuesta inválida del servidor al subir evidencia (no es JSON válido)');
+      }
       return result;
     } catch (error) {
       log('error', 'Error subiendo evidencia:', error);
@@ -614,18 +633,33 @@
     event.target.value = '';
     if (!file) return;
 
-    if (!/^image\//i.test(file.type)) {
-      showAlert('Solo se permiten archivos de imagen');
+    var isImage = /^image\//i.test(file.type);
+    var isVideo = /^video\//i.test(file.type) &&
+                  /(mp4|quicktime|webm)/.test(file.type);
+
+    if (!isImage && !isVideo) {
+      showAlert('Solo se permiten archivos de imagen o video (MP4, MOV, WebM)');
+      return;
+    }
+
+    if (isVideo && file.size > 15 * 1024 * 1024) {
+      showAlert('El video es demasiado grande (máximo 15 MB). Por favor selecciona un video más pequeño o más corto.');
       return;
     }
 
     try {
-      var compressedData = await compressImage(file);
-      evidencias.push(compressedData);
+      var data = null;
+      if (isImage) {
+        data = await compressImage(file);
+        showAlert('Imagen comprimida y agregada exitosamente', 'success');
+      } else {
+        data = await readVideoAsDataUrl(file);
+        showAlert('Video agregado exitosamente', 'success');
+      }
+      evidencias.push(data);
       actualizarListaEvidencias();
-      showAlert('Imagen comprimida y agregada exitosamente', 'success');
     } catch (error) {
-      showAlert('Error al procesar imagen: ' + error.message);
+      showAlert('Error al procesar archivo: ' + error.message);
     }
   }
 
@@ -669,6 +703,25 @@
     });
   }
 
+  async function readVideoAsDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        resolve({
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          dataUrl: e.target.result,
+          blob: file
+        });
+      };
+      reader.onerror = function () {
+        reject(new Error('No se pudo leer el archivo de video'));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   function actualizarListaEvidencias() {
     var container = $('convivenciaEvidenciasList');
     if (!container) return;
@@ -677,10 +730,12 @@
       return;
     }
     var html = evidencias.map(function (evidence, idx) {
+      var isVideo = /^video\//i.test(evidence.type);
+      var icon = isVideo ? 'bi-camera-video' : 'bi-image';
       return '<div class="card mb-2">' +
         '<div class="card-body p-2">' +
         '<div class="d-flex justify-content-between align-items-center">' +
-        '<div><i class="bi bi-image me-2"></i><strong>' + esc(evidence.name) + '</strong><br>' +
+        '<div><i class="bi ' + icon + ' me-2"></i><strong>' + esc(evidence.name) + '</strong><br>' +
         '<small class="text-muted">' + (evidence.size / 1024).toFixed(1) + ' KB</small></div>' +
         '<button type="button" class="btn btn-danger btn-sm cv-remove-evidence" data-idx="' + idx + '">' +
         '<i class="bi bi-trash"></i></button></div></div></div>';

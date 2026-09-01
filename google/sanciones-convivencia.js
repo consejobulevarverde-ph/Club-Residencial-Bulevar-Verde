@@ -189,10 +189,10 @@ function subirEvidenciaConvivencia_(payload) {
   payload = payload || {};
 
   const dataUrl = String(payload.dataUrl || '');
-  const match = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/i);
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp)|video\/(?:mp4|quicktime|webm));base64,([A-Za-z0-9+/=]+)$/i);
 
   if (!match) {
-    throw new Error('La evidencia tiene un formato inválido.');
+    throw new Error('La evidencia tiene un formato inválido. Se aceptan imágenes (JPEG, PNG, WebP) o videos (MP4, MOV, WebM).');
   }
 
   const mimeType = match[1].toLowerCase().replace('image/jpg', 'image/jpeg');
@@ -202,12 +202,17 @@ function subirEvidenciaConvivencia_(payload) {
     throw new Error('La evidencia está vacía.');
   }
 
-  if (bytes.length > 5 * 1024 * 1024) {
-    throw new Error('La evidencia supera el tamaño permitido (5 MB).');
+  const isVideo = mimeType.startsWith('video/');
+  const maxSize = isVideo ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
+  if (bytes.length > maxSize) {
+    throw new Error('La evidencia supera el tamaño permitido (' + (isVideo ? '20 MB para video' : '5 MB para imagen') + ').');
   }
 
   const extension = mimeType === 'image/png' ? 'png' :
-                    mimeType === 'image/webp' ? 'webp' : 'jpg';
+                    mimeType === 'image/webp' ? 'webp' :
+                    mimeType === 'video/mp4' ? 'mp4' :
+                    mimeType === 'video/quicktime' ? 'mov' :
+                    mimeType === 'video/webm' ? 'webm' : 'jpg';
   const contexto = safeTrim_(payload.contexto).toLowerCase();
   const caseId = safeTrim_(payload.caseId).replace(/[^A-Za-z0-9_-]/g, '');
   const apto = normalizeApto_(payload.apto || '');
