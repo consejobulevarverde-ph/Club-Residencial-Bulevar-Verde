@@ -116,3 +116,16 @@ mutation CrearVinculoVehiculoUnidad(
 @transaction {
   vinculo_vehiculo_unidad_insert(data: $input)
 }
+
+query ObtenerColaboradorPorFirebaseUid(
+  $firebaseUid: String!
+)
+@auth(level: USER, insecureReason: "La API pasa el uid del token autenticado (request.auth.uid), no uno arbitrario del cliente.") {
+  colaboradores(
+    where: { firebaseUid: { eq: $firebaseUid }, activo: { eq: true } }
+    limit: 1
+  ) {
+    id
+    nombreCompleto
+  }
+}

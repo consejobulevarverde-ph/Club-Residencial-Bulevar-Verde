@@ -366,6 +366,24 @@ query ListarCasosConvivenciaPorUnidadAdmin(
   }
 }
 
+query ListarCasosConvivenciaResumenPorUnidadAdmin(
+  $unidadId: UUID!
+)
+@auth(level: NO_ACCESS) {
+  unidad(id: $unidadId) {
+    casos: casos_convivencia_on_unidad(
+      orderBy: [{ fechaCreacion: DESC }]
+      limit: 100
+    ) {
+      caseCode
+      motivo
+      severidad
+      estado
+      fechaCreacion
+    }
+  }
+}
+
 query ObtenerCasoConvivenciaResidenteAdmin(
   $unidadId: UUID!
   $caseCode: String!

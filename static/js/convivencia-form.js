@@ -343,6 +343,7 @@
     var paso = $('convivenciaPaso' + hasta);
     if (paso) paso.classList.remove('hidden');
     marcarPasoCompleto(desde);
+    if (hasta === 2) cargarResumenApartamento();
     if (hasta === 4) actualizarResumen();
     window.scrollTo(0, 0);
   }
@@ -1155,17 +1156,77 @@
     }
   }
 
+  async function cargarResumenApartamento() {
+    var container = $('convivenciaResumenApto');
+    var apto = $('convivenciaApto');
+    var aptoValue = apto ? apto.value.trim() : '';
+    if (!container || !aptoValue) return;
+
+    container.classList.remove('hidden');
+    container.innerHTML = '<p class="text-muted mb-0"><i class="bi bi-hourglass-split me-2"></i>Consultando historial del apartamento...</p>';
+
+    try {
+      var token = await getAuthToken();
+      var response = await fetch(API_BASE + '/api/v1/convivencia/apartamentos/' + encodeURIComponent(aptoValue) + '/resumen', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      var body = await response.json();
+      if (!response.ok) throw new Error((body.error && body.error.message) || 'Error al consultar historial');
+      renderResumenApartamento(body.data);
+    } catch (error) {
+      log('warn', 'No se pudo cargar el historial del apartamento', error);
+      container.classList.add('hidden');
+    }
+  }
+
+  function renderResumenApartamento(data) {
+    var container = $('convivenciaResumenApto');
+    if (!container) return;
+
+    if (!data.unidadEncontrada || data.totalCasos === 0) {
+      container.innerHTML = '<div class="alert alert-secondary mb-0 py-2"><i class="bi bi-info-circle me-2"></i>Sin casos previos registrados para este apartamento.</div>';
+      return;
+    }
+
+    var severidadBadges = Object.keys(data.porSeveridad).map(function (nombre) {
+      return '<span class="cv-info-badge me-1">' + esc(nombre) + ': ' + data.porSeveridad[nombre] + '</span>';
+    }).join('');
+
+    var recientesHtml = (data.casosRecientes || []).map(function (caso) {
+      return '<li>' + esc(caso.caseCode) + ' — ' + esc(caso.motivo) + ' <span class="text-muted">(' + esc(caso.severidad) + ', ' + esc(caso.estado) + ')</span></li>';
+    }).join('');
+
+    container.innerHTML =
+      '<div class="alert alert-warning mb-0 py-2">' +
+      '<p class="mb-2"><i class="bi bi-clock-history me-2"></i><strong>Historial del apartamento ' + esc(data.apartamento) + ':</strong> ' +
+      data.totalCasos + ' caso(s) · ' + data.sinResolver + ' sin resolver · ' + data.resueltos + ' resuelto(s)</p>' +
+      '<div class="mb-2">' + severidadBadges + '</div>' +
+      (recientesHtml ? '<ul class="mb-0 small">' + recientesHtml + '</ul>' : '') +
+      '</div>';
+  }
+
   function llenarNotificadorActual() {
     var notificadorInput = $('convivenciaNotificador');
-    if (!notificadorInput) return;
+    if (!notificadorInput || !window.firebase || !firebase.auth) return;
 
-    if (window.firebase && firebase.auth && firebase.auth().currentUser) {
-      var currentUser = firebase.auth().currentUser;
-      var displayName = currentUser.displayName || currentUser.email || 'Usuario';
-      notificadorInput.value = displayName;
-    } else {
-      notificadorInput.value = 'Usuario no autenticado';
-    }
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (!user) return;
+      user.getIdToken().then(function (token) {
+        return fetch(API_BASE + '/api/v1/vigilancia/yo', {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+      }).then(function (response) {
+        return response.json().then(function (body) {
+          if (!response.ok) throw new Error((body.error && body.error.message) || 'Error');
+          return body;
+        });
+      }).then(function (body) {
+        notificadorInput.value = (body.data && body.data.nombreCompleto) || 'Usuario';
+      }).catch(function (error) {
+        log('warn', 'No se pudo obtener el nombre del colaborador autenticado', error);
+        notificadorInput.value = 'Usuario';
+      });
+    });
   }
 
   async function init() {
