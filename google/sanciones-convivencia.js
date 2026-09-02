@@ -689,7 +689,8 @@ function obtenerIdxPlanillaConvivencia_(rawHeaders) {
     evidenciasDescargos: findColIdxConvivencia_(colMap, ['evidenciasdescargos', 'evidenciadescargos']),
     fechaDescargos: findColIdxConvivencia_(colMap, ['fechadescargos']),
     resolucion: findColIdxConvivencia_(colMap, ['resolucion']),
-    notasAdmin: findColIdxConvivencia_(colMap, ['notasadmin', 'notas'])
+    notasAdmin: findColIdxConvivencia_(colMap, ['notasadmin', 'notas']),
+    clientRequestId: findColIdxConvivencia_(colMap, ['clientrequestid', 'clientid'])
   };
 }
 
@@ -742,6 +743,7 @@ function crearCasoConvivencia(params) {
   const severidad = safeTrim_(params.severidad);
   const evidenciasArray = params.evidencias || [];
   const notificador = safeTrim_(params.notificador);
+  const clientRequestId = safeTrim_(params.clientRequestId);
 
   if (!apto || !motivo || !descripcion || !justificacion || !severidad) {
     throw new Error('Apto, motivo, descripción de los hechos, justificación y severidad son obligatorios.');
@@ -756,13 +758,44 @@ function crearCasoConvivencia(params) {
     const ss = SpreadsheetApp.openById(SHEET_ID_CONVIVENCIA);
     const sheet = getOrCreatePlanillaConvivencia_(ss);
 
-    const caseId = generarIdCasoConvivencia_();
-    const ahora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    const evidenciasStr = evidenciasArray.join(';');
-
     const contexto = leerPlanillaConvivencia_();
     const IDX = contexto.IDX;
     validarColumnasPlanillaConvivencia_(IDX);
+
+    // Deduplicación por clientRequestId: si ya existe un caso con este ID, devolverlo
+    if (clientRequestId && IDX.clientRequestId !== -1) {
+      const registros = construirRegistrosConvivencia_(contexto);
+      var casoExistente = null;
+      for (var i = 0; i < registros.length; i++) {
+        var row = contexto.rows[i];
+        if (row && row[IDX.clientRequestId] === clientRequestId) {
+          casoExistente = registros[i];
+          break;
+        }
+      }
+
+      if (casoExistente) {
+        Logger.log('Caso duplicado detectado por clientRequestId: ' + clientRequestId + ', caseId existente: ' + casoExistente.id);
+        return {
+          ok: true,
+          caseId: casoExistente.id,
+          mensaje: 'Este caso ya había sido registrado anteriormente.',
+          isDuplicate: true,
+          apto: apto,
+          motivo: motivo,
+          descripcion: descripcion,
+          justificacion: justificacion,
+          razonNotificacion: justificacion,
+          severidad: severidad,
+          sancionEquivalente: casoExistente.sancionEquivalente,
+          cuotasEquivalentes: casoExistente.cuotasEquivalentes
+        };
+      }
+    }
+
+    const caseId = generarIdCasoConvivencia_();
+    const ahora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    const evidenciasStr = evidenciasArray.join(';');
 
     const filaData = new Array(Math.max(contexto.lastCol || 0, IDX.notasAdmin + 1, 16)).fill('');
 
@@ -777,6 +810,7 @@ function crearCasoConvivencia(params) {
     if (IDX.evidencias !== -1) filaData[IDX.evidencias] = evidenciasStr;
     if (IDX.notificadorAdmin !== -1) filaData[IDX.notificadorAdmin] = notificador;
     if (IDX.estado !== -1) filaData[IDX.estado] = ESTADO_CASO_PENDIENTE_DESCARGOS;
+    if (IDX.clientRequestId !== -1) filaData[IDX.clientRequestId] = clientRequestId;
 
     sheet.appendRow(filaData);
 
@@ -866,7 +900,8 @@ function getOrCreatePlanillaConvivencia_(ss) {
       'Evidencias Descargos',
       'Fecha Descargos',
       'Resolucion',
-      'Notas Admin'
+      'Notas Admin',
+      'Client Request ID'
     ];
 
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);

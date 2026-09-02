@@ -127,6 +127,114 @@
   .convivencia-panel .hidden {
     display: none !important;
   }
+
+  .cv-queue-float-btn {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 1000;
+    background: var(--p, #2c5f2d);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(44, 95, 45, 0.3);
+    transition: all 0.3s ease;
+  }
+
+  .cv-queue-float-btn:hover {
+    background: #1e4620;
+    box-shadow: 0 6px 16px rgba(44, 95, 45, 0.4);
+    transform: scale(1.1);
+  }
+
+  .cv-queue-float-btn.hidden {
+    display: none;
+  }
+
+  .cv-queue-item {
+    background: #f9f9f9;
+    border: 1px solid var(--b, #d8e6d9);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid var(--p, #2c5f2d);
+  }
+
+  .cv-queue-item.error {
+    border-left-color: #dc3545;
+    background: #fff5f5;
+  }
+
+  .cv-queue-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .cv-queue-item-title {
+    font-weight: 600;
+    color: #333;
+  }
+
+  .cv-queue-item-status {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+  }
+
+  .cv-queue-item-status.pending {
+    background: #fff3cd;
+    color: #856404;
+  }
+
+  .cv-queue-item-status.error {
+    background: #f8d7da;
+    color: #721c24;
+  }
+
+  .cv-queue-item-meta {
+    font-size: 0.85rem;
+    color: #666;
+    margin: 0.5rem 0;
+  }
+
+  .cv-queue-evidences {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #ddd;
+    font-size: 0.9rem;
+  }
+
+  .cv-queue-error-text {
+    color: #dc3545;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: 0.25rem;
+  }
+
+  .cv-queue-modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  @media (max-width: 768px) {
+    .cv-queue-float-btn {
+      bottom: 1rem;
+      right: 1rem;
+      width: 50px;
+      height: 50px;
+      font-size: 1.2rem;
+    }
+  }
 </style>
 
 <div class="convivencia-panel">
@@ -327,6 +435,34 @@
       </div>
     </div>
   </form>
+
+  <!-- Queue Control Floating Button -->
+  <button id="convivenciaQueueFloatBtn" class="cv-queue-float-btn hidden" data-bs-toggle="modal" data-bs-target="#convivenciaQueueModal" title="Ver estado de la cola">
+    <i class="bi bi-cloud-arrow-up"></i><span class="badge bg-danger position-absolute top-0 end-0" id="convivenciaQueueFloatBadge" style="display: none; font-size: 0.65rem; padding: 0.25rem 0.35rem;">0</span>
+  </button>
+
+  <!-- Queue Status Modal -->
+  <div class="modal fade" id="convivenciaQueueModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-cloud-arrow-up me-2"></i>Estado de la Cola de Casos</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body cv-queue-modal-body">
+          <div id="convivenciaQueueModalBody">
+            <p class="text-muted text-center"><i class="bi bi-hourglass-split me-2"></i>Cargando...</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          <button type="button" class="btn btn-primary" id="convivenciaQueueRetryAllBtn">
+            <i class="bi bi-arrow-repeat me-2"></i>Reintentar todos
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="{{ "js/evidence-camera.js" | relURL }}?v=20260813-1"></script>

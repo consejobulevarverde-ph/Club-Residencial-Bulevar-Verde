@@ -88,9 +88,34 @@
   async function refreshQueueCount() {
     var items = await getQueueItems();
     var count = items.length;
+    var errorCount = items.filter(function (it) { return !!it.lastError; }).length;
 
     var queueEl = $('convivenciaQueueCount');
-    if (queueEl) queueEl.textContent = String(count);
+    if (queueEl) {
+      if (errorCount > 0) {
+        queueEl.className = 'badge text-bg-danger';
+        queueEl.textContent = errorCount + ' error(es)';
+      } else if (count > 0) {
+        queueEl.className = 'badge text-bg-warning';
+        queueEl.textContent = String(count) + ' pendiente(s)';
+      } else {
+        queueEl.className = 'badge text-bg-secondary';
+        queueEl.textContent = '0';
+      }
+    }
+
+    var floatBtn = $('convivenciaQueueFloatBtn');
+    if (floatBtn) floatBtn.classList.toggle('hidden', count === 0);
+
+    var floatBadge = $('convivenciaQueueFloatBadge');
+    if (floatBadge) {
+      if (count > 0) {
+        floatBadge.textContent = String(count);
+        floatBadge.style.display = '';
+      } else {
+        floatBadge.style.display = 'none';
+      }
+    }
 
     var retryBtn = $('convivenciaRetryBtn');
     if (retryBtn) retryBtn.hidden = count === 0;
@@ -98,13 +123,99 @@
     var statusEl = $('convivenciaQueueStatus');
     if (statusEl && count > 0) {
       statusEl.hidden = false;
-      statusEl.className = 'alert alert-warning';
-      statusEl.innerHTML = '<i class="bi bi-cloud-arrow-up"></i> ' +
-        '<strong>' + count + '</strong> caso(s) pendiente(s) de envío. ' +
-        'La información permanece guardada en este dispositivo.';
+      if (errorCount > 0) {
+        statusEl.className = 'alert alert-danger';
+        statusEl.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>' +
+          '<strong>' + errorCount + '</strong> caso(s) con errores. ' +
+          'Revisar la cola de detalles para más información.';
+      } else {
+        statusEl.className = 'alert alert-warning';
+        statusEl.innerHTML = '<i class="bi bi-cloud-arrow-up me-2"></i>' +
+          '<strong>' + count + '</strong> caso(s) pendiente(s) de envío. ' +
+          'La información permanece guardada en este dispositivo.';
+      }
     } else if (statusEl && (!statusEl.dataset.persistent)) {
       statusEl.hidden = true;
     }
+
+    var modal = document.getElementById('convivenciaQueueModal');
+    if (modal && modal.classList.contains('show')) {
+      await renderQueuePanel();
+    }
+  }
+
+  async function renderQueuePanel() {
+    var container = $('convivenciaQueueModalBody');
+    if (!container) return;
+
+    var items = await getQueueItems();
+
+    if (items.length === 0) {
+      container.innerHTML = '<p class="text-muted text-center"><i class="bi bi-check-circle me-2"></i>No hay casos en la cola.</p>';
+      return;
+    }
+
+    var html = '<div>' + items.map(function (item, idx) {
+      var isError = !!item.lastError;
+      var uploadedCount = (item.evidenciasSubidas || []).length;
+      var totalCount = (item.evidencias || []).length;
+      var percentComplete = totalCount > 0 ? Math.round((uploadedCount / totalCount) * 100) : 0;
+
+      var attemptText = item.attempts ? ' · ' + item.attempts + ' intento(s)' : '';
+      var lastAttemptText = item.lastAttemptAt ? ' · Último intento: ' + new Date(item.lastAttemptAt).toLocaleTimeString('es-CO') : '';
+
+      var evidenciasHtml = '';
+      if (totalCount > 0) {
+        evidenciasHtml = '<div class="cv-queue-evidences">' +
+          '<strong>Evidencias:</strong> ' + uploadedCount + '/' + totalCount + ' subidas (' + percentComplete + '%)<br>' +
+          '<div style="font-size: 0.8rem; color: #666;">';
+
+        (item.evidencias || []).forEach(function (ev) {
+          var isUploaded = item.evidenciasSubidas.some(function (sub) { return sub.name === ev.name; });
+          var icon = isUploaded ? '✓' : '⏳';
+          var color = isUploaded ? '#28a745' : '#ffc107';
+          evidenciasHtml += '<span style="color: ' + color + ';">' + icon + ' ' + esc(ev.name) + '</span><br>';
+        });
+
+        evidenciasHtml += '</div></div>';
+      }
+
+      var errorHtml = isError ? '<div class="cv-queue-error-text"><strong>Error:</strong> ' + esc(item.lastError) + '</div>' : '';
+
+      return '<div class="cv-queue-item ' + (isError ? 'error' : '') + '">' +
+        '<div class="cv-queue-item-header">' +
+        '<div class="cv-queue-item-title">Apto. ' + esc(item.apto) + ' - ' + esc(item.motivo) + '</div>' +
+        '<span class="cv-queue-item-status ' + (isError ? 'error' : 'pending') + '">' + (isError ? '❌ Error' : '⏳ Pendiente') + '</span>' +
+        '</div>' +
+        '<div class="cv-queue-item-meta">' +
+        '<strong>Severidad:</strong> ' + esc(item.severidad) + ' · ' +
+        '<strong>Notificador:</strong> ' + esc(item.notificador) +
+        attemptText + lastAttemptText +
+        '</div>' +
+        '<div class="cv-queue-item-meta">' +
+        '<small>' + new Date(item.queuedAt).toLocaleString('es-CO') + '</small>' +
+        '</div>' +
+        evidenciasHtml +
+        errorHtml +
+        '<button type="button" class="btn btn-sm btn-outline-primary mt-2 cv-queue-retry-btn" data-client-request-id="' + esc(item.clientRequestId) + '">' +
+        '<i class="bi bi-arrow-repeat me-1"></i>Reintentar este caso' +
+        '</button>' +
+        '</div>';
+    }).join('') + '</div>';
+
+    container.innerHTML = html;
+
+    // Delegación de eventos para botones de reintento
+    container.addEventListener('click', function (event) {
+      var btn = event.target.closest('.cv-queue-retry-btn');
+      if (!btn) return;
+
+      var clientRequestId = btn.getAttribute('data-client-request-id');
+      if (clientRequestId) {
+        log('info', 'Reintentando caso desde panel.', { clientRequestId: clientRequestId });
+        flushQueue(true, clientRequestId, 'reintento desde panel de cola');
+      }
+    });
   }
 
   var form = $('convivenciaCasoForm');
@@ -943,6 +1054,22 @@
       elements.retryBtn.addEventListener('click', function () {
         log('info', 'Botón "Intentar enviar" presionado.');
         flushQueue(true, null, 'botón manual');
+      });
+    }
+
+    var queueRetryAllBtn = $('convivenciaQueueRetryAllBtn');
+    if (queueRetryAllBtn) {
+      queueRetryAllBtn.addEventListener('click', function () {
+        log('info', 'Botón "Reintentar todos" en modal presionado.');
+        flushQueue(true, null, 'botón reintentar todos en panel');
+      });
+    }
+
+    var queueModal = document.getElementById('convivenciaQueueModal');
+    if (queueModal) {
+      queueModal.addEventListener('show.bs.modal', function () {
+        log('debug', 'Modal de cola abierto; renderizando panel.');
+        renderQueuePanel();
       });
     }
   }

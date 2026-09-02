@@ -39,6 +39,7 @@ title = 'Club Residencial Bulevar Verde'
   pqrsGestionVersion = "20260821-1-evidence-preview-fix"
   reservasWebAppUrl = "https://script.google.com/macros/s/AKfycbz2SCWn0SNBMummGS-X4qF4INN8LkHe_2WDOq1jDQi_7egg71q9zotgaARctjxk6EnW/exec"
   sancionesWebAppUrl = "https://script.google.com/macros/s/AKfycbwxsX0I8qoDnX7PmAw9XjGPziT4jC1WtUBLVhhZdUFZhaD-ND0U8T1cld-2vM15HeJ5CA/exec"
+  sancionesVersion = "20260901-1-deduplication-queue-panel"
 
   # Piloto de migración a bulevar-verde-api (Cloud Run + Firebase Auth + Data Connect).
   # apiBaseUrl apunta al servicio de Cloud Run en producción.
