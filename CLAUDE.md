@@ -7,7 +7,6 @@
 **Key Pages**:
 - `/` — home (landing)
 - `/datos-personales/` — resident self-service portal (login, profile, residents, vehicles, pets, emergency, sanciones)
-- `/sanciones-convivencia/` — community rules violations (legacy page, separate from datos-personales tab)
 - Other static pages and news
 
 **Deployment**: `hugo --gc --minify` → `firebase deploy --only hosting`
@@ -98,16 +97,46 @@ Frontend mirrors backend transforms visually with `text-uppercase` class:
 
 Applied to: tipo documento, número documento, nombre, especie, raza, parentesco. NOT to correo, teléfono, descargos (free text).
 
-### 6. Sanciones (Two Systems)
+### 6. Sanciones de Convivencia — full Ley 675/2001 sanction process (bulevar-verde-api, not Google Apps Script)
 
-1. **Legacy**: `/sanciones-convivencia/` — unauthenticated, manual apartment entry, Google Apps Script backend
-2. **New (Tab)**: `/datos-personales/tabSanciones` — authenticated, auto-uses resident's apartment, embedded detail + descargos
+Google Apps Script (`google/sanciones-convivencia.js`) was retired. Cases now live in Postgres via
+Data Connect (`CasoConvivencia`/`EvidenciaConvivencia`/`EventoCasoConvivencia`/`Sancion` types), served
+by `bulevar-verde-api`'s `convivencia` module and `datos-personales` sanciones sub-resource. It's a real
+state machine now, not just create+resolve — see `bulevar-verde-api/doc/CONVIVENCIA_NOTIFICATIONS.md`
+for the full diagram; short version: `PENDIENTE_DESCARGOS` → `CON_DESCARGOS` → (formal cases only)
+`PENDIENTE_APROBACION_CONSEJO` → `SANCION_APROBADA` → optional `EN_APELACION` →
+`SANCION_RATIFICADA`/`SANCION_REVOCADA`, with `CERRADO_SIN_SANCION`/`ARCHIVADO` side branches. A case's
+severity decides at creation time whether it even needs the formal process (`requiereProcesoFormal` —
+"Llamado de Atención" doesn't; everything else does).
 
-Both read from same GAS (`consultarCasosApto`, `consultarCasosDetalle`, `subirEvidenciaConvivencia`, `guardarDescargos`).
+1. **Case creation** — `vigilancia-datos/list.html` / `administracion-datos/list.html`, shared
+   `partials/convivencia-form.html` + `static/js/convivencia-form.js` wizard. Firebase-authenticated,
+   calls `POST /api/v1/convivencia/casos` and `POST /api/v1/convivencia/evidencias`. Keeps its
+   offline-first IndexedDB queue (`clientRequestId` dedup) — only the transport changed. Severity
+   badges visually flag which ones are a mere "llamado de atención" vs. formal-process-eligible.
+2. **Resident consultation, descargos & apelación** — `/datos-personales/tabSanciones`, authenticated
+   via the resident session token (same `apiFetch()` used by every other tab). Calls `GET /sanciones`,
+   `GET /sanciones/:caseCode`, `POST /sanciones/evidencias`, `POST /sanciones/:caseCode/descargos`, and
+   `POST /sanciones/:caseCode/apelacion` (only once a sanction is `SANCION_APROBADA`). The unit is
+   always derived server-side from the session — never sent by the client. The resident sees the
+   proposed sanction amount as soon as administración stages it, not only after Consejo approval.
+3. **Admin case management** — `administracion-datos/list.html`, "Casos Convivencia" panel. The old
+   single "resolver" form is now a state-dependent dispatcher: from `PENDIENTE_DESCARGOS`/`CON_DESCARGOS`
+   it shows close/archive plus (formal cases only) "registrar acta de comité" and "proponer sanción
+   económica"; from `PENDIENTE_APROBACION_CONSEJO` it shows aprobar/rechazar/devolver; from
+   `EN_APELACION` it shows ratificar/revocar. Always shows the case's event timeline
+   (`EventoCasoConvivencia`) and the linked `Sancion` record when one exists. Vigilancia never gets
+   this panel — case creation is its only role in the process.
 
-**Evidence gallery** (reused in both):
+Evidence still lands in the same Google Drive folder as before (`soporte-sanciones-convivencia`),
+now uploaded by the API itself (`src/services/drive.ts` in bulevar-verde-api) via an OAuth2 refresh
+token for the same Gmail account used for SMTP — not a Drive API-incompatible app password. Accepts
+images (≤20MB), video (≤50MB), and PDF (≤50MB, with a quick pdf-lib optimization pass) — used for the
+Comité's acta and its anexos, and for appeal evidence, in addition to case/descargo evidence.
+
+**Evidence gallery**:
 - Google Drive URLs with fallback chain: `drive.google.com/thumbnail` → `lh3.googleusercontent.com` → original
-- `window.handleConvivenciaEvidenceError_` / `window.handleSancionEvidenceError_` handle missing images on `<img onerror>`
+- `window.handleSancionEvidenceError_` handles missing images on `<img onerror>` (resident tab)
 
 **Evidence capture**:
 - `window.BVEvidenceCamera` — self-contained module (`static/js/evidence-camera.js`), safe to include on multiple pages
@@ -178,7 +207,6 @@ Currently `schemaValidation: COMPATIBLE` in `dataconnect/dataconnect.yaml`.
 ```
 layouts/
   datos-personales/list.html    # Resident portal (login, tabs, JS IIFE)
-  sanciones-convivencia/list.html  # Legacy sanciones page
   [other-pages]/
 
 static/
@@ -216,7 +244,7 @@ hugo.toml
 
 ### Display Evidence Gallery
 
-Pattern from `sanciones-convivencia/list.html`:
+Pattern from `datos-personales/list.html` (`tabSanciones`):
 
 ```javascript
 function buildEvidenceHtml(url, label) {
@@ -397,4 +425,4 @@ While not strict compliance, the UI should embrace:
 
 ---
 
-**Last updated**: 2026-08-15 — sanciones tab, full resident edit, uppercase transforms, evidence camera integration, plate formatting, generic sample data guidelines
+**Last updated**: 2026-09-02 — extended sanciones de convivencia into a full Ley 675/2001 sanction-process state machine (comité de convivencia sessions, Consejo de Administración approval/rejection/return-for-revision, resident appeals with ratify/revoke, an economic sanction record, and a per-case event timeline in both the admin panel and resident portal); added PDF evidence support and raised upload size limits

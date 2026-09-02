@@ -1,0 +1,447 @@
+# Operaciones de casos de convivencia (creación, listado, proceso sancionatorio,
+# descargos/apelación del residente y evidencias). La autenticación y autorización
+# las hace bulevar-verde-api (rol Firebase para vigilancia/administración, token
+# de sesión de residente para consulta/descargos/apelación) — por eso todas
+# quedan en NO_ACCESS y se invocan con executeAdminQuery/executeAdminMutation.
+
+query ObtenerCasoConvivenciaPorClientRequestIdAdmin(
+  $clientRequestId: String!
+)
+@auth(level: NO_ACCESS) {
+  casos_convivencia(where: { clientRequestId: { eq: $clientRequestId } }, limit: 1) {
+    id
+    caseCode
+    apartamento
+    motivo
+    estado
+  }
+}
+
+mutation CrearCasoConvivenciaAdmin(
+  $input: CasoConvivencia_Data!
+    @allow(
+      fields: """
+        caseCode
+        unidadId
+        apartamento
+        motivo
+        descripcion
+        razonNotificacion
+        severidad
+        sancionEquivalente
+        notificadorAdmin
+        creadoPorUid
+        requiereProcesoFormal
+        clientRequestId
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_insert(data: $input)
+}
+
+mutation CrearEvidenciaConvivenciaAdmin(
+  $input: EvidenciaConvivencia_Data!
+    @allow(
+      fields: """
+        casoId
+        contexto
+        url
+        driveFileId
+        nombreArchivo
+        mimeType
+        tamanoBytes
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  evidencia_convivencia_insert(data: $input)
+}
+
+# Filtro de estado opcional vía "in": la API omite $estados (o pasa un arreglo
+# vacío/null) cuando el admin no quiere filtrar por estado, siguiendo el mismo
+# patrón que ListarColaboradores usa para su filtro opcional de rol.
+query ListarCasosConvivenciaAdmin(
+  $estados: [String!]
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: NO_ACCESS) {
+  casos_convivencia(
+    where: { estado: { in: $estados } }
+    orderBy: [{ fechaCreacion: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    caseCode
+    apartamento
+    motivo
+    severidad
+    requiereProcesoFormal
+    estado
+    fechaCreacion
+    descargosResidente
+  }
+}
+
+query ObtenerCasoConvivenciaDetalleAdmin(
+  $id: UUID!
+)
+@auth(level: NO_ACCESS) {
+  caso_convivencia(id: $id) {
+    id
+    caseCode
+    unidad {
+      id
+    }
+    apartamento
+    motivo
+    descripcion
+    razonNotificacion
+    severidad
+    sancionEquivalente
+    notificadorAdmin
+    requiereProcesoFormal
+    estado
+    descargosResidente
+    fechaDescargos
+    actaComiteFecha
+    actaComiteResumen
+    sancionPropuestaTipo
+    sancionPropuestaValor
+    sancionPropuestaJustificacion
+    sancionPropuestaPersona {
+      id
+      nombreCompleto
+    }
+    apelacionTexto
+    fechaApelacion
+    resolucion
+    notasAdmin
+    clientRequestId
+    fechaCreacion
+    fechaActualizacion
+    evidencias: evidencias_convivencia_on_caso {
+      id
+      contexto
+      url
+      nombreArchivo
+      mimeType
+      fechaCreacion
+    }
+    sancion: sanciones_on_caso {
+      id
+      tipoSancion
+      descripcion
+      valor
+      estado
+      fechaImposicion
+      fechaPago
+      fechaCierre
+      observaciones
+    }
+    eventos: eventos_caso_convivencia_on_caso(orderBy: [{ fechaCreacion: ASC }]) {
+      id
+      tipoEvento
+      estadoAnterior
+      estadoNuevo
+      descripcion
+      actorUid
+      actorTipo
+      fechaCreacion
+    }
+  }
+}
+
+# Restringida en la capa API a estado destino CERRADO_SIN_SANCION | ARCHIVADO,
+# solo desde PENDIENTE_DESCARGOS | CON_DESCARGOS. El resto de transiciones usan
+# las mutaciones dedicadas de más abajo.
+mutation ActualizarEstadoCasoConvivenciaAdmin(
+  $id: UUID!
+  $estado: String!
+  $resolucion: String
+  $notasAdmin: String
+  $resueltoPorUid: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: {
+      estado: $estado
+      resolucion: $resolucion
+      notasAdmin: $notasAdmin
+      resueltoPorUid: $resueltoPorUid
+    }
+  )
+}
+
+mutation RegistrarActaComiteCasoConvivenciaAdmin(
+  $id: UUID!
+  $actaComiteFecha: Timestamp!
+  $actaComiteResumen: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { estado: "CON_DESCARGOS", actaComiteFecha: $actaComiteFecha, actaComiteResumen: $actaComiteResumen }
+  )
+}
+
+mutation ProponerSancionCasoConvivenciaAdmin(
+  $id: UUID!
+  $sancionPropuestaTipo: String!
+  $sancionPropuestaValor: Float!
+  $sancionPropuestaJustificacion: String!
+  $sancionPropuestaPersonaId: UUID
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: {
+      estado: "PENDIENTE_APROBACION_CONSEJO"
+      sancionPropuestaTipo: $sancionPropuestaTipo
+      sancionPropuestaValor: $sancionPropuestaValor
+      sancionPropuestaJustificacion: $sancionPropuestaJustificacion
+      sancionPropuestaPersonaId: $sancionPropuestaPersonaId
+    }
+  )
+}
+
+mutation AprobarConsejoCasoConvivenciaAdmin(
+  $id: UUID!
+  $resolucion: String!
+  $notasAdmin: String
+  $resueltoPorUid: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { estado: "SANCION_APROBADA", resolucion: $resolucion, notasAdmin: $notasAdmin, resueltoPorUid: $resueltoPorUid }
+  )
+}
+
+mutation RechazarConsejoCasoConvivenciaAdmin(
+  $id: UUID!
+  $resolucion: String!
+  $notasAdmin: String
+  $resueltoPorUid: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { estado: "CERRADO_SIN_SANCION", resolucion: $resolucion, notasAdmin: $notasAdmin, resueltoPorUid: $resueltoPorUid }
+  )
+}
+
+mutation DevolverConsejoCasoConvivenciaAdmin(
+  $id: UUID!
+  $resolucion: String!
+  $notasAdmin: String
+  $resueltoPorUid: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: {
+      estado: "CON_DESCARGOS"
+      resolucion: $resolucion
+      notasAdmin: $notasAdmin
+      resueltoPorUid: $resueltoPorUid
+      sancionPropuestaTipo: null
+      sancionPropuestaValor: null
+      sancionPropuestaJustificacion: null
+      sancionPropuestaPersonaId: null
+    }
+  )
+}
+
+mutation RatificarApelacionCasoConvivenciaAdmin(
+  $id: UUID!
+  $resolucion: String!
+  $notasAdmin: String
+  $resueltoPorUid: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { estado: "SANCION_RATIFICADA", resolucion: $resolucion, notasAdmin: $notasAdmin, resueltoPorUid: $resueltoPorUid }
+  )
+}
+
+mutation RevocarApelacionCasoConvivenciaAdmin(
+  $id: UUID!
+  $resolucion: String!
+  $notasAdmin: String
+  $resueltoPorUid: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { estado: "SANCION_REVOCADA", resolucion: $resolucion, notasAdmin: $notasAdmin, resueltoPorUid: $resueltoPorUid }
+  )
+}
+
+mutation CrearSancionConvivenciaAdmin(
+  $input: Sancion_Data!
+    @allow(
+      fields: """
+        casoId
+        unidadId
+        personaResponsableId
+        tipoSancion
+        descripcion
+        fechaImposicion
+        valor
+        estado
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  sancion_insert(data: $input)
+}
+
+mutation AnularSancionConvivenciaAdmin(
+  $id: UUID!
+  $fechaCierre: Date!
+  $observaciones: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  sancion_update(id: $id, data: { estado: "ANULADA", fechaCierre: $fechaCierre, observaciones: $observaciones })
+}
+
+mutation CrearEventoCasoConvivenciaAdmin(
+  $input: EventoCasoConvivencia_Data!
+    @allow(
+      fields: """
+        casoId
+        tipoEvento
+        estadoAnterior
+        estadoNuevo
+        descripcion
+        actorUid
+        actorTipo
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  evento_caso_convivencia_insert(data: $input)
+}
+
+# --- Consulta y acciones del propio residente (autorización por unidadId, no por apto declarado por el cliente) ---
+
+query ListarCasosConvivenciaPorUnidadAdmin(
+  $unidadId: UUID!
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: NO_ACCESS) {
+  unidad(id: $unidadId) {
+    casos: casos_convivencia_on_unidad(
+      orderBy: [{ fechaCreacion: DESC }]
+      limit: $limit
+      offset: $offset
+    ) {
+      id
+      caseCode
+      apartamento
+      motivo
+      estado
+      fechaCreacion
+      descargosResidente
+    }
+  }
+}
+
+query ObtenerCasoConvivenciaResidenteAdmin(
+  $unidadId: UUID!
+  $caseCode: String!
+)
+@auth(level: NO_ACCESS) {
+  unidad(id: $unidadId) {
+    casos: casos_convivencia_on_unidad(where: { caseCode: { eq: $caseCode } }, limit: 1) {
+      id
+      caseCode
+      apartamento
+      motivo
+      descripcion
+      razonNotificacion
+      severidad
+      sancionEquivalente
+      notificadorAdmin
+      estado
+      descargosResidente
+      fechaDescargos
+      actaComiteFecha
+      actaComiteResumen
+      sancionPropuestaTipo
+      sancionPropuestaValor
+      sancionPropuestaJustificacion
+      apelacionTexto
+      fechaApelacion
+      resolucion
+      fechaCreacion
+      evidencias: evidencias_convivencia_on_caso {
+        id
+        contexto
+        url
+        nombreArchivo
+      }
+      sancion: sanciones_on_caso {
+        id
+        tipoSancion
+        valor
+        estado
+        fechaImposicion
+      }
+      eventos: eventos_caso_convivencia_on_caso(orderBy: [{ fechaCreacion: ASC }]) {
+        id
+        tipoEvento
+        estadoAnterior
+        estadoNuevo
+        descripcion
+        fechaCreacion
+      }
+    }
+  }
+}
+
+mutation GuardarDescargosCasoConvivenciaAdmin(
+  $id: UUID!
+  $descargosResidente: String!
+  $fechaDescargos: Timestamp!
+  $estado: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { descargosResidente: $descargosResidente, fechaDescargos: $fechaDescargos, estado: $estado }
+  )
+}
+
+mutation RegistrarApelacionCasoConvivenciaAdmin(
+  $id: UUID!
+  $apelacionTexto: String!
+  $fechaApelacion: Timestamp!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { estado: "EN_APELACION", apelacionTexto: $apelacionTexto, fechaApelacion: $fechaApelacion }
+  )
+}

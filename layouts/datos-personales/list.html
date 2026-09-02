@@ -971,6 +971,29 @@
             <div id="sancionDetailEvidencias"></div>
           </div>
 
+          <div id="sancionActaComiteSection" class="surface p-4 mb-3 hidden">
+            <h5 class="section-title h6 mb-3"><i class="bi bi-people me-2"></i>Acta del Comité de Convivencia</h5>
+            <p class="text-muted small mb-1" id="sancionActaComiteFecha"></p>
+            <p id="sancionActaComiteResumen" class="locked rounded p-3"></p>
+          </div>
+
+          <div id="sancionPropuestaSection" class="surface p-4 mb-3 hidden">
+            <h5 class="section-title h6 mb-3"><i class="bi bi-cash-coin me-2"></i>Sanción económica propuesta</h5>
+            <p class="mb-1"><strong>Tipo:</strong> <span id="sancionPropuestaTipo"></span></p>
+            <p class="mb-1"><strong>Valor:</strong> $<span id="sancionPropuestaValor"></span></p>
+            <p class="mb-0"><strong>Justificación:</strong></p>
+            <p id="sancionPropuestaJustificacion" class="locked rounded p-3"></p>
+            <p class="small text-muted mb-0">Esta propuesta está pendiente de aprobación del Consejo de Administración.</p>
+          </div>
+
+          <div id="sancionImpuestaSection" class="surface p-4 mb-3 hidden">
+            <h5 class="section-title h6 mb-3"><i class="bi bi-exclamation-octagon me-2"></i>Sanción económica</h5>
+            <p class="mb-1"><strong>Tipo:</strong> <span id="sancionImpuestaTipo"></span></p>
+            <p class="mb-1"><strong>Valor:</strong> $<span id="sancionImpuestaValor"></span></p>
+            <p class="mb-1"><strong>Estado:</strong> <span id="sancionImpuestaEstado"></span></p>
+            <p class="mb-0"><strong>Fecha de imposición:</strong> <span id="sancionImpuestaFecha"></span></p>
+          </div>
+
           <div class="surface p-4 mb-3">
             <h5 class="section-title h6 mb-3"><i class="bi bi-chat-left-text me-2"></i>Línea de tiempo</h5>
             <div id="sancionCasoTimeline"></div>
@@ -992,7 +1015,7 @@
                     <button type="button" class="btn btn-outline-secondary" id="sancionOpenCameraBtn"><i class="bi bi-camera me-1"></i>Cámara</button>
                     <button type="button" class="btn btn-outline-secondary" id="sancionOpenGalleryBtn"><i class="bi bi-image me-1"></i>Galería</button>
                   </div>
-                  <input type="file" id="sancionGalleryInput" accept="image/*" hidden>
+                  <input type="file" id="sancionGalleryInput" accept="image/*,application/pdf" hidden>
                 </div>
                 <div id="sancionEvidenciasAportadas"><small class="text-muted d-block">Ninguna evidencia seleccionada</small></div>
                 <div id="sancionDescargosUploadStatus" class="mt-2"></div>
@@ -1013,6 +1036,46 @@
             <div id="sancionEvidenciasDescargosSection" class="mt-3 hidden">
               <p><strong>Tus evidencias:</strong></p>
               <div id="sancionEvidenciasDescargosRegistradas"></div>
+            </div>
+          </div>
+
+          <div id="sancionApelacionSection" class="surface p-4 mb-3 hidden">
+            <h5 class="section-title h6 mb-3"><i class="bi bi-flag me-2"></i>Apelar la sanción</h5>
+            <p class="small-note">Si no estás de acuerdo con la sanción aprobada, puedes presentar una apelación para que el Consejo de Administración la revise.</p>
+            <form id="sancionApelacionForm" class="row g-3">
+              <div class="col-12">
+                <label class="form-label" for="sancionApelacionTexto">Explica los motivos de tu apelación <small class="text-muted">(máximo 2000 caracteres)</small></label>
+                <textarea id="sancionApelacionTexto" class="form-control" rows="5" maxlength="2000" placeholder="Explica por qué apelas la decisión..."></textarea>
+                <small class="text-muted d-block mt-1"><span id="sancionApelacionCharCount">0</span>/2000 caracteres</small>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Evidencias de soporte</label>
+                <div class="mb-2">
+                  <small class="text-muted d-block mb-2"><i class="bi bi-camera me-1"></i>Toma una foto o selecciona de la galería</small>
+                  <div class="d-flex gap-2 mb-3 flex-wrap">
+                    <button type="button" class="btn btn-outline-secondary" id="sancionApelacionOpenCameraBtn"><i class="bi bi-camera me-1"></i>Cámara</button>
+                    <button type="button" class="btn btn-outline-secondary" id="sancionApelacionOpenGalleryBtn"><i class="bi bi-image me-1"></i>Galería</button>
+                  </div>
+                  <input type="file" id="sancionApelacionGalleryInput" accept="image/*,application/pdf" hidden>
+                </div>
+                <div id="sancionApelacionEvidenciasAportadas"><small class="text-muted d-block">Ninguna evidencia seleccionada</small></div>
+                <div id="sancionApelacionUploadStatus" class="mt-2"></div>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary" id="sancionApelacionGuardarBtn"><i class="bi bi-send me-2"></i>Presentar apelación</button>
+                <span id="sancionApelacionStatus" class="ms-2"></span>
+              </div>
+            </form>
+          </div>
+
+          <div id="sancionApelacionExistente" class="surface p-4 mb-3 hidden">
+            <h5 class="section-title h6 mb-3"><i class="bi bi-flag me-2"></i>Tu apelación</h5>
+            <p><strong>Fecha:</strong> <span id="sancionApelacionFechaRegistrada"></span></p>
+            <p><strong>Tu explicación:</strong></p>
+            <div id="sancionApelacionTextoRegistrado" class="locked rounded p-3"></div>
+            <div id="sancionApelacionEvidenciasSection" class="mt-3 hidden">
+              <p><strong>Tus evidencias:</strong></p>
+              <div id="sancionApelacionEvidenciasRegistradas"></div>
             </div>
           </div>
         </div>
@@ -1122,7 +1185,6 @@
       'use strict';
 
       var API_BASE = {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }};
-      var SANCIONES_API_URL = {{ .Site.Params.sancionesWebAppUrl | default "" | jsonify | safeJS }};
       var STORAGE_KEY = 'bvDatosPersonalesToken';
 
       var $ = function (id) { return document.getElementById(id); };
@@ -1132,6 +1194,7 @@
       var sancionesCargadas = false;
       var currentSancion = null;
       var sancionEvidenciasAportadas = [];
+      var sancionApelacionEvidenciasAportadas = [];
 
       [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]')).forEach(function (el) {
         new bootstrap.Popover(el, { trigger: 'focus' });
@@ -1228,7 +1291,7 @@
         var button = event.target.closest('button[data-target]');
         if (!button || button.closest('.hidden')) return;
         showTab(button.dataset.target);
-        if (button.dataset.target === 'tabSanciones' && !sancionesCargados) cargarSanciones();
+        if (button.dataset.target === 'tabSanciones' && !sancionesCargadas) cargarSanciones();
         if (button.dataset.target === 'tabDocumentos' && !documentosCargados) renderBotonesDocumentos();
         if (button.dataset.target === 'tabReservas' && !reservasCargados) cargarReservas();
       });
@@ -1239,39 +1302,46 @@
         var badges = {
           PENDIENTE_DESCARGOS: '<span class="badge badge-pending">Pendiente de descargos</span>',
           CON_DESCARGOS: '<span class="badge badge-with-response">Descargos recibidos</span>',
-          RESUELTO: '<span class="badge badge-resolved">Resuelto</span>',
+          PENDIENTE_APROBACION_CONSEJO: '<span class="badge badge-pending">En revisión del Consejo</span>',
+          SANCION_APROBADA: '<span class="badge bg-dark">Sanción aprobada — puedes apelar</span>',
+          EN_APELACION: '<span class="badge badge-with-response">Apelación en curso</span>',
+          CERRADO_SIN_SANCION: '<span class="badge badge-resolved">Cerrado sin sanción</span>',
+          SANCION_RATIFICADA: '<span class="badge bg-dark">Sanción ratificada</span>',
+          SANCION_REVOCADA: '<span class="badge badge-resolved">Sanción revocada</span>',
           ARCHIVADO: '<span class="badge bg-secondary">Archivado</span>',
         };
         return badges[estado] || '<span class="badge bg-secondary">' + esc(estado) + '</span>';
       }
 
+      var TIPO_EVENTO_LABELS_SANCION = {
+        CASO_CREADO: 'Notificación registrada',
+        DESCARGOS_REGISTRADOS: 'Descargos aportados',
+        ACTA_COMITE_REGISTRADA: 'Acta de comité registrada',
+        CASO_CERRADO_SIN_SANCION: 'Caso cerrado sin sanción',
+        CASO_ARCHIVADO: 'Caso archivado',
+        SANCION_PROPUESTA: 'Sanción económica propuesta',
+        CONSEJO_APROBO_SANCION: 'El Consejo aprobó la sanción',
+        CONSEJO_RECHAZO_SANCION: 'El Consejo rechazó la sanción',
+        CONSEJO_DEVOLVIO_PROPUESTA: 'El Consejo devolvió la propuesta',
+        APELACION_PRESENTADA: 'Apelación presentada',
+        APELACION_RATIFICADA: 'El Consejo ratificó la sanción',
+        APELACION_REVOCADA: 'El Consejo revocó la sanción',
+      };
+
       function cargarSanciones() {
-        var apto = profile && profile.unidad && profile.unidad.apartamento;
         $('sancionesLoading').classList.remove('hidden');
         $('sancionesError').classList.add('hidden');
         $('sancionesEmpty').classList.add('hidden');
         $('sancionesList').innerHTML = '';
 
-        if (!SANCIONES_API_URL || !apto) {
-          $('sancionesLoading').classList.add('hidden');
-          $('sancionesError').textContent = 'No fue posible determinar el apartamento para consultar sanciones.';
-          $('sancionesError').classList.remove('hidden');
-          return;
-        }
-
-        fetch(SANCIONES_API_URL + '?action=consultarCasosApto&apto=' + encodeURIComponent(apto))
-          .then(function (response) { return response.json(); })
-          .then(function (data) {
+        apiFetch('/sanciones')
+          .then(function (body) {
             sancionesCargadas = true;
             $('sancionesLoading').classList.add('hidden');
-            if (!data.ok) {
-              $('sancionesError').textContent = data.error || 'Error al consultar sanciones.';
-              $('sancionesError').classList.remove('hidden');
-              return;
-            }
-            mostrarListadoSanciones(data.casos || []);
+            mostrarListadoSanciones(body.data || []);
           })
           .catch(function (error) {
+            sancionesCargadas = true;
             $('sancionesLoading').classList.add('hidden');
             $('sancionesError').textContent = 'Error de conexión: ' + error.message;
             $('sancionesError').classList.remove('hidden');
@@ -1308,18 +1378,12 @@
       });
 
       function verDetalleSancion(caseId) {
-        var apto = profile && profile.unidad && profile.unidad.apartamento;
         clearAlert();
 
-        fetch(SANCIONES_API_URL + '?action=consultarCasosDetalle&caseId=' + encodeURIComponent(caseId) + '&apto=' + encodeURIComponent(apto))
-          .then(function (response) { return response.json(); })
-          .then(function (data) {
-            if (!data.ok) {
-              alertMessage(data.error || 'Error al cargar el detalle de la notificación.');
-              return;
-            }
-            currentSancion = data.caso;
-            renderizarDetalleSancion(data.caso);
+        apiFetch('/sanciones/' + encodeURIComponent(caseId))
+          .then(function (body) {
+            currentSancion = body.data;
+            renderizarDetalleSancion(body.data);
             $('sancionesListView').classList.add('hidden');
             $('sancionDetailView').classList.remove('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1335,12 +1399,12 @@
         $('sancionDetailCaseId').textContent = caso.id;
         $('sancionDetailMotivo').textContent = caso.motivo;
         $('sancionDetailSeveridad').textContent = caso.severidad || 'No especificada';
-        $('sancionDetailCuotas').textContent = Number(caso.sancionEquivalente != null ? caso.sancionEquivalente : (caso.cuotasEquivalentes || 0));
+        $('sancionDetailCuotas').textContent = Number(caso.sancionEquivalente || 0);
         $('sancionDetailFecha').textContent = caso.fechaRegistro || 'Sin fecha';
         $('sancionDetailEstado').innerHTML = obtenerBadgeEstadoSancion(caso.estado || 'PENDIENTE_DESCARGOS');
         $('sancionDetailNotificador').textContent = caso.notificadorAdmin || 'Administración';
         $('sancionDetailDescripcion').textContent = caso.descripcion || 'No se registraron los hechos en este caso.';
-        $('sancionDetailRazonNotificacion').textContent = caso.justificacion || caso.razonNotificacion || 'No se registró la justificación de la notificación en este caso.';
+        $('sancionDetailRazonNotificacion').textContent = caso.razonNotificacion || 'No se registró la justificación de la notificación en este caso.';
 
         if (Array.isArray(caso.evidencias) && caso.evidencias.length > 0) {
           $('sancionEvidenciasSection').classList.remove('hidden');
@@ -1350,15 +1414,45 @@
           $('sancionDetailEvidencias').innerHTML = '';
         }
 
-        var timeline = [{ fecha: caso.fechaRegistro, titulo: 'Notificación registrada', contenido: caso.motivo }];
-        if (caso.fechaDescargos) {
-          timeline.push({ fecha: caso.fechaDescargos, titulo: 'Descargos aportados', contenido: (caso.descargosResidente || '').substring(0, 100) + '...' });
+        if (caso.actaComiteResumen) {
+          $('sancionActaComiteSection').classList.remove('hidden');
+          $('sancionActaComiteFecha').textContent = 'Sesión del ' + (caso.actaComiteFecha || '');
+          $('sancionActaComiteResumen').textContent = caso.actaComiteResumen;
+        } else {
+          $('sancionActaComiteSection').classList.add('hidden');
         }
-        $('sancionCasoTimeline').innerHTML = timeline.map(function (evento) {
+
+        if (caso.sancionPropuestaTipo) {
+          $('sancionPropuestaSection').classList.remove('hidden');
+          $('sancionPropuestaTipo').textContent = caso.sancionPropuestaTipo;
+          $('sancionPropuestaValor').textContent = formatearMonedaSancion(caso.sancionPropuestaValor);
+          $('sancionPropuestaJustificacion').textContent = caso.sancionPropuestaJustificacion || '';
+        } else {
+          $('sancionPropuestaSection').classList.add('hidden');
+        }
+
+        if (caso.sancion) {
+          $('sancionImpuestaSection').classList.remove('hidden');
+          $('sancionImpuestaTipo').textContent = caso.sancion.tipoSancion || '';
+          $('sancionImpuestaValor').textContent = formatearMonedaSancion(caso.sancion.valor);
+          $('sancionImpuestaEstado').textContent = caso.sancion.estado || '';
+          $('sancionImpuestaFecha').textContent = caso.sancion.fechaImposicion || '';
+        } else {
+          $('sancionImpuestaSection').classList.add('hidden');
+        }
+
+        var eventos = Array.isArray(caso.eventos) ? caso.eventos : [];
+        if (!eventos.length) {
+          eventos = [{ fechaCreacion: caso.fechaRegistro, tipoEvento: 'CASO_CREADO', descripcion: caso.motivo }];
+        }
+        $('sancionCasoTimeline').innerHTML = eventos.map(function (evento) {
+          var titulo = TIPO_EVENTO_LABELS_SANCION[evento.tipoEvento] || evento.tipoEvento;
           return '<div class="sancion-timeline-item">' +
-            '<div style="font-weight:600;color:var(--bv-primary);font-size:.9rem">' + esc(evento.fecha) + '</div>' +
+            '<div style="font-weight:600;color:var(--bv-primary);font-size:.9rem">' + esc(evento.fechaCreacion) + '</div>' +
             '<div style="background:#f9f9f9;padding:1rem;border-radius:.5rem;margin-top:.5rem">' +
-            '<strong>' + esc(evento.titulo) + '</strong><p class="mb-0 mt-2">' + esc(evento.contenido) + '</p></div></div>';
+            '<strong>' + esc(titulo) + '</strong>' +
+            (evento.descripcion ? '<p class="mb-0 mt-2">' + esc(evento.descripcion) + '</p>' : '') +
+            '</div></div>';
         }).join('');
 
         if (caso.descargosResidente) {
@@ -1374,14 +1468,43 @@
             $('sancionEvidenciasDescargosSection').classList.add('hidden');
             $('sancionEvidenciasDescargosRegistradas').innerHTML = '';
           }
-        } else {
+        } else if (caso.estado === 'PENDIENTE_DESCARGOS') {
           $('sancionDescargosSection').classList.remove('hidden');
           $('sancionDescargosExistentes').classList.add('hidden');
           limpiarFormSancionDescargos();
+        } else {
+          $('sancionDescargosSection').classList.add('hidden');
+          $('sancionDescargosExistentes').classList.add('hidden');
+        }
+
+        if (caso.apelacionTexto) {
+          $('sancionApelacionSection').classList.add('hidden');
+          $('sancionApelacionExistente').classList.remove('hidden');
+          $('sancionApelacionFechaRegistrada').textContent = caso.fechaApelacion || '';
+          $('sancionApelacionTextoRegistrado').textContent = caso.apelacionTexto;
+
+          if (Array.isArray(caso.evidenciasApelacion) && caso.evidenciasApelacion.length > 0) {
+            $('sancionApelacionEvidenciasSection').classList.remove('hidden');
+            $('sancionApelacionEvidenciasRegistradas').innerHTML = renderSancionEvidenceGallery(caso.evidenciasApelacion, 'Evidencia de apelación');
+          } else {
+            $('sancionApelacionEvidenciasSection').classList.add('hidden');
+            $('sancionApelacionEvidenciasRegistradas').innerHTML = '';
+          }
+        } else if (caso.estado === 'SANCION_APROBADA') {
+          $('sancionApelacionSection').classList.remove('hidden');
+          $('sancionApelacionExistente').classList.add('hidden');
+          limpiarFormSancionApelacion();
+        } else {
+          $('sancionApelacionSection').classList.add('hidden');
+          $('sancionApelacionExistente').classList.add('hidden');
         }
       }
 
-      /* Reutiliza la estrategia de visualización de evidencias de Google Drive usada en /sanciones-convivencia/ */
+      function formatearMonedaSancion(valor) {
+        return Number(valor || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 });
+      }
+
+      /* Estrategia de visualización de evidencias almacenadas en Google Drive (con fallback si la miniatura falla) */
       function renderSancionEvidenceGallery(urls, labelPrefix) {
         return urls.map(function (url, index) {
           return buildSancionEvidenceHtml(url, (labelPrefix || 'Evidencia') + ' ' + (index + 1));
@@ -1499,8 +1622,12 @@
           return;
         }
         container.innerHTML = sancionEvidenciasAportadas.map(function (evidence, idx) {
+          var isPdf = evidence.type === 'application/pdf';
+          var thumb = isPdf
+            ? '<div style="width:72px;height:72px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f1f1f1"><i class="bi bi-file-earmark-pdf text-danger" style="font-size:1.8rem;"></i></div>'
+            : '<img src="' + esc(evidence.dataUrl) + '" alt="Evidencia ' + (idx + 1) + '" style="width:72px;height:72px;object-fit:cover;border-radius:8px">';
           return '<div class="card mb-2"><div class="card-body p-2"><div class="d-flex gap-3 align-items-center">' +
-            '<img src="' + esc(evidence.dataUrl) + '" alt="Evidencia ' + (idx + 1) + '" style="width:72px;height:72px;object-fit:cover;border-radius:8px">' +
+            thumb +
             '<div class="flex-grow-1 overflow-hidden"><strong class="d-block text-truncate">' + esc(evidence.name) + '</strong>' +
             '<small class="text-muted">' + (evidence.size / 1024).toFixed(1) + ' KB</small></div>' +
             '<button type="button" class="btn btn-outline-danger btn-sm remover-sancion-evidencia" data-idx="' + idx + '" aria-label="Eliminar evidencia"><i class="bi bi-trash"></i></button>' +
@@ -1546,8 +1673,25 @@
         event.target.value = '';
         if (!file) return;
 
-        if (!/^image\//i.test(file.type)) {
-          alertMessage('Solo se permiten archivos de imagen');
+        var isImage = /^image\//i.test(file.type);
+        var isPdf = file.type === 'application/pdf';
+
+        if (!isImage && !isPdf) {
+          alertMessage('Solo se permiten archivos de imagen o PDF');
+          return;
+        }
+
+        if (isPdf) {
+          if (file.size > 50 * 1024 * 1024) {
+            alertMessage('El documento es demasiado grande (máximo 50 MB).');
+            return;
+          }
+          leerArchivoComoDataUrl(file).then(function (data) {
+            sancionEvidenciasAportadas.push(data);
+            actualizarListaSancionEvidencias();
+          }).catch(function (error) {
+            alertMessage('Error al procesar el documento: ' + error.message);
+          });
           return;
         }
 
@@ -1556,6 +1700,17 @@
           actualizarListaSancionEvidencias();
         }).catch(function (error) {
           alertMessage('Error al procesar la imagen: ' + error.message);
+        });
+      }
+
+      function leerArchivoComoDataUrl(file) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onerror = function () { reject(new Error('No fue posible leer el archivo seleccionado.')); };
+          reader.onload = function () {
+            resolve({ name: file.name, size: file.size, type: file.type, dataUrl: reader.result });
+          };
+          reader.readAsDataURL(file);
         });
       }
 
@@ -1596,23 +1751,15 @@
       }
 
       function subirSancionEvidenciaAGoogle(evidence) {
-        return fetch(SANCIONES_API_URL + '?action=subirEvidenciaConvivencia', {
+        return apiFetch('/sanciones/evidencias', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-          body: JSON.stringify({
-            name: evidence.name,
-            mimeType: 'image/jpeg',
+          body: {
+            mimeType: evidence.type || 'image/jpeg',
             dataUrl: evidence.dataUrl,
-            contexto: 'descargo_residente',
             caseId: currentSancion ? currentSancion.id : '',
-            apto: currentSancion ? currentSancion.apto : '',
-            captureMetadata: evidence.captureMetadata || null,
-          }),
-          mode: 'cors',
-          credentials: 'omit',
-        }).then(function (response) { return response.json(); }).then(function (result) {
-          if (!result.ok) throw new Error(result.error || 'No fue posible subir la evidencia.');
-          return result;
+          },
+        }).then(function (body) {
+          return body.data;
         });
       }
 
@@ -1643,26 +1790,175 @@
           uploadStatus.innerHTML = '';
           status.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando descargos...';
 
-          var params = new URLSearchParams();
-          params.append('action', 'guardarDescargos');
-          params.append('caseId', currentSancion.id);
-          params.append('apto', currentSancion.apto);
-          params.append('descargos', descargos);
-          params.append('evidencias', JSON.stringify(evidenceUrls));
-
-          return fetch(SANCIONES_API_URL, {
+          return apiFetch('/sanciones/' + encodeURIComponent(currentSancion.id) + '/descargos', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: params.toString(),
-            mode: 'cors',
-            credentials: 'omit',
+            body: { descargos: descargos, evidencias: evidenceUrls },
           });
-        }).then(function (response) { return response.json(); }).then(function (data) {
-          if (!data.ok) {
-            alertMessage(data.error || 'Error al guardar descargos');
+        }).then(function () {
+          alertMessage('Descargos guardados exitosamente. Gracias por tu respuesta.', 'success');
+          setTimeout(function () { cargarSanciones(); }, 2000);
+        }).catch(function (error) {
+          alertMessage('Error de conexión: ' + error.message);
+        }).finally(function () {
+          btn.disabled = false;
+          status.innerHTML = '';
+          uploadStatus.innerHTML = '';
+        });
+      }
+
+      /* ---------- Apelación de sanciones de convivencia ---------- */
+
+      $('sancionApelacionForm').addEventListener('submit', guardarSancionApelacion);
+      $('sancionApelacionTexto').addEventListener('input', function () {
+        $('sancionApelacionCharCount').textContent = this.value.length;
+      });
+      $('sancionApelacionOpenCameraBtn').addEventListener('click', capturarSancionApelacionEvidencia);
+      $('sancionApelacionOpenGalleryBtn').addEventListener('click', function () { $('sancionApelacionGalleryInput').click(); });
+      $('sancionApelacionGalleryInput').addEventListener('change', seleccionarSancionApelacionEvidencia);
+
+      function limpiarFormSancionApelacion() {
+        $('sancionApelacionForm').reset();
+        $('sancionApelacionCharCount').textContent = '0';
+        $('sancionApelacionUploadStatus').innerHTML = '';
+        sancionApelacionEvidenciasAportadas = [];
+        actualizarListaSancionApelacionEvidencias();
+      }
+
+      function actualizarListaSancionApelacionEvidencias() {
+        var container = $('sancionApelacionEvidenciasAportadas');
+        if (!sancionApelacionEvidenciasAportadas.length) {
+          container.innerHTML = '<small class="text-muted d-block">Ninguna evidencia seleccionada</small>';
+          return;
+        }
+        container.innerHTML = sancionApelacionEvidenciasAportadas.map(function (evidence, idx) {
+          var isPdf = evidence.type === 'application/pdf';
+          var thumb = isPdf
+            ? '<div style="width:72px;height:72px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f1f1f1"><i class="bi bi-file-earmark-pdf text-danger" style="font-size:1.8rem;"></i></div>'
+            : '<img src="' + esc(evidence.dataUrl) + '" alt="Evidencia ' + (idx + 1) + '" style="width:72px;height:72px;object-fit:cover;border-radius:8px">';
+          return '<div class="card mb-2"><div class="card-body p-2"><div class="d-flex gap-3 align-items-center">' +
+            thumb +
+            '<div class="flex-grow-1 overflow-hidden"><strong class="d-block text-truncate">' + esc(evidence.name) + '</strong>' +
+            '<small class="text-muted">' + (evidence.size / 1024).toFixed(1) + ' KB</small></div>' +
+            '<button type="button" class="btn btn-outline-danger btn-sm remover-sancion-apelacion-evidencia" data-idx="' + idx + '" aria-label="Eliminar evidencia"><i class="bi bi-trash"></i></button>' +
+            '</div></div></div>';
+        }).join('');
+      }
+
+      $('sancionApelacionEvidenciasAportadas').addEventListener('click', function (event) {
+        var button = event.target.closest('.remover-sancion-apelacion-evidencia');
+        if (!button) return;
+        sancionApelacionEvidenciasAportadas.splice(Number(button.dataset.idx), 1);
+        actualizarListaSancionApelacionEvidencias();
+      });
+
+      function capturarSancionApelacionEvidencia() {
+        if (!window.BVEvidenceCamera) {
+          alertMessage('No fue posible cargar el módulo seguro de cámara. Recarga la página e intenta nuevamente.');
+          return;
+        }
+        if (!currentSancion) {
+          alertMessage('No se identificó el caso al que pertenece la evidencia.');
+          return;
+        }
+
+        window.BVEvidenceCamera.capture({
+          contextLabel: 'Evidencia de apelación de convivencia',
+          detailLines: ['Caso: ' + currentSancion.id, 'Apartamento: ' + currentSancion.apto],
+          filePrefix: 'convivencia-apelacion',
+          maxDimension: 1600,
+          quality: 0.84,
+        }).then(function (evidence) {
+          sancionApelacionEvidenciasAportadas.push(evidence);
+          actualizarListaSancionApelacionEvidencias();
+          alertMessage('Fotografía tomada con fecha y ubicación incorporadas.', 'success');
+        }).catch(function (error) {
+          if (error && error.name === 'AbortError') return;
+          alertMessage('No fue posible tomar la fotografía: ' + (error.message || error));
+        });
+      }
+
+      function seleccionarSancionApelacionEvidencia(event) {
+        var file = event.target.files && event.target.files[0];
+        event.target.value = '';
+        if (!file) return;
+
+        var isImage = /^image\//i.test(file.type);
+        var isPdf = file.type === 'application/pdf';
+
+        if (!isImage && !isPdf) {
+          alertMessage('Solo se permiten archivos de imagen o PDF');
+          return;
+        }
+
+        if (isPdf) {
+          if (file.size > 50 * 1024 * 1024) {
+            alertMessage('El documento es demasiado grande (máximo 50 MB).');
             return;
           }
-          alertMessage('Descargos guardados exitosamente. Gracias por tu respuesta.', 'success');
+          leerArchivoComoDataUrl(file).then(function (data) {
+            sancionApelacionEvidenciasAportadas.push(data);
+            actualizarListaSancionApelacionEvidencias();
+          }).catch(function (error) {
+            alertMessage('Error al procesar el documento: ' + error.message);
+          });
+          return;
+        }
+
+        comprimirSancionImagen(file).then(function (compressedData) {
+          sancionApelacionEvidenciasAportadas.push(compressedData);
+          actualizarListaSancionApelacionEvidencias();
+        }).catch(function (error) {
+          alertMessage('Error al procesar la imagen: ' + error.message);
+        });
+      }
+
+      function subirSancionApelacionEvidenciaAGoogle(evidence) {
+        return apiFetch('/sanciones/evidencias', {
+          method: 'POST',
+          body: {
+            mimeType: evidence.type || 'image/jpeg',
+            dataUrl: evidence.dataUrl,
+            caseId: currentSancion ? currentSancion.id : '',
+            contexto: 'apelacion_residente',
+          },
+        }).then(function (body) {
+          return body.data;
+        });
+      }
+
+      function guardarSancionApelacion(event) {
+        event.preventDefault();
+        clearAlert();
+
+        var texto = $('sancionApelacionTexto').value.trim();
+        if (!texto) { alertMessage('Explica los motivos de tu apelación'); return; }
+        if (texto.length < 20) { alertMessage('La apelación debe tener al menos 20 caracteres'); return; }
+
+        var btn = $('sancionApelacionGuardarBtn');
+        var status = $('sancionApelacionStatus');
+        var uploadStatus = $('sancionApelacionUploadStatus');
+        btn.disabled = true;
+
+        var evidenceUrls = [];
+        var subirSiguiente = function (i) {
+          if (i >= sancionApelacionEvidenciasAportadas.length) return Promise.resolve();
+          uploadStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Subiendo evidencia ' + (i + 1) + '/' + sancionApelacionEvidenciasAportadas.length + '...';
+          return subirSancionApelacionEvidenciaAGoogle(sancionApelacionEvidenciasAportadas[i]).then(function (result) {
+            evidenceUrls.push(result.url);
+            return subirSiguiente(i + 1);
+          });
+        };
+
+        subirSiguiente(0).then(function () {
+          uploadStatus.innerHTML = '';
+          status.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando apelación...';
+
+          return apiFetch('/sanciones/' + encodeURIComponent(currentSancion.id) + '/apelacion', {
+            method: 'POST',
+            body: { texto: texto, evidencias: evidenceUrls },
+          });
+        }).then(function () {
+          alertMessage('Apelación presentada exitosamente.', 'success');
           setTimeout(function () { cargarSanciones(); }, 2000);
         }).catch(function (error) {
           alertMessage('Error de conexión: ' + error.message);

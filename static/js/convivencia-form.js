@@ -2,7 +2,28 @@
   'use strict';
 
   var config = window.CONVIVENCIA_FORM_CONFIG || {};
-  var API_URL = config.apiUrl || '';
+  var API_BASE = config.apiBase || '';
+
+  function getAuthToken() {
+    return new Promise(function (resolve, reject) {
+      if (!window.firebase || !firebase.auth) {
+        reject(new Error('No hay sesión activa.'));
+        return;
+      }
+      if (firebase.auth().currentUser) {
+        firebase.auth().currentUser.getIdToken().then(resolve, reject);
+        return;
+      }
+      var off = firebase.auth().onAuthStateChanged(function (user) {
+        off();
+        if (!user) {
+          reject(new Error('No hay sesión activa.'));
+          return;
+        }
+        user.getIdToken().then(resolve, reject);
+      });
+    });
+  }
 
   var categorias = [];
   var severidades = [];
@@ -238,11 +259,14 @@
 
   async function cargarConfiguracion() {
     try {
-      var response = await fetch(API_URL + '?action=listarConfig');
-      var data = await response.json();
-      if (data.ok) {
-        categorias = data.categorias || [];
-        severidades = data.severidades || [];
+      var token = await getAuthToken();
+      var response = await fetch(API_BASE + '/api/v1/convivencia/config', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      var body = await response.json();
+      if (response.ok) {
+        categorias = (body.data && body.data.categorias) || [];
+        severidades = (body.data && body.data.severidades) || [];
         var cacheData = {
           categorias: categorias,
           severidades: severidades,
@@ -295,8 +319,13 @@
     var container = $('convivenciaSeveridadContainer');
     if (!container || severidades.length === 0) return;
     var html = severidades.map(function (sev) {
-      return '<button type="button" class="cv-severity-badge" data-nombre="' + esc(sev.nombre) + '" data-cuotas="' + sev.cuotas + '">' +
-        '<strong>' + esc(sev.nombre) + '</strong> (' + sev.cuotas + ' cuota' + (sev.cuotas !== 1 ? 's' : '') + ')</button>';
+      var esLlamadoAtencion = sev.requiereProcesoFormal === false;
+      var claseExtra = esLlamadoAtencion ? ' cv-severity-badge-informal' : '';
+      var detalle = esLlamadoAtencion
+        ? 'no requiere proceso formal'
+        : sev.cuotas + ' cuota' + (sev.cuotas !== 1 ? 's' : '') + ' referencial';
+      return '<button type="button" class="cv-severity-badge' + claseExtra + '" data-nombre="' + esc(sev.nombre) + '" data-cuotas="' + sev.cuotas + '">' +
+        '<strong>' + esc(sev.nombre) + '</strong> (' + detalle + ')</button>';
     }).join('');
     container.innerHTML = html;
   }
@@ -388,7 +417,11 @@
       if (reviewSection) reviewSection.classList.remove('hidden');
       var html = evidencias.map(function (evidence, idx) {
         var isVideo = /^video\//i.test(evidence.type);
-        var media = isVideo
+        var isPdf = evidence.type === 'application/pdf';
+        var media = isPdf
+          ? '<div style="width: 200px; height: 80px; display:flex; align-items:center; gap:.5rem; border:1px solid #ddd; border-radius:4px; padding:.5rem;">' +
+            '<i class="bi bi-file-earmark-pdf text-danger" style="font-size:1.8rem;"></i><span class="small text-truncate">' + esc(evidence.name) + '</span></div>'
+          : isVideo
           ? '<video controls style="max-width: 200px; max-height: 150px; border-radius: 4px;" src="' + evidence.dataUrl + '" />'
           : '<img src="' + evidence.dataUrl + '" style="max-width: 200px; max-height: 150px; border-radius: 4px;" alt="Evidencia ' + (idx + 1) + '">';
         return '<div class="mb-2">' + media +
@@ -480,8 +513,8 @@
       return;
     }
 
-    if (!API_URL) {
-      log('error', 'No se puede enviar: falta configurar API_URL.');
+    if (!API_BASE) {
+      log('error', 'No se puede enviar: falta configurar API_BASE.');
       showStatus('warning', 'El caso está en cola, pero falta configurar la URL del servidor.');
       await refreshQueueCount();
       return;
@@ -574,7 +607,7 @@
 
           var caseData = {
             clientRequestId: item.clientRequestId,
-            apto: item.apto,
+            apartamento: item.apto,
             motivo: item.motivo,
             descripcion: item.descripcion,
             razonNotificacion: item.razonNotificacion,
@@ -583,23 +616,29 @@
             evidencias: item.evidenciasSubidas.map(function (sub) { return sub.url; })
           };
 
-          var createResponse = await fetch(API_URL + '?action=crearCasoConvivencia', {
+          var token = await getAuthToken();
+          var createResponse = await fetch(API_BASE + '/api/v1/convivencia/casos', {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer ' + token
+            },
             body: JSON.stringify(caseData)
           });
 
-          var createResult = await createResponse.json();
-          if (!createResult.ok) {
-            throw new Error(createResult.error || 'El servidor no confirmó el registro.');
+          var createBody = await createResponse.json();
+          if (!createResponse.ok) {
+            throw new Error((createBody.error && createBody.error.message) || 'El servidor no confirmó el registro.');
           }
 
+          var createResult = createBody.data;
+
           await deleteQueueItem(item.clientRequestId);
-          log('info', 'Caso confirmado y eliminado de la cola.', { clientRequestId: item.clientRequestId, caseId: createResult.caseId });
+          log('info', 'Caso confirmado y eliminado de la cola.', { clientRequestId: item.clientRequestId, caseId: createResult.caseCode });
 
           showStatus(
             'success',
-            'Caso enviado correctamente. ID: ' + createResult.caseId
+            'Caso enviado correctamente. ID: ' + createResult.caseCode
           );
 
           setTimeout(function () {
@@ -671,22 +710,20 @@
 
   async function uploadEvidenceToGoogle(evidence, apto) {
     try {
-      var response = await fetch(API_URL + '?action=subirEvidenciaConvivencia', {
+      var token = await getAuthToken();
+      var response = await fetch(API_BASE + '/api/v1/convivencia/evidencias', {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token
+        },
         body: JSON.stringify({
-          name: evidence.name,
           mimeType: evidence.type || 'image/jpeg',
           dataUrl: evidence.dataUrl,
-          contexto: 'caso_offline',
-          apto: apto || '',
-          captureMetadata: evidence.captureMetadata || null
+          contexto: 'caso',
+          apartamento: apto || ''
         })
       });
-
-      if (!response.ok) {
-        throw new Error('Respuesta inválida del servidor: ' + response.status);
-      }
 
       var result = null;
       try {
@@ -694,7 +731,12 @@
       } catch (parseError) {
         throw new Error('Respuesta inválida del servidor al subir evidencia (no es JSON válido)');
       }
-      return result;
+
+      if (!response.ok) {
+        return { ok: false, error: (result.error && result.error.message) || ('Error del servidor: ' + response.status) };
+      }
+
+      return { ok: true, url: result.data.url };
     } catch (error) {
       log('error', 'Error subiendo evidencia:', error);
       throw error;
@@ -747,14 +789,20 @@
     var isImage = /^image\//i.test(file.type);
     var isVideo = /^video\//i.test(file.type) &&
                   /(mp4|quicktime|webm)/.test(file.type);
+    var isPdf = file.type === 'application/pdf';
 
-    if (!isImage && !isVideo) {
-      showAlert('Solo se permiten archivos de imagen o video (MP4, MOV, WebM)');
+    if (!isImage && !isVideo && !isPdf) {
+      showAlert('Solo se permiten archivos de imagen, video (MP4, MOV, WebM) o PDF');
       return;
     }
 
-    if (isVideo && file.size > 15 * 1024 * 1024) {
-      showAlert('El video es demasiado grande (máximo 15 MB). Por favor selecciona un video más pequeño o más corto.');
+    if (isVideo && file.size > 50 * 1024 * 1024) {
+      showAlert('El video es demasiado grande (máximo 50 MB). Por favor selecciona un video más pequeño o más corto.');
+      return;
+    }
+
+    if (isPdf && file.size > 50 * 1024 * 1024) {
+      showAlert('El documento es demasiado grande (máximo 50 MB).');
       return;
     }
 
@@ -763,9 +811,12 @@
       if (isImage) {
         data = await compressImage(file);
         showAlert('Imagen comprimida y agregada exitosamente', 'success');
-      } else {
-        data = await readVideoAsDataUrl(file);
+      } else if (isVideo) {
+        data = await readFileAsDataUrl(file);
         showAlert('Video agregado exitosamente', 'success');
+      } else {
+        data = await readFileAsDataUrl(file);
+        showAlert('Documento agregado exitosamente', 'success');
       }
       evidencias.push(data);
       actualizarListaEvidencias();
@@ -814,7 +865,7 @@
     });
   }
 
-  async function readVideoAsDataUrl(file) {
+  async function readFileAsDataUrl(file) {
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
       reader.onload = function (e) {
@@ -827,7 +878,7 @@
         });
       };
       reader.onerror = function () {
-        reject(new Error('No se pudo leer el archivo de video'));
+        reject(new Error('No se pudo leer el archivo'));
       };
       reader.readAsDataURL(file);
     });
@@ -842,7 +893,8 @@
     }
     var html = evidencias.map(function (evidence, idx) {
       var isVideo = /^video\//i.test(evidence.type);
-      var icon = isVideo ? 'bi-camera-video' : 'bi-image';
+      var isPdf = evidence.type === 'application/pdf';
+      var icon = isPdf ? 'bi-file-earmark-pdf' : (isVideo ? 'bi-camera-video' : 'bi-image');
       return '<div class="card mb-2">' +
         '<div class="card-body p-2">' +
         '<div class="d-flex justify-content-between align-items-center">' +
@@ -1077,7 +1129,7 @@
   async function init() {
     log('info', 'Inicializando módulo.', {
       online: navigator.onLine,
-      apiUrl: API_URL ? 'configurada' : 'sin configurar'
+      apiBase: API_BASE ? 'configurada' : 'sin configurar'
     });
 
     renderNetworkStatus();

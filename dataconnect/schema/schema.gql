@@ -270,6 +270,7 @@ type Sancion @table(name: "sanciones", singular: "sancion", plural: "sanciones",
   id: UUID! @default(expr: "uuidV4()")
   unidad: Unidad!
   personaResponsable: Persona
+  caso: CasoConvivencia
   tipoSancion: String
   descripcion: String
   fechaImposicion: Date
@@ -281,4 +282,73 @@ type Sancion @table(name: "sanciones", singular: "sancion", plural: "sanciones",
   observaciones: String
   fechaCreacion: Timestamp! @default(expr: "request.time")
   fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type CasoConvivencia
+  @table(name: "casos_convivencia", singular: "caso_convivencia", plural: "casos_convivencia", key: "id") {
+  id: UUID! @default(expr: "uuidV4()")
+  caseCode: String! @unique
+  unidad: Unidad!
+  apartamento: String!
+  motivo: String!
+  descripcion: String!
+  razonNotificacion: String!
+  severidad: String!
+  sancionEquivalente: Float @col(dataType: "numeric(6,2)")
+  notificadorAdmin: String!
+  creadoPorUid: String
+  requiereProcesoFormal: Boolean! @default(value: true)
+  estado: String! @default(value: "PENDIENTE_DESCARGOS")
+  descargosResidente: String
+  fechaDescargos: Timestamp
+  actaComiteFecha: Timestamp
+  actaComiteResumen: String
+  sancionPropuestaTipo: String
+  sancionPropuestaValor: Float @col(dataType: "numeric(16,2)")
+  sancionPropuestaJustificacion: String
+  sancionPropuestaPersona: Persona
+  apelacionTexto: String
+  fechaApelacion: Timestamp
+  resolucion: String
+  notasAdmin: String
+  resueltoPorUid: String
+  clientRequestId: String @unique
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+type EvidenciaConvivencia
+  @table(
+    name: "evidencias_convivencia"
+    singular: "evidencia_convivencia"
+    plural: "evidencias_convivencia"
+    key: "id"
+  ) {
+  id: UUID! @default(expr: "uuidV4()")
+  caso: CasoConvivencia!
+  contexto: String!
+  url: String!
+  driveFileId: String
+  nombreArchivo: String
+  mimeType: String
+  tamanoBytes: Int
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+}
+
+type EventoCasoConvivencia
+  @table(
+    name: "eventos_caso_convivencia"
+    singular: "evento_caso_convivencia"
+    plural: "eventos_caso_convivencia"
+    key: "id"
+  ) {
+  id: UUID! @default(expr: "uuidV4()")
+  caso: CasoConvivencia!
+  tipoEvento: String!
+  estadoAnterior: String
+  estadoNuevo: String!
+  descripcion: String
+  actorUid: String
+  actorTipo: String!
+  fechaCreacion: Timestamp! @default(expr: "request.time")
 }
