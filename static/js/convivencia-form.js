@@ -928,11 +928,12 @@
             el.style.display = 'none';
           });
           document.querySelectorAll('.cv-main-category').forEach(function (btn) {
+            btn.classList.remove('expanded');
             btn.classList.remove('selected');
           });
           if (!isOpen) {
             subcatDiv.style.display = '';
-            mainCat.classList.add('selected');
+            mainCat.classList.add('expanded');
           }
         }
         return;
@@ -948,6 +949,25 @@
           badges[i].classList.remove('selected');
         }
         subCat.classList.add('selected');
+        var mainCats = categoriesContainer.querySelectorAll('.cv-main-category');
+        for (var i = 0; i < mainCats.length; i++) {
+          mainCats[i].classList.remove('selected');
+          mainCats[i].classList.remove('expanded');
+        }
+        var parentIdx = event.target.closest('.cv-main-category');
+        if (!parentIdx) {
+          var subcatParent = subCat.closest('.cv-subcategories');
+          if (subcatParent && subcatParent.id) {
+            var idMatch = subcatParent.id.match(/cv-categ-(\d+)/);
+            if (idMatch) {
+              var parentIdx = parseInt(idMatch[1], 10);
+              var parentBtn = categoriesContainer.querySelector('.cv-main-category[data-idx="' + parentIdx + '"]');
+              if (parentBtn) {
+                parentBtn.classList.add('selected');
+              }
+            }
+          }
+        }
       }
     });
   }
