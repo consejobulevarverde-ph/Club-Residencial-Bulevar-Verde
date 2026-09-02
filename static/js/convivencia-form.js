@@ -62,7 +62,7 @@
     statusEl.className = 'alert alert-' + type;
     statusEl.textContent = message;
 
-    global.setTimeout(function () {
+    setTimeout(function () {
       refreshQueueCount();
     }, 12000);
   }
