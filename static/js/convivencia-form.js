@@ -309,8 +309,15 @@
       container.innerHTML = '<p class="text-muted">Cargando categorías...</p>';
       return;
     }
-    var html = categorias.map(function (cat) {
-      return '<button type="button" class="cv-category-badge" data-category="' + esc(cat) + '">' + esc(cat) + '</button>';
+    var html = categorias.map(function (cat, idx) {
+      var categId = 'cv-categ-' + idx;
+      var subcategHtml = cat.subcategorias.map(function (sub) {
+        return '<button type="button" class="cv-category-badge cv-subcategory" style="display:none; margin-left:1rem;" data-category="' + esc(sub) + '">' + esc(sub) + '</button>';
+      }).join('');
+      return '<div>' +
+        '<button type="button" class="cv-category-badge cv-main-category" data-idx="' + idx + '" style="font-size:1.1rem;">' + esc(cat.emoji) + ' ' + esc(cat.nombre) + '</button>' +
+        '<div id="' + categId + '" class="cv-subcategories" style="display:none;">' + subcategHtml + '</div>' +
+        '</div>';
     }).join('');
     container.innerHTML = html;
   }
@@ -909,16 +916,38 @@
   var categoriesContainer = $('convivenciaCategoriasContainer');
   if (categoriesContainer) {
     categoriesContainer.addEventListener('click', function (event) {
-      var badge = event.target.closest('.cv-category-badge');
-      if (!badge) return;
-      motivoSeleccionado = badge.getAttribute('data-category') || '';
-      var motivo = $('convivenciaMotivoCustom');
-      if (motivo) motivo.value = '';
-      var badges = categoriesContainer.querySelectorAll('.cv-category-badge');
-      for (var i = 0; i < badges.length; i++) {
-        badges[i].classList.remove('selected');
+      var mainCat = event.target.closest('.cv-main-category');
+      if (mainCat) {
+        var idx = mainCat.getAttribute('data-idx');
+        var categId = 'cv-categ-' + idx;
+        var subcatDiv = $(categId);
+        if (subcatDiv) {
+          var isOpen = subcatDiv.style.display !== 'none';
+          document.querySelectorAll('.cv-subcategories').forEach(function (el) {
+            el.style.display = 'none';
+          });
+          document.querySelectorAll('.cv-main-category').forEach(function (btn) {
+            btn.classList.remove('selected');
+          });
+          if (!isOpen) {
+            subcatDiv.style.display = '';
+            mainCat.classList.add('selected');
+          }
+        }
+        return;
       }
-      badge.classList.add('selected');
+
+      var subCat = event.target.closest('.cv-subcategory');
+      if (subCat) {
+        motivoSeleccionado = subCat.getAttribute('data-category') || '';
+        var motivo = $('convivenciaMotivoCustom');
+        if (motivo) motivo.value = '';
+        var badges = categoriesContainer.querySelectorAll('.cv-subcategory');
+        for (var i = 0; i < badges.length; i++) {
+          badges[i].classList.remove('selected');
+        }
+        subCat.classList.add('selected');
+      }
     });
   }
 
