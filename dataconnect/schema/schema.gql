@@ -1,3 +1,6 @@
+# Data Connect Schema - Bulevar Verde Portal
+# Updated: 2026-09-02 with complete convivencia sanction workflow
+
 type Unidad @table(name: "unidades", singular: "unidad", plural: "unidades", key: "id") {
   id: UUID! @default(expr: "uuidV4()")
   torre: Int!
