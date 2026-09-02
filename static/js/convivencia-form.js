@@ -1155,6 +1155,19 @@
     }
   }
 
+  function llenarNotificadorActual() {
+    var notificadorInput = $('convivenciaNotificador');
+    if (!notificadorInput) return;
+
+    if (window.firebase && firebase.auth && firebase.auth().currentUser) {
+      var currentUser = firebase.auth().currentUser;
+      var displayName = currentUser.displayName || currentUser.email || 'Usuario';
+      notificadorInput.value = displayName;
+    } else {
+      notificadorInput.value = 'Usuario no autenticado';
+    }
+  }
+
   async function init() {
     log('info', 'Inicializando módulo.', {
       online: navigator.onLine,
@@ -1163,6 +1176,7 @@
 
     renderNetworkStatus();
     initEventListeners();
+    llenarNotificadorActual();
     cargarConfiguracion();
     refreshQueueCount();
     flushQueue(false, null, 'inicio del módulo');
