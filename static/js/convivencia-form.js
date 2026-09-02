@@ -936,6 +936,17 @@
             mainCat.classList.add('expanded');
           }
         }
+        // Set motivoSeleccionado to the main category name
+        motivoSeleccionado = (categorias[idx] && categorias[idx].nombre) || '';
+        // Clear any free-text motivo
+        var motivo = $('convivenciaMotivoCustom');
+        if (motivo) motivo.value = '';
+        // Clear .selected from all subcategories and mark this main category as selected
+        var badges = categoriesContainer.querySelectorAll('.cv-subcategory');
+        for (var i = 0; i < badges.length; i++) {
+          badges[i].classList.remove('selected');
+        }
+        mainCat.classList.add('selected');
         return;
       }
 
