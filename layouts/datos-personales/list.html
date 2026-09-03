@@ -2346,15 +2346,12 @@
         if (!$('reservaFechaConsulta').value) { alertMessage('Selecciona una fecha.'); return; }
 
         reservasData.fechaSeleccionada = parseLocalDateString($('reservaFechaConsulta').value);
-        var desde = new Date(reservasData.fechaSeleccionada);
-        desde.setHours(0, 0, 0, 0);
-        var hasta = new Date(reservasData.fechaSeleccionada);
-        hasta.setHours(23, 59, 59, 999);
+        var fechaStr = $('reservaFechaConsulta').value; // YYYY-MM-DD format
 
         loading($('irPaso2'), true, 'Cargando disponibilidad…');
-        apiFetch('/reservas/disponibilidad?zonaComunId=' + esc(reservasData.zonaSeleccionada) + '&desde=' + desde.toISOString() + '&hasta=' + hasta.toISOString())
+        apiFetch('/reservas/disponibilidad?zonaComunId=' + esc(reservasData.zonaSeleccionada) + '&fecha=' + fechaStr)
           .then(function (result) {
-            reservasData.disponibilidad = result.data || [];
+            reservasData.disponibilidad = result.data.franjas || [];
             var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
             var fechaFormato = new Date(reservasData.fechaSeleccionada).toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -2377,50 +2374,32 @@
           });
       });
 
+      function formatHora12(hora24Str) {
+        var parts = hora24Str.split(':');
+        var h = parseInt(parts[0]);
+        var m = parts[1];
+        var ampm = h >= 12 ? 'p.m.' : 'a.m.';
+        var h12 = h % 12 || 12;
+        return String(h12).padStart(2, '0') + ':' + m + ' ' + ampm;
+      }
+
       function renderDisponibilidad() {
         var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
-        var horaInicio = zona.horaApertura.split(':');
-        var horaFin = zona.horaCierre.split(':');
-
         var html = '<p class="small mb-0 text-muted">Horarios disponibles (mínimo ' + zona.duracionMinHoras + 'h):</p><div style="margin-top:0.75rem;">';
-        var slots = [];
-        var currentHour = parseInt(horaInicio[0]);
-        var currentMin = parseInt(horaInicio[1]);
-        var endHour = parseInt(horaFin[0]);
-        var endMin = parseInt(horaFin[1]);
 
-        while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
-          var slotStart = new Date(reservasData.fechaSeleccionada);
-          slotStart.setHours(currentHour, currentMin, 0);
-          var slotEnd = new Date(slotStart);
-          slotEnd.setMinutes(slotEnd.getMinutes() + (zona.duracionMinHoras * 60));
-
-          var isOccupied = reservasData.disponibilidad.some(function (res) {
-            var resStart = new Date(res.fechaHoraInicio);
-            var resEnd = new Date(res.fechaHoraFin);
-            return (slotStart < resEnd && slotEnd > resStart);
-          });
-
-          var startStr = slotStart.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
-          var endStr = slotEnd.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
-          var start24h = String(slotStart.getHours()).padStart(2,'0') + ':' + String(slotStart.getMinutes()).padStart(2,'0');
-          var end24h = String(slotEnd.getHours()).padStart(2,'0') + ':' + String(slotEnd.getMinutes()).padStart(2,'0');
+        reservasData.disponibilidad.forEach(function (franja) {
+          var startStr = formatHora12(franja.horaInicio);
+          var endStr = formatHora12(franja.horaFin);
 
           var slotHTML = '<button type="button" class="btn btn-sm ' +
-            (isOccupied ? 'btn-danger disabled' : 'btn-outline-success slot-disponible') +
-            '" ' + (isOccupied ? 'disabled' : 'data-hora="' + start24h + '" data-hora-fin="' + end24h + '" data-hora-label="' + startStr + '" data-hora-fin-label="' + endStr + '"') +
+            (!franja.disponible ? 'btn-danger disabled' : 'btn-outline-success slot-disponible') +
+            '" ' + (franja.disponible ? 'data-hora="' + franja.horaInicio + '" data-hora-fin="' + franja.horaFin + '" data-hora-label="' + startStr + '" data-hora-fin-label="' + endStr + '"' : 'disabled') +
             '>' +
             startStr + ' - ' + endStr +
-            (isOccupied ? '<br><small>(Ocupado)</small>' : '') +
+            (!franja.disponible ? '<br><small>(Ocupado)</small>' : '') +
             '</button>';
           html += slotHTML;
-
-          currentMin += 60;
-          if (currentMin >= 60) {
-            currentHour += Math.floor(currentMin / 60);
-            currentMin = currentMin % 60;
-          }
-        }
+        });
         html += '</div>';
 
         $('disponibilidadContainer').innerHTML = html;
