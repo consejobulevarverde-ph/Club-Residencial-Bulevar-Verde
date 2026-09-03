@@ -1625,7 +1625,7 @@
       function cargarReservasCatalogo() {
         var catalogoLoading = $('reservasCatalogoLoading');
         if (catalogoLoading) catalogoLoading.classList.remove('hidden');
-        withIdToken(function (idToken) {
+        return withIdToken(function (idToken) {
           return apiFetch('/api/v1/reservas/catalogo', idToken);
         }).then(function (result) {
           if (catalogoLoading) catalogoLoading.classList.add('hidden');
@@ -2676,8 +2676,12 @@
         if (accion === 'editar') {
           accionesPendiente = function () {
             reservaEditandoId = reservaActualId;
-            withIdToken(function (idToken) {
-              return apiFetch('/api/v1/reservas/' + reservaActualId, idToken);
+            // Asegura que zonasCatalogoCache esté poblado antes de armar el modal
+            var catalogoListo = zonasCatalogoCache.length ? Promise.resolve() : cargarReservasCatalogo();
+            catalogoListo.then(function () {
+              return withIdToken(function (idToken) {
+                return apiFetch('/api/v1/reservas/' + reservaActualId, idToken);
+              });
             }).then(function (result) {
               var r = result.data;
               renderEditarReservaZonaOptions();
