@@ -179,6 +179,26 @@ mutation ActualizarEstadoCasoConvivenciaAdmin(
   )
 }
 
+mutation EditarContenidoCasoConvivenciaAdmin(
+  $id: UUID!
+  $motivo: String!
+  $descripcion: String!
+  $razonNotificacion: String!
+  $notificadorAdmin: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: {
+      motivo: $motivo
+      descripcion: $descripcion
+      razonNotificacion: $razonNotificacion
+      notificadorAdmin: $notificadorAdmin
+    }
+  )
+}
+
 mutation RegistrarActaComiteCasoConvivenciaAdmin(
   $id: UUID!
   $actaComiteFecha: Timestamp!

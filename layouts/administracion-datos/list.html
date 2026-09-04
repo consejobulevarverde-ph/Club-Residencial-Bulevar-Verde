@@ -636,9 +636,14 @@
         </div>
 
         <div id="casosConvivenciaDetailView" class="hidden">
-          <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="casosConvivenciaVolverBtn">
-            <i class="bi bi-arrow-left me-1"></i>Volver al listado
-          </button>
+          <div class="d-flex gap-2 mb-3 flex-wrap">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="casosConvivenciaVolverBtn">
+              <i class="bi bi-arrow-left me-1"></i>Volver al listado
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="casoDetailEditarBtn">
+              <i class="bi bi-pencil me-1"></i>Editar información
+            </button>
+          </div>
 
           <div class="surface p-4 mb-3">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -1057,6 +1062,50 @@
             <button id="editarReservaSubmit" type="button" class="btn btn-primary" disabled>
               <i class="bi bi-check-circle me-1"></i>Guardar Cambios
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Editar Caso de Convivencia -->
+    <div class="modal fade" id="modalEditarCasoConvivencia" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Editar información del caso</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="editarCasoConvivenciaForm" class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label small">Caso (solo lectura)</label>
+                <input id="editCasoId" type="text" class="form-control form-control-sm" disabled>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small">Apartamento (solo lectura)</label>
+                <input id="editCasoApto" type="text" class="form-control form-control-sm" disabled>
+              </div>
+              <div class="col-12">
+                <label for="editCasoMotivo" class="form-label small">Motivo</label>
+                <input id="editCasoMotivo" type="text" class="form-control form-control-sm" maxlength="200" required autocomplete="off">
+              </div>
+              <div class="col-12">
+                <label for="editCasoDescripcion" class="form-label small">Descripción de los hechos</label>
+                <textarea id="editCasoDescripcion" class="form-control form-control-sm" rows="4" maxlength="4000" required autocomplete="off"></textarea>
+              </div>
+              <div class="col-12">
+                <label for="editCasoRazon" class="form-label small">Razón de la notificación</label>
+                <textarea id="editCasoRazon" class="form-control form-control-sm" rows="3" maxlength="2000" required autocomplete="off"></textarea>
+              </div>
+              <div class="col-md-6">
+                <label for="editCasoNotificador" class="form-label small">Notificador</label>
+                <input id="editCasoNotificador" type="text" class="form-control form-control-sm" maxlength="200" required autocomplete="off">
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="editCasoConvivenciaSubmit" type="button" class="btn btn-primary">Guardar cambios</button>
           </div>
         </div>
       </div>
@@ -2614,6 +2663,7 @@
       var reservasModalEditar = null;
       var modalEditarZona = null;
       var zonaEditandoId = null;
+      var modalEditarCasoConvivencia = null;
 
       document.addEventListener('DOMContentLoaded', function() {
         var modalAccionesEl = $('reservasModalAcciones');
@@ -2622,12 +2672,14 @@
         var modalPagoEl = $('reservasModalPago');
         var modalEditarReservaEl = $('reservasModalEditar');
         var modalEditarEl = $('modalEditarZona');
+        var modalEditarCasoEl = $('modalEditarCasoConvivencia');
         if (modalAccionesEl) reservasModalAcciones = new bootstrap.Modal(modalAccionesEl);
         if (modalRechazarEl) reservasModalRechazar = new bootstrap.Modal(modalRechazarEl);
         if (modalCancelarEl) reservasModalCancelar = new bootstrap.Modal(modalCancelarEl);
         if (modalPagoEl) reservasModalPago = new bootstrap.Modal(modalPagoEl);
         if (modalEditarReservaEl) reservasModalEditar = new bootstrap.Modal(modalEditarReservaEl);
         if (modalEditarEl) modalEditarZona = new bootstrap.Modal(modalEditarEl);
+        if (modalEditarCasoEl) modalEditarCasoConvivencia = new bootstrap.Modal(modalEditarCasoEl);
       });
 
       var accionesPendiente = null;
@@ -3037,8 +3089,59 @@
         cargarCasosConvivencia(true);
       });
 
+      $('casoDetailEditarBtn').addEventListener('click', function () {
+        if (!casoConvivenciaActual) return;
+        $('editCasoId').value = casoConvivenciaActual.caseCode || '';
+        $('editCasoApto').value = casoConvivenciaActual.apartamento || '';
+        $('editCasoMotivo').value = casoConvivenciaActual.motivo || '';
+        $('editCasoDescripcion').value = casoConvivenciaActual.descripcion || '';
+        $('editCasoRazon').value = casoConvivenciaActual.razonNotificacion || '';
+        $('editCasoNotificador').value = casoConvivenciaActual.notificadorAdmin || '';
+        if (modalEditarCasoConvivencia) modalEditarCasoConvivencia.show();
+      });
+
+      var editCasoSubmitBtn = $('editCasoConvivenciaSubmit');
+      if (editCasoSubmitBtn) editCasoSubmitBtn.addEventListener('click', function () {
+        if (!casoConvivenciaActual) return;
+        hideMsg();
+        var btn = this;
+        var motivo = $('editCasoMotivo').value.trim();
+        var descripcion = $('editCasoDescripcion').value.trim();
+        var razon = $('editCasoRazon').value.trim();
+        var notificador = $('editCasoNotificador').value.trim();
+
+        if (!motivo || !descripcion || !razon || !notificador) {
+          msg('Todos los campos son requeridos');
+          return;
+        }
+
+        busy(btn, true, 'Guardando…');
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id, idToken, {
+            method: 'PATCH',
+            body: {
+              motivo: motivo,
+              descripcion: descripcion,
+              razonNotificacion: razon,
+              notificadorAdmin: notificador
+            }
+          });
+        })
+          .then(function (response) {
+            return response.json().then(function (data) {
+              casoConvivenciaActual = data.data;
+              renderDetalleCasoConvivencia(data.data);
+              if (modalEditarCasoConvivencia) modalEditarCasoConvivencia.hide();
+              msg('Caso actualizado', 'success');
+            });
+          })
+          .catch(function (error) { msg(error.message); })
+          .finally(function () { busy(btn, false, 'Guardar cambios'); });
+      });
+
       var TIPO_EVENTO_LABELS = {
         CASO_CREADO: 'Caso creado',
+        CASO_EDITADO: 'Información del caso editada',
         DESCARGOS_REGISTRADOS: 'Descargos registrados',
         ACTA_COMITE_REGISTRADA: 'Acta de comité registrada',
         CASO_CERRADO_SIN_SANCION: 'Caso cerrado sin sanción',
