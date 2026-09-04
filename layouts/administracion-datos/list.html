@@ -1886,8 +1886,10 @@
       if (showReservasCatalogo) showReservasCatalogo.addEventListener('click', function () { modeReservas('catalogo'); });
       if (showReservasReservar) showReservasReservar.addEventListener('click', function () {
         modeReservas('reservar');
-        if (!zonasCatalogoCache.length) cargarReservasCatalogo();
-        renderReservarZonaOptions();
+        var catalogoListo = zonasCatalogoCache.length ? Promise.resolve() : cargarReservasCatalogo();
+        catalogoListo.then(function () {
+          renderReservarZonaOptions();
+        });
       });
       if (showReservasAgenda) showReservasAgenda.addEventListener('click', function () {
         modeReservas('agenda');
