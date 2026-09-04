@@ -266,11 +266,11 @@
       <form id="loginForm" class="row g-3">
         <div class="col-12">
           <label class="form-label" for="email">Correo</label>
-          <input id="email" type="email" class="form-control" required>
+          <input id="email" type="email" class="form-control" required autocomplete="username">
         </div>
         <div class="col-12">
           <label class="form-label" for="password">Contraseña</label>
-          <input id="password" type="password" class="form-control" required>
+          <input id="password" type="password" class="form-control" required autocomplete="current-password">
         </div>
         <div class="col-12 d-grid">
           <button id="loginBtn" class="btn btn-primary btn-lg" type="submit">Ingresar</button>
@@ -318,7 +318,7 @@
                 <input
                   id="query"
                   class="form-control"
-                  placeholder="Código, placa, correo, documento o nombre">
+                  placeholder="Código, placa, correo, documento o nombre" autocomplete="off">
                 <button class="btn btn-primary">Buscar</button>
               </form>
               <div id="searchResults" class="mt-3 text-muted">Sin búsquedas todavía.</div>
@@ -365,56 +365,56 @@
             <h3 class="section-title h5 mb-3"><i class="bi bi-plus-circle me-2"></i>Crear nueva zona</h3>
             <form id="crearZonaForm" class="row g-3">
               <div class="col-md-3">
-                <label class="form-label small">Código</label>
-                <input id="zonaCodigo" type="text" class="form-control form-control-sm" required>
+                <label for="zonaCodigo"class="form-label small">Código</label>
+                <input id="zonaCodigo" type="text" class="form-control form-control-sm" required autocomplete="off">
               </div>
               <div class="col-md-3">
-                <label class="form-label small">Tipo</label>
-                <input id="zonaTipo" type="text" class="form-control form-control-sm" placeholder="ej: Salón, Cancha" required>
+                <label for="zonaTipo"class="form-label small">Tipo</label>
+                <input id="zonaTipo" type="text" class="form-control form-control-sm" placeholder="ej: Salón, Cancha" required autocomplete="off">
               </div>
               <div class="col-md-6">
-                <label class="form-label small">Descripción</label>
-                <input id="zonaDescripcion" type="text" class="form-control form-control-sm" required>
+                <label for="zonaDescripcion"class="form-label small">Descripción</label>
+                <input id="zonaDescripcion" type="text" class="form-control form-control-sm" required autocomplete="off">
               </div>
               <div class="col-md-2">
-                <label class="form-label small">Hora apertura</label>
-                <input id="zonaHoraApertura" type="time" class="form-control form-control-sm" required>
+                <label for="zonaHoraApertura"class="form-label small">Hora apertura</label>
+                <input id="zonaHoraApertura" type="time" class="form-control form-control-sm" required autocomplete="off">
               </div>
               <div class="col-md-2">
-                <label class="form-label small">Hora cierre</label>
-                <input id="zonaHoraCierre" type="time" class="form-control form-control-sm" required>
+                <label for="zonaHoraCierre"class="form-label small">Hora cierre</label>
+                <input id="zonaHoraCierre" type="time" class="form-control form-control-sm" required autocomplete="off">
               </div>
               <div class="col-md-2">
-                <label class="form-label small">Dur. mín. (horas)</label>
-                <input id="zonaDuracionMin" type="number" class="form-control form-control-sm" min="1" required>
+                <label for="zonaDuracionMin"class="form-label small">Dur. mín. (horas)</label>
+                <input id="zonaDuracionMin" type="number" class="form-control form-control-sm" min="1" required autocomplete="off">
               </div>
               <div class="col-md-2">
-                <label class="form-label small">Dur. máx. (horas)</label>
-                <input id="zonaDuracionMax" type="number" class="form-control form-control-sm" min="1" required>
+                <label for="zonaDuracionMax"class="form-label small">Dur. máx. (horas)</label>
+                <input id="zonaDuracionMax" type="number" class="form-control form-control-sm" min="1" required autocomplete="off">
               </div>
               <div class="col-md-2">
-                <label class="form-label small">Costo</label>
-                <input id="zonaCosto" type="number" class="form-control form-control-sm" step="0.01" min="0">
+                <label for="zonaCosto"class="form-label small">Costo</label>
+                <input id="zonaCosto" type="number" class="form-control form-control-sm" step="0.01" min="0" autocomplete="off">
               </div>
               <div class="col-md-2">
-                <label class="form-label small">Depósito</label>
-                <input id="zonaDeposito" type="number" class="form-control form-control-sm" step="0.01" min="0">
+                <label for="zonaDeposito"class="form-label small">Depósito</label>
+                <input id="zonaDeposito" type="number" class="form-control form-control-sm" step="0.01" min="0" autocomplete="off">
               </div>
               <div class="col-md-3">
                 <div class="form-check mt-4">
-                  <input id="zonaRequierePago" type="checkbox" class="form-check-input">
+                  <input id="zonaRequierePago" type="checkbox" class="form-check-input" autocomplete="off">
                   <label class="form-check-label small" for="zonaRequierePago">Requiere pago</label>
                 </div>
               </div>
               <div class="col-md-3">
                 <div class="form-check mt-4">
-                  <input id="zonaRequiereAprobacion" type="checkbox" class="form-check-input">
+                  <input id="zonaRequiereAprobacion" type="checkbox" class="form-check-input" autocomplete="off">
                   <label class="form-check-label small" for="zonaRequiereAprobacion">Requiere aprobación</label>
                 </div>
               </div>
               <div class="col-md-3">
                 <div class="form-check mt-4">
-                  <input id="zonaSoportaRecreativa" type="checkbox" class="form-check-input">
+                  <input id="zonaSoportaRecreativa" type="checkbox" class="form-check-input" autocomplete="off">
                   <label class="form-check-label small" for="zonaSoportaRecreativa">Soporta recreativa</label>
                 </div>
               </div>
@@ -438,9 +438,9 @@
             <form id="reservarForm" class="row g-3">
               <!-- Búsqueda de unidad -->
               <div class="col-12">
-                <label class="form-label small"><strong>1. Seleccionar Unidad</strong></label>
+                <label class="form-label small" for="reservarUnidadQuery"><strong>1. Seleccionar Unidad</strong></label>
                 <div id="reservarUnidadSearchForm" class="input-group mb-3">
-                  <input id="reservarUnidadQuery" type="text" class="form-control form-control-sm" placeholder="Código, placa, correo, documento o nombre">
+                  <input id="reservarUnidadQuery" type="text" class="form-control form-control-sm" placeholder="Código, placa, correo, documento o nombre" autocomplete="off">
                   <button type="button" id="reservarUnidadBuscarBtn" class="btn btn-primary btn-sm">Buscar</button>
                 </div>
                 <div id="reservarUnidadResults" class="text-muted small mb-3">Ingresa un término para buscar.</div>
@@ -452,16 +452,16 @@
 
               <!-- Selección de zona -->
               <div class="col-md-6">
-                <label class="form-label small"><strong>2. Zona Común</strong></label>
-                <select id="reservarZona" class="form-select form-select-sm" required>
+                <label class="form-label small" for="reservarZona"><strong>2. Zona Común</strong></label>
+                <select id="reservarZona" class="form-select form-select-sm" required autocomplete="off">
                   <option value="">-- Seleccionar zona --</option>
                 </select>
               </div>
 
               <!-- Modalidad de uso -->
               <div class="col-md-6">
-                <label class="form-label small"><strong>Modalidad</strong></label>
-                <select id="reservarModalidad" class="form-select form-select-sm" required>
+                <label class="form-label small" for="reservarModalidad"><strong>Modalidad</strong></label>
+                <select id="reservarModalidad" class="form-select form-select-sm" required autocomplete="off">
                   <option value="ORGANIZADO_CON_INVITADOS">Organizado / con invitados</option>
                 </select>
               </div>
@@ -477,30 +477,30 @@
 
               <!-- Fecha -->
               <div class="col-md-4">
-                <label class="form-label small"><strong>3. Fecha</strong></label>
-                <input id="reservarFecha" type="date" class="form-control form-control-sm" required>
+                <label class="form-label small" for="reservarFecha"><strong>3. Fecha</strong></label>
+                <input id="reservarFecha" type="date" class="form-control form-control-sm" required autocomplete="off">
               </div>
 
               <!-- Hora de inicio -->
               <div class="col-md-4">
-                <label class="form-label small"><strong>Hora de Inicio</strong></label>
-                <select id="reservarHoraInicio" class="form-select form-select-sm" required disabled>
+                <label class="form-label small" for="reservarHoraInicio"><strong>Hora de Inicio</strong></label>
+                <select id="reservarHoraInicio" class="form-select form-select-sm" required disabled autocomplete="off">
                   <option value="">-- Seleccionar --</option>
                 </select>
               </div>
 
               <!-- Duración -->
               <div class="col-md-4">
-                <label class="form-label small"><strong>Duración (horas)</strong></label>
-                <select id="reservarDuracion" class="form-select form-select-sm" required disabled>
+                <label class="form-label small" for="reservarDuracion"><strong>Duración (horas)</strong></label>
+                <select id="reservarDuracion" class="form-select form-select-sm" required disabled autocomplete="off">
                   <option value="">-- Seleccionar --</option>
                 </select>
               </div>
 
               <!-- Hora de fin (readonly) -->
               <div class="col-md-4">
-                <label class="form-label small"><strong>Hora de Fin</strong></label>
-                <input id="reservarHoraFin" type="text" class="form-control form-control-sm" disabled>
+                <label class="form-label small" for="reservarHoraFin"><strong>Hora de Fin</strong></label>
+                <input id="reservarHoraFin" type="text" class="form-control form-control-sm" disabled autocomplete="off">
               </div>
 
               <!-- Panel de reservas existentes -->
@@ -519,8 +519,8 @@
 
               <!-- Observaciones -->
               <div class="col-12">
-                <label class="form-label small">Observaciones (opcional)</label>
-                <textarea id="reservarObservaciones" class="form-control form-control-sm" rows="2" placeholder="Notas adicionales sobre esta reserva..."></textarea>
+                <label for="reservarObservaciones"class="form-label small">Observaciones (opcional)</label>
+                <textarea id="reservarObservaciones" class="form-control form-control-sm" rows="2" placeholder="Notas adicionales sobre esta reserva..." autocomplete="off"></textarea>
               </div>
 
               <!-- Botón de envío -->
@@ -538,11 +538,11 @@
             <h2 class="h5 mb-3"><i class="bi bi-calendar-event me-2"></i>Agenda de Reservas</h2>
             <div class="row g-3 mb-4">
               <div class="col-md-6">
-                <label class="form-label small">Rango de fechas</label>
+                <span class="form-label small">Rango de fechas</span>
                 <div class="d-flex gap-2">
-                  <input id="agendaDesde" type="date" class="form-control form-control-sm">
+                  <input id="agendaDesde" aria-label="Fecha desde" type="date" class="form-control form-control-sm" autocomplete="off">
                   <span class="align-self-center text-muted">a</span>
-                  <input id="agendaHasta" type="date" class="form-control form-control-sm">
+                  <input id="agendaHasta" aria-label="Fecha hasta" type="date" class="form-control form-control-sm" autocomplete="off">
                 </div>
               </div>
               <div class="col-md-6 d-flex gap-2 align-items-end">
@@ -561,7 +561,7 @@
       <section id="personalView" class="hidden">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <h3 class="section-title h5 mb-0">Personal de la copropiedad</h3>
-          <select id="personalFiltroRol" class="form-select form-select-sm" style="max-width:200px">
+          <select id="personalFiltroRol" class="form-select form-select-sm" style="max-width:200px" autocomplete="off">
             <option value="">Todos los roles</option>
             <option value="VIGILANTE">Vigilantes</option>
             <option value="ASEADOR">Aseadores</option>
@@ -578,22 +578,22 @@
             <div class="surface p-4">
               <h3 class="section-title h6" id="personalFormTitulo">Agregar personal</h3>
               <form id="personalForm" class="row g-2">
-                <input type="hidden" id="personalId" value="">
-                <div class="col-md-6"><label class="form-label small">Tipo doc.</label>
-                  <input id="personalTipoDocumento" class="form-control form-control-sm text-uppercase" value="CC" required></div>
-                <div class="col-md-6"><label class="form-label small">Número doc.</label>
-                  <input id="personalNumeroDocumento" class="form-control form-control-sm text-uppercase" required></div>
-                <div class="col-12"><label class="form-label small">Nombre completo</label>
-                  <input id="personalNombreCompleto" class="form-control form-control-sm text-uppercase" required></div>
-                <div class="col-md-6"><label class="form-label small">Rol</label>
-                  <select id="personalRol" class="form-select form-select-sm" required>
+                <input type="hidden" id="personalId" value="" autocomplete="off">
+                <div class="col-md-6"><label for="personalTipoDocumento"class="form-label small">Tipo doc.</label>
+                  <input id="personalTipoDocumento" class="form-control form-control-sm text-uppercase" value="CC" required autocomplete="off"></div>
+                <div class="col-md-6"><label for="personalNumeroDocumento"class="form-label small">Número doc.</label>
+                  <input id="personalNumeroDocumento" class="form-control form-control-sm text-uppercase" required autocomplete="off"></div>
+                <div class="col-12"><label for="personalNombreCompleto"class="form-label small">Nombre completo</label>
+                  <input id="personalNombreCompleto" class="form-control form-control-sm text-uppercase" required autocomplete="off"></div>
+                <div class="col-md-6"><label for="personalRol"class="form-label small">Rol</label>
+                  <select id="personalRol" class="form-select form-select-sm" required autocomplete="off">
                     <option value="VIGILANTE">VIGILANTE</option>
                     <option value="ASEADOR">ASEADOR</option>
                   </select></div>
-                <div class="col-md-6"><label class="form-label small">Teléfono (opcional)</label>
-                  <input id="personalTelefono" class="form-control form-control-sm"></div>
-                <div class="col-12"><label class="form-label small">Correo (opcional)</label>
-                  <input id="personalCorreo" type="email" class="form-control form-control-sm"></div>
+                <div class="col-md-6"><label for="personalTelefono"class="form-label small">Teléfono (opcional)</label>
+                  <input id="personalTelefono" class="form-control form-control-sm" autocomplete="off"></div>
+                <div class="col-12"><label for="personalCorreo"class="form-label small">Correo (opcional)</label>
+                  <input id="personalCorreo" type="email" class="form-control form-control-sm" autocomplete="off"></div>
                 <div class="col-12 d-flex gap-2">
                   <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
                   <button type="button" id="personalCancelarEdicion" class="btn btn-outline-secondary btn-sm hidden">Cancelar edición</button>
@@ -608,7 +608,7 @@
         <div id="casosConvivenciaListView">
           <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <h3 class="section-title h5 mb-0">Casos de convivencia</h3>
-            <select id="casosConvivenciaFiltroEstado" class="form-select form-select-sm" style="max-width:260px">
+            <select id="casosConvivenciaFiltroEstado" class="form-select form-select-sm" style="max-width:260px" autocomplete="off">
               <option value="">Todos los estados</option>
               <optgroup label="En trámite">
                 <option value="PENDIENTE_DESCARGOS">Pendiente de descargos</option>
@@ -717,16 +717,16 @@
             <h5 class="section-title h6">Registrar sesión del Comité de Convivencia</h5>
             <form id="casoActaComiteForm" class="row g-2">
               <div class="col-md-4">
-                <label class="form-label small">Fecha de la sesión</label>
-                <input type="date" id="casoActaComiteFecha" class="form-control form-control-sm" required>
+                <label for="casoActaComiteFecha"class="form-label small">Fecha de la sesión</label>
+                <input type="date" id="casoActaComiteFecha" class="form-control form-control-sm" required autocomplete="off">
               </div>
               <div class="col-12">
-                <label class="form-label small">Resumen / decisión del comité</label>
-                <textarea id="casoActaComiteResumen" class="form-control form-control-sm" rows="3" minlength="20" required></textarea>
+                <label for="casoActaComiteResumen"class="form-label small">Resumen / decisión del comité</label>
+                <textarea id="casoActaComiteResumen" class="form-control form-control-sm" rows="3" minlength="20" required autocomplete="off"></textarea>
               </div>
               <div class="col-12">
-                <label class="form-label small">Anexos (acta, fotos — opcional)</label>
-                <input type="file" id="casoActaComiteEvidenciaInput" class="form-control form-control-sm" accept="image/*,video/mp4,video/quicktime,video/webm,application/pdf" multiple>
+                <label for="casoActaComiteEvidenciaInput"class="form-label small">Anexos (acta, fotos — opcional)</label>
+                <input type="file" id="casoActaComiteEvidenciaInput" class="form-control form-control-sm" accept="image/*,video/mp4,video/quicktime,video/webm,application/pdf" multiple autocomplete="off">
                 <div id="casoActaComiteEvidenciaEstado" class="small text-muted mt-1"></div>
               </div>
               <div class="col-12">
@@ -739,19 +739,19 @@
             <h5 class="section-title h6">Cerrar o archivar el caso</h5>
             <form id="casoCierreForm" class="row g-2">
               <div class="col-md-4">
-                <label class="form-label small">Acción</label>
-                <select id="casoCierreEstado" class="form-select form-select-sm" required>
+                <label for="casoCierreEstado"class="form-label small">Acción</label>
+                <select id="casoCierreEstado" class="form-select form-select-sm" required autocomplete="off">
                   <option value="CERRADO_SIN_SANCION">Cerrar sin sanción</option>
                   <option value="ARCHIVADO">Archivar</option>
                 </select>
               </div>
               <div class="col-12">
-                <label class="form-label small">Resolución</label>
-                <textarea id="casoCierreResolucion" class="form-control form-control-sm" rows="3"></textarea>
+                <label class="form-label small" for="casoCierreResolucion">Resolución</label>
+                <textarea id="casoCierreResolucion" class="form-control form-control-sm" rows="3" autocomplete="off"></textarea>
               </div>
               <div class="col-12">
-                <label class="form-label small">Notas internas (opcional)</label>
-                <textarea id="casoCierreNotas" class="form-control form-control-sm" rows="2"></textarea>
+                <label class="form-label small" for="casoCierreNotas">Notas internas (opcional)</label>
+                <textarea id="casoCierreNotas" class="form-control form-control-sm" rows="2" autocomplete="off"></textarea>
               </div>
               <div class="col-12">
                 <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
@@ -764,16 +764,16 @@
             <p class="small text-muted">Queda pendiente de aprobación del Consejo de Administración.</p>
             <form id="casoProponerSancionForm" class="row g-2">
               <div class="col-md-6">
-                <label class="form-label small">Tipo de sanción</label>
-                <input type="text" id="casoProponerSancionTipo" class="form-control form-control-sm" placeholder="Ej. Multa por incumplimiento" required>
+                <label for="casoProponerSancionTipo"class="form-label small">Tipo de sanción</label>
+                <input type="text" id="casoProponerSancionTipo" class="form-control form-control-sm" placeholder="Ej. Multa por incumplimiento" required autocomplete="off">
               </div>
               <div class="col-md-6">
-                <label class="form-label small">Valor propuesto (COP)</label>
-                <input type="number" id="casoProponerSancionValor" class="form-control form-control-sm" min="1" step="1" required>
+                <label for="casoProponerSancionValor"class="form-label small">Valor propuesto (COP)</label>
+                <input type="number" id="casoProponerSancionValor" class="form-control form-control-sm" min="1" step="1" required autocomplete="off">
               </div>
               <div class="col-12">
-                <label class="form-label small">Justificación</label>
-                <textarea id="casoProponerSancionJustificacion" class="form-control form-control-sm" rows="3" minlength="20" required></textarea>
+                <label for="casoProponerSancionJustificacion"class="form-label small">Justificación</label>
+                <textarea id="casoProponerSancionJustificacion" class="form-control form-control-sm" rows="3" minlength="20" required autocomplete="off"></textarea>
               </div>
               <div class="col-12">
                 <button type="submit" class="btn btn-outline-danger btn-sm">Enviar al Consejo</button>
@@ -785,12 +785,12 @@
             <h5 class="section-title h6">Decisión del Consejo de Administración</h5>
             <form id="casoConsejoForm" class="row g-2">
               <div class="col-12">
-                <label class="form-label small">Resolución</label>
-                <textarea id="casoConsejoResolucion" class="form-control form-control-sm" rows="3" required></textarea>
+                <label class="form-label small" for="casoConsejoResolucion">Resolución</label>
+                <textarea id="casoConsejoResolucion" class="form-control form-control-sm" rows="3" required autocomplete="off"></textarea>
               </div>
               <div class="col-12">
-                <label class="form-label small">Notas internas (opcional)</label>
-                <textarea id="casoConsejoNotas" class="form-control form-control-sm" rows="2"></textarea>
+                <label class="form-label small" for="casoConsejoNotas">Notas internas (opcional)</label>
+                <textarea id="casoConsejoNotas" class="form-control form-control-sm" rows="2" autocomplete="off"></textarea>
               </div>
               <div class="col-12 d-flex gap-2 flex-wrap">
                 <button type="submit" class="btn btn-success btn-sm" data-accion="aprobar">Consejo aprueba</button>
@@ -804,12 +804,12 @@
             <h5 class="section-title h6">Resolver apelación</h5>
             <form id="casoApelacionResolverForm" class="row g-2">
               <div class="col-12">
-                <label class="form-label small">Resolución</label>
-                <textarea id="casoApelacionResolverResolucion" class="form-control form-control-sm" rows="3" required></textarea>
+                <label class="form-label small" for="casoApelacionResolverResolucion">Resolución</label>
+                <textarea id="casoApelacionResolverResolucion" class="form-control form-control-sm" rows="3" required autocomplete="off"></textarea>
               </div>
               <div class="col-12">
-                <label class="form-label small">Notas internas (opcional)</label>
-                <textarea id="casoApelacionResolverNotas" class="form-control form-control-sm" rows="2"></textarea>
+                <label class="form-label small" for="casoApelacionResolverNotas">Notas internas (opcional)</label>
+                <textarea id="casoApelacionResolverNotas" class="form-control form-control-sm" rows="2" autocomplete="off"></textarea>
               </div>
               <div class="col-12 d-flex gap-2 flex-wrap">
                 <button type="submit" class="btn btn-success btn-sm" data-accion="ratificar">Ratificar sanción</button>
@@ -849,7 +849,7 @@
                   class="form-control" 
                   id="archivoCartera" 
                   accept=".xls,.xlsx"
-                  required>
+                  required autocomplete="off">
                 <div class="form-text">
                   <strong>Formato esperado:</strong> El archivo debe contener columnas como:
                   <ul class="mb-0 mt-1">
@@ -909,7 +909,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            <textarea id="reservasMotivoRechazo" class="form-control" rows="3" placeholder="Motivo del rechazo..."></textarea>
+            <textarea id="reservasMotivoRechazo" class="form-control" rows="3" placeholder="Motivo del rechazo..." autocomplete="off"></textarea>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -928,7 +928,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            <textarea id="reservasMotivoCancelacion" class="form-control" rows="3" placeholder="Motivo de la cancelación (opcional)..."></textarea>
+            <textarea id="reservasMotivoCancelacion" class="form-control" rows="3" placeholder="Motivo de la cancelación (opcional)..." autocomplete="off"></textarea>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -948,16 +948,16 @@
           </div>
           <div class="modal-body row g-3">
             <div class="col-12">
-              <label class="form-label small">Estado del pago</label>
-              <select id="reservasEstadoPago" class="form-select form-select-sm">
+              <label for="reservasEstadoPago"class="form-label small">Estado del pago</label>
+              <select id="reservasEstadoPago" class="form-select form-select-sm" autocomplete="off">
                 <option value="NO_REQUIERE">No requiere</option>
                 <option value="PENDIENTE">Pendiente</option>
                 <option value="PAGADO">Pagado</option>
               </select>
             </div>
             <div class="col-12">
-              <label class="form-label small">Fecha de pago (opcional)</label>
-              <input id="reservasFechaPago" type="date" class="form-control form-control-sm">
+              <label for="reservasFechaPago"class="form-label small">Fecha de pago (opcional)</label>
+              <input id="reservasFechaPago" type="date" class="form-control form-control-sm" autocomplete="off">
             </div>
           </div>
           <div class="modal-footer">
@@ -980,16 +980,16 @@
             <form id="editarReservaForm" class="row g-3">
               <!-- Selección de zona -->
               <div class="col-md-6">
-                <label class="form-label small"><strong>Zona Común</strong></label>
-                <select id="editarReservaZona" class="form-select form-select-sm" required>
+                <label class="form-label small" for="editarReservaZona"><strong>Zona Común</strong></label>
+                <select id="editarReservaZona" class="form-select form-select-sm" required autocomplete="off">
                   <option value="">-- Seleccionar zona --</option>
                 </select>
               </div>
 
               <!-- Modalidad de uso -->
               <div class="col-md-6">
-                <label class="form-label small"><strong>Modalidad</strong></label>
-                <select id="editarReservaModalidad" class="form-select form-select-sm" required>
+                <label class="form-label small" for="editarReservaModalidad"><strong>Modalidad</strong></label>
+                <select id="editarReservaModalidad" class="form-select form-select-sm" required autocomplete="off">
                   <option value="ORGANIZADO_CON_INVITADOS">Organizado / con invitados</option>
                 </select>
               </div>
@@ -1005,30 +1005,30 @@
 
               <!-- Fecha -->
               <div class="col-md-4">
-                <label class="form-label small"><strong>Fecha</strong></label>
-                <input id="editarReservaFecha" type="date" class="form-control form-control-sm" required>
+                <label class="form-label small" for="editarReservaFecha"><strong>Fecha</strong></label>
+                <input id="editarReservaFecha" type="date" class="form-control form-control-sm" required autocomplete="off">
               </div>
 
               <!-- Hora de inicio -->
               <div class="col-md-4">
-                <label class="form-label small"><strong>Hora de Inicio</strong></label>
-                <select id="editarReservaHoraInicio" class="form-select form-select-sm" required disabled>
+                <label class="form-label small" for="editarReservaHoraInicio"><strong>Hora de Inicio</strong></label>
+                <select id="editarReservaHoraInicio" class="form-select form-select-sm" required disabled autocomplete="off">
                   <option value="">-- Seleccionar --</option>
                 </select>
               </div>
 
               <!-- Duración -->
               <div class="col-md-4">
-                <label class="form-label small"><strong>Duración (horas)</strong></label>
-                <select id="editarReservaDuracion" class="form-select form-select-sm" required disabled>
+                <label class="form-label small" for="editarReservaDuracion"><strong>Duración (horas)</strong></label>
+                <select id="editarReservaDuracion" class="form-select form-select-sm" required disabled autocomplete="off">
                   <option value="">-- Seleccionar --</option>
                 </select>
               </div>
 
               <!-- Hora de fin (readonly) -->
               <div class="col-md-4">
-                <label class="form-label small"><strong>Hora de Fin</strong></label>
-                <input id="editarReservaHoraFin" type="text" class="form-control form-control-sm" disabled>
+                <label class="form-label small" for="editarReservaHoraFin"><strong>Hora de Fin</strong></label>
+                <input id="editarReservaHoraFin" type="text" class="form-control form-control-sm" disabled autocomplete="off">
               </div>
 
               <!-- Panel de reservas existentes -->
@@ -1047,8 +1047,8 @@
 
               <!-- Observaciones -->
               <div class="col-12">
-                <label class="form-label small">Observaciones (opcional)</label>
-                <textarea id="editarReservaObservaciones" class="form-control form-control-sm" rows="2" placeholder="Notas adicionales sobre esta reserva..."></textarea>
+                <label for="editarReservaObservaciones"class="form-label small">Observaciones (opcional)</label>
+                <textarea id="editarReservaObservaciones" class="form-control form-control-sm" rows="2" placeholder="Notas adicionales sobre esta reserva..." autocomplete="off"></textarea>
               </div>
             </form>
           </div>
@@ -1073,62 +1073,62 @@
           <div class="modal-body">
             <form id="editarZonaForm" class="row g-3">
               <div class="col-lg-2">
-                <label class="form-label small">Código (solo lectura)</label>
+                <label for="editZonaCodigo"class="form-label small">Código (solo lectura)</label>
                 <input id="editZonaCodigo" type="text" class="form-control form-control-sm" disabled>
               </div>
               <div class="col-lg-2">
-                <label class="form-label small">Tipo (solo lectura)</label>
+                <label for="editZonaTipo"class="form-label small">Tipo (solo lectura)</label>
                 <input id="editZonaTipo" type="text" class="form-control form-control-sm" disabled>
               </div>
               <div class="col-lg-8">
-                <label class="form-label small">Descripción</label>
-                <input id="editZonaDescripcion" type="text" class="form-control form-control-sm" required>
+                <label for="editZonaDescripcion"class="form-label small">Descripción</label>
+                <input id="editZonaDescripcion" type="text" class="form-control form-control-sm" required autocomplete="off">
               </div>
               <div class="col-lg-3">
-                <label class="form-label small">Hora apertura</label>
-                <input id="editZonaHoraApertura" type="time" class="form-control form-control-sm" required>
+                <label for="editZonaHoraApertura"class="form-label small">Hora apertura</label>
+                <input id="editZonaHoraApertura" type="time" class="form-control form-control-sm" required autocomplete="off">
               </div>
               <div class="col-lg-3">
-                <label class="form-label small">Hora cierre</label>
-                <input id="editZonaHoraCierre" type="time" class="form-control form-control-sm" required>
+                <label for="editZonaHoraCierre"class="form-label small">Hora cierre</label>
+                <input id="editZonaHoraCierre" type="time" class="form-control form-control-sm" required autocomplete="off">
               </div>
               <div class="col-lg-3">
-                <label class="form-label small">Dur. mín. (horas)</label>
-                <input id="editZonaDuracionMin" type="number" class="form-control form-control-sm" min="1" required>
+                <label for="editZonaDuracionMin"class="form-label small">Dur. mín. (horas)</label>
+                <input id="editZonaDuracionMin" type="number" class="form-control form-control-sm" min="1" required autocomplete="off">
               </div>
               <div class="col-lg-3">
-                <label class="form-label small">Dur. máx. (horas)</label>
-                <input id="editZonaDuracionMax" type="number" class="form-control form-control-sm" min="1" required>
+                <label for="editZonaDuracionMax"class="form-label small">Dur. máx. (horas)</label>
+                <input id="editZonaDuracionMax" type="number" class="form-control form-control-sm" min="1" required autocomplete="off">
               </div>
               <div class="col-lg-3">
-                <label class="form-label small">Costo</label>
-                <input id="editZonaCosto" type="number" class="form-control form-control-sm" step="0.01" min="0">
+                <label for="editZonaCosto"class="form-label small">Costo</label>
+                <input id="editZonaCosto" type="number" class="form-control form-control-sm" step="0.01" min="0" autocomplete="off">
               </div>
               <div class="col-lg-3">
-                <label class="form-label small">Depósito</label>
-                <input id="editZonaDeposito" type="number" class="form-control form-control-sm" step="0.01" min="0">
+                <label for="editZonaDeposito"class="form-label small">Depósito</label>
+                <input id="editZonaDeposito" type="number" class="form-control form-control-sm" step="0.01" min="0" autocomplete="off">
               </div>
               <div class="col-lg-2">
                 <div class="form-check mt-4">
-                  <input id="editZonaRequierePago" type="checkbox" class="form-check-input">
+                  <input id="editZonaRequierePago" type="checkbox" class="form-check-input" autocomplete="off">
                   <label class="form-check-label small" for="editZonaRequierePago">Requiere pago</label>
                 </div>
               </div>
               <div class="col-lg-2">
                 <div class="form-check mt-4">
-                  <input id="editZonaRequiereAprobacion" type="checkbox" class="form-check-input">
+                  <input id="editZonaRequiereAprobacion" type="checkbox" class="form-check-input" autocomplete="off">
                   <label class="form-check-label small" for="editZonaRequiereAprobacion">Req. aprobación</label>
                 </div>
               </div>
               <div class="col-lg-2">
                 <div class="form-check mt-4">
-                  <input id="editZonaSoportaRecreativa" type="checkbox" class="form-check-input">
+                  <input id="editZonaSoportaRecreativa" type="checkbox" class="form-check-input" autocomplete="off">
                   <label class="form-check-label small" for="editZonaSoportaRecreativa">Soporta recreativa</label>
                 </div>
               </div>
               <div class="col-lg-2">
                 <div class="form-check mt-4">
-                  <input id="editZonaActivo" type="checkbox" class="form-check-input">
+                  <input id="editZonaActivo" type="checkbox" class="form-check-input" autocomplete="off">
                   <label class="form-check-label small" for="editZonaActivo">Activo</label>
                 </div>
               </div>
@@ -1390,35 +1390,35 @@
           '<div class="accordion">' +
           accordionItem('collapse-editar', 'Datos de la unidad',
             '<form id="editUnidadForm" class="row g-2 align-items-end">' +
-            '<div class="col-md-5"><label class="form-label small">Estado</label>' +
-            '<select id="editEstadoUnidad" class="form-select form-select-sm">' +
+            '<div class="col-md-5"><label for="editEstadoUnidad"class="form-label small">Estado</label>' +
+            '<select id="editEstadoUnidad" class="form-select form-select-sm" autocomplete="off">' +
             ['NO_ENTREGADA', 'ENTREGADA'].map(function (estado) {
               return '<option value="' + estado + '"' + (estado === perfil.estadoUnidad ? ' selected' : '') + '>' + estado + '</option>';
             }).join('') +
             '</select></div>' +
-            '<div class="col-md-5"><label class="form-label small">Fecha de entrega</label>' +
-            '<input id="editFechaEntrega" type="date" class="form-control form-control-sm" value="' + esc((perfil.fechaEntrega || '').slice(0, 10)) + '"></div>' +
+            '<div class="col-md-5"><label for="editFechaEntrega"class="form-label small">Fecha de entrega</label>' +
+            '<input id="editFechaEntrega" type="date" class="form-control form-control-sm" value="' + esc((perfil.fechaEntrega || '').slice(0, 10)) + '" autocomplete="off"></div>' +
             '<div class="col-md-2 d-grid"><button type="submit" class="btn btn-primary btn-sm">Guardar</button></div>' +
             '</form>', false) +
 
           accordionItem('collapse-propietarios', 'Propietarios y residentes',
             '<ul>' + propietarios + '</ul>' +
             '<form id="addPropietarioForm" class="row g-2 align-items-end border-top pt-3 mt-3">' +
-            '<div class="col-md-2"><label class="form-label small">Tipo doc.</label>' +
-            '<input id="addTipoDocumento" class="form-control form-control-sm" value="CC" required></div>' +
-            '<div class="col-md-3"><label class="form-label small">Número doc.</label>' +
-            '<input id="addNumeroDocumento" class="form-control form-control-sm" required></div>' +
-            '<div class="col-md-4"><label class="form-label small">Nombre completo</label>' +
-            '<input id="addNombreCompleto" class="form-control form-control-sm" required></div>' +
-            '<div class="col-md-3"><label class="form-label small">Relación</label>' +
-            '<select id="addTipoRelacion" class="form-select form-select-sm">' +
+            '<div class="col-md-2"><label for="addTipoDocumento"class="form-label small">Tipo doc.</label>' +
+            '<input id="addTipoDocumento" class="form-control form-control-sm" value="CC" required autocomplete="off"></div>' +
+            '<div class="col-md-3"><label for="addNumeroDocumento"class="form-label small">Número doc.</label>' +
+            '<input id="addNumeroDocumento" class="form-control form-control-sm" required autocomplete="off"></div>' +
+            '<div class="col-md-4"><label for="addNombreCompleto"class="form-label small">Nombre completo</label>' +
+            '<input id="addNombreCompleto" class="form-control form-control-sm" required autocomplete="off"></div>' +
+            '<div class="col-md-3"><label for="addTipoRelacion"class="form-label small">Relación</label>' +
+            '<select id="addTipoRelacion" class="form-select form-select-sm" autocomplete="off">' +
             '<option value="PROPIETARIO">PROPIETARIO</option>' +
             '<option value="RESIDENTE">RESIDENTE</option>' +
             '</select></div>' +
-            '<div class="col-md-4"><label class="form-label small">Correo</label>' +
-            '<input id="addCorreo" type="email" class="form-control form-control-sm" required></div>' +
-            '<div class="col-md-3"><label class="form-label small">Teléfono (opcional)</label>' +
-            '<input id="addTelefono" class="form-control form-control-sm"></div>' +
+            '<div class="col-md-4"><label for="addCorreo"class="form-label small">Correo</label>' +
+            '<input id="addCorreo" type="email" class="form-control form-control-sm" required autocomplete="off"></div>' +
+            '<div class="col-md-3"><label for="addTelefono"class="form-label small">Teléfono (opcional)</label>' +
+            '<input id="addTelefono" class="form-control form-control-sm" autocomplete="off"></div>' +
             '<div class="col-md-3 d-grid"><button type="submit" class="btn btn-outline-success btn-sm">Agregar</button></div>' +
             '</form>', true) +
 
