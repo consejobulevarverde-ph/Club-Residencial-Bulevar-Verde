@@ -199,6 +199,19 @@ mutation EditarContenidoCasoConvivenciaAdmin(
   )
 }
 
+mutation AnularCasoConvivenciaAdmin(
+  $id: UUID!
+  $resolucion: String!
+  $resueltoPorUid: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { estado: "ANULADO", resolucion: $resolucion, resueltoPorUid: $resueltoPorUid }
+  )
+}
+
 mutation RegistrarActaComiteCasoConvivenciaAdmin(
   $id: UUID!
   $actaComiteFecha: Timestamp!
@@ -371,6 +384,7 @@ query ListarCasosConvivenciaPorUnidadAdmin(
 @auth(level: NO_ACCESS) {
   unidad(id: $unidadId) {
     casos: casos_convivencia_on_unidad(
+      where: { estado: { ne: "ANULADO" } }
       orderBy: [{ fechaCreacion: DESC }]
       limit: $limit
       offset: $offset
@@ -392,6 +406,7 @@ query ListarCasosConvivenciaResumenPorUnidadAdmin(
 @auth(level: NO_ACCESS) {
   unidad(id: $unidadId) {
     casos: casos_convivencia_on_unidad(
+      where: { estado: { ne: "ANULADO" } }
       orderBy: [{ fechaCreacion: DESC }]
       limit: 100
     ) {
@@ -410,7 +425,7 @@ query ObtenerCasoConvivenciaResidenteAdmin(
 )
 @auth(level: NO_ACCESS) {
   unidad(id: $unidadId) {
-    casos: casos_convivencia_on_unidad(where: { caseCode: { eq: $caseCode } }, limit: 1) {
+    casos: casos_convivencia_on_unidad(where: { caseCode: { eq: $caseCode }, estado: { ne: "ANULADO" } }, limit: 1) {
       id
       caseCode
       apartamento

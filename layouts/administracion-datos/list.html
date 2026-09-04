@@ -624,6 +624,7 @@
                 <option value="SANCION_RATIFICADA">Sanción ratificada</option>
                 <option value="SANCION_REVOCADA">Sanción revocada</option>
                 <option value="ARCHIVADO">Archivado</option>
+                <option value="ANULADO">Anulado</option>
               </optgroup>
             </select>
           </div>
@@ -642,6 +643,9 @@
             </button>
             <button type="button" class="btn btn-outline-primary btn-sm" id="casoDetailEditarBtn">
               <i class="bi bi-pencil me-1"></i>Editar información
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm" id="casoDetailAnularBtn">
+              <i class="bi bi-x-circle me-1"></i>Anular caso
             </button>
           </div>
 
@@ -1106,6 +1110,29 @@
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
             <button id="editCasoConvivenciaSubmit" type="button" class="btn btn-primary">Guardar cambios</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Anular Caso de Convivencia -->
+    <div class="modal fade" id="modalAnularCasoConvivencia" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Anular caso</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small">El caso dejará de contar en el historial de la unidad y de la vista del residente, pero quedará visible aquí con la insignia "Anulado" para trazabilidad.</p>
+            <form id="anularCasoConvivenciaForm">
+              <label for="anularCasoMotivo" class="form-label small">Motivo de la anulación</label>
+              <textarea id="anularCasoMotivo" class="form-control form-control-sm" rows="3" maxlength="2000" required autocomplete="off" placeholder="Ej: caso de prueba, registrado por error, no aplica…"></textarea>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button id="anularCasoConvivenciaSubmit" type="button" class="btn btn-danger">Anular caso</button>
           </div>
         </div>
       </div>
@@ -2664,6 +2691,7 @@
       var modalEditarZona = null;
       var zonaEditandoId = null;
       var modalEditarCasoConvivencia = null;
+      var modalAnularCasoConvivencia = null;
 
       document.addEventListener('DOMContentLoaded', function() {
         var modalAccionesEl = $('reservasModalAcciones');
@@ -2673,6 +2701,7 @@
         var modalEditarReservaEl = $('reservasModalEditar');
         var modalEditarEl = $('modalEditarZona');
         var modalEditarCasoEl = $('modalEditarCasoConvivencia');
+        var modalAnularCasoEl = $('modalAnularCasoConvivencia');
         if (modalAccionesEl) reservasModalAcciones = new bootstrap.Modal(modalAccionesEl);
         if (modalRechazarEl) reservasModalRechazar = new bootstrap.Modal(modalRechazarEl);
         if (modalCancelarEl) reservasModalCancelar = new bootstrap.Modal(modalCancelarEl);
@@ -2680,6 +2709,7 @@
         if (modalEditarReservaEl) reservasModalEditar = new bootstrap.Modal(modalEditarReservaEl);
         if (modalEditarEl) modalEditarZona = new bootstrap.Modal(modalEditarEl);
         if (modalEditarCasoEl) modalEditarCasoConvivencia = new bootstrap.Modal(modalEditarCasoEl);
+        if (modalAnularCasoEl) modalAnularCasoConvivencia = new bootstrap.Modal(modalAnularCasoEl);
       });
 
       var accionesPendiente = null;
@@ -3005,7 +3035,8 @@
           CERRADO_SIN_SANCION: '<span class="badge bg-success">Cerrado sin sanción</span>',
           SANCION_RATIFICADA: '<span class="badge bg-dark">Sanción ratificada</span>',
           SANCION_REVOCADA: '<span class="badge bg-success">Sanción revocada</span>',
-          ARCHIVADO: '<span class="badge bg-secondary">Archivado</span>'
+          ARCHIVADO: '<span class="badge bg-secondary">Archivado</span>',
+          ANULADO: '<span class="badge bg-danger">Anulado</span>'
         };
         return badges[estado] || '<span class="badge bg-secondary">' + esc(estado) + '</span>';
       }
@@ -3139,9 +3170,51 @@
           .finally(function () { busy(btn, false, 'Guardar cambios'); });
       });
 
+      $('casoDetailAnularBtn').addEventListener('click', function () {
+        if (!casoConvivenciaActual) return;
+        $('anularCasoMotivo').value = '';
+        if (modalAnularCasoConvivencia) modalAnularCasoConvivencia.show();
+      });
+
+      var anularCasoSubmitBtn = $('anularCasoConvivenciaSubmit');
+      if (anularCasoSubmitBtn) anularCasoSubmitBtn.addEventListener('click', function () {
+        if (!casoConvivenciaActual) return;
+        hideMsg();
+        var btn = this;
+        var motivo = $('anularCasoMotivo').value.trim();
+
+        if (!motivo) {
+          msg('Debe indicar el motivo de la anulación');
+          return;
+        }
+
+        if (!confirm('¿Estás seguro de que deseas anular este caso? El caso dejará de contar en el historial de la unidad pero quedará visible aquí.')) {
+          return;
+        }
+
+        busy(btn, true, 'Anulando…');
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/anular', idToken, {
+            method: 'PATCH',
+            body: { motivo: motivo }
+          });
+        })
+          .then(function (response) {
+            return response.json().then(function (data) {
+              casoConvivenciaActual = data.data;
+              renderDetalleCasoConvivencia(data.data);
+              if (modalAnularCasoConvivencia) modalAnularCasoConvivencia.hide();
+              msg('Caso anulado', 'success');
+            });
+          })
+          .catch(function (error) { msg(error.message); })
+          .finally(function () { busy(btn, false, 'Anular caso'); });
+      });
+
       var TIPO_EVENTO_LABELS = {
         CASO_CREADO: 'Caso creado',
         CASO_EDITADO: 'Información del caso editada',
+        CASO_ANULADO: 'Caso anulado',
         DESCARGOS_REGISTRADOS: 'Descargos registrados',
         ACTA_COMITE_REGISTRADA: 'Acta de comité registrada',
         CASO_CERRADO_SIN_SANCION: 'Caso cerrado sin sanción',
@@ -3198,6 +3271,7 @@
         $('casoDetailApto').textContent = caso.apartamento;
         $('casoDetailMotivo').textContent = caso.motivo;
         $('casoDetailEstado').innerHTML = obtenerBadgeEstadoCaso(caso.estado);
+        $('casoDetailAnularBtn').classList.toggle('hidden', caso.estado === 'ANULADO');
         $('casoDetailTipoProceso').textContent = caso.requiereProcesoFormal
           ? 'Proceso sancionatorio formal'
           : 'Llamado de atención — no requiere proceso formal';
