@@ -1,0 +1,25 @@
+[debug] [2026-09-05T18:17:43.581Z] ----------------------------------------------------------------------
+[debug] [2026-09-05T18:17:43.585Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\hcorrea\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2026-09-05T18:17:43.585Z] CLI Version:   15.29.0
+[debug] [2026-09-05T18:17:43.585Z] Platform:      win32
+[debug] [2026-09-05T18:17:43.585Z] Node Version:  v22.23.2
+[debug] [2026-09-05T18:17:43.586Z] Detected Agent: unknown
+[debug] [2026-09-05T18:17:43.586Z] Time:          Sat Sep 05 2026 13:17:43 GMT-0500 (Colombia Standard Time)
+[debug] [2026-09-05T18:17:43.586Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-09-05T18:17:43.602Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-09-05T18:17:46.696Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-09-05T18:17:46.696Z] > authorizing via signed-in user (consejo.bulevarverde@gmail.com)
+[debug] [2026-09-05T18:17:46.696Z] [iam] checking project project-7dd6d100-d8c2-427a-a80 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-09-05T18:17:46.697Z] Checked if tokens are valid: false, expires at: 1788542075202
+[debug] [2026-09-05T18:17:46.697Z] Checked if tokens are valid: false, expires at: 1788542075202
+[debug] [2026-09-05T18:17:46.697Z] > refreshing access token with scopes: []
+[debug] [2026-09-05T18:17:46.699Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-09-05T18:17:46.699Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-09-05T18:17:46.972Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-09-05T18:17:46.973Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-09-05T18:17:46.984Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/project-7dd6d100-d8c2-427a-a80:testIamPermissions [none]
+[debug] [2026-09-05T18:17:46.984Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/project-7dd6d100-d8c2-427a-a80:testIamPermissions  x-goog-user-project=project-7dd6d100-d8c2-427a-a80
+[debug] [2026-09-05T18:17:46.984Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/project-7dd6d100-d8c2-427a-a80:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-09-05T18:17:47.028Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-09-05T18:17:47.028Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
