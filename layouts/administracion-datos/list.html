@@ -1217,6 +1217,34 @@
         </div>
       </div>
     </div>
+
+    <div class="modal fade" id="editarContactoModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Editar contacto</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="editarContactoForm">
+            <div class="modal-body">
+              <p class="text-muted small mb-3" id="editarContactoNombre"></p>
+              <div class="mb-3">
+                <label class="form-label" for="editarContactoEmail">Correo</label>
+                <input id="editarContactoEmail" type="email" class="form-control" required autocomplete="off">
+              </div>
+              <div class="mb-0">
+                <label class="form-label" for="editarContactoTelefono">Celular</label>
+                <input id="editarContactoTelefono" type="tel" class="form-control" autocomplete="off">
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn btn-primary" id="editarContactoGuardarBtn">Guardar cambios</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </main>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -1422,7 +1450,8 @@
             (v.persona.correo ? ' · ' + esc(v.persona.correo) : '') +
             (v.persona.telefono ? ' · ' + esc(v.persona.telefono) : '') +
             (v.activo
-              ? ' <button type="button" class="btn btn-outline-danger btn-sm ms-2 retirar-propietario" data-vinculo-id="' + esc(v.id) + '">Retirar</button>'
+              ? ' <button type="button" class="btn btn-outline-primary btn-sm ms-2 editar-contacto-persona" title="Editar contacto" aria-label="Editar contacto" data-persona-id="' + esc(v.persona.id) + '" data-nombre="' + esc(v.persona.nombreCompleto) + '" data-correo="' + esc(v.persona.correo || '') + '" data-telefono="' + esc(v.persona.telefono || '') + '"><i class="bi bi-pencil"></i></button>' +
+                ' <button type="button" class="btn btn-outline-danger btn-sm ms-1 retirar-propietario" data-vinculo-id="' + esc(v.id) + '">Retirar</button>'
               : ' <span class="badge text-bg-secondary">retirado</span>') +
             '</li>';
         }).join('') || '<li class="text-muted">Sin registros.</li>';
@@ -1652,6 +1681,16 @@
       });
 
       $('profile').addEventListener('click', function (event) {
+        var editarButton = event.target.closest('.editar-contacto-persona');
+        if (editarButton) {
+          $('editarContactoForm').dataset.personaId = editarButton.dataset.personaId;
+          $('editarContactoNombre').textContent = editarButton.dataset.nombre || '';
+          $('editarContactoEmail').value = editarButton.dataset.correo || '';
+          $('editarContactoTelefono').value = editarButton.dataset.telefono || '';
+          new bootstrap.Modal($('editarContactoModal')).show();
+          return;
+        }
+
         var button = event.target.closest('.retirar-propietario');
         if (!button) return;
 
@@ -1668,6 +1707,36 @@
           loadProfile(currentUnidadId);
         }).catch(function (error) {
           msg(error.message);
+        });
+      });
+
+      $('editarContactoForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        hideMsg();
+
+        var correo = $('editarContactoEmail').value.trim();
+        if (!correo) {
+          msg('Ingresa un correo electrónico.', 'warning');
+          return;
+        }
+        var telefono = $('editarContactoTelefono').value.trim();
+        var personaId = this.dataset.personaId;
+        var button = $('editarContactoGuardarBtn');
+        busy(button, true, 'Guardando…');
+
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/vigilancia/personas/' + personaId + '/contacto', idToken, {
+            method: 'PATCH',
+            body: { correo: correo, telefono: telefono || undefined },
+          });
+        }).then(function () {
+          bootstrap.Modal.getInstance($('editarContactoModal')).hide();
+          msg('Contacto actualizado.', 'success');
+          loadProfile(currentUnidadId);
+        }).catch(function (error) {
+          msg(error.message);
+        }).finally(function () {
+          busy(button, false, 'Guardar cambios');
         });
       });
 

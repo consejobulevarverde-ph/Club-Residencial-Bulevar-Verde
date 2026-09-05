@@ -51,7 +51,9 @@ query ObtenerPerfilVigilancia(
     residentes: vinculos_unidad_persona_on_unidad(where: { activo: { eq: true } }) {
       tipoRelacion
       persona {
+        id
         nombreCompleto
+        correo
       }
     }
     vehiculos: vinculos_vehiculo_unidad_on_unidad(where: { esActual: { eq: true } }) {
@@ -115,6 +117,32 @@ mutation CrearVinculoVehiculoUnidad(
 @auth(level: USER, insecureReason: "La API restringe este endpoint al rol vigilancia antes de invocar la mutación.")
 @transaction {
   vinculo_vehiculo_unidad_insert(data: $input)
+}
+
+# Contacto de persona (correo/teléfono) para el flujo de "registrar correo
+# faltante" desde vigilancia/administración. A diferencia de
+# ActualizarPersonaContactoAdmin (NO_ACCESS, usada por el autoservicio de
+# residentes con su propio token firmado), estas operaciones son invocadas
+# por personal autenticado con Firebase (vigilancia/administrador/superadmin).
+query ObtenerPersonaContacto(
+  $id: UUID!
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles vigilancia/administrador/superadmin antes de invocar la consulta.") {
+  persona(id: $id) {
+    id
+    correo
+    telefono
+  }
+}
+
+mutation ActualizarPersonaContacto(
+  $id: UUID!
+  $correo: String
+  $telefono: String
+)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a roles vigilancia/administrador/superadmin y valida en Express si el rol puede sobrescribir un correo ya existente.")
+@transaction {
+  persona_update(id: $id, data: { correo: $correo, telefono: $telefono })
 }
 
 query ObtenerColaboradorPorFirebaseUid(

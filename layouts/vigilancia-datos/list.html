@@ -562,6 +562,34 @@
     </section>
   </main>
 
+  <div class="modal fade" id="agregarCorreoModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Registrar contacto</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="agregarCorreoForm">
+          <div class="modal-body">
+            <p class="small-note" id="agregarCorreoNombre"></p>
+            <div class="mb-3">
+              <label class="form-label" for="agregarCorreoEmail">Correo</label>
+              <input id="agregarCorreoEmail" type="email" class="form-control" required autocomplete="off">
+            </div>
+            <div class="mb-0">
+              <label class="form-label" for="agregarCorreoTelefono">Celular (opcional)</label>
+              <input id="agregarCorreoTelefono" type="tel" class="form-control" autocomplete="off">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="agregarCorreoGuardarBtn">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -884,10 +912,10 @@
                 '<div class="col-md-4">' +
                 '<h4 class="h6 fw-bold"><i class="bi bi-people me-1"></i>Residentes</h4>' +
                 list(unit.residentes, function (item) {
-                  var whatsappLink = item.persona.telefono
-                    ? '<a href="https://wa.me/57' + item.persona.telefono.replace(/\D/g, '').slice(-10) + '" target="_blank" class="ms-2" title="Chat por WhatsApp" style="text-decoration:none"><i class="bi bi-whatsapp text-success"></i></a>'
+                  var pencil = !item.persona.tieneCorreo
+                    ? '<button type="button" class="btn btn-sm btn-outline-primary ms-2 agregar-correo" title="Registrar correo" aria-label="Registrar correo" data-persona-id="' + esc(item.persona.id) + '" data-nombre="' + esc(item.persona.nombreCompleto) + '"><i class="bi bi-pencil"></i></button>'
                     : '';
-                  return '<div class="d-flex align-items-center gap-1"><strong>' + esc(item.persona.nombreCompleto) + '</strong>' + whatsappLink + '</div>' +
+                  return '<div class="d-flex align-items-center gap-1"><strong>' + esc(item.persona.nombreCompleto) + '</strong>' + pencil + '</div>' +
                     '<div class="small-note">' + esc(item.tipoRelacion) + '</div>';
                 }) +
                 '</div>' +
@@ -928,12 +956,21 @@
       }
 
       $('results').addEventListener('click', function (event) {
-        var button = event.target.closest('.register-unit');
-        if (!button) return;
+        var registerButton = event.target.closest('.register-unit');
+        if (registerButton) {
+          $('newApartment').value = registerButton.dataset.apartment || '';
+          mode('registration');
+          $('newName').focus();
+          return;
+        }
 
-        $('newApartment').value = button.dataset.apartment || '';
-        mode('registration');
-        $('newName').focus();
+        var correoButton = event.target.closest('.agregar-correo');
+        if (correoButton) {
+          $('agregarCorreoForm').dataset.personaId = correoButton.dataset.personaId;
+          $('agregarCorreoNombre').textContent = correoButton.dataset.nombre || '';
+          $('agregarCorreoForm').reset();
+          new bootstrap.Modal($('agregarCorreoModal')).show();
+        }
       });
 
       function renderRegistrationResult(data) {
@@ -1015,6 +1052,36 @@
           '<strong>' + esc(data.codigoOficial) + '</strong> como ' + esc(data.tipoVinculo) + '.</p>' +
           '</article>';
       }
+
+      $('agregarCorreoForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        hideMsg();
+
+        var correo = $('agregarCorreoEmail').value.trim();
+        if (!correo) {
+          msg('Ingresa un correo electrónico.', 'warning');
+          return;
+        }
+        var telefono = $('agregarCorreoTelefono').value.trim();
+        var personaId = this.dataset.personaId;
+        var button = $('agregarCorreoGuardarBtn');
+        busy(button, true, 'Guardando…');
+
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/vigilancia/personas/' + personaId + '/contacto', idToken, {
+            method: 'PATCH',
+            body: { correo: correo, telefono: telefono || undefined },
+          });
+        }).then(function () {
+          bootstrap.Modal.getInstance($('agregarCorreoModal')).hide();
+          msg('Correo registrado correctamente.', 'success');
+          $('searchForm').requestSubmit();
+        }).catch(function (error) {
+          msg(error.message);
+        }).finally(function () {
+          busy(button, false, 'Guardar');
+        });
+      });
 
       function list(items, formatter) {
         return items && items.length
