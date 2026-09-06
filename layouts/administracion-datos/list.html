@@ -610,6 +610,7 @@
             <h3 class="section-title h5 mb-0">Casos de convivencia</h3>
             <select id="casosConvivenciaFiltroEstado" class="form-select form-select-sm" style="max-width:260px" autocomplete="off">
               <option value="">Todos los estados</option>
+              <option value="EN_TRAMITE" selected>En trámite (todos)</option>
               <optgroup label="En trámite">
                 <option value="PENDIENTE_DESCARGOS">Pendiente de descargos</option>
                 <option value="CON_DESCARGOS">Descargos recibidos</option>
@@ -3121,9 +3122,12 @@
 
       function cargarCasosConvivencia(reset) {
         if (reset !== false) casosConvivenciaOffset = 0;
-        var estado = $('casosConvivenciaFiltroEstado').value;
+        var seleccion = $('casosConvivenciaFiltroEstado').value;
+        var estados = seleccion === 'EN_TRAMITE'
+          ? ['PENDIENTE_DESCARGOS', 'CON_DESCARGOS']
+          : (seleccion ? [seleccion] : []);
         var qs = '?limit=' + CASOS_CONVIVENCIA_LIMIT + '&offset=' + casosConvivenciaOffset +
-          (estado ? '&estado=' + encodeURIComponent(estado) : '');
+          estados.map(function (e) { return '&estado=' + encodeURIComponent(e); }).join('');
 
         withIdToken(function (idToken) {
           return apiFetch('/api/v1/convivencia/casos' + qs, idToken).then(function (resp) {
