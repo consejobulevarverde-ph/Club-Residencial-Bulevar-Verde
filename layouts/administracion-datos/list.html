@@ -1767,6 +1767,10 @@
         return dias[fecha.getDay()];
       }
 
+      function fechaBogotaYMD(iso) {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+      }
+
       var zonasCatalogoCache = [];
 
       function cargarReservasCatalogo() {
@@ -1985,7 +1989,7 @@
           fechas.forEach(function (f) {
             var fechaStr = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0') + '-' + String(f.getDate()).padStart(2, '0');
             var reservasDelDia = zonas[zona].filter(function (r) {
-              return r.fechaHoraInicio.substring(0, 10) === fechaStr;
+              return fechaBogotaYMD(r.fechaHoraInicio) === fechaStr;
             });
 
             if (reservasDelDia.length === 0) {
@@ -1993,7 +1997,7 @@
             } else {
               html += '<td>' + reservasDelDia.map(function (r) {
                 var claseEstado = 'reserva-' + r.estado.toLowerCase();
-                var hora = new Date(r.fechaHoraInicio).toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit'});
+                var hora = new Date(r.fechaHoraInicio).toLocaleTimeString('es-CO', {timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit'});
                 var emojiEstado = getEmojiEstado(r.estado);
                 var unidad = esc(r.unidad.codigoOficial);
                 var title = unidad + ' ' + hora + ' ' + r.estado;
