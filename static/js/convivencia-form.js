@@ -777,15 +777,19 @@
         detailLines: apto && apto.value ? ['Apartamento: ' + apto.value] : [],
         filePrefix: 'convivencia-caso',
         maxDimension: 1600,
-        quality: 0.84
+        quality: 0.84,
+        allowVideo: true,
+        maxVideoSeconds: 30,
+        maxVideoBytes: 50 * 1024 * 1024
       });
 
       evidencias.push(evidence);
       actualizarListaEvidencias();
-      showAlert('Fotografía tomada con fecha y ubicación incorporadas.', 'success');
+      var isVideo = /^video\//i.test(evidence.file.type);
+      showAlert((isVideo ? 'Video' : 'Fotografía') + ' grabado con fecha y ubicación incorporadas.', 'success');
     } catch (error) {
       if (error && error.name === 'AbortError') return;
-      showAlert('No fue posible tomar la fotografía: ' + (error.message || error));
+      showAlert('No fue posible capturar la evidencia: ' + (error.message || error));
     }
   }
 

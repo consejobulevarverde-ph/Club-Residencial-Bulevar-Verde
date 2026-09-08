@@ -3,6 +3,7 @@
 
   const STYLE_ID = 'bv-evidence-camera-styles';
   let activeCapture = false;
+  let mediaRecorder = null;
 
   function ensureStyles_() {
     if (document.getElementById(STYLE_ID)) return;
@@ -87,6 +88,58 @@
       .bv-camera-btn:disabled {
         opacity: 0.55;
       }
+      .bv-camera-mode-toggle {
+        display: flex;
+        gap: 0;
+        background: #3a3a3a;
+        border-radius: 999px;
+        padding: 4px;
+      }
+      .bv-camera-mode-btn {
+        min-height: 38px;
+        border: 0;
+        padding: 8px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        background: transparent;
+        color: #aaa;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .bv-camera-mode-btn.active {
+        background: #fff;
+        color: #111;
+      }
+      .bv-camera-recording-indicator {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        background: rgba(220, 38, 38, 0.9);
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .bv-camera-recording-indicator.active {
+        display: flex;
+        animation: blink 1s infinite;
+      }
+      .bv-camera-recording-dot {
+        width: 8px;
+        height: 8px;
+        background: #fff;
+        border-radius: 50%;
+        animation: pulse 1.5s infinite;
+      }
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -156,14 +209,29 @@
     });
   }
 
-  async function getCameraStream_() {
+  function pickSupportedMimeType_() {
+    const candidates = [
+      'video/mp4',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ];
+    for (let i = 0; i < candidates.length; i++) {
+      if (MediaRecorder.isTypeSupported(candidates[i])) {
+        return candidates[i];
+      }
+    }
+    return null;
+  }
+
+  async function getCameraStream_(opts) {
     if (!global.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error('La cámara segura no está disponible. Abre el portal mediante HTTPS en un navegador compatible.');
     }
 
     try {
       return await navigator.mediaDevices.getUserMedia({
-        audio: false,
+        audio: opts && opts.allowVideo ? true : false,
         video: {
           facingMode: { ideal: 'environment' },
           width: { ideal: 1920 },
@@ -266,6 +334,35 @@
     ctx.restore();
   }
 
+  function blobToEvidence_(blob, opts, capturedAt, metadata, mimeType, extension) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onerror = function () {
+        reject(new Error('No fue posible preparar la evidencia para enviarla.'));
+      };
+      reader.onload = function () {
+        const name = (opts.filePrefix || 'evidencia-camara') + '-' + fileTimestamp_(capturedAt) + '.' + extension;
+        const file = typeof File === 'function'
+          ? new File([blob], name, {
+              type: mimeType,
+              lastModified: capturedAt.getTime()
+            })
+          : null;
+
+        resolve({
+          name: name,
+          size: blob.size,
+          type: mimeType,
+          dataUrl: reader.result,
+          blob: blob,
+          file: file,
+          captureMetadata: metadata
+        });
+      };
+      reader.readAsDataURL(blob);
+    });
+  }
+
   function canvasToEvidence_(canvas, opts, capturedAt, metadata) {
     return new Promise(function (resolve, reject) {
       canvas.toBlob(function (blob) {
@@ -274,29 +371,9 @@
           return;
         }
 
-        const reader = new FileReader();
-        reader.onerror = function () {
-          reject(new Error('No fue posible preparar la fotografía para enviarla.'));
-        };
-        reader.onload = function () {
-          const name = (opts.filePrefix || 'evidencia-camara') + '-' + fileTimestamp_(capturedAt) + '.jpg';
-          const file = typeof File === 'function'
-            ? new File([blob], name, {
-                type: 'image/jpeg',
-                lastModified: capturedAt.getTime()
-              })
-            : null;
-
-          resolve({
-            name: name,
-            size: blob.size,
-            dataUrl: reader.result,
-            blob: blob,
-            file: file,
-            captureMetadata: metadata
-          });
-        };
-        reader.readAsDataURL(blob);
+        blobToEvidence_(blob, opts, capturedAt, metadata, 'image/jpeg', 'jpg')
+          .then(resolve)
+          .catch(reject);
       }, 'image/jpeg', typeof opts.quality === 'number' ? opts.quality : 0.84);
     });
   }
@@ -325,6 +402,7 @@
 
     const metadata = {
       source: 'web_camera',
+      mode: 'photo',
       capturedAt: capturedAt.toISOString(),
       displayTime: formatDateTime_(capturedAt),
       latitude: location.latitude,
@@ -364,6 +442,42 @@
     const controls = document.createElement('div');
     controls.className = 'bv-camera-controls';
 
+    const videoModeAvailable = opts.allowVideo && !!window.MediaRecorder && pickSupportedMimeType_();
+    let currentMode = 'photo';
+
+    if (videoModeAvailable) {
+      const modeToggle = document.createElement('div');
+      modeToggle.className = 'bv-camera-mode-toggle';
+
+      const photoBtn = document.createElement('button');
+      photoBtn.type = 'button';
+      photoBtn.className = 'bv-camera-mode-btn active';
+      photoBtn.textContent = 'Foto';
+
+      const videoBtn = document.createElement('button');
+      videoBtn.type = 'button';
+      videoBtn.className = 'bv-camera-mode-btn';
+      videoBtn.textContent = 'Video';
+
+      photoBtn.addEventListener('click', function () {
+        currentMode = 'photo';
+        photoBtn.classList.add('active');
+        videoBtn.classList.remove('active');
+        captureButton.textContent = 'Tomar foto';
+      });
+
+      videoBtn.addEventListener('click', function () {
+        currentMode = 'video';
+        videoBtn.classList.add('active');
+        photoBtn.classList.remove('active');
+        captureButton.textContent = 'Grabar';
+      });
+
+      modeToggle.appendChild(photoBtn);
+      modeToggle.appendChild(videoBtn);
+      controls.appendChild(modeToggle);
+    }
+
     const cancelButton = document.createElement('button');
     cancelButton.type = 'button';
     cancelButton.className = 'bv-camera-btn bv-camera-btn-cancel';
@@ -375,7 +489,17 @@
     captureButton.textContent = 'Tomar foto';
     captureButton.disabled = true;
 
+    const recordingIndicator = document.createElement('div');
+    recordingIndicator.className = 'bv-camera-recording-indicator';
+    const dot = document.createElement('div');
+    dot.className = 'bv-camera-recording-dot';
+    const timer = document.createElement('span');
+    timer.textContent = '00:00';
+    recordingIndicator.appendChild(dot);
+    recordingIndicator.appendChild(timer);
+
     controls.appendChild(cancelButton);
+    controls.appendChild(recordingIndicator);
     controls.appendChild(captureButton);
     stage.appendChild(video);
     stage.appendChild(preview);
@@ -412,8 +536,122 @@
       status: status,
       cancelButton: cancelButton,
       captureButton: captureButton,
-      clockId: clockId
+      recordingIndicator: recordingIndicator,
+      recordingTimer: timer,
+      clockId: clockId,
+      videoModeAvailable: videoModeAvailable,
+      currentMode: function() { return currentMode; }
     };
+  }
+
+  async function recordVideo_(stream, opts, ui) {
+    return new Promise(function (resolve, reject) {
+      const mimeType = pickSupportedMimeType_();
+      if (!mimeType) {
+        reject(new Error('Tu navegador no soporta la grabación de video.'));
+        return;
+      }
+
+      const maxVideoSeconds = Number(opts.maxVideoSeconds) || 30;
+      const maxVideoBytes = Number(opts.maxVideoBytes) || 50 * 1024 * 1024;
+      const chunks = [];
+      let totalSize = 0;
+      let isRecording = false;
+      let recordingStartTime = null;
+      let recordingTimeoutId = null;
+      let recordingIntervalId = null;
+
+      function formatRecordingTime(elapsed) {
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+      }
+
+      function stopRecording() {
+        if (isRecording && mediaRecorder) {
+          mediaRecorder.stop();
+          isRecording = false;
+        }
+      }
+
+      try {
+        mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+
+        mediaRecorder.ondataavailable = function (event) {
+          if (event.data && event.data.size > 0) {
+            chunks.push(event.data);
+            totalSize += event.data.size;
+            if (totalSize > maxVideoBytes) {
+              stopRecording();
+              ui.status.textContent = 'Tamaño máximo de video alcanzado. Deteniendo…';
+            }
+          }
+        };
+
+        mediaRecorder.onstop = function () {
+          if (recordingTimeoutId) clearTimeout(recordingTimeoutId);
+          if (recordingIntervalId) clearInterval(recordingIntervalId);
+          ui.recordingIndicator.classList.remove('active');
+
+          if (totalSize > maxVideoBytes) {
+            mediaRecorder = null;
+            reject(new Error('El video grabado supera el tamaño máximo permitido (' + (maxVideoBytes / (1024 * 1024)).toFixed(0) + ' MB). Intenta grabar un video más corto.'));
+            return;
+          }
+
+          if (chunks.length === 0) {
+            mediaRecorder = null;
+            reject(new Error('No se grabó ningún dato de video.'));
+            return;
+          }
+
+          const baseType = mimeType.split(';')[0];
+          const extension = baseType === 'video/mp4' ? 'mp4' : 'webm';
+          const videoBlob = new Blob(chunks, { type: baseType });
+          const capturedAt = new Date();
+          const posData = window.lastCapturePosition || {};
+          const metadata = {
+            source: 'web_camera',
+            mode: 'video',
+            capturedAt: capturedAt.toISOString(),
+            displayTime: formatDateTime_(capturedAt),
+            latitude: posData.coords ? Number(posData.coords.latitude) : 0,
+            longitude: posData.coords ? Number(posData.coords.longitude) : 0,
+            accuracy: posData.coords ? Number(posData.coords.accuracy) || 0 : 0
+          };
+
+          mediaRecorder = null;
+          blobToEvidence_(videoBlob, opts, capturedAt, metadata, baseType, extension)
+            .then(resolve)
+            .catch(reject);
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        recordingStartTime = Date.now();
+        ui.recordingIndicator.classList.add('active');
+        ui.status.textContent = 'Grabando video…';
+
+        recordingIntervalId = setInterval(function () {
+          if (isRecording && recordingStartTime) {
+            const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+            ui.recordingTimer.textContent = formatRecordingTime(elapsed);
+          }
+        }, 100);
+
+        recordingTimeoutId = setTimeout(function () {
+          if (isRecording) {
+            ui.status.textContent = 'Duración máxima de video alcanzada. Deteniendo…';
+            stopRecording();
+          }
+        }, maxVideoSeconds * 1000);
+      } catch (error) {
+        if (recordingTimeoutId) clearTimeout(recordingTimeoutId);
+        if (recordingIntervalId) clearInterval(recordingIntervalId);
+        mediaRecorder = null;
+        reject(error);
+      }
+    });
   }
 
   async function capture(opts) {
@@ -429,12 +667,13 @@
 
     try {
       const position = await getCurrentPosition_();
+      window.lastCapturePosition = position;
       ui = buildOverlay_(opts, position);
-      stream = await getCameraStream_();
+      stream = await getCameraStream_(opts);
       ui.video.srcObject = stream;
       await ui.video.play();
       await waitForVideo_(ui.video);
-      ui.status.textContent = 'GPS verificado (±' + Math.round(Number(position.coords.accuracy) || 0) + ' m). La marca se incrustará en la fotografía.';
+      ui.status.textContent = 'GPS verificado (±' + Math.round(Number(position.coords.accuracy) || 0) + ' m). La marca se incrustará en la evidencia.';
       ui.captureButton.disabled = false;
 
       return await new Promise(function (resolve, reject) {
@@ -444,6 +683,10 @@
           if (finished) return;
           finished = true;
           clearInterval(ui.clockId);
+          if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+            mediaRecorder = null;
+          }
           stopStream_(stream);
           if (ui.overlay && ui.overlay.parentNode) ui.overlay.parentNode.removeChild(ui.overlay);
           activeCapture = false;
@@ -457,10 +700,16 @@
 
         ui.captureButton.addEventListener('click', async function () {
           ui.captureButton.disabled = true;
-          ui.status.textContent = 'Generando evidencia con fecha y ubicación…';
+
           try {
-            const evidence = await renderCapturedEvidence_(ui.video, opts, position);
-            finish_(null, evidence);
+            if (ui.currentMode() === 'video') {
+              const evidence = await recordVideo_(stream, opts, ui);
+              finish_(null, evidence);
+            } else {
+              ui.status.textContent = 'Generando evidencia con fecha y ubicación…';
+              const evidence = await renderCapturedEvidence_(ui.video, opts, position);
+              finish_(null, evidence);
+            }
           } catch (error) {
             finish_(error);
           }
@@ -470,6 +719,10 @@
       if (ui) {
         clearInterval(ui.clockId);
         if (ui.overlay && ui.overlay.parentNode) ui.overlay.parentNode.removeChild(ui.overlay);
+      }
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        mediaRecorder = null;
       }
       stopStream_(stream);
       activeCapture = false;

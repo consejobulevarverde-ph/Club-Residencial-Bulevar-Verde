@@ -484,7 +484,10 @@
         ].filter(Boolean),
         filePrefix: 'pqrs-cierre-' + selectedReport.reportId,
         maxDimension: 1600,
-        quality: 0.84
+        quality: 0.84,
+        allowVideo: true,
+        maxVideoSeconds: 15,
+        maxVideoBytes: 15 * 1024 * 1024
       });
 
       var file = evidence.file || new File([evidence.blob], evidence.name, {
@@ -501,7 +504,7 @@
       });
     } catch (error) {
       if (error && error.name === 'AbortError') return;
-      showAlert('danger', 'No fue posible tomar la fotografía: ' + (error.message || error));
+      showAlert('danger', 'No fue posible capturar la evidencia: ' + (error.message || error));
     } finally {
       elements.evidenceCameraButton.disabled = false;
     }
@@ -516,12 +519,19 @@
   }
 
   function setClosureEvidenceFile(file, source) {
-    if (!/^image\//i.test(file.type || '')) {
-      showAlert('warning', 'Selecciona un archivo de imagen válido.');
+    var isImage = /^image\//i.test(file.type || '');
+    var isVideo = /^video\//i.test(file.type || '');
+
+    if (!isImage && !isVideo) {
+      showAlert('warning', 'Selecciona un archivo de imagen o video válido.');
       return;
     }
-    if (file.size > 20 * 1024 * 1024) {
-      showAlert('warning', 'La imagen original no puede superar 20 MB.');
+
+    var maxSize = isVideo ? 15 * 1024 * 1024 : 20 * 1024 * 1024;
+    var typeLabel = isVideo ? 'video' : 'imagen';
+
+    if (file.size > maxSize) {
+      showAlert('warning', 'El ' + typeLabel + ' original no puede superar ' + (maxSize / (1024 * 1024)) + ' MB.');
       return;
     }
 
@@ -570,6 +580,22 @@
 
   async function compressClosureEvidence(selected) {
     var file = selected.file;
+    var isVideo = /^video\//i.test(file.type || '');
+    var maxVideoBytes = 15 * 1024 * 1024;
+
+    if (isVideo) {
+      if (file.size > maxVideoBytes) {
+        throw new Error('El video no puede superar ' + (maxVideoBytes / (1024 * 1024)) + ' MB.');
+      }
+      var dataUrl = await blobToDataUrl(file);
+      return {
+        name: sanitizeFileName(selected.name),
+        mimeType: file.type || 'video/mp4',
+        sizeBytes: file.size,
+        dataUrl: dataUrl
+      };
+    }
+
     var image = await loadImageFile(file);
     var dimensions = fitDimensions(image.width, image.height, 1600);
     var canvas = document.createElement('canvas');

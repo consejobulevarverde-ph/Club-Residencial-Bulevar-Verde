@@ -16,6 +16,7 @@ const MANTENIMIENTO_PENDING_FOLDER_NAME = 'Reportes Mantenimiento - Respaldo de 
 const MANTENIMIENTO_PENDING_FOLDER_PROPERTY = 'MANTENIMIENTO_PENDING_FOLDER_ID';
 const MANTENIMIENTO_MAX_PHOTOS = 3;
 const MANTENIMIENTO_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const MANTENIMIENTO_MAX_VIDEO_BYTES = 15 * 1024 * 1024;
 
 const MANTENIMIENTO_GESTION_SESSION_SECONDS = 6 * 60 * 60;
 const MANTENIMIENTO_GESTION_KEY_HASH_PROPERTY = 'MANTENIMIENTO_GESTION_CLAVE_HASH';
@@ -866,7 +867,7 @@ function subirEvidenciaGestionMantenimiento(payload) {
 
   const dataUrl = String(evidence.dataUrl || '');
   const match = dataUrl.match(
-    /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/i
+    /^data:((?:image|video)\/(?:jpeg|jpg|png|webp|mp4|webm));base64,([A-Za-z0-9+/=]+)$/i
   );
   if (!match) {
     throw new Error('La evidencia de cierre tiene un formato inválido.');
@@ -877,7 +878,10 @@ function subirEvidenciaGestionMantenimiento(payload) {
   if (!bytes.length) {
     throw new Error('La evidencia de cierre está vacía.');
   }
-  if (bytes.length > MANTENIMIENTO_MAX_IMAGE_BYTES) {
+
+  const isVideo = /^video\//i.test(mimeType);
+  const maxBytes = isVideo ? MANTENIMIENTO_MAX_VIDEO_BYTES : MANTENIMIENTO_MAX_IMAGE_BYTES;
+  if (bytes.length > maxBytes) {
     throw new Error('La evidencia de cierre supera el tamaño permitido.');
   }
 
@@ -885,7 +889,11 @@ function subirEvidenciaGestionMantenimiento(payload) {
     ? 'png'
     : mimeType === 'image/webp'
       ? 'webp'
-      : 'jpg';
+      : mimeType === 'video/mp4'
+        ? 'mp4'
+        : mimeType === 'video/webm'
+          ? 'webm'
+          : 'jpg';
   const safeEvidenceId = clientEvidenceId.replace(/[^A-Za-z0-9_-]/g, '')
     .slice(0, 80);
   const fileName = reportId + '-gestion-' + safeEvidenceId + '.' + extension;
