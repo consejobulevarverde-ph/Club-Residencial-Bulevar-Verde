@@ -1909,6 +1909,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
             '<div><strong>' + esc(caso.apartamento) + '</strong> · ' + esc(caso.motivo) +
             '<br><small class="text-muted">' + esc(caso.caseCode) + ' · ' + esc(caso.fechaCreacion) + '</small></div>' +
             '<div>' + obtenerBadgeEstadoCaso(caso.estado) +
+            (caso.severidad ? ' <span class="badge bg-secondary ms-1">' + esc(caso.severidad) + '</span>' : '') +
             (caso.tieneDescargos ? ' <span class="badge bg-info text-dark ms-1">Con descargos</span>' : '') +
             '</div></div>';
         }).join('');
