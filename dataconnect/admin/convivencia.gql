@@ -199,6 +199,24 @@ mutation EditarContenidoCasoConvivenciaAdmin(
   )
 }
 
+mutation ActualizarSeveridadCasoConvivenciaAdmin(
+  $id: UUID!
+  $severidad: String!
+  $sancionEquivalente: Float
+  $requiereProcesoFormal: Boolean!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: {
+      severidad: $severidad
+      sancionEquivalente: $sancionEquivalente
+      requiereProcesoFormal: $requiereProcesoFormal
+    }
+  )
+}
+
 mutation AnularCasoConvivenciaAdmin(
   $id: UUID!
   $resolucion: String!

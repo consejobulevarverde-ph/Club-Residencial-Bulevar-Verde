@@ -1962,6 +1962,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         $('editCasoDescripcion').value = casoConvivenciaActual.descripcion || '';
         $('editCasoRazon').value = casoConvivenciaActual.razonNotificacion || '';
         $('editCasoNotificador').value = casoConvivenciaActual.notificadorAdmin || '';
+        $('editCasoSeveridad').value = casoConvivenciaActual.severidad || '';
         if (modalEditarCasoConvivencia) modalEditarCasoConvivencia.show();
       });
 
@@ -1974,6 +1975,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         var descripcion = $('editCasoDescripcion').value.trim();
         var razon = $('editCasoRazon').value.trim();
         var notificador = $('editCasoNotificador').value.trim();
+        var severidad = $('editCasoSeveridad').value.trim();
 
         if (!motivo || !descripcion || !razon || !notificador) {
           msg('Todos los campos son requeridos');
@@ -1982,20 +1984,33 @@ var config = window.ADMIN_DATOS_CONFIG || {};
 
         busy(btn, true, 'Guardando…');
         withIdToken(function (idToken) {
-          return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id, idToken, {
-            method: 'PATCH',
-            body: {
-              motivo: motivo,
-              descripcion: descripcion,
-              razonNotificacion: razon,
-              notificadorAdmin: notificador
-            }
-          });
+          var promises = [
+            apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id, idToken, {
+              method: 'PATCH',
+              body: {
+                motivo: motivo,
+                descripcion: descripcion,
+                razonNotificacion: razon,
+                notificadorAdmin: notificador
+              }
+            })
+          ];
+
+          if (severidad && severidad !== casoConvivenciaActual.severidad) {
+            promises.push(
+              apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/severidad', idToken, {
+                method: 'PATCH',
+                body: { severidad: severidad }
+              })
+            );
+          }
+
+          return Promise.all(promises);
         })
-          .then(function (response) {
-            return response.json().then(function (data) {
-              casoConvivenciaActual = data.data;
-              renderDetalleCasoConvivencia(data.data);
+          .then(function (responses) {
+            return Promise.all(responses.map(function (r) { return r.json(); })).then(function (dataArray) {
+              casoConvivenciaActual = dataArray[dataArray.length - 1].data;
+              renderDetalleCasoConvivencia(casoConvivenciaActual);
               if (modalEditarCasoConvivencia) modalEditarCasoConvivencia.hide();
               msg('Caso actualizado', 'success');
             });
@@ -2049,6 +2064,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         CASO_CREADO: 'Caso creado',
         CASO_EDITADO: 'Información del caso editada',
         CASO_ANULADO: 'Caso anulado',
+        SEVERIDAD_MODIFICADA: 'Severidad modificada',
         DESCARGOS_REGISTRADOS: 'Descargos registrados',
         ACTA_COMITE_REGISTRADA: 'Acta de comité registrada',
         CASO_CERRADO_SIN_SANCION: 'Caso cerrado sin sanción',
