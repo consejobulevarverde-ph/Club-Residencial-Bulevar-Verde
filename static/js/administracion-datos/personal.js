@@ -3,7 +3,8 @@
     window.AdminDatos.registrarModulo({
       id: 'personal',
       buttonId: 'showPersonal',
-      viewId: 'personalView'
+      viewId: 'personalView',
+      onFirstShow: window.AdminDatos.loadPersonal
     });
   }
 }());

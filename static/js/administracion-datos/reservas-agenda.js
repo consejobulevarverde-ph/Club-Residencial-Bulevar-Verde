@@ -3,7 +3,8 @@
     window.AdminDatos.registrarModulo({
       id: 'reservas',
       buttonId: 'showReservas',
-      viewId: 'reservasView'
+      viewId: 'reservasView',
+      onFirstShow: window.AdminDatos.cargarReservasAgenda
     });
   }
 }());

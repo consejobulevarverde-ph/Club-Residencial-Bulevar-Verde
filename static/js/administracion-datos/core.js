@@ -2561,6 +2561,9 @@ var config = window.ADMIN_DATOS_CONFIG || {};
   AdminDatos.registrarModulo = registrarModulo;
   AdminDatos.mode = mode;
   AdminDatos.loadDashboard = loadDashboard;
+  AdminDatos.cargarCasosConvivencia = cargarCasosConvivencia;
+  AdminDatos.loadPersonal = loadPersonal;
+  AdminDatos.cargarReservasAgenda = cargarReservasAgenda;
 
   // Shared state object
   AdminDatos.state = {

@@ -1,4 +1,10 @@
-// Module functions compiled into core.js for simplicity during refactor
 (function () {
-  // Placeholder - functionality merged into core.js
+  if (window.AdminDatos && window.AdminDatos.registrarModulo) {
+    window.AdminDatos.registrarModulo({
+      id: 'casosConvivencia',
+      buttonId: 'showCasosConvivencia',
+      viewId: 'casosConvivenciaView',
+      onFirstShow: window.AdminDatos.cargarCasosConvivencia
+    });
+  }
 }());
