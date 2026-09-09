@@ -2549,9 +2549,29 @@ var config = window.ADMIN_DATOS_CONFIG || {};
     });
   }
 
+  // Export all shared helpers and state to AdminDatos namespace
+  AdminDatos.$ = $;
+  AdminDatos.esc = esc;
+  AdminDatos.msg = msg;
+  AdminDatos.hideMsg = hideMsg;
+  AdminDatos.panel = panel;
+  AdminDatos.busy = busy;
+  AdminDatos.apiFetch = apiFetch;
+  AdminDatos.withIdToken = withIdToken;
   AdminDatos.registrarModulo = registrarModulo;
   AdminDatos.mode = mode;
   AdminDatos.loadDashboard = loadDashboard;
+
+  // Shared state object
+  AdminDatos.state = {
+    currentUnidadId: null,
+    reservarUnidadId: null,
+    reservarReservasDelDiaCache: [],
+    reservarFranjasCache: [],
+    editarReservaDelDiaCache: [],
+    editarReservaFranjasCache: [],
+    reservaEditandoId: null
+  };
 
   // Register 'convivencia' hardcoded (no separate file, lives in convivencia-form.js)
   registrarModulo({
