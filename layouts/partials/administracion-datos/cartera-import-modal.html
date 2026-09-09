@@ -1,0 +1,56 @@
+<div class="modal fade" id="modalImportarCartera" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-file-earmark-excel me-2"></i>Importar Informe de Cartera
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="importResult" class="alert hidden mb-3" role="alert"></div>
+
+        <form id="formImportarCartera">
+          <div class="mb-3">
+            <label for="archivoCartera" class="form-label">
+              Selecciona el archivo Excel (.xls o .xlsx)
+            </label>
+            <input
+              type="file"
+              class="form-control"
+              id="archivoCartera"
+              accept=".xls,.xlsx"
+              required autocomplete="off">
+            <div class="form-text">
+              <strong>Formato esperado:</strong> El archivo debe contener columnas como:
+              <ul class="mb-0 mt-1">
+                <li><strong>Inmueble</strong> o <strong>Apartamento</strong>: Código del apto (ej: 1029)</li>
+                <li><strong>Saldo Actual</strong>: Saldo actual de cartera</li>
+                <li><strong>Saldo Anterior</strong>: Saldo del periodo anterior (opcional)</li>
+                <li><strong>Fecha Corte</strong>: Fecha del reporte (opcional)</li>
+                <li><strong>Estado</strong>: AL_DIA o EN_MORA (opcional)</li>
+              </ul>
+            </div>
+          </div>
+
+          <div id="progressBar" class="progress hidden mb-3" style="height: 25px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                 role="progressbar"
+                 style="width: 100%">
+              Procesando archivo...
+            </div>
+          </div>
+
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-success" id="btnSubirCartera">
+              <i class="bi bi-upload me-1"></i>Subir e Importar
+            </button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

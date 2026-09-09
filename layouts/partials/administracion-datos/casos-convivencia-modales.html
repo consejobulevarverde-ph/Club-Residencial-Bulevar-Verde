@@ -1,0 +1,64 @@
+<div class="modal fade" id="modalEditarCasoConvivencia" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar información del caso</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editarCasoConvivenciaForm" class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small">Caso (solo lectura)</label>
+            <input id="editCasoId" type="text" class="form-control form-control-sm" disabled>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small">Apartamento (solo lectura)</label>
+            <input id="editCasoApto" type="text" class="form-control form-control-sm" disabled>
+          </div>
+          <div class="col-12">
+            <label for="editCasoMotivo" class="form-label small">Motivo</label>
+            <input id="editCasoMotivo" type="text" class="form-control form-control-sm" maxlength="200" required autocomplete="off">
+          </div>
+          <div class="col-12">
+            <label for="editCasoDescripcion" class="form-label small">Descripción de los hechos</label>
+            <textarea id="editCasoDescripcion" class="form-control form-control-sm" rows="4" maxlength="4000" required autocomplete="off"></textarea>
+          </div>
+          <div class="col-12">
+            <label for="editCasoRazon" class="form-label small">Razón de la notificación</label>
+            <textarea id="editCasoRazon" class="form-control form-control-sm" rows="3" maxlength="2000" required autocomplete="off"></textarea>
+          </div>
+          <div class="col-md-6">
+            <label for="editCasoNotificador" class="form-label small">Notificador</label>
+            <input id="editCasoNotificador" type="text" class="form-control form-control-sm" maxlength="200" required autocomplete="off">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button id="editCasoConvivenciaSubmit" type="button" class="btn btn-primary">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalAnularCasoConvivencia" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Anular caso</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">El caso dejará de contar en el historial de la unidad y de la vista del residente, pero quedará visible aquí con la insignia "Anulado" para trazabilidad.</p>
+        <form id="anularCasoConvivenciaForm">
+          <label for="anularCasoMotivo" class="form-label small">Motivo de la anulación</label>
+          <textarea id="anularCasoMotivo" class="form-control form-control-sm" rows="3" maxlength="2000" required autocomplete="off" placeholder="Ej: caso de prueba, registrado por error, no aplica…"></textarea>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button id="anularCasoConvivenciaSubmit" type="button" class="btn btn-danger">Anular caso</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,230 @@
+:root {
+  --p: #2c5f2d;
+  --s: #4a8c4b;
+  --l: #e8f5e9;
+  --b: #d8e6d9;
+}
+
+body {
+  font-family: Montserrat, sans-serif;
+  background: var(--l);
+}
+
+.navbar,
+.btn-primary {
+  background: var(--p) !important;
+  border-color: var(--p) !important;
+}
+
+.header {
+  background: linear-gradient(135deg, var(--s), var(--p));
+  color: #fff;
+  padding: 2.5rem 0;
+}
+
+.surface {
+  background: #fff;
+  border: 1px solid var(--b);
+  border-radius: 1rem;
+  box-shadow: 0 5px 18px rgba(44, 95, 45, .08);
+}
+
+.section-title {
+  color: var(--p);
+  font-weight: 700;
+}
+
+.metric {
+  border-left: 5px solid var(--p);
+}
+
+.small-note {
+  font-size: .86rem;
+  color: #667268;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.sticky-panel {
+  top: 1rem;
+}
+
+.accordion-button {
+  font-weight: 600;
+  color: var(--p);
+}
+
+.accordion-button:not(.collapsed) {
+  background: var(--l);
+  color: var(--p);
+  box-shadow: none;
+}
+
+.accordion-button:focus {
+  box-shadow: 0 0 0 2px var(--b);
+  border-color: var(--p);
+}
+
+.accordion-item {
+  border-color: var(--b);
+}
+
+.mode-button {
+  color: var(--p);
+  border-color: var(--p);
+  font-weight: 500;
+}
+
+.mode-button:hover {
+  background: var(--l);
+  color: var(--p);
+}
+
+.mode-button.active {
+  color: #fff;
+  background: var(--p);
+  border-color: var(--p);
+}
+
+/* Calendario de Reservas */
+.repeat-row {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--b);
+}
+
+.repeat-row:last-child {
+  border-bottom: none;
+}
+
+table {
+  font-size: 0.9rem;
+}
+
+.calendar-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 0.8rem;
+}
+
+.calendar-table th, .calendar-table td {
+  border: 1px solid var(--b);
+  padding: 0.6rem 0.4rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.calendar-table th {
+  background: var(--p);
+  color: #fff;
+  font-weight: 700;
+  padding: 0.6rem 0.4rem;
+}
+
+.calendar-table .zona-nombre {
+  text-align: left;
+  font-weight: 700;
+  color: var(--p);
+  background: #f5f7f5;
+  min-width: 140px;
+  padding: 0.6rem 0.8rem;
+}
+
+.calendar-table .fecha-header {
+  background: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--p);
+  padding: 0.6rem 0.3rem;
+}
+
+.fecha-numero {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--p);
+  margin-bottom: 0.15rem;
+}
+
+.fecha-dia {
+  display: block;
+  font-size: 0.65rem;
+  color: #888;
+  font-weight: 500;
+}
+
+.reserva-block {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  color: #fff;
+  font-weight: 600;
+  padding: 2px 3px;
+  margin: 2px 0;
+  border-radius: 3px;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.reserva-emoji {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.reserva-texto {
+  font-size: 0.6rem;
+  word-wrap: break-word;
+}
+
+.reserva-pendiente {
+  background: #ffc107;
+  color: #000;
+}
+
+.reserva-confirmada {
+  background: #28a745;
+  color: #fff;
+}
+
+.reserva-cancelada {
+  background: #6c757d;
+  color: #fff;
+}
+
+.reserva-rechazada {
+  background: #dc3545;
+  color: #fff;
+}
+
+.reserva-vacia {
+  background: #fafafa;
+  border: 1px dashed #ddd;
+}
+
+.calendar-legend {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f9faf9;
+  border-radius: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.legend-emoji {
+  font-size: 1.1rem;
+  min-width: 1.2rem;
+}

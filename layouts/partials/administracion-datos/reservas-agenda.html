@@ -1,0 +1,23 @@
+<section id="reservasAgendaView">
+  <div class="surface p-4">
+    <h2 class="h5 mb-3"><i class="bi bi-calendar-event me-2"></i>Agenda de Reservas</h2>
+    <div class="row g-3 mb-4">
+      <div class="col-md-6">
+        <span class="form-label small">Rango de fechas</span>
+        <div class="d-flex gap-2">
+          <input id="agendaDesde" aria-label="Fecha desde" type="date" class="form-control form-control-sm" autocomplete="off">
+          <span class="align-self-center text-muted">a</span>
+          <input id="agendaHasta" aria-label="Fecha hasta" type="date" class="form-control form-control-sm" autocomplete="off">
+        </div>
+      </div>
+      <div class="col-md-6 d-flex gap-2 align-items-end">
+        <button id="agendaSiete" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-calendar me-1"></i>7 días</button>
+        <button id="agendaMes" type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-calendar2 me-1"></i>Mes</button>
+        <button id="agendaRefrescar" type="button" class="btn btn-primary btn-sm flex-grow-1"><i class="bi bi-arrow-clockwise me-1"></i>Cargar</button>
+      </div>
+    </div>
+    <div id="agendaLoading" class="text-muted small mb-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+    <div id="agendaError" class="alert alert-danger hidden mb-3"></div>
+    <div id="agendaCalendario" style="overflow-x: auto;"></div>
+  </div>
+</section>

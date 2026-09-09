@@ -1,0 +1,70 @@
+<section id="reservasCatalogoView" class="hidden">
+  <div class="surface p-4 mb-4">
+    <h3 class="section-title h5 mb-3"><i class="bi bi-plus-circle me-2"></i>Crear nueva zona</h3>
+    <form id="crearZonaForm" class="row g-3">
+      <div class="col-md-3">
+        <label for="zonaCodigo"class="form-label small">Código</label>
+        <input id="zonaCodigo" type="text" class="form-control form-control-sm" required autocomplete="off">
+      </div>
+      <div class="col-md-3">
+        <label for="zonaTipo"class="form-label small">Tipo</label>
+        <input id="zonaTipo" type="text" class="form-control form-control-sm" placeholder="ej: Salón, Cancha" required autocomplete="off">
+      </div>
+      <div class="col-md-6">
+        <label for="zonaDescripcion"class="form-label small">Descripción</label>
+        <input id="zonaDescripcion" type="text" class="form-control form-control-sm" required autocomplete="off">
+      </div>
+      <div class="col-md-2">
+        <label for="zonaHoraApertura"class="form-label small">Hora apertura</label>
+        <input id="zonaHoraApertura" type="time" class="form-control form-control-sm" required autocomplete="off">
+      </div>
+      <div class="col-md-2">
+        <label for="zonaHoraCierre"class="form-label small">Hora cierre</label>
+        <input id="zonaHoraCierre" type="time" class="form-control form-control-sm" required autocomplete="off">
+      </div>
+      <div class="col-md-2">
+        <label for="zonaDuracionMin"class="form-label small">Dur. mín. (horas)</label>
+        <input id="zonaDuracionMin" type="number" class="form-control form-control-sm" min="1" required autocomplete="off">
+      </div>
+      <div class="col-md-2">
+        <label for="zonaDuracionMax"class="form-label small">Dur. máx. (horas)</label>
+        <input id="zonaDuracionMax" type="number" class="form-control form-control-sm" min="1" required autocomplete="off">
+      </div>
+      <div class="col-md-2">
+        <label for="zonaCosto"class="form-label small">Costo</label>
+        <input id="zonaCosto" type="number" class="form-control form-control-sm" step="0.01" min="0" autocomplete="off">
+      </div>
+      <div class="col-md-2">
+        <label for="zonaDeposito"class="form-label small">Depósito</label>
+        <input id="zonaDeposito" type="number" class="form-control form-control-sm" step="0.01" min="0" autocomplete="off">
+      </div>
+      <div class="col-md-3">
+        <div class="form-check mt-4">
+          <input id="zonaRequierePago" type="checkbox" class="form-check-input" autocomplete="off">
+          <label class="form-check-label small" for="zonaRequierePago">Requiere pago</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check mt-4">
+          <input id="zonaRequiereAprobacion" type="checkbox" class="form-check-input" autocomplete="off">
+          <label class="form-check-label small" for="zonaRequiereAprobacion">Requiere aprobación</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check mt-4">
+          <input id="zonaSoportaRecreativa" type="checkbox" class="form-check-input" autocomplete="off">
+          <label class="form-check-label small" for="zonaSoportaRecreativa">Soporta recreativa</label>
+        </div>
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus me-1"></i>Crear zona</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="surface p-4">
+    <h3 class="section-title h5 mb-3">Zonas comunes</h3>
+    <div id="reservasCatalogoLoading" class="text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+    <div id="reservasCatalogoLista"></div>
+  </div>
+</section>

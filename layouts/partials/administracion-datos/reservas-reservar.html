@@ -1,0 +1,101 @@
+<section id="reservasReservarView" class="hidden">
+  <div class="surface p-4">
+    <h3 class="section-title h5 mb-3"><i class="bi bi-calendar-plus me-2"></i>Crear Reserva Manual</h3>
+
+    <form id="reservarForm" class="row g-3">
+      <!-- Búsqueda de unidad -->
+      <div class="col-12">
+        <label class="form-label small" for="reservarUnidadQuery"><strong>1. Seleccionar Unidad</strong></label>
+        <div id="reservarUnidadSearchForm" class="input-group mb-3">
+          <input id="reservarUnidadQuery" type="text" class="form-control form-control-sm" placeholder="Código, placa, correo, documento o nombre" autocomplete="off">
+          <button type="button" id="reservarUnidadBuscarBtn" class="btn btn-primary btn-sm">Buscar</button>
+        </div>
+        <div id="reservarUnidadResults" class="text-muted small mb-3">Ingresa un término para buscar.</div>
+        <div id="reservarUnidadSeleccionada" class="alert alert-info hidden mb-3" style="display: flex; justify-content: space-between; align-items: center;">
+          <span><strong>Unidad: </strong><span id="reservarUnidadSeleccionadaTexto"></span></span>
+          <button type="button" id="reservarUnidadCambiar" class="btn btn-sm btn-outline-secondary">Cambiar</button>
+        </div>
+      </div>
+
+      <!-- Selección de zona -->
+      <div class="col-md-6">
+        <label class="form-label small" for="reservarZona"><strong>2. Zona Común</strong></label>
+        <select id="reservarZona" class="form-select form-select-sm" required autocomplete="off">
+          <option value="">-- Seleccionar zona --</option>
+        </select>
+      </div>
+
+      <!-- Modalidad de uso -->
+      <div class="col-md-6">
+        <label class="form-label small" for="reservarModalidad"><strong>Modalidad</strong></label>
+        <select id="reservarModalidad" class="form-select form-select-sm" required autocomplete="off">
+          <option value="ORGANIZADO_CON_INVITADOS">Organizado / con invitados</option>
+        </select>
+      </div>
+
+      <!-- Panel informativo de la zona -->
+      <div id="reservarZonaInfo" class="alert alert-info hidden col-12" style="font-size: 0.9rem;">
+        <strong>Información de la zona:</strong>
+        <div><span id="reservarZonaHorario">Horario: </span></div>
+        <div><span id="reservarZonaDuracion">Duración: </span></div>
+        <div><span id="reservarZonaPrecio">Costo: </span></div>
+        <div style="margin-top: 0.5rem; color: #856404;"><span id="reservarZonaAprobacion"></span></div>
+      </div>
+
+      <!-- Fecha -->
+      <div class="col-md-4">
+        <label class="form-label small" for="reservarFecha"><strong>3. Fecha</strong></label>
+        <input id="reservarFecha" type="date" class="form-control form-control-sm" required autocomplete="off">
+      </div>
+
+      <!-- Hora de inicio -->
+      <div class="col-md-4">
+        <label class="form-label small" for="reservarHoraInicio"><strong>Hora de Inicio</strong></label>
+        <select id="reservarHoraInicio" class="form-select form-select-sm" required disabled autocomplete="off">
+          <option value="">-- Seleccionar --</option>
+        </select>
+      </div>
+
+      <!-- Duración -->
+      <div class="col-md-4">
+        <label class="form-label small" for="reservarDuracion"><strong>Duración (horas)</strong></label>
+        <select id="reservarDuracion" class="form-select form-select-sm" required disabled autocomplete="off">
+          <option value="">-- Seleccionar --</option>
+        </select>
+      </div>
+
+      <!-- Hora de fin (readonly) -->
+      <div class="col-md-4">
+        <label class="form-label small" for="reservarHoraFin"><strong>Hora de Fin</strong></label>
+        <input id="reservarHoraFin" type="text" class="form-control form-control-sm" disabled autocomplete="off">
+      </div>
+
+      <!-- Panel de reservas existentes -->
+      <div id="reservasReservarExistentes" class="col-12 hidden">
+        <div class="alert alert-light border">
+          <strong class="small">Reservas activas ese día para esta zona:</strong>
+          <div id="reservasReservarExistentesList" style="font-size: 0.9rem; margin-top: 0.5rem;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel de conflicto -->
+      <div id="reservasReservarConflicto" class="alert alert-danger hidden col-12" role="alert">
+        <strong>⚠️ Conflicto de horario:</strong> <span id="reservasReservarConflictoMsg"></span>
+      </div>
+
+      <!-- Observaciones -->
+      <div class="col-12">
+        <label for="reservarObservaciones"class="form-label small">Observaciones (opcional)</label>
+        <textarea id="reservarObservaciones" class="form-control form-control-sm" rows="2" placeholder="Notas adicionales sobre esta reserva..." autocomplete="off"></textarea>
+      </div>
+
+      <!-- Botón de envío -->
+      <div class="col-12">
+        <button id="reservasReservarSubmit" type="submit" class="btn btn-primary btn-sm" disabled>
+          <i class="bi bi-check-circle me-1"></i>Crear Reserva
+        </button>
+      </div>
+    </form>
+  </div>
+</section>

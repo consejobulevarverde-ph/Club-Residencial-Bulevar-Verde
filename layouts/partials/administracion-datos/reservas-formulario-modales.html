@@ -1,0 +1,172 @@
+<div class="modal fade" id="reservasModalAcciones" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Acciones de Reserva</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="reservasAccionesInfo" class="text-muted small mb-3"></p>
+        <div id="reservasAccionesBotones" class="d-grid gap-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="reservasModalRechazar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Rechazar Reserva</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <textarea id="reservasMotivoRechazo" class="form-control" rows="3" placeholder="Motivo del rechazo..." autocomplete="off"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button id="reservasConfirmarRechazo" type="button" class="btn btn-danger">Rechazar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="reservasModalCancelar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Cancelar Reserva</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <textarea id="reservasMotivoCancelacion" class="form-control" rows="3" placeholder="Motivo de la cancelación (opcional)..." autocomplete="off"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button id="reservasConfirmarCancelacion" type="button" class="btn btn-warning">Cancelar Reserva</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="reservasModalPago" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Registrar Pago</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body row g-3">
+        <div class="col-12">
+          <label for="reservasEstadoPago"class="form-label small">Estado del pago</label>
+          <select id="reservasEstadoPago" class="form-select form-select-sm" autocomplete="off">
+            <option value="NO_REQUIERE">No requiere</option>
+            <option value="PENDIENTE">Pendiente</option>
+            <option value="PAGADO">Pagado</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label for="reservasFechaPago"class="form-label small">Fecha de pago (opcional)</label>
+          <input id="reservasFechaPago" type="date" class="form-control form-control-sm" autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button id="reservasConfirmarPago" type="button" class="btn btn-primary">Registrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="reservasModalEditar" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Reserva</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editarReservaForm" class="row g-3">
+          <!-- Selección de zona -->
+          <div class="col-md-6">
+            <label class="form-label small" for="editarReservaZona"><strong>Zona Común</strong></label>
+            <select id="editarReservaZona" class="form-select form-select-sm" required autocomplete="off">
+              <option value="">-- Seleccionar zona --</option>
+            </select>
+          </div>
+
+          <!-- Modalidad de uso -->
+          <div class="col-md-6">
+            <label class="form-label small" for="editarReservaModalidad"><strong>Modalidad</strong></label>
+            <select id="editarReservaModalidad" class="form-select form-select-sm" required autocomplete="off">
+              <option value="ORGANIZADO_CON_INVITADOS">Organizado / con invitados</option>
+            </select>
+          </div>
+
+          <!-- Panel informativo de la zona -->
+          <div id="editarReservaZonaInfo" class="alert alert-info hidden col-12" style="font-size: 0.9rem;">
+            <strong>Información de la zona:</strong>
+            <div><span id="editarReservaZonaHorario">Horario: </span></div>
+            <div><span id="editarReservaZonaDuracion">Duración: </span></div>
+            <div><span id="editarReservaZonaPrecio">Costo: </span></div>
+            <div style="margin-top: 0.5rem; color: #856404;"><span id="editarReservaZonaAprobacion"></span></div>
+          </div>
+
+          <!-- Fecha -->
+          <div class="col-md-4">
+            <label class="form-label small" for="editarReservaFecha"><strong>Fecha</strong></label>
+            <input id="editarReservaFecha" type="date" class="form-control form-control-sm" required autocomplete="off">
+          </div>
+
+          <!-- Hora de inicio -->
+          <div class="col-md-4">
+            <label class="form-label small" for="editarReservaHoraInicio"><strong>Hora de Inicio</strong></label>
+            <select id="editarReservaHoraInicio" class="form-select form-select-sm" required disabled autocomplete="off">
+              <option value="">-- Seleccionar --</option>
+            </select>
+          </div>
+
+          <!-- Duración -->
+          <div class="col-md-4">
+            <label class="form-label small" for="editarReservaDuracion"><strong>Duración (horas)</strong></label>
+            <select id="editarReservaDuracion" class="form-select form-select-sm" required disabled autocomplete="off">
+              <option value="">-- Seleccionar --</option>
+            </select>
+          </div>
+
+          <!-- Hora de fin (readonly) -->
+          <div class="col-md-4">
+            <label class="form-label small" for="editarReservaHoraFin"><strong>Hora de Fin</strong></label>
+            <input id="editarReservaHoraFin" type="text" class="form-control form-control-sm" disabled autocomplete="off">
+          </div>
+
+          <!-- Panel de reservas existentes -->
+          <div id="editarReservasExistentes" class="col-12 hidden">
+            <div class="alert alert-light border">
+              <strong class="small">Reservas activas ese día para esta zona:</strong>
+              <div id="editarReservasExistentesList" style="font-size: 0.9rem; margin-top: 0.5rem;">
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel de conflicto -->
+          <div id="editarReservasConflicto" class="alert alert-danger hidden col-12" role="alert">
+            <strong>⚠️ Conflicto de horario:</strong> <span id="editarReservasConflictoMsg"></span>
+          </div>
+
+          <!-- Observaciones -->
+          <div class="col-12">
+            <label for="editarReservaObservaciones"class="form-label small">Observaciones (opcional)</label>
+            <textarea id="editarReservaObservaciones" class="form-control form-control-sm" rows="2" placeholder="Notas adicionales sobre esta reserva..." autocomplete="off"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button id="editarReservaSubmit" type="button" class="btn btn-primary" disabled>
+          <i class="bi bi-check-circle me-1"></i>Guardar Cambios
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

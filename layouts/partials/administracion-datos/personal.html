@@ -1,0 +1,43 @@
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h3 class="section-title h5 mb-0">Personal de la copropiedad</h3>
+  <select id="personalFiltroRol" class="form-select form-select-sm" style="max-width:200px" autocomplete="off">
+    <option value="">Todos los roles</option>
+    <option value="VIGILANTE">Vigilantes</option>
+    <option value="ASEADOR">Aseadores</option>
+  </select>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="surface p-4">
+      <div id="personalTabla">Cargando…</div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="surface p-4">
+      <h3 class="section-title h6" id="personalFormTitulo">Agregar personal</h3>
+      <form id="personalForm" class="row g-2">
+        <input type="hidden" id="personalId" value="" autocomplete="off">
+        <div class="col-md-6"><label for="personalTipoDocumento"class="form-label small">Tipo doc.</label>
+          <input id="personalTipoDocumento" class="form-control form-control-sm text-uppercase" value="CC" required autocomplete="off"></div>
+        <div class="col-md-6"><label for="personalNumeroDocumento"class="form-label small">Número doc.</label>
+          <input id="personalNumeroDocumento" class="form-control form-control-sm text-uppercase" required autocomplete="off"></div>
+        <div class="col-12"><label for="personalNombreCompleto"class="form-label small">Nombre completo</label>
+          <input id="personalNombreCompleto" class="form-control form-control-sm text-uppercase" required autocomplete="off"></div>
+        <div class="col-md-6"><label for="personalRol"class="form-label small">Rol</label>
+          <select id="personalRol" class="form-select form-select-sm" required autocomplete="off">
+            <option value="VIGILANTE">VIGILANTE</option>
+            <option value="ASEADOR">ASEADOR</option>
+          </select></div>
+        <div class="col-md-6"><label for="personalTelefono"class="form-label small">Teléfono (opcional)</label>
+          <input id="personalTelefono" class="form-control form-control-sm" autocomplete="off"></div>
+        <div class="col-12"><label for="personalCorreo"class="form-label small">Correo (opcional)</label>
+          <input id="personalCorreo" type="email" class="form-control form-control-sm" autocomplete="off"></div>
+        <div class="col-12 d-flex gap-2">
+          <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+          <button type="button" id="personalCancelarEdicion" class="btn btn-outline-secondary btn-sm hidden">Cancelar edición</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

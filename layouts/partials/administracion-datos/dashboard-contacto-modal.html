@@ -1,0 +1,27 @@
+<div class="modal fade" id="editarContactoModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar contacto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="editarContactoForm">
+        <div class="modal-body">
+          <p class="text-muted small mb-3" id="editarContactoNombre"></p>
+          <div class="mb-3">
+            <label class="form-label" for="editarContactoEmail">Correo</label>
+            <input id="editarContactoEmail" type="email" class="form-control" required autocomplete="off">
+          </div>
+          <div class="mb-0">
+            <label class="form-label" for="editarContactoTelefono">Celular</label>
+            <input id="editarContactoTelefono" type="tel" class="form-control" autocomplete="off">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="editarContactoGuardarBtn">Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
