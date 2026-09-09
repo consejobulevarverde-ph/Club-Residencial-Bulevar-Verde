@@ -85,7 +85,7 @@
       </section>
 
       <section id="reservasView" class="hidden">
-        {{ partial "administracion-datos/reservas" . }}
+        {{ partial "administracion-datos/reservas/index" . }}
       </section>
 
       <section id="personalView" class="hidden">
@@ -93,14 +93,14 @@
       </section>
 
       <section id="casosConvivenciaView" class="hidden">
-        {{ partial "administracion-datos/casos-convivencia" . }}
+        {{ partial "administracion-datos/casos/casos-convivencia" . }}
       </section>
     </section>
 
     {{ partial "administracion-datos/cartera-import-modal" . }}
-    {{ partial "administracion-datos/reservas-formulario-modales" . }}
-    {{ partial "administracion-datos/reservas-catalogo-modal-zona" . }}
-    {{ partial "administracion-datos/casos-convivencia-modales" . }}
+    {{ partial "administracion-datos/reservas/modales" . }}
+    {{ partial "administracion-datos/reservas/modal-zona" . }}
+    {{ partial "administracion-datos/casos/modales" . }}
     {{ partial "administracion-datos/dashboard-contacto-modal" . }}
   </main>
 
