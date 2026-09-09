@@ -55,3 +55,11 @@ mutation CrearOActualizarHistorialCartera(
     }
   )
 }
+
+# Buscar unidad por id (para validar existencia antes de corregir su cartera)
+query ObtenerUnidadPorId($id: UUID!) @auth(level: NO_ACCESS) {
+  unidad(id: $id) {
+    id
+    codigoOficial
+  }
+}

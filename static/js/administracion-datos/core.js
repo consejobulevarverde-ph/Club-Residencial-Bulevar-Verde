@@ -227,9 +227,25 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         }).join('') || '<li class="text-muted">Sin registros.</li>';
 
         var hc = perfil.historialCartera && perfil.historialCartera[0];
-        var estadoCuenta = hc
-          ? esc(hc.estadoCuenta || '') + ' · Saldo: ' + esc(hc.saldoActual || '')
-          : 'Sin información.';
+        var obtenerPeriodoActual = function () {
+          var ahora = new Date();
+          var anio = ahora.getFullYear();
+          var mes = String(ahora.getMonth() + 1).padStart(2, '0');
+          return String(anio) + mes;
+        };
+        var periodoActual = obtenerPeriodoActual();
+        var carteraFormBody = '<form id="editCarteraForm" class="row g-2 align-items-end">' +
+          '<div class="col-md-3"><label for="editCarteraPeriodo" class="form-label small">Período (YYYYMM)</label>' +
+          '<input id="editCarteraPeriodo" type="text" class="form-control form-control-sm" value="' + esc((hc && hc.periodo) || periodoActual || '') + '" placeholder="202609" autocomplete="off"></div>' +
+          '<div class="col-md-3"><label for="editCarteraSaldoAnterior" class="form-label small">Saldo Anterior</label>' +
+          '<input id="editCarteraSaldoAnterior" type="number" class="form-control form-control-sm" value="' + esc((hc && hc.saldoAnterior !== undefined) ? hc.saldoAnterior : '') + '" step="0.01" autocomplete="off"></div>' +
+          '<div class="col-md-3"><label for="editCarteraSaldoActual" class="form-label small">Saldo Actual</label>' +
+          '<input id="editCarteraSaldoActual" type="number" class="form-control form-control-sm" value="' + esc((hc && hc.saldoActual !== undefined) ? hc.saldoActual : '') + '" step="0.01" autocomplete="off"></div>' +
+          '<div class="col-md-2"><label for="editCarteraCargos" class="form-label small">Cargos</label>' +
+          '<input id="editCarteraCargos" type="number" class="form-control form-control-sm" value="' + esc((hc && hc.cargos !== undefined) ? hc.cargos : '') + '" step="0.01" autocomplete="off"></div>' +
+          '<div class="col-md-1 d-grid"><button type="submit" class="btn btn-primary btn-sm">Guardar</button></div>' +
+          '</form>' +
+          (hc ? '<p class="small text-muted mt-2">Estado: ' + esc(hc.estadoCuenta || '') + '</p>' : '<p class="small text-muted mt-2">Sin información de cartera.</p>');
 
         function accordionItem(id, title, body, expanded) {
           return '<div class="accordion-item">' +
@@ -285,7 +301,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
           accordionItem('collapse-parqueaderos', 'Parqueaderos', '<ul>' + parqueaderos + '</ul>', false) +
           accordionItem('collapse-mascotas', 'Mascotas', '<ul>' + mascotas + '</ul>', false) +
           accordionItem('collapse-emergencia', 'Contacto de emergencia', '<ul>' + emergencia + '</ul>', false) +
-          accordionItem('collapse-cuenta', 'Estado de cuenta', '<p>' + estadoCuenta + '</p>', false) +
+          accordionItem('collapse-cuenta', 'Estado de cuenta', carteraFormBody, false) +
           accordionItem('collapse-documentos', 'Documentos PhEnLinea',
             '<div id="docsPhEnLinea" class="row g-3"></div>' +
             '<div id="docsPhEnLineaError" class="alert alert-danger hidden mb-0"></div>', false) +
@@ -429,6 +445,36 @@ var config = window.ADMIN_DATOS_CONFIG || {};
             msg(error.message);
           }).finally(function () {
             busy(button, false, 'Agregar');
+          });
+        }
+
+        if (event.target.id === 'editCarteraForm') {
+          event.preventDefault();
+          hideMsg();
+
+          var button = event.target.querySelector('button[type="submit"]');
+          busy(button, true, 'Guardando…');
+
+          var saldoAnterior = $('editCarteraSaldoAnterior').value.trim();
+          var saldoActual = $('editCarteraSaldoActual').value.trim();
+          var cargos = $('editCarteraCargos').value.trim();
+
+          var payload = {
+            periodo: $('editCarteraPeriodo').value.trim(),
+            saldoAnterior: saldoAnterior ? parseFloat(saldoAnterior) : undefined,
+            saldoActual: saldoActual ? parseFloat(saldoActual) : undefined,
+            cargos: cargos ? parseFloat(cargos) : undefined
+          };
+
+          withIdToken(function (idToken) {
+            return apiFetch('/api/v1/cartera/unidades/' + currentUnidadId, idToken, { method: 'PATCH', body: payload });
+          }).then(function () {
+            msg('Cartera actualizada.', 'success');
+            loadProfile(currentUnidadId);
+          }).catch(function (error) {
+            msg(error.message);
+          }).finally(function () {
+            busy(button, false, 'Guardar');
           });
         }
       });
