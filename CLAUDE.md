@@ -109,8 +109,8 @@ for the full diagram; short version: `PENDIENTE_DESCARGOS` → `CON_DESCARGOS` �
 severity decides at creation time whether it even needs the formal process (`requiereProcesoFormal` —
 "Llamado de Atención" doesn't; everything else does).
 
-1. **Case creation** — `vigilancia-datos/list.html` / `administracion-datos/list.html`, shared
-   `partials/convivencia-form.html` + `static/js/convivencia-form.js` wizard. Firebase-authenticated,
+1. **Case creation** — `vigilancia-datos/list.html` / `administracion-datos/list.html` (post-refactor
+   shell), shared `partials/convivencia-form.html` + `static/js/convivencia-form.js` wizard. Firebase-authenticated,
    calls `POST /api/v1/convivencia/casos` and `POST /api/v1/convivencia/evidencias`. Keeps its
    offline-first IndexedDB queue (`clientRequestId` dedup) — only the transport changed. Severity
    badges visually flag which ones are a mere "llamado de atención" vs. formal-process-eligible.
@@ -120,13 +120,15 @@ severity decides at creation time whether it even needs the formal process (`req
    `POST /sanciones/:caseCode/apelacion` (only once a sanction is `SANCION_APROBADA`). The unit is
    always derived server-side from the session — never sent by the client. The resident sees the
    proposed sanction amount as soon as administración stages it, not only after Consejo approval.
-3. **Admin case management** — `administracion-datos/list.html`, "Casos Convivencia" panel. The old
-   single "resolver" form is now a state-dependent dispatcher: from `PENDIENTE_DESCARGOS`/`CON_DESCARGOS`
+3. **Admin case management** — `layouts/partials/administracion-datos/casos/` partials +
+   `static/js/administracion-datos/core.js` (via `window.AdminDatos` namespace), "Casos Convivencia" tab.
+   The old single "resolver" form is now a state-dependent dispatcher: from `PENDIENTE_DESCARGOS`/`CON_DESCARGOS`
    it shows close/archive plus (formal cases only) "registrar acta de comité" and "proponer sanción
    económica"; from `PENDIENTE_APROBACION_CONSEJO` it shows aprobar/rechazar/devolver; from
    `EN_APELACION` it shows ratificar/revocar. Always shows the case's event timeline
    (`EventoCasoConvivencia`) and the linked `Sancion` record when one exists. Vigilancia never gets
-   this panel — case creation is its only role in the process.
+   this panel — case creation is its only role in the process. See
+   `layouts/partials/administracion-datos/casos/CLAUDE.md` for full architecture.
 
 Evidence still lands in the same Google Drive folder as before (`soporte-sanciones-convivencia`),
 now uploaded by the API itself (`src/services/drive.ts` in bulevar-verde-api) via an OAuth2 refresh
@@ -425,4 +427,4 @@ While not strict compliance, the UI should embrace:
 
 ---
 
-**Last updated**: 2026-09-02 — extended sanciones de convivencia into a full Ley 675/2001 sanction-process state machine (comité de convivencia sessions, Consejo de Administración approval/rejection/return-for-revision, resident appeals with ratify/revoke, an economic sanction record, and a per-case event timeline in both the admin panel and resident portal); added PDF evidence support and raised upload size limits
+**Last updated**: 2026-09-08 — refactored `administracion-datos/list.html` monolith (3,782 lines) into modular partials + `window.AdminDatos` namespace + 8 JS modules under `static/js/administracion-datos/`, split partials into `casos/` and `reservas/` subdirectories with independent CLAUDE.md guides; updated documentation across root and layouts CLAUDE.md to reflect new architecture

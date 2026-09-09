@@ -149,6 +149,30 @@ if (modalRechazar) modalRechazar.show();
 
 Prevent crashes if modal HTML not present (e.g., if rendered conditionally based on role).
 
+### 10. Admin Panel Module Architecture (`window.AdminDatos`)
+
+The `/administracion-datos/` panel uses a modular architecture with a shared namespace to avoid
+mixing logic. This is not a single monolithic IIFE, but a hub-and-spoke pattern:
+
+**Core module** (`static/js/administracion-datos/core.js`):
+- Initializes `window.AdminDatos = {}` and exposes shared helpers: `$()`, `esc()`, `apiFetch()`, `msg()`, `busy()`, etc.
+- Manages shared state: `AdminDatos.state = { currentUnidadId, reservarUnidadId, ...caches... }`
+- Implements generic module registration: `AdminDatos.registrarModulo(config)` and `AdminDatos.mode(name)` for tab visibility/switching
+- Houses the actual feature logic: all rendering functions (`cargarCasosConvivencia()`, `cargarReservasAgenda()`, `loadPersonal()`, etc.)
+
+**Feature modules** (all under `static/js/administracion-datos/`, each a small IIFE):
+- Each is a stub file (~150 bytes) that calls `AdminDatos.registrarModulo({ id, buttonId, viewId, onFirstShow })`
+- Examples: `dashboard.js`, `casos-convivencia.js`, `reservas-agenda.js`, `personal.js`, etc.
+- The `onFirstShow` callback (optional) lazy-loads data the first time the tab is clicked
+
+**Lazy loading**: If a module defines `onFirstShow`, it fires **only once** on first tab click, not on page load. This keeps the dashboard snappy when loading — each heavy feature (cases, reservations, personnel) loads only when the admin looks at it.
+
+**Modals placement**: All modals (Bootstrap) live **at the end of `<main>`**, as siblings of `<section id="app">` — never nested inside a hidden view. Reason: if a modal were inside `<section id="casosConvivenciaView class="hidden">`, the browser would hide it even if Bootstrap tries to show it (a hidden ancestor hides all descendants).
+
+**See also**:
+- `layouts/partials/administracion-datos/casos/CLAUDE.md` — Casos Convivencia partials + module
+- `layouts/partials/administracion-datos/reservas/CLAUDE.md` — Reservas sub-tabs, partials, and modules
+
 ## File Structure
 
 ```
@@ -157,23 +181,42 @@ layouts/
   datos-personales/
     list.html              # Resident portal (profile, reservations, etc.)
   administracion-datos/
-    list.html              # Admin panel: data master, case registration, zone management + reservation calendar
+    list.html              # Admin panel shell (thin wrapper, modular architecture)
+    CLAUDE.md              # Architecture guide for administracion-datos
+  partials/administracion-datos/
+    dashboard.html         # Metrics & unit search
+    personal.html          # Personnel CRUD
+    convivencia-form.html  # Case registration wizard (shared with vigilancia)
+    casos/
+      CLAUDE.md            # Guide: caso convivencia partials + modules
+      casos-convivencia.html  # List/detail/actions for existing cases
+      modales.html         # Edit case & cancel case modals
+    reservas/
+      CLAUDE.md            # Guide: reservation partials + modules (sub-tabs)
+      index.html           # Container: sub-nav + 3 sub-view partials
+      agenda.html          # Reservation calendar grid
+      catalogo.html        # Zone CRUD
+      reservar.html        # Reservation booking form
+      modal-zona.html      # Edit zone modal
+      modales.html         # Reservation action modals (approve/reject/cancel/payment)
   vigilancia-datos/
     list.html              # Surveillance officer calendar view
   header.html              # Navigation bar (included via Hugo partial)
   footer.html              # Footer (included via Hugo partial)
-  CLAUDE.md                # This file
 ```
+
+**See also**: `static/js/administracion-datos/` — 8 JS modules (core + 7 feature-specific stubs) wiring the partials together via `window.AdminDatos` namespace
 
 ## Common Tasks
 
 ### Add a New Field to Zone Creation Form
 
-1. Edit `/administracion-datos/list.html`, find the zone creation form (id="crearZonaForm")
+1. Edit `layouts/partials/administracion-datos/reservas/catalogo.html`, find the zone creation form (id="crearZonaForm")
 2. Add a new `<input>` or `<select>` with a unique id
-3. In the form submit handler (inside the reservas-specific functions), extract the value: `var newField = $('newFieldId').value;`
-4. Include in POST body sent to `/api/v1/reservas/catalogo` (backend schema must also accept it)
-5. Reload admin panel and test
+3. In `static/js/administracion-datos/core.js`, find the zone submit handler
+4. Extract the value in the form handler: `var newField = $('newFieldId').value;`
+5. Include in POST body sent to `/api/v1/reservas/catalogo` (backend schema must also accept it)
+6. Reload admin panel and test
 
 ### Modify Date Range Restrictions in Resident Wizard
 
@@ -184,7 +227,7 @@ layouts/
 
 ### Add a New Zone Type or Emoji
 
-1. Edit `/datos-personales/list.html` or `/administracion-datos/list.html` (Reservas tab), find `function getEmojiZona(descripcion)`
+1. Edit `static/js/administracion-datos/core.js`, find `function getEmojiZona(descripcion)`
 2. Add new case: `if (desc.includes('new_type')) return '🆕';`
 3. Same for `getEmojiEstado()` if adding new reservation states
 4. Backend schema must also define the enum value
@@ -265,4 +308,4 @@ git push origin firebase
 
 ---
 
-**Last updated**: 2026-08-25 — reservation wizard UX improvements, null-checks audit, Flatpickr date picker integration
+**Last updated**: 2026-09-08 — documented admin panel modular architecture with `window.AdminDatos` namespace, lazy-loading module registration, and partition of partials into `casos/` and `reservas/` subdirectories
