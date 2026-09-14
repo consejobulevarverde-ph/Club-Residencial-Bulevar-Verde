@@ -379,6 +379,11 @@
         showAlert('Apartamento y notificador son obligatorios');
         return false;
       }
+      // Normalizar apartamento a 4 dígitos con ceros a la izquierda
+      var soloDigitos = apto.value.trim().replace(/\D/g, '');
+      if (soloDigitos && soloDigitos.length <= 4) {
+        apto.value = soloDigitos.padStart(4, '0');
+      }
     }
     if (paso === 2) {
       var motivoVal = motivoSeleccionado || (motivo ? motivo.value.trim() : '');
@@ -1210,7 +1215,7 @@
       renderResumenApartamento(body.data);
     } catch (error) {
       log('warn', 'No se pudo cargar el historial del apartamento', error);
-      container.classList.add('hidden');
+      container.innerHTML = '<div class="alert alert-light mb-0 py-2"><i class="bi bi-exclamation-triangle me-2"></i>No se pudo verificar el historial del apartamento. Continúa cuando estés listo.</div>';
     }
   }
 
@@ -1218,7 +1223,12 @@
     var container = $('convivenciaResumenApto');
     if (!container) return;
 
-    if (!data.unidadEncontrada || data.totalCasos === 0) {
+    if (!data.unidadEncontrada) {
+      container.innerHTML = '<div class="alert alert-danger mb-0 py-2"><i class="bi bi-exclamation-circle-fill me-2"></i><strong>No se encontró una unidad</strong> con el apartamento ' + esc(data.apartamento) + '. Verifica el número antes de continuar.</div>';
+      return;
+    }
+
+    if (data.totalCasos === 0) {
       container.innerHTML = '<div class="alert alert-secondary mb-0 py-2"><i class="bi bi-info-circle me-2"></i>Sin casos previos registrados para este apartamento.</div>';
       return;
     }
