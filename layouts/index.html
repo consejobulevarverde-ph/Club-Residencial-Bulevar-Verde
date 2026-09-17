@@ -40,6 +40,15 @@
             --color-white: #ffffff;
         }
         
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: 105px;
+        }
+
+        #contenido {
+            scroll-margin-top: 105px;
+        }
+
         body {
             font-family: var(--font-primary);
             font-weight: var(--font-weight-regular);
@@ -68,28 +77,136 @@
             color: var(--color-white) !important;
         }
         
-        .hero-section {
-            background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary) 100%);
-            color: var(--color-light);
-            padding: 80px 0;
+        .drone-banner-section {
+            width: 100%;
             margin-bottom: 40px;
+            background-color: var(--color-light);
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            position: relative;
         }
-        
-        .hero-section h1 {
-            font-weight: var(--font-weight-extrabold);
-            font-size: 2.5rem;
+
+        .drone-banner-wrapper {
+            width: 100%;
+            position: relative;
         }
-        
-        .hero-section .lead {
-            font-weight: var(--font-weight-semibold);
-            font-size: 1.2rem;
-        }
-        
-        .hero-logo {
-            max-width: 75%;
+
+        .drone-banner-image {
+            width: 100%;
             height: auto;
-            margin-bottom: 30px;
-            filter: drop-shadow(0 4px 8px rgba(44, 95, 45, 0.3));
+            max-height: 85vh;
+            object-fit: cover;
+            object-position: center center;
+            display: block;
+        }
+
+        .scroll-down-wrap {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            text-decoration: none;
+            color: #ffffff;
+            z-index: 10;
+            background: rgba(44, 95, 45, 0.72);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1.5px solid rgba(255, 255, 255, 0.65);
+            padding: 6px 20px;
+            border-radius: 50px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.28);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .scroll-down-wrap:hover {
+            background: rgba(44, 95, 45, 0.95);
+            color: #ffffff;
+            transform: translateX(-50%) translateY(-3px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+        }
+
+        .scroll-down-label {
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+            line-height: 1.1;
+        }
+
+        .scroll-down-icon-box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .scroll-arrow-anim {
+            font-size: 1.05rem;
+            line-height: 1;
+            animation: bounceDown 1.8s infinite;
+        }
+
+        @keyframes bounceDown {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(6px);
+            }
+            60% {
+                transform: translateY(3px);
+            }
+        }
+
+        @media (max-width: 768px) {
+            html {
+                scroll-padding-top: 75px;
+            }
+            #contenido {
+                scroll-margin-top: 75px;
+            }
+            .drone-banner-section {
+                margin-bottom: 25px;
+            }
+            .scroll-down-wrap {
+                bottom: 12px;
+                padding: 4px 14px;
+                gap: 1px;
+                border-width: 1px;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+            }
+            .scroll-down-label {
+                font-size: 0.65rem;
+                letter-spacing: 0.8px;
+            }
+            .scroll-arrow-anim {
+                font-size: 0.82rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            html {
+                scroll-padding-top: 65px;
+            }
+            #contenido {
+                scroll-margin-top: 65px;
+            }
+            .scroll-down-wrap {
+                bottom: 8px;
+                padding: 3px 11px;
+                border-radius: 20px;
+            }
+            .scroll-down-label {
+                font-size: 0.58rem;
+                letter-spacing: 0.6px;
+            }
+            .scroll-arrow-anim {
+                font-size: 0.75rem;
+            }
         }
         
         .content-section {
@@ -196,21 +313,23 @@
 <body>
     {{ partial "header" . }}
 
-    <!-- Hero Section -->
-    <section class="hero-section text-center" style="background-image: url('{{ "images/drone.jpeg" | relURL }}'); background-size: cover; background-position: center; display: flex; flex-direction: column; min-height: 500px;">
-        <div class="container" style="flex: 1; display: flex; align-items: flex-start; justify-content: center;">
-            <img src="{{ "images/logo.png" | relURL }}" alt="Club Residencial Bulevar Verde" class="hero-logo" onerror="this.style.display='none'">
+    <!-- Drone Panoramic Section (Full, Pure, Unobstructed Aerial Photography) -->
+    <section class="drone-banner-section">
+        <div class="drone-banner-wrapper">
+            <img src="{{ "images/drone.jpeg" | relURL }}" alt="Panorámica Club Residencial Bulevar Verde" class="drone-banner-image">
         </div>
-        <div class="container" style="margin-top: auto; padding-bottom: 2rem;">
-            <div>
-                <h1 class="display-4" style="color: white; margin-bottom: 1rem;">{{ .Site.Title }}</h1>
-                <p class="lead" style="color: #ddd;">{{ .Site.Params.description }}</p>
+
+        <!-- Indicador de desplazamiento suave hacia abajo (Estilo Wilodeco) -->
+        <a href="#contenido" class="scroll-down-wrap" aria-label="Desplazarse hacia abajo">
+            <span class="scroll-down-label">Explorar</span>
+            <div class="scroll-down-icon-box">
+                <i class="bi bi-chevron-down scroll-arrow-anim"></i>
             </div>
-        </div>
+        </a>
     </section>
 
     <!-- Main Content -->
-    <div class="container">
+    <div id="contenido" class="container pt-3">
         <div class="content-section">
             {{ .Content }}
         </div>

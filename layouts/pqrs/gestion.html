@@ -271,9 +271,7 @@
               id="managementStatusFilter" class="form-select">
               <option value="">Todos</option>
               <option selected>Abierto</option>
-              <option>Asignado</option>
               <option>En proceso</option>
-              <option>Resuelto</option>
               <option>Cerrado</option>
             </select></div>
         </div>
@@ -303,6 +301,19 @@
         </div>
         <div class="modal-body">
           <div id="managementDetailBody"></div>
+
+          <div id="managementInProgressSection" class="p-3 bg-light rounded border border-primary-subtle mt-4" hidden>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+              <div>
+                <h4 class="h6 fw-bold text-primary mb-1"><i class="bi bi-tools me-1"></i>¿Iniciarás la atención de este reporte?</h4>
+                <p class="small text-muted mb-0">Marca el estado como "En proceso" para registrar el inicio de los trabajos y notificar al residente.</p>
+              </div>
+              <button id="managementInProgressButton" type="button" class="btn btn-outline-primary">
+                <i class="bi bi-play-circle me-1"></i>Marcar En proceso
+              </button>
+            </div>
+          </div>
+
           <section id="managementClosurePanel" class="border-top mt-4 pt-4" hidden>
             <h3 class="h5 fw-bold text-success"><i class="bi bi-check2-circle me-1"></i>Finalizar atención</h3>
             <p class="text-muted">El cierre actualizará la misma fila del reporte en la hoja de cálculo.</p>

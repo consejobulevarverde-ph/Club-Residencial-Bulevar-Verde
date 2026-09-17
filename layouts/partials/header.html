@@ -1,18 +1,219 @@
-<nav class="navbar navbar-expand-lg navbar-dark" style="background-color: var(--p, #2c5f2d) !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
-  <div class="container">
-    <a class="navbar-brand" href="{{ .Site.Home.RelPermalink }}" style="font-weight: 800; font-size: 1.5rem; color: #ffffff !important;">
-      <i class="bi bi-houses-fill"></i> Club Bulevar Verde
+<style>
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 100px;
+  }
+  @media (max-width: 991.98px) {
+    html {
+      scroll-padding-top: 70px;
+    }
+  }
+  @media (max-width: 480px) {
+    html {
+      scroll-padding-top: 60px;
+    }
+  }
+  .top-glass-navbar {
+    background: rgba(44, 95, 45, 0.88) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    padding: 2px 0;
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    transition: all 0.3s ease;
+  }
+  .glass-navbar-container {
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 36px;
+    min-height: 88px;
+  }
+  .navbar-brand {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+  }
+  .glass-navbar-logo {
+    height: 88px;
+    width: auto;
+    max-width: 300px;
+    object-fit: contain;
+    display: block;
+    filter: brightness(0) invert(1);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+  }
+  .navbar-brand:hover .glass-navbar-logo {
+    transform: scale(1.03);
+    opacity: 0.92;
+  }
+  .glass-nav-link {
+    color: #ffffff !important;
+    font-weight: 600;
+    font-size: 0.94rem;
+    letter-spacing: 0.2px;
+    padding: 8px 14px !important;
+    position: relative;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    opacity: 0.92;
+    transition: all 0.25s ease;
+  }
+  .glass-nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 14px;
+    right: 14px;
+    height: 2px;
+    background-color: #ffffff;
+    border-radius: 2px;
+    transform: scaleX(0);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .glass-nav-link:hover,
+  .glass-nav-link.active {
+    color: #ffffff !important;
+    opacity: 1;
+  }
+  .glass-nav-link:hover::after,
+  .glass-nav-link.active::after {
+    transform: scaleX(1);
+  }
+  .glass-nav-link i {
+    font-size: 1.05rem;
+    opacity: 0.85;
+    transition: transform 0.25s ease;
+  }
+  .glass-nav-link:hover i {
+    transform: translateY(-1px);
+    opacity: 1;
+  }
+  @media (min-width: 992px) {
+    .navbar-collapse {
+      flex-grow: 0;
+    }
+  }
+  @media (max-width: 991.98px) {
+    .top-glass-navbar {
+      padding: 4px 0;
+    }
+    .glass-navbar-container {
+      justify-content: space-between;
+      gap: 0;
+      min-height: 52px;
+      flex-wrap: wrap;
+    }
+    .glass-navbar-logo {
+      height: 46px;
+      max-width: 170px;
+    }
+    .navbar-collapse {
+      background: rgba(28, 64, 29, 0.98);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 12px;
+      padding: 8px 12px;
+      margin-top: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      width: 100%;
+      flex-basis: 100%;
+    }
+    .navbar-nav {
+      gap: 2px !important;
+    }
+    .glass-nav-link {
+      padding: 8px 12px !important;
+      font-size: 0.90rem;
+      border-radius: 8px;
+      gap: 10px;
+      display: flex;
+    }
+    .glass-nav-link i {
+      font-size: 1.05rem;
+      width: 20px;
+      text-align: center;
+    }
+    .glass-nav-link::after {
+      display: none;
+    }
+    .glass-nav-link:hover,
+    .glass-nav-link:active {
+      background: rgba(255, 255, 255, 0.14);
+    }
+  }
+  @media (max-width: 480px) {
+    .glass-navbar-logo {
+      height: 40px;
+      max-width: 145px;
+    }
+    .glass-navbar-container {
+      padding: 0 14px;
+      min-height: 48px;
+    }
+    .glass-nav-link {
+      font-size: 0.86rem;
+      padding: 7px 10px !important;
+    }
+  }
+</style>
+
+<nav class="top-glass-navbar navbar navbar-expand-lg sticky-top">
+  <div class="glass-navbar-container">
+    <!-- Logo blanco integrado cercano a Reservas -->
+    <a class="navbar-brand d-flex align-items-center py-0" href="{{ .Site.Home.RelPermalink }}">
+      <img src="{{ "images/logo.png" | relURL }}" alt="{{ .Site.Title }}" class="glass-navbar-logo">
     </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-      <span class="navbar-toggler-icon"></span>
+
+    <!-- Botón móvil -->
+    <button class="navbar-toggler border-0 shadow-none px-2" type="button" data-bs-toggle="collapse" data-bs-target="#topGlassNav" aria-controls="topGlassNav" aria-expanded="false" aria-label="Toggle navigation">
+      <i class="bi bi-list fs-1 text-white"></i>
     </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav ms-auto">
-        {{ range .Site.Menus.main }}
+
+    <!-- Opciones de navegación estilo Wilodeco -->
+    <div class="collapse navbar-collapse" id="topGlassNav">
+      <ul class="navbar-nav mb-2 mb-lg-0 gap-1 gap-lg-2 py-2 py-lg-0 align-items-lg-center">
         <li class="nav-item">
-          <a class="nav-link" href="{{ .URL }}" style="color: #e8f5e9 !important; font-weight: 600;">{{ .Name }}</a>
+          <a class="nav-link glass-nav-link" href="{{ "reservas/" | relURL }}">
+            <i class="bi bi-calendar2-check"></i>
+            <span>Reservas</span>
+          </a>
         </li>
-        {{ end }}
+        <li class="nav-item">
+          <a class="nav-link glass-nav-link" href="{{ "pqrs/" | relURL }}">
+            <i class="bi bi-tools"></i>
+            <span>PQRS & Mantenimientos</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link glass-nav-link" href="{{ "sanciones/" | relURL }}">
+            <i class="bi bi-shield-exclamation"></i>
+            <span>Sanciones</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link glass-nav-link" href="{{ "datos-personales/" | relURL }}">
+            <i class="bi bi-person-vcard"></i>
+            <span>Datos</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link glass-nav-link" href="#contacto">
+            <i class="bi bi-telephone"></i>
+            <span>Contacto</span>
+          </a>
+        </li>
       </ul>
     </div>
   </div>

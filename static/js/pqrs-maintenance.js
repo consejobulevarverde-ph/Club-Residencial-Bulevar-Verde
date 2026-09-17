@@ -59,6 +59,7 @@
       lastAttemptAt: report && report.lastAttemptAt,
       lastError: report && report.lastError,
       reportadoPor: report && report.reportadoPor,
+      correo: report && (report.correo || report.email),
       ubicacion: report && report.ubicacion,
       descriptionLength: String(report && report.descripcion || '').length,
       photoCount: photos.length,
@@ -112,6 +113,7 @@
     });
 
     elements.reporter = byId('maintenanceReporter');
+    elements.email = byId('maintenanceEmail');
     elements.location = byId('maintenanceLocation');
     elements.description = byId('maintenanceDescription');
     elements.cameraButton = byId('maintenanceOpenCameraButton');
@@ -138,6 +140,11 @@
 
     bindPanelButtons();
     bindPhotoSelectors();
+    if (elements.email) {
+      elements.email.addEventListener('input', function () {
+        elements.email.setCustomValidity('');
+      });
+    }
     elements.form.addEventListener('submit', handleSubmit);
     elements.retry.addEventListener('click', function () {
       log('info', 'Botón "Intentar enviar" presionado.');
@@ -212,25 +219,59 @@
   function bindPanelButtons() {
     var generalButton = byId('showGeneralPqrs');
     var maintenanceButton = byId('showMaintenanceForm');
+    var consultationButton = byId('showConsultationPanel');
+
     var generalPanel = byId('generalPqrsPanel');
     var maintenancePanel = byId('maintenancePanel');
+    var consultationPanel = byId('consultationPanel');
 
     function show(panel) {
-      var maintenanceVisible = panel === 'maintenance';
-      generalPanel.hidden = maintenanceVisible;
-      maintenancePanel.hidden = !maintenanceVisible;
-      generalButton.classList.toggle('active', !maintenanceVisible);
-      maintenanceButton.classList.toggle('active', maintenanceVisible);
-      generalButton.setAttribute('aria-pressed', String(!maintenanceVisible));
-      maintenanceButton.setAttribute('aria-pressed', String(maintenanceVisible));
+      if (generalPanel) generalPanel.hidden = (panel !== 'general');
+      if (maintenancePanel) maintenancePanel.hidden = (panel !== 'maintenance');
+      if (consultationPanel) consultationPanel.hidden = (panel !== 'consultation');
 
-      if (maintenanceVisible) {
+      if (generalButton) {
+        generalButton.classList.toggle('active', panel === 'general');
+        generalButton.setAttribute('aria-pressed', String(panel === 'general'));
+      }
+      if (maintenanceButton) {
+        maintenanceButton.classList.toggle('active', panel === 'maintenance');
+        maintenanceButton.setAttribute('aria-pressed', String(panel === 'maintenance'));
+      }
+      if (consultationButton) {
+        consultationButton.classList.toggle('active', panel === 'consultation');
+        consultationButton.setAttribute('aria-pressed', String(panel === 'consultation'));
+      }
+
+      if (panel === 'maintenance' && maintenancePanel) {
         maintenancePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (panel === 'consultation' && consultationPanel) {
+        consultationPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var queryInput = byId('consultQueryInput');
+        if (queryInput) queryInput.focus();
       }
     }
 
-    generalButton.addEventListener('click', function () { show('general'); });
-    maintenanceButton.addEventListener('click', function () { show('maintenance'); });
+    if (generalButton) {
+      generalButton.addEventListener('click', function () { show('general'); });
+    }
+    if (maintenanceButton) {
+      maintenanceButton.addEventListener('click', function () { show('maintenance'); });
+    }
+    if (consultationButton) {
+      consultationButton.addEventListener('click', function () { show('consultation'); });
+    }
+
+    // Auto-activar pestaña si viene por hash o parámetros
+    try {
+      var hash = window.location.hash;
+      var urlParams = new URLSearchParams(window.location.search);
+      if (hash === '#consulta' || hash === '#consultar' || urlParams.get('tab') === 'consulta' || urlParams.get('id') || urlParams.get('correo')) {
+        show('consultation');
+      } else if (hash === '#mantenimiento' || urlParams.get('tab') === 'mantenimiento') {
+        show('maintenance');
+      }
+    } catch (e) {}
   }
 
   function bindPhotoSelectors() {
@@ -344,19 +385,30 @@
   async function handleSubmit(event) {
     event.preventDefault();
 
-    var reportadoPor = elements.reporter.value.trim();
-    var ubicacion = elements.location.value.trim();
-    var descripcion = elements.description.value.trim();
+    var reportadoPor = elements.reporter ? elements.reporter.value.trim() : '';
+    var correo = elements.email ? elements.email.value.trim() : '';
+    var ubicacion = elements.location ? elements.location.value.trim() : '';
+    var descripcion = elements.description ? elements.description.value.trim() : '';
     var files = selectedPhotoFiles.map(function (item) { return item.file; });
 
     log('info', 'Inicio de creación de reporte.', {
       reporterLength: reportadoPor.length,
+      email: correo,
       locationLength: ubicacion.length,
       descriptionLength: descripcion.length,
       selectedPhotos: files.map(function (file) {
         return { name: file.name, type: file.type, sizeBytes: file.size };
       })
     });
+
+    var emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (elements.email) {
+      if (!correo || !emailPattern.test(correo)) {
+        elements.email.setCustomValidity('Ingresa un correo electrónico válido.');
+      } else {
+        elements.email.setCustomValidity('');
+      }
+    }
 
     if (!elements.form.checkValidity()) {
       elements.form.classList.add('was-validated');
@@ -394,6 +446,7 @@
         queuedAt: new Date().toISOString(),
         attempts: 0,
         reportadoPor: reportadoPor,
+        correo: correo,
         ubicacion: ubicacion,
         descripcion: descripcion,
         fotos: photos
