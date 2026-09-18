@@ -175,6 +175,29 @@
       min-width: 150px;
     }
 
+    .management-evidence-item {
+      width: 150px;
+    }
+
+    .management-evidence-item .management-evidence-preview {
+      width: 150px;
+      height: 150px;
+    }
+
+    .management-evidence-video {
+      width: 150px;
+      height: 150px;
+      border-radius: 12px;
+      border: 1px solid #cfe3cf;
+      background: #f7faf7;
+    }
+
+    .management-evidence-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .pqrs-evidence-thumb {
       width: 150px;
       height: 150px;
@@ -233,6 +256,21 @@
           <button id="managementLogoutButton" class="btn btn-outline-secondary" type="button"><i
               class="bi bi-box-arrow-right me-1"></i>Salir</button>
         </div>
+      </div>
+
+      <div id="managementQueueBanner" class="alert alert-warning mb-4" role="status" hidden>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <i class="bi bi-cloud-arrow-up me-1"></i>
+            <strong id="managementQueueCount">0</strong> cierre(s) pendiente(s) de envío.
+            La información permanece guardada en este dispositivo.
+            <span id="managementNetworkStatus" class="ms-1 fw-semibold"></span>
+          </div>
+          <button id="managementQueueRetryButton" class="btn btn-sm btn-outline-dark" type="button">
+            <i class="bi bi-arrow-repeat me-1"></i>Intentar enviar
+          </button>
+        </div>
+        <ul id="managementQueueList" class="list-unstyled small mb-0 mt-2"></ul>
       </div>
 
       <div class="row g-3 mb-4">
@@ -306,6 +344,17 @@
           <section id="managementClosurePanel" class="border-top mt-4 pt-4" hidden>
             <h3 class="h5 fw-bold text-success"><i class="bi bi-check2-circle me-1"></i>Finalizar atención</h3>
             <p class="text-muted">El cierre actualizará la misma fila del reporte en la hoja de cálculo.</p>
+            <div id="managementClosureAlert" class="alert" role="alert" hidden></div>
+            <div id="managementClosureQueued" class="alert alert-warning" role="status" hidden>
+              <div class="fw-semibold mb-1"><i class="bi bi-cloud-arrow-up me-1"></i>Cierre pendiente de envío</div>
+              <div class="small mb-2">
+                Este cierre quedó guardado en el dispositivo y se enviará automáticamente cuando haya conexión.
+                <span id="managementClosureQueuedError" class="d-block text-danger mt-1"></span>
+              </div>
+              <button id="managementClosureQueuedRetry" type="button" class="btn btn-sm btn-outline-dark">
+                <i class="bi bi-arrow-repeat me-1"></i>Intentar enviar
+              </button>
+            </div>
             <form id="managementClosureForm" novalidate>
               <div class="mb-3"><label for="managementResponsible"
                   class="form-label fw-semibold">Responsable</label><input id="managementResponsible" type="text"
@@ -330,16 +379,9 @@
                   <button id="managementOpenEvidenceGalleryButton" type="button" class="btn btn-outline-success">
                     <i class="bi bi-images me-1"></i>Selecciona de la galería
                   </button>
-                  <button id="managementRemoveEvidenceButton" type="button" class="btn btn-outline-danger" hidden>
-                    <i class="bi bi-trash me-1"></i>Quitar evidencia
-                  </button>
                 </div>
-                <input id="managementEvidenceGalleryInput" type="file" accept="image/*" hidden>
-                <div id="managementEvidencePreviewContainer" class="mt-3" hidden>
-                  <img id="managementEvidencePreview" class="management-evidence-preview"
-                    alt="Previsualización de la evidencia de cierre">
-                  <div id="managementEvidenceInfo" class="small text-muted mt-2"></div>
-                </div>
+                <input id="managementEvidenceGalleryInput" type="file" accept="image/*" multiple hidden>
+                <div id="managementEvidenceList" class="d-flex flex-wrap gap-3 mt-3" hidden></div>
                 <div id="managementEvidenceStatus" class="form-text">La imagen se comprimirá antes de almacenarse.</div>
               </div>
               <div class="form-check mb-4"><input id="managementCloseConfirm" class="form-check-input" type="checkbox"
