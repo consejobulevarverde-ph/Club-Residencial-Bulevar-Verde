@@ -6,6 +6,16 @@
 const PQRS_VERSION = '2.3.0-email-api-notificaciones';
 const PQRS_TIMEZONE = 'America/Bogota';
 const API_BULEVAR_VERDE_BASE_URL = 'https://bulevar-verde-api-739757275794.us-east4.run.app';
+// Dominio público del sitio (baseURL de hugo.toml). Lo usan los enlaces de los correos.
+const PQRS_PUBLIC_BASE_URL = 'https://bulevar-verde-app.web.app';
+
+// Consulta pública (sin autenticación): topes para proteger la cuota de Apps Script
+// y evitar la enumeración de radicados o el uso del formulario como relé de correo.
+const PQRS_RATE_LIMIT_PREFIX = 'pqrs_rate_';
+const PQRS_CONSULTA_MAX_GLOBAL = 120;        // consultas cada 10 min
+const PQRS_CONSULTA_MAX_FALLIDAS = 30;       // radicados inexistentes cada 10 min
+const PQRS_RESUMEN_MAX_POR_CORREO = 3;       // resúmenes por correo cada hora
+const PQRS_NOTIFICACION_MAX_POR_CORREO = 5;  // confirmaciones por correo cada hora
 
 const PQRS_ADMIN_EMAIL = 'bulevarverdeadmon@gmail.com';
 const PQRS_CC_EMAIL = 'consejo.bulevarverde@gmail.com';
@@ -438,7 +448,11 @@ function crearReporteMantenimiento(payload) {
   if (reportadoPor.length < 3 || reportadoPor.length > 120) {
     throw new Error('Ingresa el nombre de quien realiza el reporte.');
   }
-  if (!correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+  // Los reportes guardados en la cola de un dispositivo antes de existir el campo
+  // de correo se envían marcados como legacyWithoutEmail; de lo contrario quedarían
+  // rechazados para siempre. Solo se conservan sin notificación al residente.
+  const legacyWithoutEmail = !correo && payload.legacyWithoutEmail === true;
+  if (!legacyWithoutEmail && (!correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo))) {
     throw new Error('Ingresa un correo electrónico válido para recibir las notificaciones.');
   }
   if (ubicacion.length < 3 || ubicacion.length > 250) {
@@ -546,10 +560,16 @@ function crearReporteMantenimiento(payload) {
     // La fila ya quedó confirmada; se elimina el respaldo temporal de Drive.
     pqrsDeletePendingMaintenanceBackup_(clientRequestId);
 
+    // El formulario es público: el correo del residente es un dato sin verificar.
+    // Superado el tope, el reporte se guarda igual pero la confirmación solo va a
+    // la administración, para que no sirva de relé hacia terceros.
+    const notifyResident = Boolean(correo) &&
+      !pqrsRateLimitExceeded_('notificacion-correo', correo, PQRS_NOTIFICACION_MAX_POR_CORREO, 3600);
+
     pqrsSendMaintenanceNotification_({
       reportId: reportId,
       reportadoPor: reportadoPor,
-      correo: correo,
+      correo: notifyResident ? correo : '',
       ubicacion: ubicacion,
       descripcion: descripcion,
       reportedAt: reportedAt,
@@ -821,127 +841,157 @@ function obtenerReporteMantenimiento(payload) {
 function consultarReportesMantenimientoPublico(payload) {
   payload = payload || {};
 
-  const rawReportId = safeTrimPQRS_(payload.reportId || payload.id);
-  const reportId = pqrsSafeId_(rawReportId);
+  const reportId = pqrsSafeId_(safeTrimPQRS_(payload.reportId || payload.id));
   const correo = safeTrimPQRS_(payload.correo || payload.email).toLowerCase();
 
   if (!reportId && !correo) {
     throw new Error('Debes ingresar el número de radicado (ID) o el correo electrónico registrado.');
   }
 
-  if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+  if (!reportId && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
     throw new Error('Ingresa un correo electrónico válido.');
   }
 
-  const ss = pqrsGetSpreadsheet_();
-  const sheet = pqrsGetMaintenanceSheet_(ss);
-  const lastRow = sheet.getLastRow();
-
-  if (lastRow < 2) {
-    return {
-      ok: true,
-      total: 0,
-      reportes: []
-    };
+  if (pqrsRateLimitExceeded_('consulta', 'global', PQRS_CONSULTA_MAX_GLOBAL, 600)) {
+    throw new Error('Hay demasiadas consultas en este momento. Intenta nuevamente en unos minutos.');
   }
 
-  const values = sheet.getRange(
-    2,
-    1,
-    lastRow - 1,
-    MANTENIMIENTO_HEADERS.length
-  ).getValues();
+  // El radicado actúa como llave: llega solo al correo de quien hizo el reporte.
+  // Buscar por correo NO devuelve datos en pantalla (ver pqrsEnviarResumenPorCorreo_).
+  return reportId
+    ? pqrsConsultarPorRadicado_(reportId)
+    : pqrsEnviarResumenPorCorreo_(correo);
+}
 
-  const richPhotoLinks = sheet.getRange(
-    2,
-    12,
-    lastRow - 1,
-    3
-  ).getRichTextValues();
+function pqrsConsultarPorRadicado_(reportId) {
+  const sheet = pqrsGetMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const found = pqrsFindMaintenanceReportById_(sheet, reportId);
 
-  const richClosureLinks = sheet.getRange(
-    2,
-    17,
-    lastRow - 1,
-    1
-  ).getRichTextValues();
-
-  const matchingReports = [];
-
-  for (let i = 0; i < values.length; i++) {
-    const row = values[i];
-    const rowReportId = safeTrimPQRS_(row[0]);
-    const rowEmail = safeTrimPQRS_(row[5]).toLowerCase();
-
-    if (!rowReportId) continue;
-
-    let matches = false;
-
-    if (reportId && rowReportId.toUpperCase() === reportId.toUpperCase()) {
-      matches = true;
-    } else if (correo && rowEmail === correo) {
-      matches = true;
+  if (!found) {
+    // Los intentos fallidos se cuentan aparte para frenar la enumeración de radicados.
+    if (pqrsRateLimitExceeded_('radicado-fallido', 'global', PQRS_CONSULTA_MAX_FALLIDAS, 600)) {
+      throw new Error('Demasiados intentos con radicados inexistentes. Intenta más tarde.');
     }
-
-    if (matches) {
-      const closureRich = richClosureLinks[i] && richClosureLinks[i][0];
-      const closureUrl = closureRich && typeof closureRich.getLinkUrl === 'function'
-        ? safeTrimPQRS_(closureRich.getLinkUrl())
-        : safeTrimPQRS_(row[16]);
-
-      const photoLinks = pqrsExtractPhotoLinks_(row, richPhotoLinks[i], 12);
-
-      const item = pqrsMaintenanceRowToObject_(
-        row,
-        i + 2,
-        photoLinks,
-        closureUrl
-      );
-
-      // Enmascarar parte del correo para privacidad en consulta pública
-      let maskedEmail = '';
-      if (item.correo) {
-        const parts = item.correo.split('@');
-        if (parts.length === 2) {
-          const userPart = parts[0];
-          const domain = parts[1];
-          const visible = userPart.length > 3 ? userPart.slice(0, 3) : userPart.slice(0, 1);
-          maskedEmail = visible + '***@' + domain;
-        } else {
-          maskedEmail = '***@***';
-        }
-      }
-
-      matchingReports.push({
-        reportId: item.reportId,
-        fechaReporte: item.fechaReporte,
-        reportadoPor: item.reportadoPor,
-        correoEnmascarado: maskedEmail,
-        ubicacion: item.ubicacion,
-        descripcion: item.descripcion,
-        estado: item.estado,
-        responsable: item.responsable,
-        prioridad: item.prioridad,
-        fechaAtencion: item.fechaAtencion,
-        fechaCierre: item.fechaCierre,
-        fotos: item.fotos || [],
-        fotoCierre: item.fotoCierre || '',
-        observacionesGestion: item.observacionesGestion || ''
-      });
-    }
+    return { ok: true, total: 0, reportes: [] };
   }
 
-  matchingReports.sort(function (a, b) {
-    return String(b.fechaReporte || '').localeCompare(String(a.fechaReporte || ''));
-  });
+  const row = sheet.getRange(found.row, 1, 1, MANTENIMIENTO_HEADERS.length).getValues()[0];
+  const item = pqrsMaintenanceRowToObject_(
+    row,
+    found.row,
+    pqrsGetMaintenancePhotoLinksForRow_(sheet, found.row, row),
+    pqrsGetClosurePhotoLinkForRow_(sheet, found.row, row)
+  );
 
+  return { ok: true, total: 1, reportes: [pqrsPublicMaintenanceView_(item)] };
+}
+
+// Vista pública: sin correo y con el nombre del reportante abreviado.
+function pqrsPublicMaintenanceView_(item) {
   return {
-    ok: true,
-    total: matchingReports.length,
-    reportes: matchingReports
+    reportId: item.reportId,
+    fechaReporte: item.fechaReporte,
+    reportadoPor: pqrsMaskName_(item.reportadoPor),
+    ubicacion: item.ubicacion,
+    descripcion: item.descripcion,
+    estado: item.estado,
+    responsable: item.responsable,
+    prioridad: item.prioridad,
+    fechaAtencion: item.fechaAtencion,
+    fechaCierre: item.fechaCierre,
+    fotos: item.fotos || [],
+    fotoCierre: item.fotoCierre || '',
+    observacionesGestion: item.observacionesGestion || ''
   };
 }
 
+function pqrsMaskName_(name) {
+  const parts = safeTrimPQRS_(name).split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  return [parts[0]].concat(parts.slice(1).map(function (part) {
+    return part.charAt(0).toUpperCase() + '.';
+  })).join(' ');
+}
+
+// Respuesta idéntica exista o no el correo: no revela qué correos tienen reportes.
+// El detalle (radicados, estado, ubicación) solo se envía a esa bandeja.
+function pqrsEnviarResumenPorCorreo_(correo) {
+  const respuesta = {
+    ok: true,
+    modo: 'correo',
+    message: 'Si el correo tiene solicitudes registradas, te enviamos un resumen con los radicados a tu bandeja de entrada.'
+  };
+
+  if (pqrsRateLimitExceeded_('resumen-correo', correo, PQRS_RESUMEN_MAX_POR_CORREO, 3600)) {
+    return respuesta;
+  }
+
+  const sheet = pqrsGetMaintenanceSheet_(pqrsGetSpreadsheet_());
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return respuesta;
+
+  const cells = sheet
+    .getRange(2, 6, lastRow - 1, 1)
+    .createTextFinder(correo)
+    .matchEntireCell(true)
+    .findAll();
+  if (!cells.length) return respuesta;
+
+  const reportes = cells.map(function (cell) {
+    const row = sheet.getRange(cell.getRow(), 1, 1, MANTENIMIENTO_HEADERS.length).getValues()[0];
+    return {
+      reportId: safeTrimPQRS_(row[0]),
+      fecha: pqrsDateToIso_(row[2]),
+      ubicacion: safeTrimPQRS_(row[6]),
+      estado: safeTrimPQRS_(row[8]) || 'Abierto'
+    };
+  }).sort(function (a, b) {
+    return String(b.fecha).localeCompare(String(a.fecha));
+  }).slice(0, 20);
+
+  const filas = reportes.map(function (reporte) {
+    const enlace = PQRS_PUBLIC_BASE_URL + '/pqrs/consulta/?id=' + encodeURIComponent(reporte.reportId);
+    return '<tr>' +
+      '<td style="padding: 6px 8px; border-bottom: 1px solid #eee;"><a href="' + pqrsEscapeHtml_(enlace) + '" style="color: #2c5f2d; font-weight: 700;">' + pqrsEscapeHtml_(reporte.reportId) + '</a></td>' +
+      '<td style="padding: 6px 8px; border-bottom: 1px solid #eee;">' + pqrsEscapeHtml_(reporte.estado) + '</td>' +
+      '<td style="padding: 6px 8px; border-bottom: 1px solid #eee;">' + pqrsEscapeHtml_(reporte.ubicacion) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  const texto = reportes.map(function (reporte) {
+    return '• ' + reporte.reportId + ' (' + reporte.estado + ') - ' + reporte.ubicacion + '\n  ' +
+      PQRS_PUBLIC_BASE_URL + '/pqrs/consulta/?id=' + encodeURIComponent(reporte.reportId);
+  }).join('\n');
+
+  enviarCorreoViaSancionesAPI_({
+    to: correo,
+    subject: '[Bulevar Verde] Resumen de tus solicitudes de mantenimiento',
+    body: 'Solicitaste consultar tus reportes de mantenimiento en el portal del Club Residencial Bulevar Verde.\n\n' +
+      texto + '\n\nSi no fuiste tú, puedes ignorar este mensaje.',
+    htmlBody: '<div style="font-family: \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">' +
+      '<div style="background-color: #2c5f2d; color: #ffffff; padding: 20px; text-align: center;"><h2 style="margin: 0; font-size: 18px;">Club Residencial Bulevar Verde</h2>' +
+      '<p style="margin: 4px 0 0; font-size: 14px;">Resumen de tus solicitudes de mantenimiento</p></div>' +
+      '<div style="padding: 20px; color: #333333; font-size: 14px; line-height: 1.6;">' +
+      '<p style="margin-top: 0;">Solicitaste consultar tus reportes en el portal. Abre el radicado para ver el detalle:</p>' +
+      '<table style="width: 100%; border-collapse: collapse; font-size: 14px;"><tr><th align="left" style="padding: 6px 8px;">Radicado</th><th align="left" style="padding: 6px 8px;">Estado</th><th align="left" style="padding: 6px 8px;">Ubicación</th></tr>' + filas + '</table>' +
+      '<p style="font-size: 12px; color: #777; margin-bottom: 0;">Si no fuiste tú, puedes ignorar este mensaje.</p>' +
+      '</div></div>'
+  });
+
+  return respuesta;
+}
+
+// Contador por ventana en CacheService. No es atómico, pero basta para frenar abuso.
+function pqrsRateLimitExceeded_(bucket, key, max, windowSeconds) {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = PQRS_RATE_LIMIT_PREFIX + bucket + '_' + pqrsHash_(String(key)).slice(0, 32);
+  const current = Number(cache.get(cacheKey) || 0);
+
+  if (current >= max) return true;
+
+  cache.put(cacheKey, String(current + 1), windowSeconds);
+  return false;
+}
 
 function obtenerEvidenciaMantenimiento(payload) {
   pqrsRequireMaintenanceSession_((payload || {}).token);
@@ -950,9 +1000,9 @@ function obtenerEvidenciaMantenimiento(payload) {
   const reportId = pqrsSafeId_(payload.reportId);
   const photoIndex = Number(payload.photoIndex || 0);
   let photoUrl = safeTrimPQRS_(payload.photoUrl);
-  let fileId = safeTrimPQRS_(payload.fileId);
+  let fileId = '';
 
-  if (!fileId && photoUrl) {
+  if (photoUrl) {
     fileId = pqrsExtractGoogleDriveFileId_(photoUrl);
   }
 
@@ -995,6 +1045,12 @@ function obtenerEvidenciaMantenimiento(payload) {
   try {
     file = DriveApp.getFileById(fileId);
   } catch (error) {
+    throw new Error('No fue posible acceder al archivo de la evidencia.');
+  }
+
+  // El cliente puede enviar cualquier enlace de Drive: solo se sirven archivos de
+  // la carpeta de evidencias de mantenimiento.
+  if (!pqrsIsMaintenanceFolderFile_(file)) {
     throw new Error('No fue posible acceder al archivo de la evidencia.');
   }
 
@@ -1142,6 +1198,24 @@ function finalizarReporteMantenimiento(payload) {
     throw new Error('Las observaciones de cierre deben tener entre 5 y 3000 caracteres.');
   }
 
+  // La URL de la evidencia viene del cliente: debe ser un archivo de la carpeta de
+  // mantenimiento. Se guarda la URL canónica de Drive, no el texto recibido.
+  let evidenceUrl = '';
+  let evidenceFile = null;
+  const requestedEvidenceUrl = safeTrimPQRS_(payload.evidenceUrl);
+  if (requestedEvidenceUrl) {
+    const evidenceFileId = pqrsExtractGoogleDriveFileId_(requestedEvidenceUrl);
+    try {
+      evidenceFile = evidenceFileId ? DriveApp.getFileById(evidenceFileId) : null;
+    } catch (driveError) {
+      evidenceFile = null;
+    }
+    if (!evidenceFile || !pqrsIsMaintenanceFolderFile_(evidenceFile)) {
+      throw new Error('La evidencia de cierre no es válida.');
+    }
+    evidenceUrl = evidenceFile.getUrl();
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
 
@@ -1172,7 +1246,8 @@ function finalizarReporteMantenimiento(payload) {
         reporte: pqrsMaintenanceRowToObject_(
           current,
           row,
-          pqrsGetMaintenancePhotoLinksForRow_(sheet, row, current)
+          pqrsGetMaintenancePhotoLinksForRow_(sheet, row, current),
+          pqrsGetClosurePhotoLinkForRow_(sheet, row, current)
         )
       };
     }
@@ -1198,7 +1273,6 @@ function finalizarReporteMantenimiento(payload) {
     sheet.getRange(row, 16).setValue(now);
 
     // Evidencia fotográfica de cierre en columna 17 (Foto Cierre)
-    const evidenceUrl = safeTrimPQRS_(payload.evidenceUrl);
     if (evidenceUrl) {
       const richText = SpreadsheetApp.newRichTextValue()
         .setText('🖼️ Foto Cierre')
@@ -1208,14 +1282,10 @@ function finalizarReporteMantenimiento(payload) {
       sheet.getRange(row, 17).setRichTextValue(richText);
 
       try {
-        const fileId = pqrsExtractGoogleDriveFileId_(evidenceUrl);
-        if (fileId) {
-          const file = DriveApp.getFileById(fileId);
-          const image = sheet.insertImage(file.getBlob(), 17, row);
-          image.setWidth(120).setHeight(90);
-          image.setAltTextTitle('Foto de Cierre');
-          sheet.setRowHeight(row, 105);
-        }
+        const image = sheet.insertImage(evidenceFile.getBlob(), 17, row);
+        image.setWidth(120).setHeight(90);
+        image.setAltTextTitle('Foto de Cierre');
+        sheet.setRowHeight(row, 105);
       } catch (imgError) {
         Logger.log('No fue posible insertar miniatura de cierre sobre la celda: ' + (imgError.message || String(imgError)));
       }
@@ -1283,8 +1353,10 @@ function actualizarEstadoMantenimiento(payload) {
   if (!reportId) {
     throw new Error('No se identificó el reporte a actualizar.');
   }
-  if (!nuevoEstado || (nuevoEstado !== 'En proceso' && nuevoEstado !== 'Cerrado' && nuevoEstado !== 'Abierto')) {
-    throw new Error('Estado inválido.');
+  // El cierre se hace con "Finalizar atención" (exige observaciones y evidencia);
+  // aquí solo se marca el inicio de la atención.
+  if (nuevoEstado !== 'En proceso') {
+    throw new Error('Estado inválido. Para cerrar un reporte usa "Finalizar atención".');
   }
 
   const lock = LockService.getScriptLock();
@@ -1302,6 +1374,28 @@ function actualizarEstadoMantenimiento(payload) {
     const row = found.row;
     const current = sheet.getRange(row, 1, 1, MANTENIMIENTO_HEADERS.length).getValues()[0];
     const previousStatus = safeTrimPQRS_(current[8]);
+
+    if (previousStatus === 'Cerrado') {
+      throw new Error('El reporte ya está cerrado y no puede volver a "En proceso".');
+    }
+
+    if (previousStatus === 'En proceso') {
+      // Idempotente: no repite la entrada de historial ni el correo al residente.
+      return {
+        ok: true,
+        alreadyInProgress: true,
+        reportId: reportId,
+        estado: 'En proceso',
+        message: 'El reporte ya estaba en proceso.',
+        reporte: pqrsMaintenanceRowToObject_(
+          current,
+          row,
+          pqrsGetMaintenancePhotoLinksForRow_(sheet, row, current),
+          pqrsGetClosurePhotoLinkForRow_(sheet, row, current)
+        )
+      };
+    }
+
     const now = new Date();
     const timestamp = Utilities.formatDate(
       now,
@@ -1325,15 +1419,8 @@ function actualizarEstadoMantenimiento(payload) {
     sheet.getRange(row, 18).setValue(consolidatedObservations);
     sheet.getRange(row, 19).setValue(PQRS_VERSION);
 
-    if (nuevoEstado === 'En proceso') {
-      if (!current[14]) {
-        sheet.getRange(row, 15).setValue(now);
-      }
-    } else if (nuevoEstado === 'Cerrado') {
-      if (!current[14]) {
-        sheet.getRange(row, 15).setValue(now);
-      }
-      sheet.getRange(row, 16).setValue(now);
+    if (!current[14]) {
+      sheet.getRange(row, 15).setValue(now);
     }
 
     SpreadsheetApp.flush();
@@ -1342,32 +1429,17 @@ function actualizarEstadoMantenimiento(payload) {
     const photoLinks = pqrsGetMaintenancePhotoLinksForRow_(sheet, row, updated);
     const closurePhotoLink = pqrsGetClosurePhotoLinkForRow_(sheet, row, updated);
 
-    if (nuevoEstado === 'En proceso' && previousStatus !== 'En proceso') {
-      pqrsSendMaintenanceInProgressNotification_({
-        reportId: reportId,
-        reportadoPor: safeTrimPQRS_(updated[4]),
-        correo: safeTrimPQRS_(updated[5]),
-        ubicacion: safeTrimPQRS_(updated[6]),
-        descripcion: safeTrimPQRS_(updated[7]),
-        responsable: responsable,
-        observaciones: observaciones,
-        attentionStartedAt: now,
-        spreadsheetUrl: ss.getUrl()
-      });
-    } else if (nuevoEstado === 'Cerrado' && previousStatus !== 'Cerrado') {
-      pqrsSendMaintenanceClosureNotification_({
-        reportId: reportId,
-        reportadoPor: safeTrimPQRS_(updated[4]),
-        correo: safeTrimPQRS_(updated[5]),
-        ubicacion: safeTrimPQRS_(updated[6]),
-        descripcion: safeTrimPQRS_(updated[7]),
-        responsable: responsable,
-        observaciones: observaciones || 'Atención completada satisfactoriamente.',
-        photoLinks: photoLinks,
-        closedAt: now,
-        spreadsheetUrl: ss.getUrl()
-      });
-    }
+    pqrsSendMaintenanceInProgressNotification_({
+      reportId: reportId,
+      reportadoPor: safeTrimPQRS_(updated[4]),
+      correo: safeTrimPQRS_(updated[5]),
+      ubicacion: safeTrimPQRS_(updated[6]),
+      descripcion: safeTrimPQRS_(updated[7]),
+      responsable: responsable,
+      observaciones: observaciones,
+      attentionStartedAt: now,
+      spreadsheetUrl: ss.getUrl()
+    });
 
     return {
       ok: true,
@@ -1515,6 +1587,16 @@ function pqrsExtractPhotoLinks_(rowValues, richValues, startCol) {
 }
 
 
+function pqrsIsMaintenanceFolderFile_(file) {
+  const folderId = pqrsGetMaintenanceFolder_().getId();
+  const parents = file.getParents();
+
+  while (parents.hasNext()) {
+    if (parents.next().getId() === folderId) return true;
+  }
+  return false;
+}
+
 function pqrsExtractGoogleDriveFileId_(url) {
   const value = safeTrimPQRS_(url);
   if (!value) return '';
@@ -1607,6 +1689,22 @@ function pqrsRepairExistingPhotoLinks_(sheet, folder) {
 
     const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
 
+    // Indexar la carpeta una sola vez: recorrerla por cada fila es O(filas x archivos)
+    // y agota el límite de ejecución cuando crece el historial.
+    const filesByName = {};
+    const closureFileByReportId = {};
+    const folderFiles = folder.getFiles();
+    while (folderFiles.hasNext()) {
+      const folderFile = folderFiles.next();
+      const folderFileName = folderFile.getName();
+      filesByName[folderFileName] = folderFile;
+
+      const closureMatch = folderFileName.match(/^(.+?)-(?:gestion-|cierre)/);
+      if (closureMatch && !closureFileByReportId[closureMatch[1]]) {
+        closureFileByReportId[closureMatch[1]] = folderFile;
+      }
+    }
+
     // Mapear imágenes existentes en la hoja para no duplicarlas
     const existingImages = sheet.getImages();
     const imagePositions = {};
@@ -1636,9 +1734,8 @@ function pqrsRepairExistingPhotoLinks_(sheet, folder) {
 
         for (let extIdx = 0; extIdx < extensions.length; extIdx++) {
           const fileName = reportId + '-foto-' + photoNum + '.' + extensions[extIdx];
-          const files = folder.getFilesByName(fileName);
-          if (files.hasNext()) {
-            foundFile = files.next();
+          if (filesByName[fileName]) {
+            foundFile = filesByName[fileName];
             break;
           }
         }
@@ -1669,17 +1766,7 @@ function pqrsRepairExistingPhotoLinks_(sheet, folder) {
       // 2. Foto de Cierre (Columna 17)
       const closureCol = 17;
       const closureCell = sheet.getRange(rowNum, closureCol);
-      let closureFile = null;
-
-      const allFiles = folder.getFiles();
-      while (allFiles.hasNext()) {
-        const f = allFiles.next();
-        const fName = f.getName();
-        if (fName.indexOf(reportId + '-gestion-') === 0 || fName.indexOf(reportId + '-cierre') === 0) {
-          closureFile = f;
-          break;
-        }
-      }
+      let closureFile = closureFileByReportId[reportId] || null;
 
       if (!closureFile) {
         const obsText = safeTrimPQRS_(rows[i][17]) || safeTrimPQRS_(rows[i][rows[i].length - 2]);
@@ -2329,7 +2416,7 @@ function pqrsSendMaintenanceClosureNotification_(report) {
             '</table>' +
           '</div>' +
           '<div style="text-align: center; margin: 24px 0 10px;">' +
-            '<a href="https://bulevar-verde-app.web.app/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '" style="background-color: #2c5f2d; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-block;" target="_blank">🔍 Ver detalle completo en línea</a>' +
+            '<a href=\"' + PQRS_PUBLIC_BASE_URL + '/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '" style="background-color: #2c5f2d; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-block;" target="_blank">🔍 Ver detalle completo en línea</a>' +
           '</div>' +
           '<p style="font-size: 13px; color: #555; text-align: center; margin-top: 15px;">Muchas gracias por tu reporte y colaboración para mantener las instalaciones de nuestro club en óptimas condiciones.</p>' +
         '</div>' +
@@ -2405,7 +2492,7 @@ function pqrsSendMaintenanceNotification_(report) {
       'FOTOGRAFÍAS ADJUNTAS:\n' + photoText + '\n\n' +
       'CONSULTA EN LÍNEA:\n' +
       'Puedes consultar el avance en tiempo real en:\n' +
-      'https://clubresidencialbulevarverde.com/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '\n\n' +
+      PQRS_PUBLIC_BASE_URL + '/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '\n\n' +
       'La administración y el equipo técnico revisarán la solicitud a la brevedad.\n' +
       'Te notificaremos por correo cuando haya novedades o cuando el caso sea cerrado.\n\n' +
       'Atentamente,\n' +
@@ -2433,7 +2520,7 @@ function pqrsSendMaintenanceNotification_(report) {
             '</table>' +
           '</div>' +
           '<div style="text-align: center; margin: 24px 0 10px;">' +
-            '<a href="https://clubresidencialbulevarverde.com/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '" style="background-color: #2c5f2d; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-block;" target="_blank">🔍 Consultar estado en línea</a>' +
+            '<a href=\"' + PQRS_PUBLIC_BASE_URL + '/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '" style="background-color: #2c5f2d; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-block;" target="_blank">🔍 Consultar estado en línea</a>' +
           '</div>' +
           '<p style="font-size: 13px; color: #555; text-align: center; margin-top: 15px;">La administración y el personal de mantenimiento atenderán esta solicitud según la prioridad y disponibilidad de recursos. Te mantendremos informado.</p>' +
         '</div>' +
@@ -2497,7 +2584,7 @@ function pqrsSendMaintenanceInProgressNotification_(report) {
       '• Fecha de inicio de atención: ' + startedAtStr + '\n' +
       (observaciones ? '• Nota inicial: ' + observaciones + '\n' : '') + '\n' +
       'CONSULTA EN LÍNEA:\n' +
-      'https://clubresidencialbulevarverde.com/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '\n\n' +
+      PQRS_PUBLIC_BASE_URL + '/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '\n\n' +
       'El personal de mantenimiento se encuentra gestionando la solución. Te informaremos oportunamente cuando el caso sea finalizado.\n\n' +
       'Atentamente,\n' +
       'Administración Club Residencial Bulevar Verde\n' +
@@ -2525,7 +2612,7 @@ function pqrsSendMaintenanceInProgressNotification_(report) {
             '</table>' +
           '</div>' +
           '<div style="text-align: center; margin: 24px 0 10px;">' +
-            '<a href="https://clubresidencialbulevarverde.com/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '" style="background-color: #1976d2; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-block;" target="_blank">🔍 Consultar avance en línea</a>' +
+            '<a href=\"' + PQRS_PUBLIC_BASE_URL + '/pqrs/consulta/?id=' + encodeURIComponent(reportId) + '" style="background-color: #1976d2; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px; display: inline-block;" target="_blank">🔍 Consultar avance en línea</a>' +
           '</div>' +
           '<p style="font-size: 13px; color: #555; text-align: center; margin-top: 15px;">El personal de mantenimiento se encuentra trabajando en la solución. Te informaremos oportunamente cuando el caso sea finalizado.</p>' +
         '</div>' +
@@ -2633,40 +2720,72 @@ function eliminarTriggersPQRS_() {
  ***************************************/
 /**
  * Envía un correo a través del API de Bulevar Verde.
- * Siempre incluye replyTo: bulevarverdeadmon@gmail.com
+ * Siempre incluye replyTo: bulevarverdeadmon@gmail.com. "to" y "cc" viajan en mensajes separados.
  *
  * @param {Object} options - { to, cc (opcional), subject, htmlBody, body (opcional), replyTo (opcional) }
  * @return {boolean} - true si fue enviado/encolado exitosamente, false si falló
  */
 function enviarCorreoViaSancionesAPI_(options) {
-  const apiToken = PropertiesService.getScriptProperties().getProperty('SANCIONES_API_TOKEN');
-  const apiEndpoint = API_BULEVAR_VERDE_BASE_URL + '/api/v1/notificaciones/enviar';
+  const principales = pqrsSplitEmails_(options.to);
+  const copias = pqrsSplitEmails_(options.cc).filter(function (email) {
+    return principales.indexOf(email) === -1;
+  });
 
-  const destinatarios = [];
-  if (options.to) {
-    String(options.to).split(',').forEach(function (email) {
-      const clean = safeTrimPQRS_(email);
-      if (clean && destinatarios.indexOf(clean) === -1) destinatarios.push(clean);
-    });
-  }
-  if (options.cc) {
-    String(options.cc).split(',').forEach(function (email) {
-      const clean = safeTrimPQRS_(email);
-      if (clean && destinatarios.indexOf(clean) === -1) destinatarios.push(clean);
-    });
-  }
-
-  if (!destinatarios.length) {
+  if (!principales.length && !copias.length) {
     Logger.log('enviarCorreoViaSancionesAPI_: No se especificaron destinatarios válidos.');
     return false;
   }
 
+  // El API (POST /api/v1/notificaciones/enviar) no tiene campo "cc": todo lo que va en
+  // "to" lo ven todos los destinatarios. Cada grupo se envía en su propio mensaje para
+  // que el residente no vea las direcciones internas ni al revés.
+  let enviado = false;
+  [principales, copias].forEach(function (grupo) {
+    if (grupo.length && pqrsEnviarGrupoViaAPI_(grupo, options)) enviado = true;
+  });
+  return enviado;
+}
+
+function pqrsSplitEmails_(value) {
+  const emails = [];
+  if (!value) return emails;
+
+  String(value).split(',').forEach(function (email) {
+    const clean = safeTrimPQRS_(email);
+    if (clean && emails.indexOf(clean) === -1) emails.push(clean);
+  });
+  return emails;
+}
+
+function pqrsEnviarGrupoViaAPI_(destinatarios, options) {
+  const apiToken = PropertiesService.getScriptProperties().getProperty('SANCIONES_API_TOKEN');
+  const apiEndpoint = API_BULEVAR_VERDE_BASE_URL + '/api/v1/notificaciones/enviar';
+
+  // Límites del API: asunto <= 200, html <= 200.000, texto <= 100.000 y hasta 100 destinatarios.
   const payload = {
     to: destinatarios,
-    subject: options.subject,
-    html: options.htmlBody || options.body || '',
+    subject: String(options.subject || '').slice(0, 200),
     replyTo: options.replyTo || 'bulevarverdeadmon@gmail.com'
   };
+  if (options.htmlBody) payload.html = String(options.htmlBody).slice(0, 200000);
+  if (options.body) payload.text = String(options.body).slice(0, 100000);
+
+  function respaldoMailApp(motivo) {
+    // MailApp tiene cuota diaria: solo se usa si el API no aceptó el mensaje.
+    try {
+      MailApp.sendEmail({
+        to: destinatarios.join(','),
+        subject: options.subject,
+        body: options.body || '',
+        htmlBody: options.htmlBody || ''
+      });
+      Logger.log('enviarCorreoViaSancionesAPI_: respaldo con MailApp ejecutado (' + motivo + ').');
+      return true;
+    } catch (fallbackErr) {
+      Logger.log('enviarCorreoViaSancionesAPI_: el respaldo con MailApp también falló: ' + fallbackErr);
+      return false;
+    }
+  }
 
   try {
     const response = UrlFetchApp.fetch(apiEndpoint, {
@@ -2685,39 +2804,12 @@ function enviarCorreoViaSancionesAPI_(options) {
     if (statusCode === 200 || statusCode === 202) {
       Logger.log('enviarCorreoViaSancionesAPI_: correo enviado/encolado exitosamente para ' + destinatarios.join(', '));
       return true;
-    } else {
-      Logger.log('enviarCorreoViaSancionesAPI_: error HTTP ' + statusCode + ' para ' + destinatarios.join(', ') + ': ' + response.getContentText());
-      try {
-        MailApp.sendEmail({
-          to: options.to,
-          cc: options.cc || '',
-          subject: options.subject,
-          body: options.body || '',
-          htmlBody: options.htmlBody || ''
-        });
-        Logger.log('enviarCorreoViaSancionesAPI_: Fallback a MailApp.sendEmail ejecutado.');
-        return true;
-      } catch (fallbackErr) {
-        Logger.log('enviarCorreoViaSancionesAPI_: Fallback MailApp también falló: ' + fallbackErr);
-        return false;
-      }
     }
+
+    Logger.log('enviarCorreoViaSancionesAPI_: error HTTP ' + statusCode + ' para ' + destinatarios.join(', ') + ': ' + response.getContentText());
+    return respaldoMailApp('HTTP ' + statusCode);
   } catch (error) {
     Logger.log('enviarCorreoViaSancionesAPI_: error enviando correo para ' + destinatarios.join(', ') + ': ' + error);
-    try {
-      MailApp.sendEmail({
-        to: options.to,
-        cc: options.cc || '',
-        subject: options.subject,
-        body: options.body || '',
-        htmlBody: options.htmlBody || ''
-      });
-      Logger.log('enviarCorreoViaSancionesAPI_: Fallback a MailApp tras excepción ejecutado.');
-      return true;
-    } catch (fallbackErr) {
-      Logger.log('enviarCorreoViaSancionesAPI_: Fallback MailApp tras excepción también falló: ' + fallbackErr);
-      return false;
-    }
+    return respaldoMailApp('excepción');
   }
 }
-

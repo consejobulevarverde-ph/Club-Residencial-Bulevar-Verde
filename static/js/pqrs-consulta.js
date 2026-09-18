@@ -95,7 +95,7 @@
       elements.queryLabel.textContent = 'Correo electrónico registrado:';
       elements.queryInput.placeholder = 'ejemplo@correo.com';
       elements.queryInput.type = 'email';
-      elements.queryHelp.textContent = 'Ingresa el correo con el que registraste la solicitud para ver todos tus reportes.';
+      elements.queryHelp.textContent = 'Te enviaremos a ese correo un resumen con los radicados de tus solicitudes.';
     } else {
       elements.queryLabel.textContent = 'Número de Radicado (ID):';
       elements.queryInput.placeholder = 'Ej: MANT-20260903-151328-LAUGS';
@@ -220,10 +220,19 @@
 
     try {
       var apiClient = getClient();
-      var response = await apiClient.call('consultarReportesMantenimientoPublico', payload);
+      var response = await apiClient.callViaForm('consultarReportesMantenimientoPublico', payload, {
+        parentOrigin: window.location.origin,
+        timeoutMs: 45000
+      });
 
       if (!response || !response.ok) {
         throw new Error(response && response.error ? response.error : 'No fue posible consultar el reporte.');
+      }
+
+      // Buscar por correo no muestra datos en pantalla: el resumen se envía a la bandeja.
+      if (response.modo === 'correo') {
+        showAlert('info', response.message || 'Si el correo tiene solicitudes registradas, te enviamos un resumen.');
+        return;
       }
 
       var reports = Array.isArray(response.reportes) ? response.reportes : [];

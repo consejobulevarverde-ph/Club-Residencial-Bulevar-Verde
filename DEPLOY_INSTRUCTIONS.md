@@ -177,6 +177,52 @@ firebase deploy
 
 ---
 
+## 📨 Deploy de Apps Script (PQRS / Mantenimiento)
+
+`google/pqrs.js` **no se despliega con el hosting**: hay que publicarlo a mano como Web App
+(Apps Script → Implementar → Administrar implementaciones → Editar → Nueva versión).
+La URL del Web App es `pqrsWebAppUrl` en `hugo.toml`.
+
+**Antes de publicar (una sola vez por cambio de esquema):**
+1. Hacer una copia de la hoja de cálculo de mantenimiento (la migración agrega/quita columnas).
+2. En *Configuración del proyecto → Propiedades de secuencia de comandos* definir
+   `SANCIONES_API_TOKEN` con el mismo valor que `SANCIONES_SERVICE_TOKEN` del API
+   (`POST /api/v1/notificaciones/enviar`). Sin él, los correos salen por MailApp (cuota diaria).
+3. Ejecutar `crearEstructuraMantenimiento` desde el editor: migra las columnas y reconstruye los
+   enlaces de fotos de los reportes anteriores.
+
+**Orden recomendado:** publicar Apps Script y, enseguida, el hosting. El frontend nuevo depende de las
+acciones `actualizarEstadoMantenimiento` y `consultarReportesMantenimientoPublico`, y el cierre envía la
+evidencia como `evidenceUrl`; con el backend viejo se pierde el enlace de la evidencia.
+
+**Comprobar la versión publicada** (debe responder algo distinto de "Acción no permitida"):
+
+```bash
+curl -sL -X POST "<pqrsWebAppUrl>"   --data-urlencode 'action=consultarReportesMantenimientoPublico'   --data-urlencode 'requestId=verif-1' --data-urlencode 'origin=https://bulevar-verde-app.web.app'   --data-urlencode 'payload={"reportId":"MANT-00000000-000000-ZZZZZ"}' | grep -o 'Acci.n no permitida'
+```
+
+**Consulta pública:** buscar por radicado muestra el detalle; buscar por correo no muestra datos, envía un
+resumen a esa bandeja. Topes en CacheService: 120 consultas / 10 min, 30 radicados inexistentes / 10 min,
+3 resúmenes por correo / hora y 5 confirmaciones por correo / hora (constantes `PQRS_*_MAX_*` en `pqrs.js`).
+
+---
+
+## 🛠️ Deploy automático (GitHub Actions) falla en "Authenticate to Google Cloud"
+
+El workflow `.github/workflows/firebase-deploy.yml` se dispara con cada push a `firebase`. Si falla con
+`provided credential is not a valid Google Service Account Key JSON`, el secreto `GCP_CREDENTIALS` del
+repositorio no es un JSON de clave válido. Para corregirlo:
+
+1. Google Cloud → IAM → Cuentas de servicio → la cuenta de deploy (permisos de Firebase Hosting y
+   Data Connect) → Claves → *Agregar clave* → JSON.
+2. GitHub → Settings → Secrets and variables → Actions → `GCP_CREDENTIALS` → pegar **el contenido completo
+   del archivo JSON** (desde `{` hasta `}`, sin comillas ni saltos de línea añadidos).
+3. Repetir el run desde la pestaña Actions (*Re-run jobs*) o con `workflow_dispatch`.
+
+Mientras tanto el deploy se hace a mano: `hugo --gc --minify && firebase deploy --only hosting`.
+
+---
+
 ## 🧪 Validación Post-Deploy
 
 ### **Web (Hosting)**
