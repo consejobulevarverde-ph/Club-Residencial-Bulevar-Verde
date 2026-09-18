@@ -59,7 +59,7 @@
       lastAttemptAt: report && report.lastAttemptAt,
       lastError: report && report.lastError,
       reportadoPor: report && report.reportadoPor,
-      correo: report && (report.correo || report.email),
+      hasEmail: Boolean(report && (report.correo || report.email)),
       ubicacion: report && report.ubicacion,
       descriptionLength: String(report && report.descripcion || '').length,
       photoCount: photos.length,
@@ -393,7 +393,7 @@
 
     log('info', 'Inicio de creación de reporte.', {
       reporterLength: reportadoPor.length,
-      email: correo,
+      hasEmail: Boolean(correo),
       locationLength: ubicacion.length,
       descriptionLength: descripcion.length,
       selectedPhotos: files.map(function (file) {
@@ -552,6 +552,9 @@
           item.attempts = Number(item.attempts || 0) + 1;
           item.lastAttemptAt = new Date().toISOString();
           delete item.lastError;
+          // Reportes guardados en este dispositivo antes de que existiera el campo
+          // de correo: se envían igual, sin notificación al residente.
+          if (!item.correo && !item.email) item.legacyWithoutEmail = true;
           await putQueueItem(item);
 
           log('info', 'Enviando reporte al Apps Script.', summarizeReport(item));
