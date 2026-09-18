@@ -247,18 +247,25 @@
             {{ .Content }}
 
             <div class="service-selector row g-3 my-4" role="group" aria-label="Tipo de solicitud">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <button id="showGeneralPqrs" type="button" class="btn active w-100" aria-pressed="true">
                         <i class="bi bi-chat-square-text"></i>
                         PQRS general
-                        <small class="d-block fw-normal mt-1">Peticiones, quejas, reclamos y sugerencias</small>
+                        <small class="d-block fw-normal mt-1">Peticiones, quejas y reclamos</small>
                     </button>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <button id="showMaintenanceForm" type="button" class="btn w-100" aria-pressed="false">
                         <i class="bi bi-tools"></i>
-                        Mantenimiento
-                        <small class="d-block fw-normal mt-1">Reportar daños o necesidades en zonas comunes</small>
+                        Reportar daño
+                        <small class="d-block fw-normal mt-1">Registrar nueva solicitud</small>
+                    </button>
+                </div>
+                <div class="col-md-4">
+                    <button id="showConsultationPanel" type="button" class="btn w-100" aria-pressed="false">
+                        <i class="bi bi-search"></i>
+                        Consultar estado
+                        <small class="d-block fw-normal mt-1">Buscar por Radicado o Correo</small>
                     </button>
                 </div>
             </div>
@@ -330,6 +337,15 @@
                             </div>
 
                             <div class="mb-3">
+                                <label for="maintenanceEmail" class="form-label required">Correo electrónico</label>
+                                <input id="maintenanceEmail" name="correo" type="email" class="form-control"
+                                    maxlength="160" autocomplete="email" required
+                                    placeholder="ejemplo@correo.com">
+                                <div class="form-text">Te enviaremos el número de radicado y las actualizaciones de estado a este correo.</div>
+                                <div class="invalid-feedback">Ingresa un correo electrónico válido (ejemplo@correo.com).</div>
+                            </div>
+
+                            <div class="mb-3">
                                 <label for="maintenanceLocation" class="form-label required">Ubicación de la zona
                                     afectada</label>
                                 <input id="maintenanceLocation" name="ubicacion" type="text" class="form-control"
@@ -394,6 +410,65 @@
                 </div>
             </section>
 
+            <section id="consultationPanel" hidden tabindex="-1">
+                <div class="info-card mb-4">
+                    <h4><i class="bi bi-search"></i> Consulta de estado de solicitudes</h4>
+                    <p class="mb-0">Consulta en tiempo real el avance, observaciones técnicas y estado de tus reportes de mantenimiento por <strong>número de radicado</strong> o por <strong>correo electrónico</strong>.</p>
+                </div>
+
+                <div class="card maintenance-form-card mb-4">
+                    <div class="card-body p-4">
+                        <form id="consultationForm">
+                            <div class="mb-3">
+                                <label class="form-label d-block mb-2">Método de búsqueda:</label>
+                                <div class="btn-group w-100" role="group" aria-label="Método de consulta">
+                                    <input type="radio" class="btn-check" name="consultType" id="consultTypeReportId" autocomplete="off" checked>
+                                    <label class="btn btn-outline-success" for="consultTypeReportId">
+                                        <i class="bi bi-hash"></i> Por Número de Radicado (ID)
+                                    </label>
+
+                                    <input type="radio" class="btn-check" name="consultType" id="consultTypeEmail" autocomplete="off">
+                                    <label class="btn btn-outline-success" for="consultTypeEmail">
+                                        <i class="bi bi-envelope"></i> Por Correo Electrónico
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label id="consultQueryLabel" for="consultQueryInput" class="form-label required">
+                                    Número de Radicado (ID):
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                                    <input id="consultQueryInput" type="text" class="form-control form-control-lg"
+                                        placeholder="Ej: MANT-20260903-151328-LAUGS" required autocomplete="off">
+                                    <button id="consultSubmitButton" type="submit" class="btn btn-primary px-4">
+                                        <i class="bi bi-arrow-right-circle"></i> Consultar
+                                    </button>
+                                </div>
+                                <div id="consultQueryHelp" class="form-text">
+                                    Ingresa el código que recibiste en el correo de confirmación.
+                                </div>
+                            </div>
+
+                            <div id="consultationAlert" class="alert alert-info mt-3" hidden role="alert"></div>
+
+                            <div id="consultationLoading" class="text-center py-4" hidden>
+                                <div class="spinner-border text-success" role="status">
+                                    <span class="visually-hidden">Consultando…</span>
+                                </div>
+                                <p class="text-muted mt-2 mb-0">Buscando información del reporte…</p>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div>
+                    <h5 id="consultationCount" class="fw-bold text-secondary mb-3"></h5>
+                    <div id="consultationResults" hidden></div>
+                </div>
+            </section>
+
             <div class="alert alert-info mt-4 mb-0">
                 <i class="bi bi-info-circle"></i>
                 Todos los reportes son revisados por la administración del club.
@@ -409,13 +484,14 @@
     <script>
         window.PQRS_MAINTENANCE_CONFIG = {
             webAppUrl: {{ .Site.Params.pqrsWebAppUrl | default "" }},
-        maxPhotos: 3,
+            maxPhotos: 3,
             maxImageBytes: 5242880,
-                targetImageBytes: 921600,
-                    maxDimension: 1600
+            targetImageBytes: 921600,
+            maxDimension: 1600
         };
     </script>
     <script src="{{ "js/pqrs-maintenance.js" | relURL }}?v={{ .Site.Params.pqrsMaintenanceVersion | default "1" }}"></script>
+    <script src="{{ "js/pqrs-consulta.js" | relURL }}?v={{ .Site.Params.pqrsMaintenanceVersion | default "1" }}"></script>
 </body>
 
 </html>

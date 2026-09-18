@@ -63,6 +63,8 @@
       metricTotal: $('metricTotal'),
       detailTitle: $('managementDetailTitle'),
       detailBody: $('managementDetailBody'),
+      inProgressSection: $('managementInProgressSection'),
+      inProgressButton: $('managementInProgressButton'),
       closurePanel: $('managementClosurePanel'),
       closureForm: $('managementClosureForm'),
       responsible: $('managementResponsible'),
@@ -95,6 +97,9 @@
     elements.search.addEventListener('input', renderReports);
     elements.statusFilter.addEventListener('change', renderReports);
     elements.reportList.addEventListener('click', handleReportClick);
+    if (elements.inProgressButton) {
+      elements.inProgressButton.addEventListener('click', handleMarkInProgress);
+    }
     elements.closureForm.addEventListener('submit', handleCloseReport);
     elements.evidenceCameraButton.addEventListener('click', captureClosureEvidence);
     elements.evidenceGalleryButton.addEventListener('click', function () {
@@ -293,13 +298,13 @@
   function renderMetrics() {
     var total = reports.length;
     var open = reports.filter(function (report) {
-      return report.estado === 'Abierto' || report.estado === 'Asignado';
+      return report.estado === 'Abierto';
     }).length;
     var inProgress = reports.filter(function (report) {
       return report.estado === 'En proceso';
     }).length;
     var closed = reports.filter(function (report) {
-      return report.estado === 'Cerrado' || report.estado === 'Resuelto';
+      return report.estado === 'Cerrado';
     }).length;
 
     elements.metricOpen.textContent = open;
@@ -407,11 +412,12 @@
   }
 
   function isClosed(report) {
-    return report.estado === 'Cerrado' || report.estado === 'Resuelto';
+    return report.estado === 'Cerrado';
   }
 
   function renderDetail(report) {
     var closed = isClosed(report);
+    var isNew = report.estado === 'Abierto';
     elements.detailTitle.textContent = report.reportId;
 
     var photoLinks = report.fotos && report.fotos.length
@@ -425,11 +431,28 @@
       detailField('Fecha del reporte', esc(formatDate(report.fechaReporte))) +
       detailField('Fecha de recepción', esc(formatDate(report.fechaRecepcion))) +
       detailField('Reportado por', esc(report.reportadoPor), 'col-md-6') +
+      detailField(
+        'Correo electrónico',
+        report.correo
+          ? '<a href="mailto:' + esc(report.correo) + '" class="text-decoration-none"><i class="bi bi-envelope me-1"></i>' + esc(report.correo) + '</a>'
+          : '<span class="text-muted">No registrado</span>',
+        'col-md-6'
+      ) +
       detailField('Ubicación', esc(report.ubicacion), 'col-md-6') +
       detailField('Descripción', '<div class="preserve-lines">' + esc(report.descripcion) + '</div>', 'col-12') +
-      detailField('Evidencias', photoLinks, 'col-12') +
+      detailField('Evidencias iniciales', photoLinks, 'col-12') +
       (report.responsable ? detailField('Responsable', esc(report.responsable), 'col-md-6') : '') +
+      (report.fechaAtencion ? detailField('Inicio de atención', esc(formatDate(report.fechaAtencion)), 'col-md-6') : '') +
       (report.fechaCierre ? detailField('Fecha de cierre', esc(formatDate(report.fechaCierre)), 'col-md-6') : '') +
+      (report.fotoCierre
+        ? detailField(
+            'Evidencia de finalización',
+            '<div class="d-flex flex-wrap gap-3">' +
+            renderClosureEvidencePreview(report.fotoCierre) +
+            '</div>',
+            'col-12'
+          )
+        : '') +
       (report.observacionesGestion
         ? detailField(
             'Historial de gestión',
@@ -440,6 +463,10 @@
       '</div>';
 
     loadEvidencePreviews(report);
+
+    if (elements.inProgressSection) {
+      elements.inProgressSection.hidden = !isNew;
+    }
 
     if (!closed) {
       elements.responsible.value = session.nombre || report.responsable || '';
@@ -466,6 +493,57 @@
       : '';
   }
 
+  async function handleMarkInProgress() {
+    if (!selectedReport) return;
+
+    var confirmed = window.confirm(
+      '¿Deseas marcar el reporte ' + selectedReport.reportId + ' como "En proceso"?\n\n' +
+      'Se registrará el inicio de la atención y se enviará una notificación por correo al residente.'
+    );
+    if (!confirmed) return;
+
+    setBusy(elements.inProgressButton, true, 'Actualizando…');
+    hideAlert();
+    hideClosureAlert();
+
+    try {
+      var result = await call('actualizarEstadoMantenimiento', {
+        token: session.token,
+        reportId: selectedReport.reportId,
+        nuevoEstado: 'En proceso',
+        responsable: session.nombre
+      }, 60000);
+
+      if (!result || !result.ok) {
+        throw new Error('El servicio no confirmó la actualización.');
+      }
+
+      selectedReport = result.reporte || selectedReport;
+      selectedReport.estado = 'En proceso';
+      selectedReport.responsable = session.nombre;
+
+      for (var i = 0; i < reports.length; i++) {
+        if (reports[i].reportId === selectedReport.reportId) {
+          reports[i] = selectedReport;
+          break;
+        }
+      }
+
+      renderMetrics();
+      renderReports();
+      renderDetail(selectedReport);
+      showClosureAlert('success', 'El reporte ' + selectedReport.reportId + ' fue marcado como "En proceso" y se notificó al residente.');
+    } catch (error) {
+      if (isSessionError(error)) {
+        handleSessionLost();
+      } else {
+        showClosureAlert('danger', error.message || 'No fue posible actualizar el estado.');
+      }
+    } finally {
+      setBusy(elements.inProgressButton, false);
+    }
+  }
+
   async function handleCloseReport(event) {
     event.preventDefault();
     if (!selectedReport) return;
@@ -489,7 +567,7 @@
     var observations = elements.observations.value.trim();
     var responsible = elements.responsible.value.trim();
 
-    if (observations.length + closureEvidences.length * EVIDENCE_URL_RESERVE_CHARS > MAX_OBSERVATIONS_CHARS) {
+    if (observations.length + Math.max(0, closureEvidences.length - 1) * EVIDENCE_URL_RESERVE_CHARS > MAX_OBSERVATIONS_CHARS) {
       showClosureAlert(
         'warning',
         'Las observaciones son demasiado largas para incluir los enlaces de las evidencias. Redúcelas e intenta nuevamente.'
@@ -833,9 +911,12 @@
       });
     }
 
+    // La hoja solo tiene una columna "Foto Cierre": la primera evidencia viaja como
+    // evidenceUrl y las demás se anexan a las observaciones.
     var urls = item.evidences.map(function (evidence) { return evidence.url; }).filter(Boolean);
-    var observations = urls.length
-      ? item.observaciones + ' ' + urls.join(' ')
+    var extraUrls = urls.slice(1);
+    var observations = extraUrls.length
+      ? item.observaciones + ' ' + extraUrls.join(' ')
       : item.observaciones;
 
     if (observations.length > MAX_OBSERVATIONS_CHARS) {
@@ -846,7 +927,8 @@
       token: session.token,
       reportId: item.reportId,
       responsable: item.responsable,
-      observaciones: observations
+      observaciones: observations,
+      evidenceUrl: urls[0] || ''
     }, 90000);
 
     if (!result || !result.ok) {
@@ -1329,14 +1411,37 @@
       '</a>';
   }
 
+  function renderClosureEvidencePreview(url) {
+    var label = 'Evidencia de Cierre';
+
+    return '<a class="d-inline-flex flex-column align-items-center text-decoration-none evidence-preview-link" ' +
+      'href="' + escAttr(url) + '" target="_blank" rel="noopener noreferrer" ' +
+      'title="Abrir ' + escAttr(label) + ' en una pestaña nueva">' +
+      '<span class="border border-success-subtle rounded overflow-hidden bg-light d-flex align-items-center justify-content-center shadow-sm" ' +
+      'style="width:200px;height:200px;">' +
+      '<img data-closure-evidence-preview data-evidence-url="' + escAttr(url) + '" alt="Previsualización de ' + escAttr(label) + '" ' +
+      'width="200" height="200" decoding="async" ' +
+      'style="width:200px;height:200px;object-fit:cover;display:block;" hidden>' +
+      '<span data-evidence-loading class="text-success text-center px-3">' +
+      '<span class="spinner-border spinner-border-sm d-block mx-auto mb-2" role="status" aria-hidden="true"></span>' +
+      '<span class="small">Cargando imagen…</span></span>' +
+      '<span data-evidence-fallback hidden class="text-success text-center px-3">' +
+      '<i class="bi bi-image fs-1 d-block"></i><span class="small">Abrir evidencia</span></span>' +
+      '</span>' +
+      '<span class="small fw-semibold text-success mt-2">' + esc(label) +
+      ' <i class="bi bi-box-arrow-up-right ms-1"></i></span>' +
+      '</a>';
+  }
+
   function loadEvidencePreviews(report) {
     if (!elements.detailBody || !report || !report.reportId) return;
 
-    var images = Array.prototype.slice.call(
-      elements.detailBody.querySelectorAll('[data-evidence-preview]')
+    // 1. Evidencias iniciales del reporte (Foto 1, Foto 2, Foto 3)
+    var initialImages = Array.prototype.slice.call(
+      elements.detailBody.querySelectorAll('[data-evidence-preview][data-photo-index]')
     );
 
-    images.forEach(function (image) {
+    initialImages.forEach(function (image) {
       var photoIndex = Number(image.getAttribute('data-photo-index') || 0);
       var container = image.parentElement;
       var loading = container.querySelector('[data-evidence-loading]');
@@ -1391,6 +1496,65 @@
           : 'No fue posible cargar la previsualización de la evidencia.');
       });
     });
+
+    // 2. Evidencias de cierre en el historial de gestión
+    var closureImages = Array.prototype.slice.call(
+      elements.detailBody.querySelectorAll('[data-closure-evidence-preview][data-evidence-url]')
+    );
+
+    closureImages.forEach(function (image) {
+      var evidenceUrl = image.getAttribute('data-evidence-url') || '';
+      var container = image.parentElement;
+      var loading = container.querySelector('[data-evidence-loading]');
+      var fallback = container.querySelector('[data-evidence-fallback]');
+
+      function showFallback(message) {
+        image.hidden = true;
+        if (loading) loading.hidden = true;
+        if (fallback) fallback.hidden = false;
+        log('warn', message || 'No fue posible cargar la previsualización de la evidencia de cierre.', {
+          reportId: report.reportId,
+          evidenceUrl: evidenceUrl
+        });
+      }
+
+      call('obtenerEvidenciaMantenimiento', {
+        token: session.token,
+        reportId: report.reportId,
+        photoUrl: evidenceUrl
+      }, 60000).then(function (result) {
+        if (!result || !result.ok || !result.dataUrl) {
+          throw new Error('El servicio no devolvió la imagen.');
+        }
+
+        image.addEventListener('load', function () {
+          if (loading) loading.hidden = true;
+          if (fallback) fallback.hidden = true;
+          image.hidden = false;
+          log('info', 'Previsualización de evidencia de cierre cargada.', {
+            reportId: report.reportId,
+            bytes: result.bytes || 0,
+            mimeType: result.mimeType || ''
+          });
+        }, { once: true });
+
+        image.addEventListener('error', function () {
+          showFallback('El navegador no pudo representar la evidencia de cierre recibida.');
+        }, { once: true });
+
+        image.src = result.dataUrl;
+
+        if (image.complete && image.naturalWidth > 0) {
+          if (loading) loading.hidden = true;
+          if (fallback) fallback.hidden = true;
+          image.hidden = false;
+        }
+      }).catch(function (error) {
+        showFallback(error && error.message
+          ? error.message
+          : 'No fue posible cargar la previsualización de la evidencia de cierre.');
+      });
+    });
   }
 
   function detailField(label, value, classes) {
@@ -1400,9 +1564,8 @@
   }
 
   function statusBadge(status) {
-    if (status === 'Cerrado' || status === 'Resuelto') return 'text-bg-success';
+    if (status === 'Cerrado') return 'text-bg-success';
     if (status === 'En proceso') return 'text-bg-primary';
-    if (status === 'Asignado') return 'text-bg-info';
     return 'text-bg-warning';
   }
 
@@ -1555,25 +1718,24 @@
       var isDriveEvidence = /^https:\/\/(?:drive|docs)\.google\.com\//i.test(url);
 
       if (isDriveEvidence) {
-        // Renderizar miniatura con fallback chain para Drive
-        var displayUrls = buildMediaDisplayUrls_(url);
-        var initialUrl = displayUrls.shift() || url;
-        var fallbackUrls = encodeURIComponent(JSON.stringify(displayUrls));
-
         output += '<a href="' + escAttr(url) + '" target="_blank" rel="noopener noreferrer" ' +
-          'class="d-inline-flex flex-column align-items-center text-decoration-none mx-1" ' +
+          'class="d-inline-flex flex-column align-items-center text-decoration-none mx-1 my-2" ' +
           'title="Abrir evidencia en una pestaña nueva">' +
-          '<span class="border border-success-subtle rounded overflow-hidden bg-light d-flex align-items-center justify-content-center shadow-sm pqrs-evidence-thumb">' +
-          '<img data-evidence-preview alt="Previsualización de evidencia" ' +
-          'width="150" height="150" decoding="async" referrerpolicy="no-referrer" ' +
-          'style="width:150px;height:150px;object-fit:cover;display:block;" ' +
-          'src="' + escAttr(initialUrl) + '" ' +
-          'data-fallback-urls="' + escAttr(fallbackUrls) + '" ' +
-          'onerror="window.handlePqrsEvidenceError_(this)">' +
+          '<span class="border border-success-subtle rounded overflow-hidden bg-light d-flex align-items-center justify-content-center shadow-sm" ' +
+          'style="width:150px;height:150px;">' +
+          '<img data-closure-evidence-preview data-evidence-url="' + escAttr(url) + '" alt="Previsualización de evidencia" ' +
+          'width="150" height="150" decoding="async" ' +
+          'style="width:150px;height:150px;object-fit:cover;display:block;" hidden>' +
+          '<span data-evidence-loading class="text-success text-center px-2">' +
+          '<span class="spinner-border spinner-border-sm d-block mx-auto mb-2" role="status" aria-hidden="true"></span>' +
+          '<span class="small">Cargando…</span></span>' +
+          '<span data-evidence-fallback hidden class="text-success text-center px-2">' +
+          '<i class="bi bi-image fs-2 d-block"></i><span class="small">Abrir evidencia</span></span>' +
           '</span>' +
           '<span class="small fw-semibold text-success mt-1">' +
-          '<i class="bi bi-image me-1" aria-hidden="true"></i>Ver evidencia</span>' +
-          '</a>'
+          '<i class="bi bi-image me-1" aria-hidden="true"></i>Ver evidencia' +
+          ' <i class="bi bi-box-arrow-up-right ms-1"></i></span>' +
+          '</a>';
       } else {
         // Link simple para URLs no-Drive
         var label = 'Abrir enlace';
