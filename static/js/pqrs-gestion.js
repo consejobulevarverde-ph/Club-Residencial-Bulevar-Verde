@@ -9,9 +9,21 @@
   var reports = [];
   var selectedReport = null;
   var detailModal = null;
-  var selectedClosureEvidence = null;
-  var uploadedClosureEvidenceUrl = '';
-  var closureEvidenceObjectUrl = '';
+  var detailModalElement = null;
+  var closureEvidences = [];
+
+  // Cola local de cierres. Usa una base propia: subir la versión de
+  // 'bulevar-verde-pqrs' rompería la página de creación de reportes.
+  var DB_NAME = 'bulevar-verde-pqrs-gestion';
+  var DB_VERSION = 1;
+  var STORE_NAME = 'closureQueue';
+  var MAX_CLOSURE_EVIDENCES = 3;
+  var MAX_OBSERVATIONS_CHARS = 3000;
+  var EVIDENCE_URL_RESERVE_CHARS = 120;
+  var pendingClosures = {};
+  var pendingClosuresKey = '';
+  var flushInProgress = false;
+  var flushPromise = null;
 
   var elements = {};
 
@@ -59,18 +71,25 @@
       observations: $('managementObservations'),
       evidenceCameraButton: $('managementOpenEvidenceCameraButton'),
       evidenceGalleryButton: $('managementOpenEvidenceGalleryButton'),
-      evidenceRemoveButton: $('managementRemoveEvidenceButton'),
       evidenceGalleryInput: $('managementEvidenceGalleryInput'),
-      evidencePreviewContainer: $('managementEvidencePreviewContainer'),
-      evidencePreview: $('managementEvidencePreview'),
-      evidenceInfo: $('managementEvidenceInfo'),
+      evidenceList: $('managementEvidenceList'),
       evidenceStatus: $('managementEvidenceStatus'),
       closeConfirm: $('managementCloseConfirm'),
-      closeButton: $('managementCloseButton')
+      closeButton: $('managementCloseButton'),
+      closureAlert: $('managementClosureAlert'),
+      closureQueued: $('managementClosureQueued'),
+      closureQueuedError: $('managementClosureQueuedError'),
+      closureQueuedRetry: $('managementClosureQueuedRetry'),
+      queueBanner: $('managementQueueBanner'),
+      queueCount: $('managementQueueCount'),
+      queueList: $('managementQueueList'),
+      queueRetry: $('managementQueueRetryButton'),
+      network: $('managementNetworkStatus')
     };
 
     client = new window.PortalBVClient(config.webAppUrl || '');
-    detailModal = new bootstrap.Modal($('managementDetailModal'));
+    detailModalElement = $('managementDetailModal');
+    detailModal = new bootstrap.Modal(detailModalElement);
 
     elements.loginForm.addEventListener('submit', handleLogin);
     elements.logoutButton.addEventListener('click', handleLogout);
@@ -87,7 +106,40 @@
       elements.evidenceGalleryInput.click();
     });
     elements.evidenceGalleryInput.addEventListener('change', handleClosureEvidenceSelection);
-    elements.evidenceRemoveButton.addEventListener('click', resetClosureEvidence);
+    elements.evidenceList.addEventListener('click', handleEvidenceListClick);
+    elements.queueRetry.addEventListener('click', function () {
+      log('info', 'Botón "Intentar enviar" presionado.');
+      flushQueue(true, null, 'botón manual');
+    });
+    elements.closureQueuedRetry.addEventListener('click', function () {
+      flushQueue(true, null, 'botón del detalle');
+    });
+    elements.queueList.addEventListener('click', handleQueueListClick);
+
+    window.addEventListener('online', function () {
+      log('info', 'Evento online recibido.');
+      renderNetworkStatus();
+      flushQueue(false, null, 'evento online');
+    });
+    window.addEventListener('offline', function () {
+      log('warn', 'Evento offline recibido.');
+      renderNetworkStatus();
+    });
+    window.addEventListener('focus', function () {
+      flushQueue(false, null, 'foco de ventana');
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) flushQueue(false, null, 'página visible');
+    });
+    window.setInterval(function () {
+      if (!document.hidden) flushQueue(false, null, 'temporizador de 60 segundos');
+    }, 60000);
+
+    renderNetworkStatus();
+    renderClosureEvidences();
+    refreshQueueCount().catch(function (error) {
+      log('error', 'No fue posible consultar la cola de cierres durante el inicio.', error);
+    });
 
     restoreSession();
   }
@@ -148,6 +200,8 @@
     showPanel('app');
     loadReports().catch(function () {
       // loadReports ya maneja la visualización y el vencimiento.
+    }).then(function () {
+      flushQueue(false, null, 'inicio del módulo');
     });
   }
 
@@ -183,6 +237,7 @@
       showPanel('app');
       await loadReports();
       showAlert('success', 'Ingreso correcto. Ya puedes gestionar los reportes de mantenimiento.');
+      flushQueue(false, null, 'inicio de sesión');
     } catch (error) {
       showAlert('danger', error.message || 'No fue posible iniciar sesión.');
     } finally {
@@ -289,9 +344,12 @@
   }
 
   function renderReportCard(report) {
-    var closed = report.estado === 'Cerrado' || report.estado === 'Resuelto';
+    var closed = isClosed(report);
     var badge = statusBadge(report.estado);
     var date = formatDate(report.fechaRecepcion || report.fechaReporte);
+    var queuedBadge = pendingClosures[report.reportId]
+      ? '<span class="badge text-bg-warning"><i class="bi bi-cloud-arrow-up me-1"></i>Cierre en cola</span>'
+      : '';
 
     return '<div class="col-12 col-lg-6">' +
       '<button type="button" class="report-card card w-100 h-100 text-start border-0 shadow-sm" data-report-id="' + esc(report.reportId) + '">' +
@@ -299,7 +357,9 @@
       '<div class="d-flex justify-content-between align-items-start gap-3 mb-2">' +
       '<div><div class="small text-muted">' + esc(date) + '</div>' +
       '<h3 class="h6 fw-bold mb-0">' + esc(report.reportId) + '</h3></div>' +
-      '<span class="badge ' + badge + '">' + esc(report.estado) + '</span>' +
+      '<div class="d-flex flex-column align-items-end gap-1">' +
+      '<span class="badge ' + badge + '">' + esc(report.estado) + '</span>' + queuedBadge +
+      '</div>' +
       '</div>' +
       '<div class="fw-semibold text-success mb-2"><i class="bi bi-geo-alt me-1"></i>' + esc(report.ubicacion) + '</div>' +
       '<p class="mb-3 report-description">' + esc(report.descripcion) + '</p>' +
@@ -324,6 +384,9 @@
 
   async function openReport(reportId) {
     hideAlert();
+    hideClosureAlert();
+    // Evita que un refresco de la cola muestre el panel de un reporte anterior.
+    selectedReport = null;
     elements.detailTitle.textContent = 'Cargando reporte…';
     elements.detailBody.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-success"></div></div>';
     elements.closurePanel.hidden = true;
@@ -348,8 +411,12 @@
     }
   }
 
+  function isClosed(report) {
+    return report.estado === 'Cerrado';
+  }
+
   function renderDetail(report) {
-    var closed = report.estado === 'Cerrado';
+    var closed = isClosed(report);
     var isNew = report.estado === 'Abierto';
     elements.detailTitle.textContent = report.reportId;
 
@@ -401,14 +468,29 @@
       elements.inProgressSection.hidden = !isNew;
     }
 
-    elements.closurePanel.hidden = closed;
     if (!closed) {
       elements.responsible.value = session.nombre || report.responsable || '';
       elements.observations.value = '';
       elements.closeConfirm.checked = false;
       elements.closureForm.classList.remove('was-validated');
+      hideClosureAlert();
       resetClosureEvidence();
     }
+    syncClosurePanel();
+  }
+
+  // Muestra el formulario de cierre, o el aviso de cierre pendiente cuando ese
+  // reporte ya está en la cola local (evita encolar el mismo cierre dos veces).
+  function syncClosurePanel() {
+    if (!selectedReport) return;
+
+    var pending = pendingClosures[selectedReport.reportId];
+    elements.closurePanel.hidden = isClosed(selectedReport);
+    elements.closureQueued.hidden = !pending;
+    elements.closureForm.hidden = Boolean(pending);
+    elements.closureQueuedError.textContent = pending && pending.lastError
+      ? 'Último intento: ' + pending.lastError
+      : '';
   }
 
   async function handleMarkInProgress() {
@@ -422,6 +504,7 @@
 
     setBusy(elements.inProgressButton, true, 'Actualizando…');
     hideAlert();
+    hideClosureAlert();
 
     try {
       var result = await call('actualizarEstadoMantenimiento', {
@@ -449,9 +532,13 @@
       renderMetrics();
       renderReports();
       renderDetail(selectedReport);
-      showAlert('success', 'El reporte ' + selectedReport.reportId + ' fue marcado como "En proceso" y se notificó al residente.');
+      showClosureAlert('success', 'El reporte ' + selectedReport.reportId + ' fue marcado como "En proceso" y se notificó al residente.');
     } catch (error) {
-      showAlert('danger', error.message || 'No fue posible actualizar el estado.');
+      if (isSessionError(error)) {
+        handleSessionLost();
+      } else {
+        showClosureAlert('danger', error.message || 'No fue posible actualizar el estado.');
+      }
     } finally {
       setBusy(elements.inProgressButton, false);
     }
@@ -460,87 +547,559 @@
   async function handleCloseReport(event) {
     event.preventDefault();
     if (!selectedReport) return;
+    hideClosureAlert();
 
-    if (!elements.closureForm.checkValidity()) {
-      elements.closureForm.classList.add('was-validated');
+    var reportId = selectedReport.reportId;
+
+    if (pendingClosures[reportId]) {
+      showClosureAlert('warning', 'Este reporte ya tiene un cierre pendiente de envío.');
       return;
     }
 
-    setBusy(elements.closeButton, true, 'Finalizando…');
+    if (!elements.closureForm.checkValidity()) {
+      elements.closureForm.classList.add('was-validated');
+      showClosureAlert('warning', 'Completa los campos obligatorios y confirma el cierre.');
+      var firstInvalid = elements.closureForm.querySelector(':invalid');
+      if (firstInvalid && typeof firstInvalid.focus === 'function') firstInvalid.focus();
+      return;
+    }
+
+    var observations = elements.observations.value.trim();
+    var responsible = elements.responsible.value.trim();
+
+    if (observations.length + Math.max(0, closureEvidences.length - 1) * EVIDENCE_URL_RESERVE_CHARS > MAX_OBSERVATIONS_CHARS) {
+      showClosureAlert(
+        'warning',
+        'Las observaciones son demasiado largas para incluir los enlaces de las evidencias. Redúcelas e intenta nuevamente.'
+      );
+      return;
+    }
+
+    setBusy(elements.closeButton, true, 'Guardando…');
+
+    var item = null;
 
     try {
-      var evidenceUrl = uploadedClosureEvidenceUrl;
+      // Todo lo que sigue es local: funciona sin conexión.
+      var evidences = [];
+      for (var index = 0; index < closureEvidences.length; index += 1) {
+        var selected = closureEvidences[index];
+        elements.evidenceStatus.textContent =
+          'Comprimiendo evidencia ' + (index + 1) + ' de ' + closureEvidences.length + '…';
 
-      if (selectedClosureEvidence && !evidenceUrl) {
-        elements.evidenceStatus.textContent = 'Comprimiendo y cargando evidencia…';
-        var compressedEvidence = await compressClosureEvidence(selectedClosureEvidence);
-        var uploadResult = await call('subirEvidenciaGestionMantenimiento', {
-          token: session.token,
-          reportId: selectedReport.reportId,
-          clientEvidenceId: selectedClosureEvidence.clientEvidenceId,
-          evidence: compressedEvidence
-        }, 120000);
-
-        if (!uploadResult || !uploadResult.ok || !uploadResult.url) {
-          throw new Error('El servicio no confirmó la carga de la evidencia.');
+        var compressed;
+        try {
+          compressed = await compressClosureEvidence(selected);
+        } catch (compressError) {
+          throw new Error(
+            'No fue posible preparar la evidencia "' + selected.name + '": ' +
+            (compressError && compressError.message ? compressError.message : compressError)
+          );
         }
 
-        evidenceUrl = uploadResult.url;
-        uploadedClosureEvidenceUrl = evidenceUrl;
-        elements.evidenceStatus.textContent = 'Evidencia cargada exitosamente.';
-        log('info', 'Evidencia de cierre cargada.', {
-          reportId: selectedReport.reportId,
-          bytes: uploadResult.bytes || 0,
-          duplicate: Boolean(uploadResult.duplicate)
+        evidences.push({
+          clientEvidenceId: selected.clientEvidenceId,
+          name: compressed.name,
+          mimeType: compressed.mimeType,
+          sizeBytes: compressed.sizeBytes,
+          dataUrl: compressed.dataUrl
         });
       }
 
-      var observations = elements.observations.value.trim();
-
-      if (observations.length > 3000) {
-        throw new Error('Las observaciones superan el máximo de 3000 caracteres.');
-      }
-
-      var result = await call('finalizarReporteMantenimiento', {
-        token: session.token,
-        reportId: selectedReport.reportId,
-        responsable: elements.responsible.value.trim(),
+      item = {
+        clientCloseId: createClientCloseId(),
+        reportId: reportId,
+        responsable: responsible,
         observaciones: observations,
-        evidenceUrl: evidenceUrl || ''
-      }, 90000);
+        evidences: evidences,
+        queuedAt: new Date().toISOString(),
+        attempts: 0
+      };
 
-      if (!result || !result.ok) {
-        throw new Error('El servicio no confirmó el cierre del reporte.');
-      }
-
-      selectedReport = result.reporte;
-      renderDetail(selectedReport);
-      try {
-        await loadReports();
-      } catch (refreshError) {
-        log('warn', 'El cierre fue confirmado, pero no se pudo refrescar la lista.', refreshError);
-      }
-      showAlert('success', result.message || 'La atención quedó finalizada.');
+      // Se persiste ANTES de intentar enviar: nada se pierde si falla la red.
+      await putQueueItem(item);
+      log('info', 'Cierre guardado en IndexedDB.', summarizeClosure(item));
+      await refreshQueueCount();
     } catch (error) {
-      if (isSessionError(error)) {
-        detailModal.hide();
-        clearSession();
-        showPanel('login');
-      }
-      showAlert('danger', error.message || 'No fue posible finalizar la atención.');
+      log('error', 'No fue posible preparar o guardar el cierre.', {
+        message: error && error.message,
+        stack: error && error.stack
+      });
+      renderClosureEvidences();
+      showClosureAlert('danger', error && error.message
+        ? error.message
+        : 'No fue posible guardar el cierre en este dispositivo.');
+      setBusy(elements.closeButton, false);
+      return;
+    }
+
+    var outcome = null;
+
+    try {
+      elements.evidenceStatus.textContent = 'Cierre guardado. Enviando…';
+      var outcomes = await flushQueue(true, item.clientCloseId, 'envío inmediato después de guardar');
+      outcome = outcomes && outcomes[item.clientCloseId];
+    } catch (error) {
+      log('error', 'Error inesperado al enviar el cierre; permanece en la cola.', {
+        message: error && error.message,
+        stack: error && error.stack
+      });
     } finally {
       setBusy(elements.closeButton, false);
     }
+
+    resetClosureForm();
+    detailModal.hide();
+
+    if (outcome && outcome.status === 'auth') return; // handleSessionLost ya avisó.
+
+    if (outcome && outcome.status === 'sent') {
+      showAlert('success', outcome.message || 'La atención quedó finalizada.');
+      return;
+    }
+
+    showAlert(
+      'warning',
+      'El cierre de ' + reportId + ' quedó guardado en este dispositivo y se enviará automáticamente cuando haya una conexión estable.' +
+      (outcome && outcome.message ? ' Motivo: ' + outcome.message : '')
+    );
   }
 
+  function resetClosureForm() {
+    elements.observations.value = '';
+    elements.closeConfirm.checked = false;
+    elements.closureForm.classList.remove('was-validated');
+    resetClosureEvidence();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Cola local de cierres (IndexedDB)                                   */
+  /* ------------------------------------------------------------------ */
+
+  function createClientCloseId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return 'MCLOSE-' + window.crypto.randomUUID();
+    }
+    return 'MCLOSE-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+  }
+
+  function summarizeClosure(item) {
+    var evidences = Array.isArray(item && item.evidences) ? item.evidences : [];
+    return {
+      clientCloseId: item && item.clientCloseId,
+      reportId: item && item.reportId,
+      attempts: Number(item && item.attempts || 0),
+      lastAttemptAt: item && item.lastAttemptAt,
+      lastError: item && item.lastError,
+      blocked: Boolean(item && item.blocked),
+      evidenceCount: evidences.length,
+      evidenceUploaded: evidences.filter(function (evidence) { return evidence.url; }).length,
+      evidenceBytes: evidences.map(function (evidence) { return Number(evidence.sizeBytes || 0); })
+    };
+  }
+
+  function serverError(message) {
+    var error = new Error(message);
+    error.code = 'SERVER_REJECTED';
+    return error;
+  }
+
+  // 'auth' = sesión vencida; 'transport' = sin red / sin respuesta (se detiene
+  // el ciclo); 'server' = el servicio respondió con un rechazo.
+  function classifyError(error) {
+    if (isSessionError(error)) return 'auth';
+    if (!navigator.onLine) return 'transport';
+    var code = error && error.code;
+    if (code === 'POST_TIMEOUT' || code === 'POST_SUBMIT_FAILED') return 'transport';
+    return 'server';
+  }
+
+  async function flushQueue(force, preferredId, trigger) {
+    trigger = trigger || 'no especificado';
+
+    if (flushInProgress) {
+      // Los disparadores automáticos no esperan; el envío inmediato sí, para
+      // poder informar el resultado de su propio ítem.
+      if (!force && !preferredId) return {};
+      try { await flushPromise; } catch (ignored) { /* runFlush ya registró el error. */ }
+      return flushQueue(force, preferredId, trigger);
+    }
+
+    if (!session.token) {
+      log('debug', 'No se procesa la cola: no hay sesión activa.', { trigger: trigger });
+      return {};
+    }
+
+    flushInProgress = true;
+    flushPromise = runFlush(force, preferredId, trigger);
+    try {
+      return await flushPromise;
+    } finally {
+      flushInProgress = false;
+      flushPromise = null;
+    }
+  }
+
+  async function runFlush(force, preferredId, trigger) {
+    var outcomes = {};
+    var sentIds = [];
+    var items;
+
+    try {
+      items = await getQueueItems();
+    } catch (error) {
+      log('error', 'No fue posible leer la cola de cierres.', error);
+      return outcomes;
+    }
+
+    if (!items.length) return outcomes;
+
+    log('info', 'Procesamiento de cola de cierres iniciado.', {
+      trigger: trigger,
+      force: Boolean(force),
+      online: navigator.onLine,
+      items: items.map(summarizeClosure)
+    });
+
+    try {
+      if (!navigator.onLine) {
+        items.forEach(function (item) {
+          outcomes[item.clientCloseId] = { status: 'queued', message: 'Sin conexión a internet.' };
+        });
+        return outcomes;
+      }
+
+      if (preferredId) {
+        items.sort(function (a, b) {
+          if (a.clientCloseId === preferredId) return -1;
+          if (b.clientCloseId === preferredId) return 1;
+          return String(a.queuedAt).localeCompare(String(b.queuedAt));
+        });
+      }
+
+      for (var index = 0; index < items.length; index += 1) {
+        var item = items[index];
+
+        // Un rechazo del servidor solo se reintenta a petición del usuario.
+        if (item.blocked && !force) continue;
+
+        try {
+          item.attempts = Number(item.attempts || 0) + 1;
+          item.lastAttemptAt = new Date().toISOString();
+          item.blocked = false;
+          delete item.lastError;
+          await putQueueItem(item);
+
+          var result = await processClosureItem(item);
+
+          await deleteQueueItem(item.clientCloseId);
+          sentIds.push(item.clientCloseId);
+          outcomes[item.clientCloseId] = {
+            status: 'sent',
+            message: result.message || 'La atención quedó finalizada.',
+            reporte: result.reporte
+          };
+          log('info', 'Cierre confirmado y eliminado de la cola local.', {
+            clientCloseId: item.clientCloseId,
+            reportId: item.reportId,
+            alreadyClosed: Boolean(result.alreadyClosed)
+          });
+
+          if (
+            item.clientCloseId !== preferredId &&
+            result.reporte &&
+            selectedReport &&
+            selectedReport.reportId === item.reportId &&
+            detailModalElement.classList.contains('show')
+          ) {
+            selectedReport = result.reporte;
+            renderDetail(selectedReport);
+          }
+        } catch (error) {
+          var kind = classifyError(error);
+          item.lastError = error && error.message ? error.message : String(error || 'Error de red');
+          if (kind === 'server') item.blocked = true;
+          await putQueueItem(item);
+
+          log('error', 'Falló el envío del cierre; permanece en la cola.', {
+            closure: summarizeClosure(item),
+            kind: kind,
+            errorCode: error && error.code,
+            online: navigator.onLine
+          });
+
+          outcomes[item.clientCloseId] = {
+            status: kind === 'auth' ? 'auth' : 'queued',
+            message: item.lastError
+          };
+
+          if (kind === 'auth') {
+            handleSessionLost();
+            break;
+          }
+          if (kind === 'transport') break;
+        }
+      }
+    } catch (error) {
+      log('error', 'Error general procesando la cola de cierres.', {
+        trigger: trigger,
+        message: error && error.message,
+        stack: error && error.stack
+      });
+    } finally {
+      try {
+        await refreshQueueCount();
+      } catch (error) {
+        log('error', 'No fue posible actualizar la cola al terminar.', error);
+      }
+
+      if (sentIds.length && session.token) {
+        try {
+          await loadReports();
+        } catch (refreshError) {
+          log('warn', 'El cierre fue confirmado, pero no se pudo refrescar la lista.', refreshError);
+        }
+
+        var background = sentIds.filter(function (id) { return id !== preferredId; });
+        if (background.length && session.token) {
+          showAlert(
+            'success',
+            background.length === 1
+              ? 'Se envió un cierre que estaba pendiente.'
+              : 'Se enviaron ' + background.length + ' cierres que estaban pendientes.'
+          );
+        }
+      }
+
+      log('info', 'Procesamiento de cola de cierres finalizado.', { trigger: trigger });
+    }
+
+    return outcomes;
+  }
+
+  // Sube las evidencias pendientes y luego finaliza el reporte. Ambos pasos son
+  // idempotentes en Apps Script (clientEvidenceId / estado Cerrado), por lo que
+  // un reintento tras perder la respuesta no duplica nada.
+  async function processClosureItem(item) {
+    for (var index = 0; index < item.evidences.length; index += 1) {
+      var evidence = item.evidences[index];
+      if (evidence.url) continue;
+
+      var upload = await call('subirEvidenciaGestionMantenimiento', {
+        token: session.token,
+        reportId: item.reportId,
+        clientEvidenceId: evidence.clientEvidenceId,
+        evidence: {
+          name: evidence.name,
+          mimeType: evidence.mimeType,
+          sizeBytes: evidence.sizeBytes,
+          dataUrl: evidence.dataUrl
+        }
+      }, 120000);
+
+      if (!upload || !upload.ok || !upload.url) {
+        throw serverError('El servicio no confirmó la carga de la evidencia.');
+      }
+
+      evidence.url = upload.url;
+      evidence.dataUrl = '';
+      await putQueueItem(item);
+      log('info', 'Evidencia de cierre cargada.', {
+        reportId: item.reportId,
+        bytes: upload.bytes || 0,
+        duplicate: Boolean(upload.duplicate)
+      });
+    }
+
+    // La hoja solo tiene una columna "Foto Cierre": la primera evidencia viaja como
+    // evidenceUrl y las demás se anexan a las observaciones.
+    var urls = item.evidences.map(function (evidence) { return evidence.url; }).filter(Boolean);
+    var extraUrls = urls.slice(1);
+    var observations = extraUrls.length
+      ? item.observaciones + ' ' + extraUrls.join(' ')
+      : item.observaciones;
+
+    if (observations.length > MAX_OBSERVATIONS_CHARS) {
+      throw serverError('Las observaciones y los enlaces de evidencia superan el máximo de ' + MAX_OBSERVATIONS_CHARS + ' caracteres.');
+    }
+
+    var result = await call('finalizarReporteMantenimiento', {
+      token: session.token,
+      reportId: item.reportId,
+      responsable: item.responsable,
+      observaciones: observations,
+      evidenceUrl: urls[0] || ''
+    }, 90000);
+
+    if (!result || !result.ok) {
+      throw serverError('El servicio no confirmó el cierre del reporte.');
+    }
+
+    return result;
+  }
+
+  function handleSessionLost() {
+    detailModal.hide();
+    clearSession();
+    showPanel('login');
+    showAlert(
+      'warning',
+      'La sesión venció. Ingresa nuevamente; los cierres pendientes se enviarán automáticamente.'
+    );
+  }
+
+  async function refreshQueueCount() {
+    var items = await getQueueItems();
+
+    pendingClosures = {};
+    items.forEach(function (item) {
+      pendingClosures[item.reportId] = item;
+    });
+
+    elements.queueCount.textContent = String(items.length);
+    elements.queueBanner.hidden = items.length === 0;
+    elements.queueList.innerHTML = items.map(renderQueueItem).join('');
+    renderNetworkStatus();
+    syncClosurePanel();
+
+    // Reprocesa las tarjetas solo si cambió el conjunto de reportes en cola.
+    var key = Object.keys(pendingClosures).sort().join('|');
+    if (key !== pendingClosuresKey) {
+      pendingClosuresKey = key;
+      if (reports.length) renderReports();
+    }
+  }
+
+  function renderQueueItem(item) {
+    var evidenceCount = Array.isArray(item.evidences) ? item.evidences.length : 0;
+    return '<li class="d-flex flex-wrap align-items-center gap-2 border-top pt-2 mt-2">' +
+      '<span class="fw-semibold">' + esc(item.reportId) + '</span>' +
+      '<span class="text-muted">' + evidenceCount + ' evidencia(s)</span>' +
+      (item.lastError ? '<span class="text-danger">' + esc(item.lastError) + '</span>' : '') +
+      '<button type="button" class="btn btn-sm btn-link text-danger p-0 ms-auto" data-discard-close="' +
+      esc(item.clientCloseId) + '">Descartar</button>' +
+      '</li>';
+  }
+
+  async function handleQueueListClick(event) {
+    var button = event.target.closest('[data-discard-close]');
+    if (!button) return;
+
+    if (!window.confirm('¿Descartar este cierre pendiente? Se perderán las observaciones y evidencias guardadas en este dispositivo.')) {
+      return;
+    }
+
+    try {
+      await deleteQueueItem(button.dataset.discardClose);
+      log('info', 'Cierre pendiente descartado por el usuario.', { clientCloseId: button.dataset.discardClose });
+      await refreshQueueCount();
+    } catch (error) {
+      showAlert('danger', 'No fue posible descartar el cierre: ' + (error && error.message || error));
+    }
+  }
+
+  function renderNetworkStatus() {
+    if (!elements.network) return;
+    elements.network.textContent = navigator.onLine ? 'Con conexión' : 'Sin conexión';
+    elements.network.className = 'ms-1 fw-semibold ' + (navigator.onLine ? 'text-success' : 'text-danger');
+  }
+
+  function openDb() {
+    return new Promise(function (resolve, reject) {
+      var request = indexedDB.open(DB_NAME, DB_VERSION);
+
+      request.onupgradeneeded = function () {
+        var db = request.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          var store = db.createObjectStore(STORE_NAME, { keyPath: 'clientCloseId' });
+          store.createIndex('queuedAt', 'queuedAt', { unique: false });
+        }
+      };
+      request.onsuccess = function () { resolve(request.result); };
+      request.onerror = function () {
+        reject(request.error || new Error('No fue posible abrir el almacenamiento local.'));
+      };
+      request.onblocked = function () {
+        log('warn', 'La apertura de IndexedDB está bloqueada por otra pestaña o versión.');
+      };
+    });
+  }
+
+  async function putQueueItem(item) {
+    var db = await openDb();
+    return transactionPromise(db, 'readwrite', function (store) {
+      store.put(item);
+    });
+  }
+
+  async function deleteQueueItem(clientCloseId) {
+    var db = await openDb();
+    return transactionPromise(db, 'readwrite', function (store) {
+      store.delete(clientCloseId);
+    });
+  }
+
+  async function getQueueItems() {
+    var db = await openDb();
+    return new Promise(function (resolve, reject) {
+      var transaction = db.transaction(STORE_NAME, 'readonly');
+      var request = transaction.objectStore(STORE_NAME).getAll();
+
+      request.onsuccess = function () {
+        resolve((request.result || []).sort(function (a, b) {
+          return String(a.queuedAt).localeCompare(String(b.queuedAt));
+        }));
+      };
+      request.onerror = function () {
+        reject(request.error || new Error('No fue posible consultar la cola local.'));
+      };
+      transaction.oncomplete = function () { db.close(); };
+    });
+  }
+
+  function transactionPromise(db, mode, operation) {
+    return new Promise(function (resolve, reject) {
+      var transaction = db.transaction(STORE_NAME, mode);
+
+      try {
+        operation(transaction.objectStore(STORE_NAME));
+      } catch (error) {
+        db.close();
+        reject(error);
+        return;
+      }
+
+      transaction.oncomplete = function () {
+        db.close();
+        resolve();
+      };
+      transaction.onerror = function () {
+        db.close();
+        reject(transaction.error || new Error('Error al guardar la cola local.'));
+      };
+      transaction.onabort = transaction.onerror;
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Evidencias de cierre                                                */
+  /* ------------------------------------------------------------------ */
+
   async function captureClosureEvidence() {
+    hideClosureAlert();
+
     if (!window.BVEvidenceCamera) {
-      showAlert('danger', 'No fue posible abrir la cámara. Recarga la página e intenta nuevamente.');
+      showClosureAlert('danger', 'No fue posible abrir la cámara. Recarga la página e intenta nuevamente.');
       return;
     }
 
     if (!selectedReport) {
-      showAlert('warning', 'Selecciona primero el reporte que estás atendiendo.');
+      showClosureAlert('warning', 'Selecciona primero el reporte que estás atendiendo.');
+      return;
+    }
+
+    if (closureEvidences.length >= MAX_CLOSURE_EVIDENCES) {
+      showClosureAlert('warning', 'Ya adjuntaste el máximo de evidencias permitidas.');
       return;
     }
 
@@ -566,27 +1125,32 @@
         lastModified: Date.now()
       });
 
-      setClosureEvidenceFile(file, 'Cámara');
-      log('info', 'Evidencia de cierre tomada con el módulo compartido.', {
-        reportId: selectedReport.reportId,
-        name: file.name,
-        sizeBytes: file.size,
-        accuracy: evidence.captureMetadata && evidence.captureMetadata.accuracy
-      });
+      if (setClosureEvidenceFile(file, 'Cámara')) {
+        log('info', 'Evidencia de cierre tomada con el módulo compartido.', {
+          reportId: selectedReport.reportId,
+          name: file.name,
+          sizeBytes: file.size,
+          accuracy: evidence.captureMetadata && evidence.captureMetadata.accuracy
+        });
+      }
     } catch (error) {
       if (error && error.name === 'AbortError') return;
-      showAlert('danger', 'No fue posible capturar la evidencia: ' + (error.message || error));
+      showClosureAlert('danger', 'No fue posible capturar la evidencia: ' + (error.message || error));
     } finally {
-      elements.evidenceCameraButton.disabled = false;
+      renderClosureEvidences();
     }
   }
 
   function handleClosureEvidenceSelection(event) {
     var input = event.target;
-    var file = input && input.files && input.files[0];
+    var files = Array.prototype.slice.call(input && input.files || []);
     input.value = '';
-    if (!file) return;
-    setClosureEvidenceFile(file, 'Galería');
+    if (!files.length) return;
+
+    hideClosureAlert();
+    files.forEach(function (file) {
+      setClosureEvidenceFile(file, 'Galería');
+    });
   }
 
   function setClosureEvidenceFile(file, source) {
@@ -594,59 +1158,99 @@
     var isVideo = /^video\//i.test(file.type || '');
 
     if (!isImage && !isVideo) {
-      showAlert('warning', 'Selecciona un archivo de imagen o video válido.');
-      return;
+      showClosureAlert('warning', 'Selecciona un archivo de imagen o video válido.');
+      return false;
+    }
+
+    if (closureEvidences.length >= MAX_CLOSURE_EVIDENCES) {
+      showClosureAlert('warning', 'Ya adjuntaste el máximo de evidencias permitidas.');
+      return false;
     }
 
     var maxSize = isVideo ? 15 * 1024 * 1024 : 20 * 1024 * 1024;
     var typeLabel = isVideo ? 'video' : 'imagen';
 
     if (file.size > maxSize) {
-      showAlert('warning', 'El ' + typeLabel + ' original no puede superar ' + (maxSize / (1024 * 1024)) + ' MB.');
-      return;
+      showClosureAlert('warning', 'El ' + typeLabel + ' original no puede superar ' + (maxSize / (1024 * 1024)) + ' MB.');
+      return false;
     }
 
-    resetClosureEvidence();
-    selectedClosureEvidence = {
+    var selected = {
       file: file,
       name: file.name || 'evidencia.jpg',
       type: file.type || 'image/jpeg',
       originalBytes: file.size || 0,
       source: source || 'Dispositivo',
-      clientEvidenceId: createClientEvidenceId()
+      clientEvidenceId: createClientEvidenceId(),
+      objectUrl: URL.createObjectURL(file)
     };
-
-    closureEvidenceObjectUrl = URL.createObjectURL(file);
-    elements.evidencePreview.src = closureEvidenceObjectUrl;
-    elements.evidencePreviewContainer.hidden = false;
-    elements.evidenceRemoveButton.hidden = false;
-    elements.evidenceInfo.textContent = selectedClosureEvidence.name +
-      ' · ' + formatBytes(selectedClosureEvidence.originalBytes);
-    elements.evidenceStatus.textContent = 'Evidencia lista. Se cargará al finalizar la atención.';
+    closureEvidences.push(selected);
+    renderClosureEvidences();
 
     log('info', 'Evidencia de cierre seleccionada.', {
-      name: selectedClosureEvidence.name,
-      type: selectedClosureEvidence.type,
-      originalBytes: selectedClosureEvidence.originalBytes,
-      source: selectedClosureEvidence.source,
-      clientEvidenceId: selectedClosureEvidence.clientEvidenceId
+      name: selected.name,
+      type: selected.type,
+      originalBytes: selected.originalBytes,
+      source: selected.source,
+      clientEvidenceId: selected.clientEvidenceId
     });
+    return true;
+  }
+
+  function handleEvidenceListClick(event) {
+    var button = event.target.closest('[data-remove-evidence]');
+    if (!button) return;
+
+    var removed = closureEvidences.splice(Number(button.dataset.removeEvidence), 1)[0];
+    if (removed && removed.objectUrl) URL.revokeObjectURL(removed.objectUrl);
+    hideClosureAlert();
+    renderClosureEvidences();
+  }
+
+  function renderClosureEvidences() {
+    if (!elements.evidenceList) return;
+
+    var full = closureEvidences.length >= MAX_CLOSURE_EVIDENCES;
+
+    elements.evidenceList.innerHTML = closureEvidences.map(function (item, index) {
+      var isVideo = /^video\//i.test(item.type);
+      var media = isVideo
+        ? '<video class="management-evidence-video" src="' + esc(item.objectUrl) + '" muted playsinline preload="metadata"></video>'
+        : '<img class="management-evidence-preview" src="' + esc(item.objectUrl) + '" alt="Previsualización de ' + esc(item.name) + '">';
+
+      return '<div class="management-evidence-item">' + media +
+        '<div class="small fw-semibold management-evidence-name mt-1" title="' + esc(item.name) + '">' + esc(item.name) + '</div>' +
+        '<div class="small text-muted">' + esc(item.source) + ' · ' + esc(formatBytes(item.originalBytes)) + '</div>' +
+        '<button type="button" class="btn btn-sm btn-outline-danger mt-1" data-remove-evidence="' + index + '">' +
+        '<i class="bi bi-trash me-1"></i>Quitar</button></div>';
+    }).join('');
+
+    elements.evidenceList.hidden = closureEvidences.length === 0;
+    elements.evidenceCameraButton.disabled = full;
+    elements.evidenceGalleryButton.disabled = full;
+    elements.evidenceStatus.textContent = closureEvidences.length
+      ? closureEvidences.length + ' evidencia(s) lista(s). Se comprimirán y se cargarán al finalizar la atención.'
+      : 'La imagen se comprimirá antes de almacenarse.';
   }
 
   function resetClosureEvidence() {
-    if (closureEvidenceObjectUrl) {
-      URL.revokeObjectURL(closureEvidenceObjectUrl);
-      closureEvidenceObjectUrl = '';
-    }
-    selectedClosureEvidence = null;
-    uploadedClosureEvidenceUrl = '';
-    if (!elements.evidencePreviewContainer) return;
-    elements.evidencePreview.removeAttribute('src');
-    elements.evidencePreviewContainer.hidden = true;
-    elements.evidenceRemoveButton.hidden = true;
-    elements.evidenceInfo.textContent = '';
-    elements.evidenceStatus.textContent = 'La imagen se comprimirá antes de almacenarse.';
-    elements.evidenceGalleryInput.value = '';
+    closureEvidences.forEach(function (item) {
+      if (item.objectUrl) URL.revokeObjectURL(item.objectUrl);
+    });
+    closureEvidences = [];
+    if (elements.evidenceGalleryInput) elements.evidenceGalleryInput.value = '';
+    renderClosureEvidences();
+  }
+
+  function showClosureAlert(type, message) {
+    elements.closureAlert.className = 'alert alert-' + type;
+    elements.closureAlert.textContent = message;
+    elements.closureAlert.hidden = false;
+    elements.closureAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function hideClosureAlert() {
+    if (elements.closureAlert) elements.closureAlert.hidden = true;
   }
 
   async function compressClosureEvidence(selected) {
