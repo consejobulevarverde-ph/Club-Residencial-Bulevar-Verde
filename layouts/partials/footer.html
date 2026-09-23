@@ -1,8 +1,25 @@
-<footer style="background-color: var(--p); color: var(--l); padding: 40px 0; margin-top: 60px;">
-  <div class="container text-center">
-    <p>&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</p>
-    {{ with .Site.Params.facebook }}<a href="{{ . }}" target="_blank" class="me-3"><i class="bi bi-facebook"></i></a>{{ end }}
-    {{ with .Site.Params.instagram }}<a href="{{ . }}" target="_blank" class="me-3"><i class="bi bi-instagram"></i></a>{{ end }}
-    {{ with .Site.Params.whatsappComunidad }}<a href="{{ . }}" target="_blank"><i class="bi bi-whatsapp"></i></a>{{ end }}
+<style>
+  .bv-footer {
+    background-color: var(--p, var(--color-primary, #2c5f2d));
+    color: var(--l, var(--color-light, #e8f5e9));
+    padding: 14px 0;
+    margin-top: 60px;
+  }
+  .bv-footer a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .bv-footer a:hover {
+    opacity: 0.8;
+  }
+</style>
+<footer class="bv-footer">
+  <div class="container d-flex flex-wrap justify-content-center align-items-center gap-2" style="font-size: 0.85rem;">
+    <span class="mb-0">&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</span>
+    <span class="d-inline-flex align-items-center gap-2">
+      {{ with .Site.Params.facebook }}<a href="{{ . }}" target="_blank"><i class="bi bi-facebook"></i></a>{{ end }}
+      {{ with .Site.Params.instagram }}<a href="{{ . }}" target="_blank"><i class="bi bi-instagram"></i></a>{{ end }}
+      {{ with .Site.Params.whatsappComunidad }}<a href="{{ . }}" target="_blank"><i class="bi bi-whatsapp"></i></a>{{ end }}
+    </span>
   </div>
 </footer>
