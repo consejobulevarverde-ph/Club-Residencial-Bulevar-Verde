@@ -62,9 +62,21 @@
     <p id="casoDetailDescripcion"></p>
     <p><strong>Razón de la notificación:</strong></p>
     <p id="casoDetailRazon"></p>
-    <div id="casoDetailEvidenciasSection" class="hidden">
+    <div id="casoDetailEvidenciasSection">
       <strong>Evidencias:</strong>
       <div id="casoDetailEvidencias" class="d-flex flex-wrap gap-2 mt-2"></div>
+      <form id="casoDetailEvidenciaForm" class="row g-2 mt-2">
+        <div class="col-12">
+          <label for="casoDetailEvidenciaInput" class="form-label small">Agregar evidencia</label>
+          <input type="file" id="casoDetailEvidenciaInput" class="form-control form-control-sm" accept="image/*,video/mp4,video/quicktime,video/webm,application/pdf" multiple autocomplete="off">
+          <div id="casoDetailEvidenciaEstado" class="small text-muted mt-1"></div>
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-outline-primary btn-sm" id="casoDetailEvidenciaSubmitBtn">
+            <i class="bi bi-upload me-1"></i>Cargar evidencia
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -1973,6 +1973,31 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         if (item) verDetalleCasoConvivencia(item.dataset.id);
       });
 
+      var EVIDENCIAS_CASO_LIMITE = 20;
+
+      function actualizarFormularioEvidenciaCaso(caso, countActual) {
+        var form = $('casoDetailEvidenciaForm');
+        var input = $('casoDetailEvidenciaInput');
+        var boton = $('casoDetailEvidenciaSubmitBtn');
+        var estadoEl = $('casoDetailEvidenciaEstado');
+        form.reset();
+        if (caso.estado === 'ANULADO') {
+          form.classList.add('hidden');
+          return;
+        }
+        form.classList.remove('hidden');
+        var restantes = EVIDENCIAS_CASO_LIMITE - countActual;
+        if (restantes <= 0) {
+          input.disabled = true;
+          boton.disabled = true;
+          estadoEl.textContent = 'Se alcanzó el máximo de ' + EVIDENCIAS_CASO_LIMITE + ' evidencias para este caso.';
+        } else {
+          input.disabled = false;
+          boton.disabled = false;
+          estadoEl.textContent = 'Cupo disponible: ' + restantes + ' de ' + EVIDENCIAS_CASO_LIMITE + '.';
+        }
+      }
+
       function buildCasoEvidenceThumb(url, label) {
         var match = /\/file\/d\/([^/]+)/.exec(url || '');
         var thumbUrl = match ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(match[1]) + '&sz=w300') : url;
@@ -2114,6 +2139,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         SEVERIDAD_MODIFICADA: 'Severidad modificada',
         DESCARGOS_REGISTRADOS: 'Descargos registrados',
         ACTA_COMITE_REGISTRADA: 'Acta de comité registrada',
+        EVIDENCIA_ADICIONAL_REGISTRADA: 'Evidencia adicional cargada',
         CASO_CERRADO_SIN_SANCION: 'Caso cerrado sin sanción',
         CASO_ARCHIVADO: 'Caso archivado',
         SANCION_PROPUESTA: 'Sanción propuesta',
@@ -2182,14 +2208,13 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         var evidencias = caso.evidencias || [];
         var evidenciasCaso = evidencias.filter(function (e) { return e.contexto === 'CASO'; });
         if (evidenciasCaso.length) {
-          $('casoDetailEvidenciasSection').classList.remove('hidden');
           $('casoDetailEvidencias').innerHTML = evidenciasCaso.map(function (e, idx) {
             return buildCasoEvidenceThumb(e.url, 'Evidencia ' + (idx + 1));
           }).join('');
         } else {
-          $('casoDetailEvidenciasSection').classList.add('hidden');
           $('casoDetailEvidencias').innerHTML = '';
         }
+        actualizarFormularioEvidenciaCaso(caso, evidenciasCaso.length);
 
         if (caso.descargosResidente) {
           $('casoDetailDescargosSection').classList.remove('hidden');
@@ -2305,6 +2330,46 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         };
         return subirSiguiente(0);
       }
+
+      $('casoDetailEvidenciaForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        hideMsg();
+        if (!casoConvivenciaActual) return;
+
+        var files = Array.prototype.slice.call($('casoDetailEvidenciaInput').files || []);
+        var estadoEl = $('casoDetailEvidenciaEstado');
+        var button = $('casoDetailEvidenciaSubmitBtn');
+        if (!files.length) {
+          msg('Selecciona al menos un archivo.');
+          return;
+        }
+
+        var existentes = (casoConvivenciaActual.evidencias || []).filter(function (e) { return e.contexto === 'CASO'; }).length;
+        if (existentes + files.length > EVIDENCIAS_CASO_LIMITE) {
+          msg('Solo puedes cargar ' + (EVIDENCIAS_CASO_LIMITE - existentes) + ' archivo(s) más para este caso.');
+          return;
+        }
+
+        busy(button, true, 'Cargando…');
+        withIdToken(function (idToken) {
+          estadoEl.textContent = 'Subiendo ' + files.length + ' archivo(s)…';
+          return subirEvidenciasConvivencia(files, idToken, 'caso', casoConvivenciaActual.caseCode, casoConvivenciaActual.apartamento)
+            .then(function (urls) {
+              estadoEl.textContent = '';
+              return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/evidencias', idToken, {
+                method: 'POST',
+                body: { evidencias: urls }
+              });
+            });
+        }).then(function (resp) {
+          casoConvivenciaActual = resp.data;
+          renderDetalleCasoConvivencia(resp.data);
+          msg('Evidencia cargada.', 'success');
+        }).catch(function (error) {
+          estadoEl.textContent = '';
+          msg(error.message);
+        }).finally(function () { busy(button, false, 'Cargar evidencia'); });
+      });
 
       $('casoActaComiteForm').addEventListener('submit', function (event) {
         event.preventDefault();
