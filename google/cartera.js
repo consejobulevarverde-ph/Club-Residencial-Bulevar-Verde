@@ -7,11 +7,15 @@
  *    el saldo mínimo de mora.
  *  - Felicitaciones: agradece a quienes están al día con su cuota.
  *
+ * Los destinatarios (nombre y correo) salen de los datos maestros vía API y son
+ * solo propietarios/copropietarios; la hoja "cartera" aporta únicamente los saldos.
+ *
  * FLUJO DE USO (igual para cartera y felicitaciones):
  * 1. prepararResumenNotificaciones*()      -> genera la hoja resumen con el
  *    estado PENDIENTE / SIN_EMAIL / YA_NOTIFICADO de cada apartamento.
  * 2. enviarNotificaciones*Pendientes()     -> envía los correos PENDIENTES
- *    respetando el máximo diario y la cuota de MailApp.
+ *    respetando el máximo diario. El envío se hace por el API de
+ *    notificaciones de Bulevar Verde (POST /api/v1/notificaciones/enviar).
  * 3. reinstalarTriggersOperativosCartera() -> programa el envío diario
  *    automático hasta que no queden pendientes.
  ***************************************/
@@ -38,15 +42,14 @@
 
 const CARTERA_SHEET_NAME = "cartera";
 
-// Archivo externo donde tienes los correos por apartamento.
-const CARTERA_CORREOS_SPREADSHEET_ID = "1MjNg_qR134dB-8vdK0NEJyeXlLS848dsOpu-bylkVBQ";
-const CARTERA_CORREOS_SHEET_GID = 0;
+// API de notificaciones. El token vive en la propiedad de script SANCIONES_API_TOKEN.
+const CARTERA_API_BASE_URL = "https://bulevar-verde-api-739757275794.us-east4.run.app";
 
 const CARTERA_SHEET_RESUMEN = "resumen_notif_cartera";
 const CARTERA_SHEET_BITACORA = "bitacora_notif_cartera";
 
 const CARTERA_SALDO_MINIMO = 400000;
-const CARTERA_MAX_ENVIOS_POR_DIA = 60;
+const CARTERA_MAX_ENVIOS_POR_DIA = 400;
 
 const CARTERA_EMAIL_REPLY_TO = "bulevarverdeadmon@gmail.com";
 const CARTERA_EMAIL_FROM_NAME = "Administración Bulevar Verde";
@@ -61,8 +64,8 @@ const FELICITACIONES_SHEET_RESUMEN = "resumen_notif_felicitaciones";
 
 const FELICITACIONES_SALDO_MAXIMO = 300000;
 
-// Comparte la misma cuota de MailApp con cartera.
-const FELICITACIONES_MAX_ENVIOS_POR_DIA = 40;
+// Comparte el mismo ritmo de envío diario (vía API) con cartera.
+const FELICITACIONES_MAX_ENVIOS_POR_DIA = 200;
 
 const FELICITACIONES_EMAIL_REPLY_TO = CARTERA_EMAIL_REPLY_TO;
 const FELICITACIONES_EMAIL_FROM_NAME = CARTERA_EMAIL_FROM_NAME;
@@ -79,7 +82,7 @@ const FELICITACIONES_MINUTO_ENVIO = 0;
 // Cartera y felicitaciones comparten exactamente la misma mecánica
 // (filtrar registros de la hoja "cartera", escribir una hoja resumen con
 // estado PENDIENTE/SIN_EMAIL/YA_NOTIFICADO y, luego, enviar los correos
-// pendientes respetando cuota y máximo diario). Solo cambian el filtro,
+// pendientes por el API respetando el máximo diario). Solo cambian el filtro,
 // el destino y el contenido del correo, que llegan por parámetro (opts).
 // ============================================================
 
@@ -169,7 +172,7 @@ function ejecutarPrepararResumenNotificaciones_(opts) {
     const data = sourceSheet.getRange(1, 1, lastRow, lastCol).getValues();
     const registros = carteraConstruirRegistrosDesdeSheet_(data);
 
-    const mapaCorreos = carteraLeerMapaCorreosAptos_();
+    const mapaPropietarios = carteraLeerMapaPropietariosAPI_();
     const mapaNotificados = opts.leerMapaNotificados(ss);
 
     const periodo = carteraPeriodoActual_();
@@ -189,7 +192,11 @@ function ejecutarPrepararResumenNotificaciones_(opts) {
       const fechaProgramada = new Date(hoy);
       fechaProgramada.setDate(hoy.getDate() + lote - 1);
 
-      const email = mapaCorreos[item.aptoNorm] || "";
+      const propietarioApi = mapaPropietarios[item.aptoNorm];
+      const email = propietarioApi ? propietarioApi.email : "";
+      // Con propietario en datos maestros se usa su nombre; sin él se conserva el de
+      // la hoja cartera solo como referencia de la fila (queda SIN_EMAIL).
+      const propietario = propietarioApi ? propietarioApi.nombre : item.propietario;
       const clave = opts.construirClave(periodo, item.aptoNorm);
 
       let estado = "PENDIENTE";
@@ -197,7 +204,7 @@ function ejecutarPrepararResumenNotificaciones_(opts) {
 
       if (!email) {
         estado = "SIN_EMAIL";
-        observaciones = "No se encontró correo para el apartamento.";
+        observaciones = "No hay propietario con correo en datos maestros para el apartamento.";
       }
 
       if (mapaNotificados[clave]) {
@@ -212,7 +219,7 @@ function ejecutarPrepararResumenNotificaciones_(opts) {
         item.blq,
         item.apto,
         item.aptoNorm,
-        item.propietario,
+        propietario,
         item.sdoAnterior,
         item.cargos,
         item.saldoActual,
@@ -310,19 +317,7 @@ function ejecutarEnvioNotificacionesPendientes_(opts) {
     let omitidos = 0;
     let errores = 0;
 
-    const quota = MailApp.getRemainingDailyQuota();
-
-    if (quota <= 0 && !opts.dryRun) {
-      Logger.log(
-        "Sin cuota disponible para " + opts.etiquetaLog +
-        ". Los registros permanecen PENDIENTES para el próximo intento."
-      );
-      return;
-    }
-
-    const maxEnvios = opts.dryRun
-      ? opts.maxEnviosPorDia
-      : Math.min(opts.maxEnviosPorDia, quota);
+    const maxEnvios = opts.maxEnviosPorDia;
 
     for (let i = 1; i < data.length; i++) {
       if (enviados >= maxEnvios) break;
@@ -368,13 +363,18 @@ function ejecutarEnvioNotificacionesPendientes_(opts) {
 
       try {
         if (!opts.dryRun) {
-          MailApp.sendEmail({
+          const resultado = carteraEnviarCorreoViaAPI_({
             to: emailDestino,
             replyTo: opts.replyTo,
             subject: subject,
-            htmlBody: htmlBody,
-            name: opts.fromName
+            htmlBody: htmlBody
           });
+
+          if (!resultado.ok) {
+            const errorApi = new Error(resultado.mensaje);
+            errorApi.httpStatus = resultado.status;
+            throw errorApi;
+          }
         }
 
         const estadoFinal = opts.dryRun ? "SIMULADO" : "ENVIADO";
@@ -384,7 +384,7 @@ function ejecutarEnvioNotificacionesPendientes_(opts) {
         row[idx.asunto] = subject;
         row[idx.observaciones] = opts.dryRun
           ? "Simulado. Correo real era: " + ctx.emailReal
-          : "Correo enviado correctamente.";
+          : "Correo enviado/encolado vía API.";
 
         if (opts.onEnviado) {
           opts.onEnviado(ss, ctx, {
@@ -402,15 +402,13 @@ function ejecutarEnvioNotificacionesPendientes_(opts) {
       } catch (error) {
         const mensaje = String(error && error.message ? error.message : error);
 
-        if (
-          /too many times for one day:\s*email/i.test(mensaje) ||
-          /daily quota/i.test(mensaje)
-        ) {
+        if (error && (error.httpStatus === 401 || error.httpStatus === 403)) {
+          // Token inválido o no configurado: es un problema de configuración,
+          // no de este registro. Se deja PENDIENTE y se detiene el envío.
           row[idx.estado] = "PENDIENTE";
           row[idx.fechaEnvio] = "";
           row[idx.asunto] = subject;
           row[idx.observaciones] = mensaje;
-          // No intentar más correos hoy.
           break;
         }
 
@@ -953,43 +951,70 @@ function carteraConstruirRegistrosDesdeSheet_(data) {
   });
 }
 
-function carteraLeerMapaCorreosAptos_() {
-  const ss = SpreadsheetApp.openById(CARTERA_CORREOS_SPREADSHEET_ID);
-  const sheet = carteraGetSheetByGid_(ss, CARTERA_CORREOS_SHEET_GID) || ss.getSheets()[0];
+/**
+ * Lee del API (datos maestros) los propietarios y copropietarios activos con
+ * correo: GET /api/v1/notificaciones/propietarios-cartera. Solo propietarios;
+ * no incluye residentes ni arrendatarios.
+ *
+ * @return {Object} { [aptoNorm]: { nombre, email } } con nombres unidos por " / "
+ *         y correos unidos por ", ". Lanza error si el API no responde: no se
+ *         debe preparar un resumen con destinatarios incompletos.
+ */
+function carteraLeerMapaPropietariosAPI_() {
+  const apiToken = PropertiesService.getScriptProperties().getProperty("SANCIONES_API_TOKEN");
+  const apiEndpoint = CARTERA_API_BASE_URL + "/api/v1/notificaciones/propietarios-cartera";
 
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
+  const MAX_REINTENTOS = 2;
+  const DELAY_MS = 300;
+  let ultimoError = "";
 
-  const mapa = {};
+  for (let intento = 0; intento <= MAX_REINTENTOS; intento++) {
+    if (intento > 0) {
+      Utilities.sleep(DELAY_MS * Math.pow(2, intento - 1));
+    }
 
-  if (lastRow < 2) {
-    return mapa;
+    try {
+      const response = UrlFetchApp.fetch(apiEndpoint, {
+        method: "GET",
+        headers: {
+          "Authorization": "Bearer " + (apiToken || ""),
+          "Accept": "application/json"
+        },
+        muteHttpExceptions: true,
+        timeout: 30
+      });
+
+      const status = response.getResponseCode();
+
+      if (status === 200) {
+        const body = JSON.parse(response.getContentText());
+        const mapa = {};
+
+        (body.unidades || []).forEach(function (unidad) {
+          const aptoNorm = carteraNormalizeApto_(unidad.apartamento);
+          const propietarios = unidad.propietarios || [];
+
+          if (!aptoNorm || propietarios.length === 0) return;
+
+          mapa[aptoNorm] = {
+            nombre: propietarios.map(function (p) { return carteraSafeTrim_(p.nombre); }).filter(Boolean).join(" / "),
+            email: propietarios.map(function (p) { return carteraSafeTrim_(p.correo); }).filter(Boolean).join(", ")
+          };
+        });
+
+        Logger.log("Propietarios desde API: " + Object.keys(mapa).length + " apartamentos.");
+        return mapa;
+      }
+
+      ultimoError = "HTTP " + status + ": " + response.getContentText();
+
+      if (status < 500) break;
+    } catch (error) {
+      ultimoError = "Error de red: " + error;
+    }
   }
 
-  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const headers = data[0].map(function (h) {
-    return carteraNormalizeHeader_(h);
-  });
-
-  const col = carteraCrearColMap_(headers);
-
-  const idxApto = carteraBuscarColumna_(col, ["apto", "apartamento", "unidad"]);
-  const idxEmail = carteraBuscarColumna_(col, ["email", "correo", "correo electronico", "correo electrónico"]);
-
-  if (idxApto === -1 || idxEmail === -1) {
-    throw new Error("No se encontraron columnas de apartamento y correo en el archivo de correos.");
-  }
-
-  data.slice(1).forEach(function (row) {
-    const aptoNorm = carteraNormalizeApto_(row[idxApto]);
-    const email = carteraSafeTrim_(row[idxEmail]);
-
-    if (!aptoNorm || !email) return;
-
-    mapa[aptoNorm] = email;
-  });
-
-  return mapa;
+  throw new Error("No se pudieron leer los propietarios desde el API. " + ultimoError);
 }
 
 function carteraGetTargetSpreadsheet_() {
@@ -1011,18 +1036,6 @@ function carteraGetSheetByNameFlexible_(ss, name) {
   return ss.getSheets().find(function (sheet) {
     return carteraNormalizeHeader_(sheet.getName()) === target;
   }) || null;
-}
-
-function carteraGetSheetByGid_(ss, gid) {
-  const sheets = ss.getSheets();
-
-  for (let i = 0; i < sheets.length; i++) {
-    if (sheets[i].getSheetId() === gid) {
-      return sheets[i];
-    }
-  }
-
-  return null;
 }
 
 function carteraContarPendientes_(sheet) {
@@ -1053,6 +1066,75 @@ function carteraContarPendientes_(sheet) {
 // ============================================================
 // 07. Helpers generales
 // ============================================================
+
+/**
+ * Envía un correo a través del API de Bulevar Verde
+ * (POST /api/v1/notificaciones/enviar, autenticado con SANCIONES_API_TOKEN).
+ * Reintenta con backoff ante errores de red o HTTP >= 500.
+ *
+ * @param {Object} options - { to (uno o varios separados por coma), subject, htmlBody, replyTo }
+ * @return {{ok: boolean, status: number, mensaje: string}}
+ */
+function carteraEnviarCorreoViaAPI_(options) {
+  const apiToken = PropertiesService.getScriptProperties().getProperty("SANCIONES_API_TOKEN");
+  const apiEndpoint = CARTERA_API_BASE_URL + "/api/v1/notificaciones/enviar";
+
+  const destinatarios = carteraSafeTrim_(options.to)
+    .split(",")
+    .map(function (email) { return carteraSafeTrim_(email); })
+    .filter(Boolean);
+
+  const payload = {
+    to: destinatarios,
+    subject: options.subject,
+    html: options.htmlBody,
+    replyTo: options.replyTo || CARTERA_EMAIL_REPLY_TO
+  };
+
+  const MAX_REINTENTOS = 2;
+  const DELAY_MS = 300;
+  let ultimo = { ok: false, status: 0, mensaje: "Sin respuesta del API." };
+
+  for (let intento = 0; intento <= MAX_REINTENTOS; intento++) {
+    if (intento > 0) {
+      Utilities.sleep(DELAY_MS * Math.pow(2, intento - 1));
+    }
+
+    try {
+      const response = UrlFetchApp.fetch(apiEndpoint, {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + (apiToken || ""),
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true,
+        timeout: 15
+      });
+
+      const status = response.getResponseCode();
+
+      if (status === 202) {
+        return { ok: true, status: status, mensaje: "" };
+      }
+
+      ultimo = {
+        ok: false,
+        status: status,
+        mensaje: "API respondió HTTP " + status + ": " + response.getContentText()
+      };
+
+      if (status < 500) {
+        return ultimo;
+      }
+    } catch (error) {
+      ultimo = { ok: false, status: 0, mensaje: "Error de red consultando el API: " + error };
+    }
+  }
+
+  return ultimo;
+}
 
 function carteraCrearColMap_(headers) {
   const col = {};
