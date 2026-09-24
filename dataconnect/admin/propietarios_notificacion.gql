@@ -1,0 +1,32 @@
+# Propietarios y copropietarios activos de todas las unidades, con su nombre y
+# correo, para las notificaciones de cartera y felicitaciones. La autenticación
+# la hace bulevar-verde-api (token de servicio), por eso queda en NO_ACCESS y se
+# invoca con executeAdminQuery. Se pagina desde la API.
+query ListarPropietariosActivosAdmin(
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: NO_ACCESS) {
+  vinculos_unidad_persona(
+    where: {
+      activo: { eq: true }
+      tipoRelacion: { in: ["PROPIETARIO", "COPROPIETARIO"] }
+    }
+    orderBy: [{ fechaInicio: ASC }, { id: ASC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    tipoRelacion
+    unidad {
+      torre
+      apartamento
+      activo
+    }
+    persona {
+      nombreCompleto
+      correo
+      activo
+    }
+  }
+}
