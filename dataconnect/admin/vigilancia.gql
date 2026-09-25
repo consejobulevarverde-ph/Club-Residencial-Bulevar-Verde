@@ -157,3 +157,57 @@ query ObtenerColaboradorPorFirebaseUid(
     nombreCompleto
   }
 }
+
+# Reporte de movimientos de vehículos por rango: asignados (vigenteDesde) y
+# desasignados (vigenteHasta). Compartido por vigilancia y administración.
+query ReporteMovimientosVehiculos($desde: Timestamp!, $hasta: Timestamp!)
+@auth(level: USER, insecureReason: "La API restringe este endpoint a vigilancia/administrador antes de invocar la consulta.") {
+  asignados: vinculos_vehiculo_unidad(
+    where: { vigenteDesde: { ge: $desde, lt: $hasta } }
+    orderBy: [{ vigenteDesde: DESC }]
+    limit: 1000
+  ) {
+    id
+    tipoVinculo
+    estadoVinculo
+    esActual
+    vigenteDesde
+    vigenteHasta
+    origenRegistro
+    vehiculo {
+      placa
+      tipoVehiculo
+      estadoVehiculo
+      activo
+      fuentes
+      fechaCreacion
+    }
+    unidad {
+      codigoOficial
+    }
+  }
+  desasignados: vinculos_vehiculo_unidad(
+    where: { vigenteHasta: { ge: $desde, lt: $hasta } }
+    orderBy: [{ vigenteHasta: DESC }]
+    limit: 1000
+  ) {
+    id
+    tipoVinculo
+    estadoVinculo
+    esActual
+    vigenteDesde
+    vigenteHasta
+    origenRegistro
+    vehiculo {
+      placa
+      tipoVehiculo
+      estadoVehiculo
+      activo
+      fuentes
+      fechaCreacion
+    }
+    unidad {
+      codigoOficial
+    }
+  }
+}
