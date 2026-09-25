@@ -362,6 +362,12 @@ Contacto [opcional badge]
 - Email: "pepito.perez@ejemplo.com"
 - Phone: "+57 300 123 4567"
 
+### Reporte de Vehículos (shared partial)
+
+`partials/vehiculos-reporte.html` + `static/js/vehiculos-reporte.js`, included in both `vigilancia-datos` (`#vehicleReportView`, via its inline `mode('vehicleReport')`) and `administracion-datos` (`#reporteVehiculosView`, via the `reporte-vehiculos.js` stub on `AdminDatos.registrarModulo`). Lazy-loads through `window.BVVehiculosReporte.mostrar()`.
+
+Calls `GET /api/v1/vigilancia/reportes/vehiculos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD` (max 93 days, Colombia time) → Data Connect `ReporteMovimientosVehiculos`. "Asignado" = link's `vigenteDesde` in range; "Desasignado" = `vigenteHasta` in range. Client-side filters + CSV export (`;` separator, UTF-8 BOM for Excel).
+
 ## UI Design & Sample Data Practices
 
 ### Using Generic Sample Data

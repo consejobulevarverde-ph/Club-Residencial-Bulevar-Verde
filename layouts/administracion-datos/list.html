@@ -53,7 +53,7 @@
           <h2 class="section-title h3 mb-0">Panel administrativo</h2>
           <div id="userText" class="small-note"></div>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
           <button id="showDashboard" type="button" class="btn btn-outline-success mode-button active">
             <i class="bi bi-speedometer2 me-1"></i>Panel General
           </button>
@@ -68,6 +68,9 @@
           </button>
           <button id="showPersonal" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-person-badge me-1"></i>Personal
+          </button>
+          <button id="showReporteVehiculos" type="button" class="btn btn-outline-success mode-button">
+            <i class="bi bi-clipboard-data me-1"></i>Reporte Vehículos
           </button>
           <button id="btnImportarCartera" class="btn btn-success">
             <i class="bi bi-file-earmark-excel me-1"></i>Importar Cartera
@@ -94,6 +97,10 @@
 
       <section id="casosConvivenciaView" class="hidden">
         {{ partial "administracion-datos/casos/casos-convivencia" . }}
+      </section>
+
+      <section id="reporteVehiculosView" class="hidden">
+        {{ partial "vehiculos-reporte.html" . }}
       </section>
     </section>
 
@@ -122,6 +129,7 @@
   <script src="{{ "js/administracion-datos/reservas-formulario.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/personal.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/casos-convivencia.js" | relURL }}?v=1"></script>
+  <script src="{{ "js/administracion-datos/reporte-vehiculos.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/cartera-import.js" | relURL }}?v=1"></script>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

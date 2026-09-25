@@ -1,0 +1,129 @@
+<style>
+  .vehiculos-reporte-panel .vr-title {
+    color: var(--p, #2c5f2d);
+    font-weight: 700;
+  }
+
+  .vehiculos-reporte-panel .vr-total {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: 1px solid var(--b, #d8e6d9);
+    background: #fff;
+  }
+
+  .vehiculos-reporte-panel .vr-total strong {
+    font-size: 1rem;
+  }
+
+  .vehiculos-reporte-panel .vr-table {
+    font-size: 0.85rem;
+    background: #fff;
+    margin-bottom: 0;
+  }
+
+  .vehiculos-reporte-panel .vr-table th {
+    background: var(--p, #2c5f2d);
+    color: #fff;
+    font-weight: 600;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+  }
+
+  .vehiculos-reporte-panel .vr-table td {
+    vertical-align: middle;
+  }
+
+  .vehiculos-reporte-panel .vr-placa {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .vehiculos-reporte-panel .vr-scroll {
+    overflow-x: auto;
+    max-height: 70vh;
+    border: 1px solid var(--b, #d8e6d9);
+    border-radius: 0.5rem;
+  }
+</style>
+
+<div class="vehiculos-reporte-panel surface p-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h2 class="h5 mb-0 vr-title"><i class="bi bi-clipboard-data me-2"></i>Reporte de vehículos</h2>
+    <button id="vrDescargar" type="button" class="btn btn-outline-success btn-sm" disabled>
+      <i class="bi bi-download me-1"></i>Descargar CSV
+    </button>
+  </div>
+
+  <form id="vrForm" class="row g-2 align-items-end mb-3">
+    <div class="col-sm-6 col-md-3">
+      <label for="vrDesde" class="form-label small mb-1">Desde</label>
+      <input id="vrDesde" type="date" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-sm-6 col-md-3">
+      <label for="vrHasta" class="form-label small mb-1">Hasta</label>
+      <input id="vrHasta" type="date" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-md-6 d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-vr-rango="mes">Este mes</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-vr-rango="mesAnterior">Mes anterior</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-vr-rango="30">30 días</button>
+      <button id="vrConsultar" type="submit" class="btn btn-primary btn-sm flex-grow-1">
+        <i class="bi bi-arrow-clockwise me-1"></i>Consultar
+      </button>
+    </div>
+  </form>
+
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <span class="vr-total text-success"><i class="bi bi-box-arrow-in-right"></i>Asignados <strong id="vrTotalAsignados">0</strong></span>
+    <span class="vr-total text-secondary"><i class="bi bi-box-arrow-left"></i>Desasignados <strong id="vrTotalDesasignados">0</strong></span>
+    <div class="ms-auto d-flex flex-wrap gap-2">
+      <select id="vrFiltroMovimiento" class="form-select form-select-sm" style="width:auto" aria-label="Filtrar por movimiento">
+        <option value="">Todos</option>
+        <option value="ASIGNADO">Asignados</option>
+        <option value="DESASIGNADO">Desasignados</option>
+      </select>
+      <input id="vrFiltroTexto" type="search" class="form-control form-control-sm text-uppercase" style="width:auto" placeholder="Placa o unidad (ABC123, 301)" aria-label="Buscar por placa o unidad">
+    </div>
+  </div>
+
+  <div id="vrTruncado" class="alert alert-warning small py-2 hidden">
+    El rango tiene demasiados registros y el reporte está incompleto. Acota las fechas para verlo completo.
+  </div>
+  <div id="vrLoading" class="text-muted small mb-3 hidden"><span class="spinner-border spinner-border-sm me-2"></span>Consultando…</div>
+  <div id="vrError" class="alert alert-danger small hidden"></div>
+  <div id="vrEmpty" class="text-muted small hidden">No hay movimientos de vehículos en este rango.</div>
+
+  <div id="vrResultado" class="vr-scroll hidden">
+    <table class="table table-sm table-hover vr-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Movimiento</th>
+          <th>Unidad</th>
+          <th>Placa</th>
+          <th>Tipo</th>
+          <th>Vínculo</th>
+          <th>Estado vínculo</th>
+          <th>Origen</th>
+          <th>Vehículo activo</th>
+        </tr>
+      </thead>
+      <tbody id="vrFilas"></tbody>
+    </table>
+  </div>
+  <div id="vrConteoVisible" class="small text-muted mt-2"></div>
+</div>
+
+<script>
+  window.VEHICULOS_REPORTE_CONFIG = {
+    apiBase: {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }}
+  };
+</script>
+<script src="{{ "js/vehiculos-reporte.js" | relURL }}?v=1"></script>
