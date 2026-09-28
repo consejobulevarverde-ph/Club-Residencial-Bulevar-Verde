@@ -104,6 +104,7 @@ query ObtenerCasoConvivenciaDetalleAdmin(
     severidad
     sancionEquivalente
     notificadorAdmin
+    creadoPorUid
     requiereProcesoFormal
     estado
     descargosResidente
@@ -152,6 +153,39 @@ query ObtenerCasoConvivenciaDetalleAdmin(
       actorUid
       actorTipo
       fechaCreacion
+    }
+  }
+}
+
+# Casos que quien los creó todavía puede corregir: siguen en PENDIENTE_DESCARGOS y se
+# crearon desde $desde (la API pasa "ahora - ventana de corrección"). Devuelve los
+# campos narrativos completos para precargar el formulario de corrección de vigilancia,
+# que no tiene acceso al detalle administrativo del caso.
+query ListarCasosPropiosCorregiblesAdmin(
+  $creadoPorUid: String!
+  $desde: Timestamp!
+)
+@auth(level: NO_ACCESS) {
+  casos_convivencia(
+    where: {
+      creadoPorUid: { eq: $creadoPorUid }
+      estado: { eq: "PENDIENTE_DESCARGOS" }
+      fechaCreacion: { ge: $desde }
+    }
+    orderBy: [{ fechaCreacion: DESC }]
+  ) {
+    id
+    caseCode
+    apartamento
+    motivo
+    descripcion
+    razonNotificacion
+    notificadorAdmin
+    severidad
+    fechaCreacion
+    evidencias: evidencias_convivencia_on_caso(where: { contexto: { eq: "CASO" } }) {
+      id
+      contexto
     }
   }
 }

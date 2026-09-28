@@ -1,0 +1,92 @@
+<style>
+  .convivencia-panel .cv-correccion > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .convivencia-panel .cv-correccion > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .convivencia-panel .cv-correccion > summary::after {
+    content: "\25BC";
+    float: right;
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+  }
+
+  .convivencia-panel .cv-correccion[open] > summary::after {
+    transform: rotate(180deg);
+  }
+
+  .convivencia-panel .cv-correccion-item.resaltado {
+    border-color: var(--p, #2c5f2d);
+    box-shadow: 0 0 0 2px var(--l, #e8f5e9);
+  }
+</style>
+
+<details id="cvCorreccionPanel" class="card mt-4 cv-correccion">
+  <summary class="card-header bg-light">
+    <span class="fw-semibold"><i class="bi bi-pencil-square me-2"></i>Corregir un caso reciente</span>
+    <small class="text-muted d-block">¿Olvidaste una evidencia o un dato? Aquí aparecen los casos que creaste y que todavía puedes corregir.</small>
+  </summary>
+  <div class="card-body">
+    <div id="cvCorreccionAlert" class="alert hidden" role="alert" aria-live="polite"></div>
+
+    <div id="cvCorreccionListaView">
+      <div class="d-flex justify-content-end mb-2">
+        <button type="button" id="cvCorreccionRecargarBtn" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-arrow-repeat me-1"></i>Actualizar
+        </button>
+      </div>
+      <div id="cvCorreccionLista"><p class="text-muted mb-0">Cargando…</p></div>
+    </div>
+
+    <div id="cvCorreccionEditorView" class="hidden">
+      <button type="button" id="cvCorreccionVolverBtn" class="btn btn-sm btn-outline-secondary mb-3">
+        <i class="bi bi-arrow-left me-1"></i>Volver a mis casos
+      </button>
+      <h3 class="h6 mb-1">Caso <code id="cvCorreccionCaseCode"></code> · Apto <span id="cvCorreccionApto"></span></h3>
+      <p class="small text-muted mb-3">
+        Creado por <strong id="cvCorreccionNotificador"></strong> ·
+        Puedes corregirlo hasta <span id="cvCorreccionHasta"></span>
+      </p>
+
+      <form id="cvCorreccionDatosForm" class="row g-2 mb-4">
+        <div class="col-12">
+          <label for="cvCorreccionMotivo" class="form-label small">Motivo</label>
+          <input id="cvCorreccionMotivo" type="text" class="form-control form-control-sm" maxlength="200" required autocomplete="off">
+        </div>
+        <div class="col-12">
+          <label for="cvCorreccionDescripcion" class="form-label small">Descripción de los hechos</label>
+          <textarea id="cvCorreccionDescripcion" class="form-control form-control-sm" rows="4" maxlength="1000" required autocomplete="off"></textarea>
+        </div>
+        <div class="col-12">
+          <label for="cvCorreccionRazon" class="form-label small">Justificación de la notificación</label>
+          <textarea id="cvCorreccionRazon" class="form-control form-control-sm" rows="3" maxlength="1000" required autocomplete="off"></textarea>
+        </div>
+        <div class="col-12">
+          <button type="submit" id="cvCorreccionGuardarBtn" class="btn btn-primary btn-sm">
+            <i class="bi bi-check2 me-1"></i>Guardar corrección
+          </button>
+        </div>
+      </form>
+
+      <h4 class="h6">Evidencias <span class="text-muted small">(<span id="cvCorreccionCantidadEvidencias">0</span> adjunta(s) al caso)</span></h4>
+      <div class="d-flex gap-2 mb-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="cvCorreccionCamaraBtn">
+          <i class="bi bi-camera me-1"></i>Cámara
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="cvCorreccionGaleriaBtn">
+          <i class="bi bi-image me-1"></i>Galería
+        </button>
+        <input type="file" id="cvCorreccionGaleriaInput" accept="image/*,video/mp4,video/quicktime,video/webm,application/pdf" hidden>
+      </div>
+      <div id="cvCorreccionEvidenciasPendientes" class="mb-2"></div>
+      <div id="cvCorreccionEvidenciaEstado" class="small text-muted mb-2"></div>
+      <button type="button" id="cvCorreccionAdjuntarBtn" class="btn btn-outline-primary btn-sm hidden">
+        <i class="bi bi-upload me-1"></i>Adjuntar al caso
+      </button>
+    </div>
+  </div>
+</details>

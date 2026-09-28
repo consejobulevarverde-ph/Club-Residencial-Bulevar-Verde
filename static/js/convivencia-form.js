@@ -651,8 +651,10 @@
 
           showStatus(
             'success',
-            'Caso enviado correctamente. ID: ' + createResult.caseCode
+            'Caso enviado correctamente. ID: ' + createResult.caseCode +
+            '. Si olvidaste una evidencia o un dato, puedes corregirlo en "Corregir un caso reciente".'
           );
+          document.dispatchEvent(new CustomEvent('bv:caso-convivencia-creado', { detail: createResult }));
 
           setTimeout(function () {
             ocultarPasos();
@@ -721,7 +723,7 @@
     }
   }
 
-  async function uploadEvidenceToGoogle(evidence, apto) {
+  async function uploadEvidenceToGoogle(evidence, apto, caseCode) {
     try {
       var token = await getAuthToken();
       var response = await fetch(API_BASE + '/api/v1/convivencia/evidencias', {
@@ -734,7 +736,8 @@
           mimeType: evidence.type || 'image/jpeg',
           dataUrl: evidence.dataUrl,
           contexto: 'caso',
-          apartamento: apto || ''
+          apartamento: apto || '',
+          caseId: caseCode || undefined
         })
       });
 
@@ -798,47 +801,52 @@
     }
   }
 
-  async function handleEvidenceSelection(event) {
-    var file = event.target.files && event.target.files[0];
-    event.target.value = '';
-    if (!file) return;
+  var MENSAJE_EVIDENCIA_AGREGADA = {
+    imagen: 'Imagen comprimida y agregada exitosamente',
+    video: 'Video agregado exitosamente',
+    documento: 'Documento agregado exitosamente'
+  };
 
+  // Valida y prepara un archivo de galería (comprime imágenes). Lanza Error con un
+  // mensaje listo para mostrar si el archivo no es válido o no se pudo procesar.
+  async function prepararArchivoEvidencia(file) {
     var isImage = /^image\//i.test(file.type);
     var isVideo = /^video\//i.test(file.type) &&
                   /(mp4|quicktime|webm)/.test(file.type);
     var isPdf = file.type === 'application/pdf';
 
     if (!isImage && !isVideo && !isPdf) {
-      showAlert('Solo se permiten archivos de imagen, video (MP4, MOV, WebM) o PDF');
-      return;
+      throw new Error('Solo se permiten archivos de imagen, video (MP4, MOV, WebM) o PDF');
     }
 
     if (isVideo && file.size > 50 * 1024 * 1024) {
-      showAlert('El video es demasiado grande (máximo 50 MB). Por favor selecciona un video más pequeño o más corto.');
-      return;
+      throw new Error('El video es demasiado grande (máximo 50 MB). Por favor selecciona un video más pequeño o más corto.');
     }
 
     if (isPdf && file.size > 50 * 1024 * 1024) {
-      showAlert('El documento es demasiado grande (máximo 50 MB).');
-      return;
+      throw new Error('El documento es demasiado grande (máximo 50 MB).');
     }
 
     try {
-      var data = null;
-      if (isImage) {
-        data = await compressImage(file);
-        showAlert('Imagen comprimida y agregada exitosamente', 'success');
-      } else if (isVideo) {
-        data = await readFileAsDataUrl(file);
-        showAlert('Video agregado exitosamente', 'success');
-      } else {
-        data = await readFileAsDataUrl(file);
-        showAlert('Documento agregado exitosamente', 'success');
-      }
-      evidencias.push(data);
-      actualizarListaEvidencias();
+      if (isImage) return { tipo: 'imagen', data: await compressImage(file) };
+      return { tipo: isVideo ? 'video' : 'documento', data: await readFileAsDataUrl(file) };
     } catch (error) {
-      showAlert('Error al procesar archivo: ' + error.message);
+      throw new Error('Error al procesar archivo: ' + error.message);
+    }
+  }
+
+  async function handleEvidenceSelection(event) {
+    var file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      var resultado = await prepararArchivoEvidencia(file);
+      evidencias.push(resultado.data);
+      actualizarListaEvidencias();
+      showAlert(MENSAJE_EVIDENCIA_AGREGADA[resultado.tipo], 'success');
+    } catch (error) {
+      showAlert(error.message);
     }
   }
 
@@ -1273,6 +1281,13 @@
       });
     });
   }
+
+  // Reutilizado por convivencia-correccion.js (corrección de casos recién creados).
+  window.BVConvivenciaForm = {
+    obtenerToken: getAuthToken,
+    prepararArchivoEvidencia: prepararArchivoEvidencia,
+    subirEvidencia: uploadEvidenceToGoogle
+  };
 
   async function init() {
     log('info', 'Inicializando módulo.', {
