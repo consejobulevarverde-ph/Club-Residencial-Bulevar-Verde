@@ -1,3 +1,5 @@
+<div id="casosConvivenciaAlert" class="alert hidden" aria-live="polite"></div>
+
 <div id="casosConvivenciaListView">
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h3 class="section-title h5 mb-0">Casos de convivencia</h3>
@@ -16,6 +18,7 @@
       <optgroup label="Cerrado">
         <option value="CERRADO_SIN_SANCION">Cerrado sin sanción</option>
         <option value="SANCION_RATIFICADA">Sanción ratificada</option>
+        <option value="SANCION_APROBADA_ALLANAMIENTO">Sanción aceptada con descuento</option>
         <option value="SANCION_REVOCADA">Sanción revocada</option>
         <option value="ARCHIVADO">Archivado</option>
         <option value="ANULADO">Anulado</option>
@@ -126,7 +129,26 @@
     </div>
   </div>
 
-  <!-- Acciones: solo una de estas secciones está visible según el estado del caso -->
+  <!-- Acciones: visibles según el estado del caso y las acciones permitidas al llamador (CONVIVENCIA_CASOS_CONFIG.acciones) -->
+
+  <div id="casoAccionesSeveridad" class="surface p-4 mb-3 hidden">
+    <h5 class="section-title h6">Reclasificar severidad</h5>
+    <form id="casoSeveridadForm" class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <label for="casoSeveridadSelect" class="form-label small">Severidad</label>
+        <select id="casoSeveridadSelect" class="form-select form-select-sm" required autocomplete="off">
+          <option value="Llamado de Atención">Llamado de Atención</option>
+          <option value="Leve">Leve</option>
+          <option value="Moderada">Moderada</option>
+          <option value="Grave">Grave</option>
+          <option value="Muy Grave">Muy Grave</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <button type="submit" class="btn btn-outline-primary btn-sm">Guardar severidad</button>
+      </div>
+    </form>
+  </div>
 
   <div id="casoAccionesComite" class="surface p-4 mb-3 hidden">
     <h5 class="section-title h6">Registrar sesión del Comité de Convivencia</h5>
@@ -238,3 +260,20 @@
     <div id="casoDetailHistorial"></div>
   </div>
 </div>
+
+{{- $modo := .modo | default "admin" }}
+<script>
+  window.CONVIVENCIA_CASOS_CONFIG = Object.assign(window.CONVIVENCIA_CASOS_CONFIG || {}, {
+    apiBase: {{ .ctx.Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }},
+    {{- if eq $modo "comite" }}
+    rutaCasos: '/api/v1/comite-convivencia',
+    acciones: ['ANULAR', 'ACTA_COMITE', 'CAMBIAR_SEVERIDAD', 'CIERRE'],
+    anularSoloSinSancion: true
+    {{- else }}
+    rutaCasos: '/api/v1/convivencia',
+    acciones: ['EDITAR', 'ANULAR', 'EVIDENCIA_CASO', 'ACTA_COMITE', 'CAMBIAR_SEVERIDAD', 'CIERRE',
+      'PROPONER_SANCION', 'CONSEJO_DECISION', 'RESOLVER_APELACION'],
+    anularSoloSinSancion: false
+    {{- end }}
+  });
+</script>

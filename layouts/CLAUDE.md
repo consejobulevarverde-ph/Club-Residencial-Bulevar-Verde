@@ -11,6 +11,7 @@
 - `/datos-personales/` — Resident portal: profile, family members, vehicles, pets, emergency contacts, **reservations**
 - `/administracion-datos/` — Admin panel (admin/superadmin only): data master, case registration, **zone catalog & reservation calendar**
 - `/vigilancia-datos/` — Surveillance staff calendar view (vigilancia role)
+- `/comite-convivencia-datos/` — Comité de Convivencia members (unlisted URL, document-only login, own session token): shared "Casos Convivencia" view limited to conciliatory actions
 
 **Deployment**: Auto-triggered by push to `origin/firebase` → Firebase Hosting (automatic)
 
@@ -158,7 +159,7 @@ mixing logic. This is not a single monolithic IIFE, but a hub-and-spoke pattern:
 - Initializes `window.AdminDatos = {}` and exposes shared helpers: `$()`, `esc()`, `apiFetch()`, `msg()`, `busy()`, etc.
 - Manages shared state: `AdminDatos.state = { currentUnidadId, reservarUnidadId, ...caches... }`
 - Implements generic module registration: `AdminDatos.registrarModulo(config)` and `AdminDatos.mode(name)` for tab visibility/switching
-- Houses the actual feature logic: all rendering functions (`cargarCasosConvivencia()`, `cargarReservasAgenda()`, `loadPersonal()`, etc.)
+- Houses the actual feature logic: rendering functions (`cargarReservasAgenda()`, `loadPersonal()`, etc.). Exception: "Casos Convivencia" lives in the self-contained `static/js/convivencia-casos.js` (shared with the comité page); its stub only supplies the Firebase token
 
 **Feature modules** (all under `static/js/administracion-datos/`, each a small IIFE):
 - Each is a stub file (~150 bytes) that calls `AdminDatos.registrarModulo({ id, buttonId, viewId, onFirstShow })`
@@ -170,8 +171,12 @@ mixing logic. This is not a single monolithic IIFE, but a hub-and-spoke pattern:
 **Modals placement**: All modals (Bootstrap) live **at the end of `<main>`**, as siblings of `<section id="app">` — never nested inside a hidden view. Reason: if a modal were inside `<section id="casosConvivenciaView class="hidden">`, the browser would hide it even if Bootstrap tries to show it (a hidden ancestor hides all descendants).
 
 **See also**:
-- `layouts/partials/administracion-datos/casos/CLAUDE.md` — Casos Convivencia partials + module
+- `layouts/partials/convivencia-casos/CLAUDE.md` — Casos Convivencia view shared with the Comité de Convivencia page
 - `layouts/partials/administracion-datos/reservas/CLAUDE.md` — Reservas sub-tabs, partials, and modules
+
+**Personal tab**: the "Comité de Convivencia" filter reuses the same table/form to manage comité members
+(`/api/v1/convivencia/comite/miembros`); for that role the form only asks for the document and an
+informational cargo — the member must already be a registered resident.
 
 ## File Structure
 
@@ -183,14 +188,16 @@ layouts/
   administracion-datos/
     list.html              # Admin panel shell (thin wrapper, modular architecture)
     CLAUDE.md              # Architecture guide for administracion-datos
+  comite-convivencia-datos/
+    list.html              # Comité de Convivencia page (login + shared casos view)
+  partials/convivencia-casos/
+    CLAUDE.md              # Guide: shared casos view (admin + comité)
+    index.html             # List/detail/actions for existing cases + config by modo
+    modales.html           # Edit case & annul case modals
   partials/administracion-datos/
     dashboard.html         # Metrics & unit search
-    personal.html          # Personnel CRUD
+    personal.html          # Personnel CRUD (+ Comité de Convivencia members)
     convivencia-form.html  # Case registration wizard (shared with vigilancia)
-    casos/
-      CLAUDE.md            # Guide: caso convivencia partials + modules
-      casos-convivencia.html  # List/detail/actions for existing cases
-      modales.html         # Edit case & cancel case modals
     reservas/
       CLAUDE.md            # Guide: reservation partials + modules (sub-tabs)
       index.html           # Container: sub-nav + 3 sub-view partials

@@ -1,0 +1,98 @@
+<style>
+  .vehiculos-panel .plate {
+    font-family: ui-monospace, monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+  }
+
+  .vehiculos-panel .registration-result {
+    border-left: 6px solid #198754;
+  }
+</style>
+
+<div id="vehiculosRegistrarView">
+  <div class="surface p-4 p-lg-5">
+    <div class="mb-4">
+      <h3 class="section-title h4">
+        <i class="bi bi-car-front me-2"></i>
+        Registrar vehículo
+      </h3>
+      <p class="mb-0">
+        Registra un vehículo vinculado a una unidad para la vigilancia y control de acceso.
+      </p>
+    </div>
+
+    <div id="vehRegistroAlert" class="alert hidden" aria-live="polite"></div>
+
+    <form id="vehicleRegistrationForm" class="row g-3">
+      <!-- Unidad -->
+      <div class="col-12 pt-2"><small class="text-muted fw-semibold">Unidad</small></div>
+      <div class="col-12 col-md-4">
+        <label class="form-label" for="vehApartment">Apartamento</label>
+        <input
+          id="vehApartment"
+          class="form-control"
+          inputmode="numeric"
+          maxlength="4"
+          placeholder="Ej.: 1029"
+          required>
+      </div>
+
+      <!-- Tipo de vehículo -->
+      <div class="col-12 pt-2"><small class="text-muted fw-semibold">Vehículo</small></div>
+      <div class="col-md-6">
+        <label class="form-label" for="vehTipoVehiculo">Tipo de vehículo</label>
+        <select id="vehTipoVehiculo" class="form-select" required>
+          <option value="CARRO">Carro</option>
+          <option value="MOTO">Moto</option>
+        </select>
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label" for="vehPlaca">Placa</label>
+        <input
+          id="vehPlaca"
+          class="form-control plate"
+          maxlength="10"
+          placeholder="Ej.: ABC123"
+          required>
+        <small class="d-block text-muted mt-1">
+          Si el vehículo no tiene placa (ej. moto eléctrica), escribe <strong>ELECTRICO</strong> o <strong>SIN PLACA</strong>.
+        </small>
+      </div>
+
+      <!-- Relación con la unidad -->
+      <div class="col-12 pt-2"><small class="text-muted fw-semibold">Relación</small></div>
+      <div class="col-md-6">
+        <label class="form-label" for="vehTipoVinculo">Tipo de vinculación</label>
+        <select id="vehTipoVinculo" class="form-select" required>
+          <option value="RESIDENTE">Residente</option>
+          <option value="VISITANTE">Visitante</option>
+        </select>
+      </div>
+
+      <div class="col-12">
+        <div class="form-check">
+          <input
+            id="confirmVehicleRegistration"
+            class="form-check-input"
+            type="checkbox"
+            required>
+          <label class="form-check-label" for="confirmVehicleRegistration">
+            Confirmo que revisé el apartamento, el tipo de vehículo y la placa suministrados.
+          </label>
+        </div>
+      </div>
+
+      <div class="col-12 d-grid d-md-flex justify-content-md-end">
+        <button id="registerVehicleBtn" class="btn btn-primary btn-lg" type="submit">
+          <i class="bi bi-car-front-fill me-2"></i>
+          Registrar vehículo
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div id="vehicleRegistrationResult" class="mt-4"></div>
+</div>

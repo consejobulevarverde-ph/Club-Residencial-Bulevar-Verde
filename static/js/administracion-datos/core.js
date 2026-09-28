@@ -1560,8 +1560,6 @@ var config = window.ADMIN_DATOS_CONFIG || {};
       var reservasModalEditar = null;
       var modalEditarZona = null;
       var zonaEditandoId = null;
-      var modalEditarCasoConvivencia = null;
-      var modalAnularCasoConvivencia = null;
 
       document.addEventListener('DOMContentLoaded', function() {
         var modalAccionesEl = $('reservasModalAcciones');
@@ -1570,16 +1568,12 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         var modalPagoEl = $('reservasModalPago');
         var modalEditarReservaEl = $('reservasModalEditar');
         var modalEditarEl = $('modalEditarZona');
-        var modalEditarCasoEl = $('modalEditarCasoConvivencia');
-        var modalAnularCasoEl = $('modalAnularCasoConvivencia');
         if (modalAccionesEl) reservasModalAcciones = new bootstrap.Modal(modalAccionesEl);
         if (modalRechazarEl) reservasModalRechazar = new bootstrap.Modal(modalRechazarEl);
         if (modalCancelarEl) reservasModalCancelar = new bootstrap.Modal(modalCancelarEl);
         if (modalPagoEl) reservasModalPago = new bootstrap.Modal(modalPagoEl);
         if (modalEditarReservaEl) reservasModalEditar = new bootstrap.Modal(modalEditarReservaEl);
         if (modalEditarEl) modalEditarZona = new bootstrap.Modal(modalEditarEl);
-        if (modalEditarCasoEl) modalEditarCasoConvivencia = new bootstrap.Modal(modalEditarCasoEl);
-        if (modalAnularCasoEl) modalAnularCasoConvivencia = new bootstrap.Modal(modalAnularCasoEl);
       });
 
       var accionesPendiente = null;
@@ -1778,12 +1772,6 @@ var config = window.ADMIN_DATOS_CONFIG || {};
       $('showDashboard').addEventListener('click', function () { mode('dashboard'); });
       $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
 
-      var casosConvivenciaCargados = false;
-      $('showCasosConvivencia').addEventListener('click', function () {
-        mode('casosConvivencia');
-        if (!casosConvivenciaCargados) { cargarCasosConvivencia(); casosConvivenciaCargados = true; }
-      });
-
       var reservasCargada = false;
       $('showReservas').addEventListener('click', function () {
         mode('reservas');
@@ -1800,9 +1788,47 @@ var config = window.ADMIN_DATOS_CONFIG || {};
       });
 
       // ===== PERSONAL CRUD =====
+      // El filtro "Comité de Convivencia" reutiliza la misma tabla y formulario, pero sus filas son
+      // membresías de residentes (/api/v1/convivencia/comite/miembros), no colaboradores.
+
+      var API_COMITE_MIEMBROS = '/api/v1/convivencia/comite/miembros';
+      var personalComiteCache = [];
+
+      function esFiltroComite() {
+        return $('personalFiltroRol').value === 'COMITE';
+      }
+
+      function actualizarCamposPersonalPorRol() {
+        var comite = $('personalRol').value === 'COMITE';
+        ['personalGrupoNombre', 'personalGrupoTelefono', 'personalGrupoCorreo'].forEach(function (id) {
+          $(id).classList.toggle('hidden', comite);
+        });
+        // Un campo oculto con required bloquea el envío del formulario.
+        $('personalNombreCompleto').required = !comite;
+        $('personalGrupoCargo').classList.toggle('hidden', !comite);
+        $('personalNotaComite').classList.toggle('hidden', !comite);
+        $('personalFormTitulo').textContent = comite ? 'Agregar miembro del Comité de Convivencia' : 'Agregar personal';
+      }
+
+      function prepararFormularioPersonal() {
+        $('personalForm').reset();
+        $('personalId').value = '';
+        $('personalTipoDocumento').disabled = false;
+        $('personalNumeroDocumento').disabled = false;
+        $('personalRol').disabled = false;
+        $('personalCancelarEdicion').classList.add('hidden');
+        if (esFiltroComite()) $('personalRol').value = 'COMITE';
+        actualizarCamposPersonalPorRol();
+      }
 
       function loadPersonal() {
         return withIdToken(function (idToken) {
+          if (esFiltroComite()) {
+            return apiFetch(API_COMITE_MIEMBROS, idToken).then(function (resp) {
+              personalComiteCache = resp.data || [];
+              renderPersonalTabla(personalComiteCache);
+            });
+          }
           var rol = $('personalFiltroRol').value;
           var qs = rol ? ('?rol=' + encodeURIComponent(rol)) : '';
           return apiFetch('/api/v1/personal' + qs, idToken).then(function (resp) {
@@ -1827,31 +1853,51 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         $('personalTabla').innerHTML = '<table class="table table-sm"><thead><tr><th>Nombre</th><th>Rol</th><th>Documento</th><th>Estado</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
       }
 
-      $('personalFiltroRol').addEventListener('change', loadPersonal);
+      $('personalFiltroRol').addEventListener('change', function () {
+        if (!esFiltroComite() && $('personalRol').value === 'COMITE') $('personalRol').value = 'VIGILANTE';
+        prepararFormularioPersonal();
+        loadPersonal();
+      });
+
+      $('personalRol').addEventListener('change', actualizarCamposPersonalPorRol);
 
       $('personalForm').addEventListener('submit', function (event) {
         event.preventDefault();
         hideMsg();
         var id = $('personalId').value;
-        var payload = {
-          tipoDocumento: $('personalTipoDocumento').value.trim(),
-          numeroDocumento: $('personalNumeroDocumento').value.trim(),
-          nombreCompleto: $('personalNombreCompleto').value.trim(),
-          rol: $('personalRol').value,
-          correo: $('personalCorreo').value.trim() || undefined,
-          telefono: $('personalTelefono').value.trim() || undefined
-        };
+        var esComite = $('personalRol').value === 'COMITE';
         var button = event.target.querySelector('button[type="submit"]');
         busy(button, true, 'Guardando…');
+
         withIdToken(function (idToken) {
+          if (esComite) {
+            var cargo = $('personalCargo').value.trim();
+            return id
+              ? apiFetch(API_COMITE_MIEMBROS + '/' + id, idToken, { method: 'PATCH', body: { cargo: cargo || null } })
+              : apiFetch(API_COMITE_MIEMBROS, idToken, {
+                method: 'POST',
+                body: {
+                  tipoDocumento: $('personalTipoDocumento').value.trim(),
+                  numeroDocumento: $('personalNumeroDocumento').value.trim(),
+                  cargo: cargo || undefined
+                }
+              });
+          }
+          var payload = {
+            tipoDocumento: $('personalTipoDocumento').value.trim(),
+            numeroDocumento: $('personalNumeroDocumento').value.trim(),
+            nombreCompleto: $('personalNombreCompleto').value.trim(),
+            rol: $('personalRol').value,
+            correo: $('personalCorreo').value.trim() || undefined,
+            telefono: $('personalTelefono').value.trim() || undefined
+          };
           return id
             ? apiFetch('/api/v1/personal/' + id, idToken, { method: 'PATCH', body: payload })
             : apiFetch('/api/v1/personal', idToken, { method: 'POST', body: payload });
         }).then(function () {
-          msg('Personal guardado.', 'success');
-          $('personalForm').reset();
-          $('personalId').value = '';
-          $('personalCancelarEdicion').classList.add('hidden');
+          msg(esComite ? 'Miembro del Comité de Convivencia guardado.' : 'Personal guardado.', 'success');
+          if (esComite && !esFiltroComite()) $('personalFiltroRol').value = 'COMITE';
+          prepararFormularioPersonal();
           loadPersonal();
         }).catch(function (error) { msg(error.message); })
           .finally(function () { busy(button, false, 'Guardar'); });
@@ -1862,18 +1908,41 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         if (editBtn) { cargarPersonalEnFormulario(editBtn.dataset.id); return; }
         var delBtn = event.target.closest('.personal-desactivar');
         if (delBtn) {
-          if (!confirm('¿Desactivar este miembro del personal?')) return;
+          var comite = esFiltroComite();
+          var pregunta = comite
+            ? '¿Desactivar este miembro del Comité de Convivencia? Perderá el acceso al portal del comité de inmediato.'
+            : '¿Desactivar este miembro del personal?';
+          if (!confirm(pregunta)) return;
           var button = delBtn;
           busy(button, true, 'Desactivando…');
           withIdToken(function (idToken) {
-            return apiFetch('/api/v1/personal/' + delBtn.dataset.id, idToken, { method: 'DELETE' });
-          }).then(function () { msg('Personal desactivado.', 'success'); loadPersonal(); })
+            return comite
+              ? apiFetch(API_COMITE_MIEMBROS + '/' + delBtn.dataset.id, idToken, { method: 'PATCH', body: { activo: false } })
+              : apiFetch('/api/v1/personal/' + delBtn.dataset.id, idToken, { method: 'DELETE' });
+          }).then(function () { msg(comite ? 'Miembro del comité desactivado.' : 'Personal desactivado.', 'success'); loadPersonal(); })
             .catch(function (error) { msg(error.message); })
             .finally(function () { busy(button, false, 'Desactivar'); });
         }
       });
 
       function cargarPersonalEnFormulario(id) {
+        if (esFiltroComite()) {
+          // No hay GET por id para membresías: la fila ya trae todo lo editable.
+          var miembro = personalComiteCache.filter(function (m) { return m.id === id; })[0];
+          if (!miembro) return;
+          prepararFormularioPersonal();
+          $('personalId').value = miembro.id;
+          $('personalTipoDocumento').value = miembro.tipoDocumento;
+          $('personalNumeroDocumento').value = miembro.numeroDocumento;
+          // Una membresía no cambia de persona: solo el cargo es editable.
+          $('personalTipoDocumento').disabled = true;
+          $('personalNumeroDocumento').disabled = true;
+          $('personalRol').disabled = true;
+          $('personalCargo').value = miembro.cargo || '';
+          $('personalFormTitulo').textContent = 'Editar miembro del Comité de Convivencia';
+          $('personalCancelarEdicion').classList.remove('hidden');
+          return;
+        }
         withIdToken(function (idToken) {
           return apiFetch('/api/v1/personal/' + id, idToken);
         }).then(function (resp) {
@@ -1885,661 +1954,12 @@ var config = window.ADMIN_DATOS_CONFIG || {};
           $('personalRol').value = c.rol;
           $('personalCorreo').value = c.correo || '';
           $('personalTelefono').value = c.telefono || '';
+          actualizarCamposPersonalPorRol();
           $('personalCancelarEdicion').classList.remove('hidden');
         }).catch(function (error) { msg(error.message); });
       }
 
-      $('personalCancelarEdicion').addEventListener('click', function () {
-        $('personalForm').reset();
-        $('personalId').value = '';
-        this.classList.add('hidden');
-      });
-
-      // ===== CASOS DE CONVIVENCIA =====
-
-      var CASOS_CONVIVENCIA_LIMIT = 20;
-      var casosConvivenciaOffset = 0;
-      var casosConvivenciaAcumulados = [];
-      var casoConvivenciaActual = null;
-
-      function obtenerBadgeEstadoCaso(estado) {
-        var badges = {
-          PENDIENTE_DESCARGOS: '<span class="badge bg-warning text-dark">Pendiente de descargos</span>',
-          CON_DESCARGOS: '<span class="badge bg-info text-dark">Descargos recibidos</span>',
-          PENDIENTE_APROBACION_CONSEJO: '<span class="badge bg-warning text-dark">Pendiente Consejo</span>',
-          SANCION_APROBADA: '<span class="badge bg-dark">Sanción aprobada</span>',
-          EN_APELACION: '<span class="badge bg-warning text-dark">En apelación</span>',
-          CERRADO_SIN_SANCION: '<span class="badge bg-success">Cerrado sin sanción</span>',
-          SANCION_RATIFICADA: '<span class="badge bg-dark">Sanción ratificada</span>',
-          SANCION_REVOCADA: '<span class="badge bg-success">Sanción revocada</span>',
-          ARCHIVADO: '<span class="badge bg-secondary">Archivado</span>',
-          ANULADO: '<span class="badge bg-danger">Anulado</span>'
-        };
-        return badges[estado] || '<span class="badge bg-secondary">' + esc(estado) + '</span>';
-      }
-
-      function formatearMoneda(valor) {
-        return Number(valor || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 });
-      }
-
-      function cargarCasosConvivencia(reset) {
-        if (reset !== false) casosConvivenciaOffset = 0;
-        var seleccion = $('casosConvivenciaFiltroEstado').value;
-        var estados = seleccion === 'EN_TRAMITE'
-          ? ['PENDIENTE_DESCARGOS', 'CON_DESCARGOS']
-          : (seleccion ? [seleccion] : []);
-        var qs = '?limit=' + CASOS_CONVIVENCIA_LIMIT + '&offset=' + casosConvivenciaOffset +
-          estados.map(function (e) { return '&estado=' + encodeURIComponent(e); }).join('');
-
-        withIdToken(function (idToken) {
-          return apiFetch('/api/v1/convivencia/casos' + qs, idToken).then(function (resp) {
-            var items = resp.data || [];
-            renderCasosConvivenciaTabla(items, casosConvivenciaOffset === 0);
-            $('casosConvivenciaCargarMasBtn').classList.toggle('hidden', items.length < CASOS_CONVIVENCIA_LIMIT);
-          });
-        }).catch(function (error) { msg(error.message); });
-      }
-
-      function renderCasosConvivenciaTabla(items, reset) {
-        if (reset) casosConvivenciaAcumulados = [];
-        casosConvivenciaAcumulados = casosConvivenciaAcumulados.concat(items);
-
-        if (!casosConvivenciaAcumulados.length) {
-          $('casosConvivenciaTabla').innerHTML = '<p class="text-muted">Sin casos registrados.</p>';
-          return;
-        }
-
-        $('casosConvivenciaTabla').innerHTML = casosConvivenciaAcumulados.map(function (caso) {
-          return '<div class="border-bottom py-2 d-flex justify-content-between align-items-center caso-convivencia-item" ' +
-            'data-id="' + esc(caso.id) + '" style="cursor:pointer">' +
-            '<div><strong>' + esc(caso.apartamento) + '</strong> · ' + esc(caso.motivo) +
-            '<br><small class="text-muted">' + esc(caso.caseCode) + ' · ' + esc(caso.fechaCreacion) + '</small></div>' +
-            '<div>' + obtenerBadgeEstadoCaso(caso.estado) +
-            (caso.severidad ? ' <span class="badge bg-secondary ms-1">' + esc(caso.severidad) + '</span>' : '') +
-            (caso.tieneDescargos ? ' <span class="badge bg-info text-dark ms-1">Con descargos</span>' : '') +
-            '</div></div>';
-        }).join('');
-      }
-
-      $('casosConvivenciaFiltroEstado').addEventListener('change', function () { cargarCasosConvivencia(true); });
-
-      $('casosConvivenciaCargarMasBtn').addEventListener('click', function () {
-        casosConvivenciaOffset += CASOS_CONVIVENCIA_LIMIT;
-        cargarCasosConvivencia(false);
-      });
-
-      $('casosConvivenciaTabla').addEventListener('click', function (event) {
-        var item = event.target.closest('.caso-convivencia-item');
-        if (item) verDetalleCasoConvivencia(item.dataset.id);
-      });
-
-      var EVIDENCIAS_CASO_LIMITE = 20;
-
-      function actualizarFormularioEvidenciaCaso(caso, countActual) {
-        var form = $('casoDetailEvidenciaForm');
-        var input = $('casoDetailEvidenciaInput');
-        var boton = $('casoDetailEvidenciaSubmitBtn');
-        var estadoEl = $('casoDetailEvidenciaEstado');
-        form.reset();
-        if (caso.estado === 'ANULADO') {
-          form.classList.add('hidden');
-          return;
-        }
-        form.classList.remove('hidden');
-        var restantes = EVIDENCIAS_CASO_LIMITE - countActual;
-        if (restantes <= 0) {
-          input.disabled = true;
-          boton.disabled = true;
-          estadoEl.textContent = 'Se alcanzó el máximo de ' + EVIDENCIAS_CASO_LIMITE + ' evidencias para este caso.';
-        } else {
-          input.disabled = false;
-          boton.disabled = false;
-          estadoEl.textContent = 'Cupo disponible: ' + restantes + ' de ' + EVIDENCIAS_CASO_LIMITE + '.';
-        }
-      }
-
-      function buildCasoEvidenceThumb(url, label) {
-        var match = /\/file\/d\/([^/]+)/.exec(url || '');
-        var thumbUrl = match ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(match[1]) + '&sz=w300') : url;
-        return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(label) + '">' +
-          '<img src="' + esc(thumbUrl) + '" alt="' + esc(label) + '" ' +
-          'style="width:96px;height:96px;object-fit:cover;border-radius:8px" ' +
-          'onerror="this.style.display=\'none\'">' +
-          '</a>';
-      }
-
-      function verDetalleCasoConvivencia(id) {
-        withIdToken(function (idToken) {
-          return apiFetch('/api/v1/convivencia/casos/' + id, idToken).then(function (resp) {
-            casoConvivenciaActual = resp.data;
-            renderDetalleCasoConvivencia(resp.data);
-            $('casosConvivenciaListView').classList.add('hidden');
-            $('casosConvivenciaDetailView').classList.remove('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          });
-        }).catch(function (error) { msg(error.message); });
-      }
-
-      $('casosConvivenciaVolverBtn').addEventListener('click', function () {
-        $('casosConvivenciaDetailView').classList.add('hidden');
-        $('casosConvivenciaListView').classList.remove('hidden');
-        cargarCasosConvivencia(true);
-      });
-
-      $('casoDetailEditarBtn').addEventListener('click', function () {
-        if (!casoConvivenciaActual) return;
-        $('editCasoId').value = casoConvivenciaActual.caseCode || '';
-        $('editCasoApto').value = casoConvivenciaActual.apartamento || '';
-        $('editCasoMotivo').value = casoConvivenciaActual.motivo || '';
-        $('editCasoDescripcion').value = casoConvivenciaActual.descripcion || '';
-        $('editCasoRazon').value = casoConvivenciaActual.razonNotificacion || '';
-        $('editCasoNotificador').value = casoConvivenciaActual.notificadorAdmin || '';
-        $('editCasoSeveridad').value = casoConvivenciaActual.severidad || '';
-        if (modalEditarCasoConvivencia) modalEditarCasoConvivencia.show();
-      });
-
-      var editCasoSubmitBtn = $('editCasoConvivenciaSubmit');
-      if (editCasoSubmitBtn) editCasoSubmitBtn.addEventListener('click', function () {
-        if (!casoConvivenciaActual) return;
-        hideMsg();
-        var btn = this;
-        var motivo = $('editCasoMotivo').value.trim();
-        var descripcion = $('editCasoDescripcion').value.trim();
-        var razon = $('editCasoRazon').value.trim();
-        var notificador = $('editCasoNotificador').value.trim();
-        var severidad = $('editCasoSeveridad').value.trim();
-
-        if (!motivo || !descripcion || !razon || !notificador) {
-          msg('Todos los campos son requeridos');
-          return;
-        }
-
-        busy(btn, true, 'Guardando…');
-        withIdToken(function (idToken) {
-          var promises = [
-            apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id, idToken, {
-              method: 'PATCH',
-              body: {
-                motivo: motivo,
-                descripcion: descripcion,
-                razonNotificacion: razon,
-                notificadorAdmin: notificador
-              }
-            })
-          ];
-
-          if (severidad && severidad !== casoConvivenciaActual.severidad) {
-            promises.push(
-              apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/severidad', idToken, {
-                method: 'PATCH',
-                body: { severidad: severidad }
-              })
-            );
-          }
-
-          return Promise.all(promises);
-        })
-          .then(function (responses) {
-            return Promise.all(responses.map(function (r) { return r.json(); })).then(function (dataArray) {
-              casoConvivenciaActual = dataArray[dataArray.length - 1].data;
-              renderDetalleCasoConvivencia(casoConvivenciaActual);
-              if (modalEditarCasoConvivencia) modalEditarCasoConvivencia.hide();
-              msg('Caso actualizado', 'success');
-            });
-          })
-          .catch(function (error) { msg(error.message); })
-          .finally(function () { busy(btn, false, 'Guardar cambios'); });
-      });
-
-      $('casoDetailAnularBtn').addEventListener('click', function () {
-        if (!casoConvivenciaActual) return;
-        $('anularCasoMotivo').value = '';
-        if (modalAnularCasoConvivencia) modalAnularCasoConvivencia.show();
-      });
-
-      var anularCasoSubmitBtn = $('anularCasoConvivenciaSubmit');
-      if (anularCasoSubmitBtn) anularCasoSubmitBtn.addEventListener('click', function () {
-        if (!casoConvivenciaActual) return;
-        hideMsg();
-        var btn = this;
-        var motivo = $('anularCasoMotivo').value.trim();
-
-        if (!motivo) {
-          msg('Debe indicar el motivo de la anulación');
-          return;
-        }
-
-        if (!confirm('¿Estás seguro de que deseas anular este caso? El caso dejará de contar en el historial de la unidad pero quedará visible aquí.')) {
-          return;
-        }
-
-        busy(btn, true, 'Anulando…');
-        withIdToken(function (idToken) {
-          return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/anular', idToken, {
-            method: 'PATCH',
-            body: { motivo: motivo }
-          });
-        })
-          .then(function (response) {
-            return response.json().then(function (data) {
-              casoConvivenciaActual = data.data;
-              renderDetalleCasoConvivencia(data.data);
-              if (modalAnularCasoConvivencia) modalAnularCasoConvivencia.hide();
-              msg('Caso anulado', 'success');
-            });
-          })
-          .catch(function (error) { msg(error.message); })
-          .finally(function () { busy(btn, false, 'Anular caso'); });
-      });
-
-      var TIPO_EVENTO_LABELS = {
-        CASO_CREADO: 'Caso creado',
-        CASO_EDITADO: 'Información del caso editada',
-        CASO_ANULADO: 'Caso anulado',
-        SEVERIDAD_MODIFICADA: 'Severidad modificada',
-        DESCARGOS_REGISTRADOS: 'Descargos registrados',
-        ACTA_COMITE_REGISTRADA: 'Acta de comité registrada',
-        EVIDENCIA_ADICIONAL_REGISTRADA: 'Evidencia adicional cargada',
-        CASO_CERRADO_SIN_SANCION: 'Caso cerrado sin sanción',
-        CASO_ARCHIVADO: 'Caso archivado',
-        SANCION_PROPUESTA: 'Sanción propuesta',
-        CONSEJO_APROBO_SANCION: 'Consejo aprobó la sanción',
-        CONSEJO_RECHAZO_SANCION: 'Consejo rechazó la sanción',
-        CONSEJO_DEVOLVIO_PROPUESTA: 'Consejo devolvió la propuesta',
-        APELACION_PRESENTADA: 'Apelación presentada',
-        APELACION_RATIFICADA: 'Apelación ratificada',
-        APELACION_REVOCADA: 'Apelación revocada'
-      };
-
-      function renderHistorialCaso(eventos) {
-        if (!eventos || !eventos.length) {
-          $('casoDetailHistorial').innerHTML = '<p class="text-muted small mb-0">Sin eventos registrados.</p>';
-          return;
-        }
-        $('casoDetailHistorial').innerHTML = eventos.map(function (evento) {
-          var etiqueta = TIPO_EVENTO_LABELS[evento.tipoEvento] || evento.tipoEvento;
-          return '<div class="border-start border-3 border-success ps-3 mb-3">' +
-            '<div class="small text-muted">' + esc(evento.fechaCreacion) + ' · ' + esc(evento.actorTipo) + '</div>' +
-            '<div><strong>' + esc(etiqueta) + '</strong></div>' +
-            (evento.descripcion ? '<div class="small mt-1">' + esc(evento.descripcion) + '</div>' : '') +
-            '</div>';
-        }).join('');
-      }
-
-      var ACCION_BLOQUES_CASO = [
-        'casoAccionesComite', 'casoAccionesCierre', 'casoAccionesProponerSancion',
-        'casoAccionesConsejo', 'casoAccionesApelacion'
-      ];
-
-      function actualizarAccionesDisponibles(caso) {
-        ACCION_BLOQUES_CASO.forEach(function (id) { $(id).classList.add('hidden'); });
-
-        if (caso.estado === 'PENDIENTE_DESCARGOS' || caso.estado === 'CON_DESCARGOS') {
-          $('casoAccionesCierre').classList.remove('hidden');
-          if (caso.requiereProcesoFormal) {
-            $('casoAccionesProponerSancion').classList.remove('hidden');
-            if (caso.estado === 'PENDIENTE_DESCARGOS') {
-              $('casoAccionesComite').classList.remove('hidden');
-            }
-          }
-        } else if (caso.estado === 'PENDIENTE_APROBACION_CONSEJO') {
-          $('casoAccionesConsejo').classList.remove('hidden');
-        } else if (caso.estado === 'EN_APELACION') {
-          $('casoAccionesApelacion').classList.remove('hidden');
-        }
-      }
-
-      function renderDetalleCasoConvivencia(caso) {
-        $('casoDetailId').textContent = caso.caseCode;
-        $('casoDetailApto').textContent = caso.apartamento;
-        $('casoDetailMotivo').textContent = caso.motivo;
-        $('casoDetailEstado').innerHTML = obtenerBadgeEstadoCaso(caso.estado);
-        $('casoDetailAnularBtn').classList.toggle('hidden', caso.estado === 'ANULADO');
-        $('casoDetailTipoProceso').textContent = caso.requiereProcesoFormal
-          ? 'Proceso sancionatorio formal'
-          : 'Llamado de atención — no requiere proceso formal';
-        $('casoDetailSeveridad').textContent = caso.severidad || 'No especificada';
-        $('casoDetailCuotas').textContent = Number(caso.sancionEquivalente || 0);
-        $('casoDetailNotificador').textContent = caso.notificadorAdmin || '—';
-        $('casoDetailFecha').textContent = caso.fechaCreacion || '';
-        $('casoDetailDescripcion').textContent = caso.descripcion || '';
-        $('casoDetailRazon').textContent = caso.razonNotificacion || '';
-
-        var evidencias = caso.evidencias || [];
-        var evidenciasCaso = evidencias.filter(function (e) { return e.contexto === 'CASO'; });
-        if (evidenciasCaso.length) {
-          $('casoDetailEvidencias').innerHTML = evidenciasCaso.map(function (e, idx) {
-            return buildCasoEvidenceThumb(e.url, 'Evidencia ' + (idx + 1));
-          }).join('');
-        } else {
-          $('casoDetailEvidencias').innerHTML = '';
-        }
-        actualizarFormularioEvidenciaCaso(caso, evidenciasCaso.length);
-
-        if (caso.descargosResidente) {
-          $('casoDetailDescargosSection').classList.remove('hidden');
-          $('casoDetailFechaDescargos').textContent = 'Recibidos el ' + (caso.fechaDescargos || '');
-          $('casoDetailDescargosTexto').textContent = caso.descargosResidente;
-
-          var evidenciasDescargo = evidencias.filter(function (e) { return e.contexto === 'DESCARGO'; });
-          if (evidenciasDescargo.length) {
-            $('casoDetailEvidenciasDescargosSection').classList.remove('hidden');
-            $('casoDetailEvidenciasDescargos').innerHTML = evidenciasDescargo.map(function (e, idx) {
-              return buildCasoEvidenceThumb(e.url, 'Evidencia de descargo ' + (idx + 1));
-            }).join('');
-          } else {
-            $('casoDetailEvidenciasDescargosSection').classList.add('hidden');
-            $('casoDetailEvidenciasDescargos').innerHTML = '';
-          }
-        } else {
-          $('casoDetailDescargosSection').classList.add('hidden');
-        }
-
-        if (caso.actaComiteResumen) {
-          $('casoDetailActaComiteSection').classList.remove('hidden');
-          $('casoDetailActaComiteFecha').textContent = 'Sesión del ' + (caso.actaComiteFecha || '');
-          $('casoDetailActaComiteResumen').textContent = caso.actaComiteResumen;
-
-          var evidenciasActa = evidencias.filter(function (e) { return e.contexto === 'ACTA_COMITE'; });
-          if (evidenciasActa.length) {
-            $('casoDetailActaComiteEvidenciasSection').classList.remove('hidden');
-            $('casoDetailActaComiteEvidencias').innerHTML = evidenciasActa.map(function (e, idx) {
-              return buildCasoEvidenceThumb(e.url, 'Anexo ' + (idx + 1));
-            }).join('');
-          } else {
-            $('casoDetailActaComiteEvidenciasSection').classList.add('hidden');
-            $('casoDetailActaComiteEvidencias').innerHTML = '';
-          }
-        } else {
-          $('casoDetailActaComiteSection').classList.add('hidden');
-        }
-
-        if (caso.sancionPropuestaTipo) {
-          $('casoDetailSancionPropuestaSection').classList.remove('hidden');
-          $('casoDetailSancionPropuestaTipo').textContent = caso.sancionPropuestaTipo;
-          $('casoDetailSancionPropuestaValor').textContent = formatearMoneda(caso.sancionPropuestaValor);
-          $('casoDetailSancionPropuestaJustificacion').textContent = caso.sancionPropuestaJustificacion || '';
-        } else {
-          $('casoDetailSancionPropuestaSection').classList.add('hidden');
-        }
-
-        if (caso.sancion) {
-          $('casoDetailSancionSection').classList.remove('hidden');
-          $('casoDetailSancionTipo').textContent = caso.sancion.tipoSancion || '';
-          $('casoDetailSancionValor').textContent = formatearMoneda(caso.sancion.valor);
-          $('casoDetailSancionEstado').textContent = caso.sancion.estado || '';
-          $('casoDetailSancionFecha').textContent = caso.sancion.fechaImposicion || '';
-        } else {
-          $('casoDetailSancionSection').classList.add('hidden');
-        }
-
-        if (caso.apelacionTexto) {
-          $('casoDetailApelacionSection').classList.remove('hidden');
-          $('casoDetailApelacionFecha').textContent = 'Presentada el ' + (caso.fechaApelacion || '');
-          $('casoDetailApelacionTexto').textContent = caso.apelacionTexto;
-
-          var evidenciasApelacion = evidencias.filter(function (e) { return e.contexto === 'APELACION'; });
-          if (evidenciasApelacion.length) {
-            $('casoDetailEvidenciasApelacionSection').classList.remove('hidden');
-            $('casoDetailEvidenciasApelacion').innerHTML = evidenciasApelacion.map(function (e, idx) {
-              return buildCasoEvidenceThumb(e.url, 'Evidencia apelación ' + (idx + 1));
-            }).join('');
-          } else {
-            $('casoDetailEvidenciasApelacionSection').classList.add('hidden');
-            $('casoDetailEvidenciasApelacion').innerHTML = '';
-          }
-        } else {
-          $('casoDetailApelacionSection').classList.add('hidden');
-        }
-
-        renderHistorialCaso(caso.eventos);
-        actualizarAccionesDisponibles(caso);
-
-        $('casoCierreEstado').value = 'CERRADO_SIN_SANCION';
-        $('casoCierreResolucion').value = '';
-        $('casoCierreNotas').value = '';
-        $('casoActaComiteForm').reset();
-        $('casoActaComiteEvidenciaEstado').textContent = '';
-        $('casoProponerSancionForm').reset();
-        $('casoConsejoForm').reset();
-        $('casoApelacionResolverForm').reset();
-      }
-
-      function leerArchivoComoDataUrl(file) {
-        return new Promise(function (resolve, reject) {
-          var reader = new FileReader();
-          reader.onerror = function () { reject(new Error('No fue posible leer el archivo "' + file.name + '".')); };
-          reader.onload = function () { resolve(reader.result); };
-          reader.readAsDataURL(file);
-        });
-      }
-
-      function subirEvidenciasConvivencia(files, idToken, contexto, caseCode, apartamento) {
-        var urls = [];
-        var subirSiguiente = function (i) {
-          if (i >= files.length) return Promise.resolve(urls);
-          return leerArchivoComoDataUrl(files[i]).then(function (dataUrl) {
-            return apiFetch('/api/v1/convivencia/evidencias', idToken, {
-              method: 'POST',
-              body: { mimeType: files[i].type, dataUrl: dataUrl, contexto: contexto, caseId: caseCode, apartamento: apartamento }
-            });
-          }).then(function (resp) {
-            urls.push(resp.data.url);
-            return subirSiguiente(i + 1);
-          });
-        };
-        return subirSiguiente(0);
-      }
-
-      $('casoDetailEvidenciaForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        hideMsg();
-        if (!casoConvivenciaActual) return;
-
-        var files = Array.prototype.slice.call($('casoDetailEvidenciaInput').files || []);
-        var estadoEl = $('casoDetailEvidenciaEstado');
-        var button = $('casoDetailEvidenciaSubmitBtn');
-        if (!files.length) {
-          msg('Selecciona al menos un archivo.');
-          return;
-        }
-
-        var existentes = (casoConvivenciaActual.evidencias || []).filter(function (e) { return e.contexto === 'CASO'; }).length;
-        if (existentes + files.length > EVIDENCIAS_CASO_LIMITE) {
-          msg('Solo puedes cargar ' + (EVIDENCIAS_CASO_LIMITE - existentes) + ' archivo(s) más para este caso.');
-          return;
-        }
-
-        busy(button, true, 'Cargando…');
-        withIdToken(function (idToken) {
-          estadoEl.textContent = 'Subiendo ' + files.length + ' archivo(s)…';
-          return subirEvidenciasConvivencia(files, idToken, 'caso', casoConvivenciaActual.caseCode, casoConvivenciaActual.apartamento)
-            .then(function (urls) {
-              estadoEl.textContent = '';
-              return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/evidencias', idToken, {
-                method: 'POST',
-                body: { evidencias: urls }
-              });
-            });
-        }).then(function (resp) {
-          casoConvivenciaActual = resp.data;
-          renderDetalleCasoConvivencia(resp.data);
-          msg('Evidencia cargada.', 'success');
-        }).catch(function (error) {
-          estadoEl.textContent = '';
-          msg(error.message);
-        }).finally(function () { busy(button, false, 'Cargar evidencia'); });
-      });
-
-      $('casoActaComiteForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        hideMsg();
-        if (!casoConvivenciaActual) return;
-
-        var fecha = $('casoActaComiteFecha').value;
-        var resumen = $('casoActaComiteResumen').value.trim();
-        if (!fecha || resumen.length < 20) {
-          msg('La fecha y un resumen de al menos 20 caracteres son requeridos.');
-          return;
-        }
-
-        var files = Array.prototype.slice.call($('casoActaComiteEvidenciaInput').files || []);
-        var estadoEl = $('casoActaComiteEvidenciaEstado');
-        var button = event.target.querySelector('button[type="submit"]');
-        busy(button, true, 'Guardando…');
-
-        withIdToken(function (idToken) {
-          var subida = Promise.resolve([]);
-          if (files.length) {
-            estadoEl.textContent = 'Subiendo ' + files.length + ' archivo(s)…';
-            subida = subirEvidenciasConvivencia(files, idToken, 'acta_comite', casoConvivenciaActual.caseCode, casoConvivenciaActual.apartamento);
-          }
-          return subida.then(function (urls) {
-            estadoEl.textContent = '';
-            return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/acta-comite', idToken, {
-              method: 'POST',
-              body: { fecha: fecha, resumen: resumen, evidencias: urls }
-            });
-          });
-        }).then(function (resp) {
-          casoConvivenciaActual = resp.data;
-          renderDetalleCasoConvivencia(resp.data);
-          msg('Acta de comité registrada.', 'success');
-        }).catch(function (error) {
-          estadoEl.textContent = '';
-          msg(error.message);
-        }).finally(function () { busy(button, false, 'Registrar acta'); });
-      });
-
-      $('casoCierreForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        hideMsg();
-        if (!casoConvivenciaActual) return;
-
-        var estado = $('casoCierreEstado').value;
-        var resolucion = $('casoCierreResolucion').value.trim();
-        if (estado === 'CERRADO_SIN_SANCION' && !resolucion) {
-          msg('La resolución es requerida para cerrar el caso sin sanción.');
-          return;
-        }
-
-        var button = event.target.querySelector('button[type="submit"]');
-        busy(button, true, 'Guardando…');
-
-        withIdToken(function (idToken) {
-          return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/estado', idToken, {
-            method: 'PATCH',
-            body: {
-              estado: estado,
-              resolucion: resolucion || undefined,
-              notasAdmin: $('casoCierreNotas').value.trim() || undefined
-            }
-          });
-        }).then(function (resp) {
-          casoConvivenciaActual = resp.data;
-          renderDetalleCasoConvivencia(resp.data);
-          msg('Caso actualizado.', 'success');
-        }).catch(function (error) { msg(error.message); })
-          .finally(function () { busy(button, false, 'Guardar'); });
-      });
-
-      $('casoProponerSancionForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        hideMsg();
-        if (!casoConvivenciaActual) return;
-
-        var tipo = $('casoProponerSancionTipo').value.trim();
-        var valor = Number($('casoProponerSancionValor').value);
-        var justificacion = $('casoProponerSancionJustificacion').value.trim();
-        if (!tipo || !valor || valor <= 0 || justificacion.length < 20) {
-          msg('Completa tipo, valor y una justificación de al menos 20 caracteres.');
-          return;
-        }
-
-        var button = event.target.querySelector('button[type="submit"]');
-        busy(button, true, 'Enviando…');
-
-        withIdToken(function (idToken) {
-          return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/proponer-sancion', idToken, {
-            method: 'PATCH',
-            body: { tipoSancion: tipo, valorPropuesto: valor, justificacion: justificacion }
-          });
-        }).then(function (resp) {
-          casoConvivenciaActual = resp.data;
-          renderDetalleCasoConvivencia(resp.data);
-          msg('Propuesta enviada al Consejo.', 'success');
-        }).catch(function (error) { msg(error.message); })
-          .finally(function () { busy(button, false, 'Enviar al Consejo'); });
-      });
-
-      var ENDPOINT_POR_ACCION_CONSEJO = {
-        aprobar: 'consejo-aprobar',
-        rechazar: 'consejo-rechazar',
-        devolver: 'consejo-devolver'
-      };
-
-      $('casoConsejoForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        hideMsg();
-        if (!casoConvivenciaActual) return;
-
-        var accion = (event.submitter && event.submitter.dataset.accion) || 'aprobar';
-        var ruta = ENDPOINT_POR_ACCION_CONSEJO[accion];
-        var resolucion = $('casoConsejoResolucion').value.trim();
-        if (!resolucion) {
-          msg('La resolución es requerida.');
-          return;
-        }
-
-        var button = event.submitter;
-        busy(button, true, 'Guardando…');
-
-        withIdToken(function (idToken) {
-          return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/' + ruta, idToken, {
-            method: 'PATCH',
-            body: { resolucion: resolucion, notasAdmin: $('casoConsejoNotas').value.trim() || undefined }
-          });
-        }).then(function (resp) {
-          casoConvivenciaActual = resp.data;
-          renderDetalleCasoConvivencia(resp.data);
-          msg('Decisión del Consejo registrada.', 'success');
-        }).catch(function (error) { msg(error.message); })
-          .finally(function () { busy(button, false, 'Guardar'); });
-      });
-
-      var ENDPOINT_POR_ACCION_APELACION = {
-        ratificar: 'apelacion-ratificar',
-        revocar: 'apelacion-revocar'
-      };
-
-      $('casoApelacionResolverForm').addEventListener('submit', function (event) {
-        event.preventDefault();
-        hideMsg();
-        if (!casoConvivenciaActual) return;
-
-        var accion = (event.submitter && event.submitter.dataset.accion) || 'ratificar';
-        var ruta = ENDPOINT_POR_ACCION_APELACION[accion];
-        var resolucion = $('casoApelacionResolverResolucion').value.trim();
-        if (!resolucion) {
-          msg('La resolución es requerida.');
-          return;
-        }
-
-        var button = event.submitter;
-        busy(button, true, 'Guardando…');
-
-        withIdToken(function (idToken) {
-          return apiFetch('/api/v1/convivencia/casos/' + casoConvivenciaActual.id + '/' + ruta, idToken, {
-            method: 'PATCH',
-            body: { resolucion: resolucion, notasAdmin: $('casoApelacionResolverNotas').value.trim() || undefined }
-          });
-        }).then(function (resp) {
-          casoConvivenciaActual = resp.data;
-          renderDetalleCasoConvivencia(resp.data);
-          msg('Apelación resuelta.', 'success');
-        }).catch(function (error) { msg(error.message); })
-          .finally(function () { busy(button, false, 'Guardar'); });
-      });
+      $('personalCancelarEdicion').addEventListener('click', prepararFormularioPersonal);
 
       // ===== IMPORTACIÓN DE CARTERA =====
       
@@ -2689,7 +2109,6 @@ var config = window.ADMIN_DATOS_CONFIG || {};
   AdminDatos.registrarModulo = registrarModulo;
   AdminDatos.mode = mode;
   AdminDatos.loadDashboard = loadDashboard;
-  AdminDatos.cargarCasosConvivencia = cargarCasosConvivencia;
   AdminDatos.loadPersonal = loadPersonal;
   AdminDatos.cargarReservasAgenda = cargarReservasAgenda;
 

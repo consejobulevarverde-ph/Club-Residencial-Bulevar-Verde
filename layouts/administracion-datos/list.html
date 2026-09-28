@@ -69,8 +69,8 @@
           <button id="showPersonal" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-person-badge me-1"></i>Personal
           </button>
-          <button id="showReporteVehiculos" type="button" class="btn btn-outline-success mode-button">
-            <i class="bi bi-clipboard-data me-1"></i>Reporte Vehículos
+          <button id="showVehiculos" type="button" class="btn btn-outline-success mode-button">
+            <i class="bi bi-car-front me-1"></i>Vehículos
           </button>
           <button id="btnImportarCartera" class="btn btn-success">
             <i class="bi bi-file-earmark-excel me-1"></i>Importar Cartera
@@ -96,18 +96,18 @@
       </section>
 
       <section id="casosConvivenciaView" class="hidden">
-        {{ partial "administracion-datos/casos/casos-convivencia" . }}
+        {{ partial "convivencia-casos/index.html" (dict "ctx" . "modo" "admin") }}
       </section>
 
-      <section id="reporteVehiculosView" class="hidden">
-        {{ partial "vehiculos-reporte.html" . }}
+      <section id="vehiculosView" class="hidden">
+        {{ partial "vehiculos/index.html" . }}
       </section>
     </section>
 
     {{ partial "administracion-datos/cartera-import-modal" . }}
     {{ partial "administracion-datos/reservas/modales" . }}
     {{ partial "administracion-datos/reservas/modal-zona" . }}
-    {{ partial "administracion-datos/casos/modales" . }}
+    {{ partial "convivencia-casos/modales.html" . }}
     {{ partial "administracion-datos/dashboard-contacto-modal" . }}
   </main>
 
@@ -122,14 +122,15 @@
     };
   </script>
 
-  <script src="{{ "js/administracion-datos/core.js" | relURL }}?v=1"></script>
+  <script src="{{ "js/administracion-datos/core.js" | relURL }}?v=2"></script>
   <script src="{{ "js/administracion-datos/dashboard.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/reservas-catalogo.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/reservas-agenda.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/reservas-formulario.js" | relURL }}?v=1"></script>
-  <script src="{{ "js/administracion-datos/personal.js" | relURL }}?v=1"></script>
-  <script src="{{ "js/administracion-datos/casos-convivencia.js" | relURL }}?v=1"></script>
-  <script src="{{ "js/administracion-datos/reporte-vehiculos.js" | relURL }}?v=1"></script>
+  <script src="{{ "js/administracion-datos/personal.js" | relURL }}?v=2"></script>
+  <script src="{{ "js/convivencia-casos.js" | relURL }}?v=1"></script>
+  <script src="{{ "js/administracion-datos/casos-convivencia.js" | relURL }}?v=2"></script>
+  <script src="{{ "js/administracion-datos/vehiculos.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/cartera-import.js" | relURL }}?v=1"></script>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

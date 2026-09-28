@@ -1,17 +1,20 @@
 (function () {
   'use strict';
 
-  var config = window.VEHICULOS_REPORTE_CONFIG || {};
+  var config = window.VEHICULOS_CONFIG || {};
   var API_BASE = config.apiBase || '';
 
   var ORIGENES = {
     WEB_VIGILANCIA: 'Vigilancia',
     AUTOSERVICIO_RESIDENTE: 'Residente'
   };
+  var PLACAS_SIN_PLACA = ['ELECTRICO', 'SIN PLACA'];
 
+  var subVista = 'registrar';
   var movimientos = [];
   var rangoActual = null;
-  var iniciado = false;
+  var reporteIniciado = false;
+  var reporteDesactualizado = false;
 
   function $(id) { return document.getElementById(id); }
 
@@ -45,9 +48,142 @@
     });
   }
 
+  function apiFetch(path, options) {
+    options = options || {};
+    return getAuthToken().then(function (token) {
+      var headers = { Authorization: 'Bearer ' + token };
+      if (options.body) headers['Content-Type'] = 'application/json';
+      return fetch(API_BASE + path, {
+        method: options.method || 'GET',
+        headers: headers,
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        if (!res.ok) throw new Error((body.error && body.error.message) || 'No fue posible completar la solicitud.');
+        return body;
+      });
+    });
+  }
+
+  function show(id, visible) {
+    $(id).classList.toggle('hidden', !visible);
+  }
+
+  function busy(button, active, label) {
+    if (active) {
+      button.dataset.old = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + label;
+    } else {
+      button.disabled = false;
+      button.innerHTML = button.dataset.old || label;
+    }
+  }
+
   function toIsoDate(date) {
     return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
   }
+
+  // ===== Sub-pestañas =====
+
+  function modoVehiculos(name) {
+    subVista = name;
+    var registrar = name === 'registrar';
+    show('vehiculosRegistrarView', registrar);
+    show('vehiculosReporteView', !registrar);
+    $('showVehiculosRegistrar').classList.toggle('active', registrar);
+    $('showVehiculosReporte').classList.toggle('active', !registrar);
+
+    if (registrar) {
+      $('vehApartment').focus();
+    } else if (!reporteIniciado) {
+      reporteIniciado = true;
+      setRango('mes');
+      consultar();
+    } else if (reporteDesactualizado) {
+      consultar();
+    }
+  }
+
+  // ===== Registrar =====
+
+  function registroMsg(text, type) {
+    var box = $('vehRegistroAlert');
+    box.className = 'alert alert-' + (type || 'danger');
+    box.textContent = text;
+    box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  function registroHideMsg() {
+    $('vehRegistroAlert').classList.add('hidden');
+  }
+
+  function placaValida(placa, tipoVehiculo) {
+    if (PLACAS_SIN_PLACA.indexOf(placa) !== -1) return true;
+    if (tipoVehiculo === 'CARRO') return /^[A-Z]{3}\d{3}$/.test(placa);
+    if (tipoVehiculo === 'MOTO') return /^[A-Z]{3}\d{2}[A-Z]$/.test(placa);
+    return false;
+  }
+
+  function registrarVehiculo(event) {
+    event.preventDefault();
+    registroHideMsg();
+
+    if (!$('confirmVehicleRegistration').checked) {
+      registroMsg('Confirma que revisaste la información.', 'warning');
+      return;
+    }
+
+    var apartment = $('vehApartment').value.trim();
+    if (!/^\d{1,4}$/.test(apartment)) {
+      registroMsg('El apartamento debe tener entre 1 y 4 dígitos.', 'warning');
+      return;
+    }
+
+    var tipoVehiculo = $('vehTipoVehiculo').value;
+    var placa = $('vehPlaca').value.trim().toUpperCase().replace(/\s+/g, ' ');
+    if (!placaValida(placa, tipoVehiculo)) {
+      registroMsg('La placa no corresponde al formato del tipo de vehículo (o escribe ELECTRICO / SIN PLACA).', 'warning');
+      return;
+    }
+
+    var button = $('registerVehicleBtn');
+    busy(button, true, 'Registrando…');
+
+    apiFetch('/api/v1/vigilancia/registrar-vehiculo', {
+      method: 'POST',
+      body: {
+        apartamento: apartment,
+        tipoVehiculo: tipoVehiculo,
+        tipoVinculo: $('vehTipoVinculo').value,
+        placa: placa
+      }
+    }).then(function (body) {
+      renderRegistroResultado(body.data);
+      $('vehicleRegistrationForm').reset();
+      registroMsg('El vehículo fue registrado correctamente.', 'success');
+      reporteDesactualizado = true;
+    }).catch(function (error) {
+      registroMsg(error.message);
+    }).then(function () {
+      busy(button, false, 'Registrar vehículo');
+    });
+  }
+
+  function renderRegistroResultado(data) {
+    $('vehicleRegistrationResult').innerHTML =
+      '<article class="surface registration-result p-4">' +
+      '<h3 class="h5 text-success fw-bold">' +
+      '<i class="bi bi-check-circle-fill me-2"></i>' +
+      'Registro completado' +
+      '</h3>' +
+      '<p class="mb-0">Vehículo <span class="plate">' + esc(data.placa) + '</span> (' + esc(data.tipoVehiculo) + ') quedó registrado en la unidad ' +
+      '<strong>' + esc(data.codigoOficial) + '</strong> como ' + esc(data.tipoVinculo) + '.</p>' +
+      '</article>';
+  }
+
+  // ===== Reporte =====
 
   function setRango(tipo) {
     var hoy = new Date();
@@ -81,10 +217,6 @@
 
   function origenLabel(origen) {
     return ORIGENES[origen] || 'Importación';
-  }
-
-  function show(id, visible) {
-    $(id).classList.toggle('hidden', !visible);
   }
 
   function filtrados() {
@@ -145,32 +277,27 @@
     show('vrTruncado', false);
     show('vrLoading', true);
     $('vrConsultar').disabled = true;
+    reporteDesactualizado = false;
 
-    getAuthToken().then(function (token) {
-      var url = API_BASE + '/api/v1/vigilancia/reportes/vehiculos?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
-      return fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-    }).then(function (res) {
-      return res.json().catch(function () { return {}; }).then(function (body) {
-        if (!res.ok) throw new Error((body.error && body.error.message) || 'No fue posible consultar el reporte.');
-        return body.data;
+    apiFetch('/api/v1/vigilancia/reportes/vehiculos?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta))
+      .then(function (body) {
+        var data = body.data;
+        movimientos = data.movimientos || [];
+        rangoActual = { desde: data.desde, hasta: data.hasta };
+        $('vrTotalAsignados').textContent = data.totales.asignados;
+        $('vrTotalDesasignados').textContent = data.totales.desasignados;
+        show('vrTruncado', Boolean(data.truncado));
+        render();
+      }).catch(function (error) {
+        movimientos = [];
+        render();
+        show('vrEmpty', false);
+        $('vrError').textContent = error.message;
+        show('vrError', true);
+      }).then(function () {
+        show('vrLoading', false);
+        $('vrConsultar').disabled = false;
       });
-    }).then(function (data) {
-      movimientos = data.movimientos || [];
-      rangoActual = { desde: data.desde, hasta: data.hasta };
-      $('vrTotalAsignados').textContent = data.totales.asignados;
-      $('vrTotalDesasignados').textContent = data.totales.desasignados;
-      show('vrTruncado', Boolean(data.truncado));
-      render();
-    }).catch(function (error) {
-      movimientos = [];
-      render();
-      show('vrEmpty', false);
-      $('vrError').textContent = error.message;
-      show('vrError', true);
-    }).then(function () {
-      show('vrLoading', false);
-      $('vrConsultar').disabled = false;
-    });
   }
 
   function csvCell(value) {
@@ -212,8 +339,21 @@
     setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
   }
 
+  // ===== Init =====
+
   function init() {
-    if (!$('vrForm')) return;
+    if (!$('vehiculosRegistrarView')) return;
+
+    $('showVehiculosRegistrar').addEventListener('click', function () { modoVehiculos('registrar'); });
+    $('showVehiculosReporte').addEventListener('click', function () { modoVehiculos('reporte'); });
+
+    $('vehApartment').addEventListener('input', function () {
+      this.value = this.value.replace(/\D/g, '').slice(0, 4);
+    });
+    $('vehPlaca').addEventListener('input', function () {
+      this.value = this.value.toUpperCase();
+    });
+    $('vehicleRegistrationForm').addEventListener('submit', registrarVehiculo);
 
     $('vrForm').addEventListener('submit', function (event) {
       event.preventDefault();
@@ -231,10 +371,8 @@
   }
 
   function mostrar() {
-    if (iniciado || !$('vrForm')) return;
-    iniciado = true;
-    setRango('mes');
-    consultar();
+    if (!$('vehiculosRegistrarView')) return;
+    modoVehiculos(subVista);
   }
 
   if (document.readyState === 'loading') {
@@ -243,5 +381,5 @@
     init();
   }
 
-  window.BVVehiculosReporte = { mostrar: mostrar };
+  window.BVVehiculos = { mostrar: mostrar };
 }());

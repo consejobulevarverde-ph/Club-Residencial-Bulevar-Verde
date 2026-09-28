@@ -984,6 +984,24 @@
             <p class="mb-0"><strong>Justificación:</strong></p>
             <p id="sancionPropuestaJustificacion" class="locked rounded p-3"></p>
             <p class="small text-muted mb-0">Esta propuesta está pendiente de aprobación del Consejo de Administración.</p>
+
+            <div id="sancionAllanamientoBloque" class="border-top mt-3 pt-3 hidden">
+              <h6 class="mb-2"><i class="bi bi-hand-thumbs-up me-2"></i>Aceptar los cargos con descuento</h6>
+              <p class="mb-2">Si aceptas los cargos ahora, la sanción se reduce a <strong>$<span id="sancionAllanamientoValor"></span></strong>
+                (valor propuesto: $<span id="sancionAllanamientoValorPropuesto"></span>).</p>
+              <form id="sancionAllanamientoForm">
+                <div class="form-check mb-3">
+                  <input class="form-check-input" type="checkbox" id="sancionAllanamientoConfirmo" required>
+                  <label class="form-check-label small" for="sancionAllanamientoConfirmo">
+                    Acepto expresamente haber incurrido en la conducta descrita y solicito acogerme al descuento del 50%
+                    sobre la sanción propuesta. Entiendo que esta decisión es definitiva y renuncio a presentar apelación.
+                  </label>
+                </div>
+                <button type="submit" class="btn btn-outline-success" id="sancionAllanamientoBtn">
+                  <i class="bi bi-check2-circle me-2"></i>Aceptar y solicitar descuento
+                </button>
+              </form>
+            </div>
           </div>
 
           <div id="sancionImpuestaSection" class="surface p-4 mb-3 hidden">
@@ -1306,6 +1324,7 @@
           CERRADO_SIN_SANCION: '<span class="badge badge-resolved">Cerrado sin sanción</span>',
           SANCION_RATIFICADA: '<span class="badge bg-dark">Sanción ratificada</span>',
           SANCION_REVOCADA: '<span class="badge badge-resolved">Sanción revocada</span>',
+          SANCION_APROBADA_ALLANAMIENTO: '<span class="badge bg-dark">Sanción aceptada con descuento</span>',
           ARCHIVADO: '<span class="badge bg-secondary">Archivado</span>',
         };
         return badges[estado] || '<span class="badge bg-secondary">' + esc(estado) + '</span>';
@@ -1324,6 +1343,7 @@
         APELACION_PRESENTADA: 'Apelación presentada',
         APELACION_RATIFICADA: 'El Consejo ratificó la sanción',
         APELACION_REVOCADA: 'El Consejo revocó la sanción',
+        ALLANAMIENTO_ACEPTADO: 'Aceptaste los cargos con descuento del 50%',
       };
 
       function cargarSanciones() {
@@ -1427,6 +1447,16 @@
           $('sancionPropuestaJustificacion').textContent = caso.sancionPropuestaJustificacion || '';
         } else {
           $('sancionPropuestaSection').classList.add('hidden');
+        }
+
+        // La API decide si aplica (estado, propuesta y ausencia de sanción) y calcula el valor.
+        $('sancionAllanamientoForm').reset();
+        if (caso.allanamientoDisponible) {
+          $('sancionAllanamientoBloque').classList.remove('hidden');
+          $('sancionAllanamientoValor').textContent = formatearMonedaSancion(caso.valorAllanamiento);
+          $('sancionAllanamientoValorPropuesto').textContent = formatearMonedaSancion(caso.sancionPropuestaValor);
+        } else {
+          $('sancionAllanamientoBloque').classList.add('hidden');
         }
 
         if (caso.sancion) {
@@ -1803,6 +1833,35 @@
           uploadStatus.innerHTML = '';
         });
       }
+
+      /* ---------- Allanamiento: aceptar cargos con 50% de descuento ---------- */
+
+      $('sancionAllanamientoForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        clearAlert();
+        if (!currentSancion) return;
+        if (!$('sancionAllanamientoConfirmo').checked) {
+          alertMessage('Debes marcar la casilla de aceptación para continuar.');
+          return;
+        }
+        if (!confirm('¿Confirmas que aceptas los cargos con el descuento? Esta decisión es definitiva y no podrás apelar.')) {
+          return;
+        }
+
+        var btn = $('sancionAllanamientoBtn');
+        btn.disabled = true;
+        apiFetch('/sanciones/' + encodeURIComponent(currentSancion.id) + '/allanamiento', {
+          method: 'POST',
+          body: { confirmo: true },
+        }).then(function () {
+          alertMessage('Aceptaste los cargos. La sanción quedó registrada con el descuento del 50%.', 'success');
+          verDetalleSancion(currentSancion.id);
+        }).catch(function (error) {
+          alertMessage('No fue posible registrar la aceptación: ' + error.message);
+        }).finally(function () {
+          btn.disabled = false;
+        });
+      });
 
       /* ---------- Apelación de sanciones de convivencia ---------- */
 
