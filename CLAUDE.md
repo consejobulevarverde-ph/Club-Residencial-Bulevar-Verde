@@ -7,6 +7,7 @@
 **Key Pages**:
 - `/` — home (landing)
 - `/datos-personales/` — resident self-service portal (login, profile, residents, vehicles, pets, emergency, sanciones)
+- `/comite-convivencia-datos/` — Comité de Convivencia portal (unlisted URL, document-only login)
 - Other static pages and news
 
 **Deployment**: `hugo --gc --minify` → `firebase deploy --only hosting`
@@ -20,9 +21,14 @@
 
 ### 1. Session Tokens (Resident Portal Login)
 
-Stored in `localStorage` under key `bvDatosPersonalesToken`. Format: HMAC-SHA256 signed, base64url-encoded plaintext (NOT encrypted). Only tamper-proof.
+Stored in `sessionStorage` under key `bvDatosPersonalesToken`. Format: HMAC-SHA256 signed, base64url-encoded plaintext (NOT encrypted). Only tamper-proof.
 
 Token obtained from backend (`/api/v1/datos-personales/validar`), then used for all authenticated requests to API. TTL: 2 hours.
+
+The Comité de Convivencia page uses the same token mechanism with its own key
+(`sessionStorage.bvComiteConvivenciaToken`, from `/api/v1/comite-convivencia/iniciar-sesion`). The API
+signs each token type with a different purpose, so a comité token never works in `datos-personales` and
+vice versa.
 
 **Important**: Never store sensitive PII in plaintext payload. Use only `{ personaId, unidadId }`.
 
@@ -105,9 +111,11 @@ by `bulevar-verde-api`'s `convivencia` module and `datos-personales` sanciones s
 state machine now, not just create+resolve — see `bulevar-verde-api/doc/CONVIVENCIA_NOTIFICATIONS.md`
 for the full diagram; short version: `PENDIENTE_DESCARGOS` → `CON_DESCARGOS` → (formal cases only)
 `PENDIENTE_APROBACION_CONSEJO` → `SANCION_APROBADA` → optional `EN_APELACION` →
-`SANCION_RATIFICADA`/`SANCION_REVOCADA`, with `CERRADO_SIN_SANCION`/`ARCHIVADO` side branches. A case's
+`SANCION_RATIFICADA`/`SANCION_REVOCADA`, with `CERRADO_SIN_SANCION`/`ARCHIVADO`/`ANULADO` side branches
+and `SANCION_APROBADA_ALLANAMIENTO` (resident accepted the charges with a 50% discount, no appeal). A case's
 severity decides at creation time whether it even needs the formal process (`requiereProcesoFormal` —
-"Llamado de Atención" doesn't; everything else does).
+"Llamado de Atención" doesn't; everything else does). Severity can be reclassified (admin or comité) only
+while no `Sancion` exists.
 
 1. **Case creation** — `vigilancia-datos/list.html` / `administracion-datos/list.html` (post-refactor
    shell), shared `partials/convivencia-form.html` + `static/js/convivencia-form.js` wizard. Firebase-authenticated,
@@ -120,15 +128,25 @@ severity decides at creation time whether it even needs the formal process (`req
    `POST /sanciones/:caseCode/apelacion` (only once a sanction is `SANCION_APROBADA`). The unit is
    always derived server-side from the session — never sent by the client. The resident sees the
    proposed sanction amount as soon as administración stages it, not only after Consejo approval.
-3. **Admin case management** — `layouts/partials/administracion-datos/casos/` partials +
-   `static/js/administracion-datos/core.js` (via `window.AdminDatos` namespace), "Casos Convivencia" tab.
+   While that proposal is pending (`PENDIENTE_APROBACION_CONSEJO`) the resident can accept the charges
+   with a 50% discount (`POST /sanciones/:caseCode/allanamiento`, `{ confirmo: true }`) — the API returns
+   `allanamientoDisponible`/`valorAllanamiento` in the detail so the rule lives in one place. Legal basis:
+   analogy with Art. 180 Ley 1801/2016, valid only if the conjunto's reglamento adopts it.
+3. **Admin case management** — shared partial `layouts/partials/convivencia-casos/` +
+   `static/js/convivencia-casos.js` (self-contained, not in `core.js`), "Casos Convivencia" tab.
    The old single "resolver" form is now a state-dependent dispatcher: from `PENDIENTE_DESCARGOS`/`CON_DESCARGOS`
    it shows close/archive plus (formal cases only) "registrar acta de comité" and "proponer sanción
    económica"; from `PENDIENTE_APROBACION_CONSEJO` it shows aprobar/rechazar/devolver; from
    `EN_APELACION` it shows ratificar/revocar. Always shows the case's event timeline
    (`EventoCasoConvivencia`) and the linked `Sancion` record when one exists. Vigilancia never gets
    this panel — case creation is its only role in the process. See
-   `layouts/partials/administracion-datos/casos/CLAUDE.md` for full architecture.
+   `layouts/partials/convivencia-casos/CLAUDE.md` for full architecture.
+4. **Comité de Convivencia** — `/comite-convivencia-datos/` renders the same partial in `comite` mode
+   against `/api/v1/comite-convivencia`. The comité is conciliatory (Ley 675, Art. 58) and cannot impose
+   sanctions: it registers its acta, reclassifies severity, closes/archives and annuls — only while the
+   case has no `Sancion`. Members are registered residents in `MiembroOrganoGobierno`
+   (`organo: "COMITE_CONVIVENCIA"`, informational `cargo`), managed from the admin "Personal" tab with the
+   "Comité de Convivencia" filter. The same table is ready for `CONSEJO_ADMINISTRACION` later.
 
 Evidence still lands in the same Google Drive folder as before (`soporte-sanciones-convivencia`),
 now uploaded by the API itself (`src/services/drive.ts` in bulevar-verde-api) via an OAuth2 refresh
@@ -315,7 +333,7 @@ Frontend (firebase.web.app) calls backend (Cloud Run) — CORS whitelist on back
 
 **Hugo build fails**: Run `hugo server` for detailed errors. Check syntax, partials, range loops.
 
-**Frontend won't authenticate**: Check `localStorage.bvDatosPersonalesToken` in DevTools. Verify backend is reachable. Check CORS origin whitelist.
+**Frontend won't authenticate**: Check `sessionStorage.bvDatosPersonalesToken` in DevTools. Verify backend is reachable. Check CORS origin whitelist.
 
 **Evidence gallery shows broken images**: Browser console should show fallback retries. Verify Google Drive sharing. Try image URL directly.
 
@@ -362,11 +380,12 @@ Contacto [opcional badge]
 - Email: "pepito.perez@ejemplo.com"
 - Phone: "+57 300 123 4567"
 
-### Reporte de Vehículos (shared partial)
+### Vehículos tab (shared partial: registrar + reporte)
 
-`partials/vehiculos-reporte.html` + `static/js/vehiculos-reporte.js`, included in both `vigilancia-datos` (`#vehicleReportView`, via its inline `mode('vehicleReport')`) and `administracion-datos` (`#reporteVehiculosView`, via the `reporte-vehiculos.js` stub on `AdminDatos.registrarModulo`). Lazy-loads through `window.BVVehiculosReporte.mostrar()`.
+`partials/vehiculos/` (`index.html` sub-tab container + `registrar.html` + `reporte.html`) with a single script `static/js/vehiculos.js`, rendered identically in `vigilancia-datos` (`#vehiculosView`, via its inline `mode('vehicle')`) and `administracion-datos` (`#vehiculosView`, via the `administracion-datos/vehiculos.js` stub on `AdminDatos.registrarModulo`). Entry point `window.BVVehiculos.mostrar()`. See `layouts/partials/vehiculos/CLAUDE.md`.
 
-Calls `GET /api/v1/vigilancia/reportes/vehiculos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD` (max 93 days, Colombia time) → Data Connect `ReporteMovimientosVehiculos`. "Asignado" = link's `vigenteDesde` in range; "Desasignado" = `vigenteHasta` in range. Client-side filters + CSV export (`;` separator, UTF-8 BOM for Excel).
+- **Registrar** → `POST /api/v1/vigilancia/registrar-vehiculo` (router allows vigilancia, administrador, superadmin).
+- **Reporte** → `GET /api/v1/vigilancia/reportes/vehiculos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD` (max 93 days, Colombia time) → Data Connect `ReporteMovimientosVehiculos`. "Asignado" = link's `vigenteDesde` in range; "Desasignado" = `vigenteHasta` in range. Client-side filters + CSV export (`;` separator, UTF-8 BOM for Excel).
 
 ## UI Design & Sample Data Practices
 

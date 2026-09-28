@@ -461,6 +461,9 @@ query ObtenerCasoConvivenciaResidenteAdmin(
       sancionPropuestaTipo
       sancionPropuestaValor
       sancionPropuestaJustificacion
+      sancionPropuestaPersona {
+        id
+      }
       apelacionTexto
       fechaApelacion
       resolucion
@@ -514,5 +517,19 @@ mutation RegistrarApelacionCasoConvivenciaAdmin(
   caso_convivencia_update(
     id: $id
     data: { estado: "EN_APELACION", apelacionTexto: $apelacionTexto, fechaApelacion: $fechaApelacion }
+  )
+}
+
+# Allanamiento: el residente acepta los cargos y la sanción propuesta con 50% de
+# descuento, sin aprobación del Consejo y renunciando a la apelación (estado terminal).
+mutation AplicarAllanamientoCasoConvivenciaAdmin(
+  $id: UUID!
+  $resolucion: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { estado: "SANCION_APROBADA_ALLANAMIENTO", resolucion: $resolucion }
   )
 }

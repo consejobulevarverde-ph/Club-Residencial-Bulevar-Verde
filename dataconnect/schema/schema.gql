@@ -355,3 +355,27 @@ type EventoCasoConvivencia
   actorTipo: String!
   fechaCreacion: Timestamp! @default(expr: "request.time")
 }
+
+# Membresía de una persona (residente) a un órgano de gobierno de la copropiedad.
+# Una fila por persona y órgano (clave compuesta): una persona puede estar en
+# ninguno, uno o ambos órganos, cada uno con su propio cargo y estado.
+# organo: "COMITE_CONVIVENCIA" | "CONSEJO_ADMINISTRACION" (string, no enum de schema).
+# cargo es informativo (Presidente, Secretario, Tesorero, Vocal…); nunca decide permisos.
+type MiembroOrganoGobierno
+  @table(
+    name: "miembros_organo_gobierno"
+    singular: "miembro_organo_gobierno"
+    plural: "miembros_organo_gobierno"
+    key: ["persona", "organo"]
+  ) {
+  id: UUID! @default(expr: "uuidV4()") @unique
+  persona: Persona!
+  organo: String!
+  cargo: String
+  activo: Boolean! @default(value: true)
+  fechaVinculacion: Date
+  fechaRetiro: Date
+  creadoPorUid: String
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}

@@ -1,0 +1,95 @@
+# Membresía de personas (residentes) a órganos de gobierno de la copropiedad:
+# COMITE_CONVIVENCIA hoy, CONSEJO_ADMINISTRACION a futuro. Todas NO_ACCESS: la API
+# autoriza antes de invocarlas (login del comité sin sesión Firebase, gestión solo
+# administrador/superadmin).
+
+query BuscarMiembroOrganoPorDocumentoAdmin(
+  $numeroDocumento: String!
+  $organo: String!
+)
+@auth(level: NO_ACCESS) {
+  personas(where: { numeroDocumento: { eq: $numeroDocumento }, activo: { eq: true } }, limit: 2) {
+    id
+    nombreCompleto
+    membresias: miembros_organo_gobierno_on_persona(
+      where: { organo: { eq: $organo }, activo: { eq: true } }
+      limit: 1
+    ) {
+      id
+      cargo
+    }
+  }
+}
+
+query ObtenerMembresiaOrganoActivaAdmin(
+  $personaId: UUID!
+  $organo: String!
+)
+@auth(level: NO_ACCESS) {
+  miembros_organo_gobierno(
+    where: { personaId: { eq: $personaId }, organo: { eq: $organo }, activo: { eq: true } }
+    limit: 1
+  ) {
+    id
+  }
+}
+
+query ListarMiembrosOrganoAdmin(
+  $organo: String!
+)
+@auth(level: NO_ACCESS) {
+  miembros_organo_gobierno(where: { organo: { eq: $organo } }, orderBy: [{ fechaCreacion: ASC }]) {
+    id
+    cargo
+    activo
+    fechaVinculacion
+    fechaRetiro
+    persona {
+      id
+      tipoDocumento
+      numeroDocumento
+      nombreCompleto
+    }
+  }
+}
+
+# Inserta la membresía o reactiva la fila existente de esa persona en ese órgano
+# (la clave compuesta persona+organo garantiza una sola fila por pareja).
+mutation GuardarMiembroOrganoAdmin(
+  $personaId: UUID!
+  $organo: String!
+  $cargo: String
+  $fechaVinculacion: Date!
+  $creadoPorUid: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  miembro_organo_gobierno_upsert(
+    data: {
+      personaId: $personaId
+      organo: $organo
+      cargo: $cargo
+      activo: true
+      fechaVinculacion: $fechaVinculacion
+      fechaRetiro: null
+      creadoPorUid: $creadoPorUid
+    }
+  )
+}
+
+# El filtro por organo evita que un endpoint de un órgano modifique por id la
+# fila de otro órgano.
+mutation ActualizarMiembroOrganoAdmin(
+  $id: UUID!
+  $organo: String!
+  $cargo: String
+  $activo: Boolean!
+  $fechaRetiro: Date
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  miembro_organo_gobierno_updateMany(
+    where: { id: { eq: $id }, organo: { eq: $organo } }
+    data: { cargo: $cargo, activo: $activo, fechaRetiro: $fechaRetiro }
+  )
+}
