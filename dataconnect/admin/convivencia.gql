@@ -60,17 +60,31 @@ mutation CrearEvidenciaConvivenciaAdmin(
   evidencia_convivencia_insert(data: $input)
 }
 
-# Filtro de estado opcional vía "in": la API omite $estados (o pasa un arreglo
-# vacío/null) cuando el admin no quiere filtrar por estado, siguiendo el mismo
-# patrón que ListarColaboradores usa para su filtro opcional de rol.
+# OJO: "in"/"eq" NO toleran null como "sin filtro" (a diferencia de lo que asumía una
+# versión anterior de este comentario) — probado contra el emulador, un $severidad nulo
+# con "eq" (o un $estados nulo con "in") devuelve cero filas, no "todas". Por eso, igual
+# que $estados (que ya enumeraba todos los ESTADOS_CASO_CONVIVENCIA en vez de pasar null),
+# $severidades ahora es un array no nulo y la API pasa todas las SEVERIDADES_CONVIVENCIA
+# cuando no se filtra por severidad. $apartamentoContiene/$motivoContiene usan "contains"
+# (mismo operador que ya usa buscar_unidades.gql), que tampoco tolera null (falla con
+# "$apartamentoContiene is null") — por eso son String! y la API pasa "" cuando no se
+# filtra: toda cadena "contains" la cadena vacía, así que equivale a no filtrar.
 query ListarCasosConvivenciaAdmin(
-  $estados: [String!]
+  $estados: [String!]!
+  $severidades: [String!]!
+  $apartamentoContiene: String!
+  $motivoContiene: String!
   $limit: Int!
   $offset: Int!
 )
 @auth(level: NO_ACCESS) {
   casos_convivencia(
-    where: { estado: { in: $estados } }
+    where: {
+      estado: { in: $estados }
+      severidad: { in: $severidades }
+      apartamento: { contains: $apartamentoContiene }
+      motivo: { contains: $motivoContiene }
+    }
     orderBy: [{ fechaCreacion: DESC }]
     limit: $limit
     offset: $offset
@@ -521,6 +535,7 @@ query ObtenerCasoConvivenciaResidenteAdmin(
         estadoAnterior
         estadoNuevo
         descripcion
+        actorTipo
         fechaCreacion
       }
     }
