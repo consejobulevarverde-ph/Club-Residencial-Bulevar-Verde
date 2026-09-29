@@ -626,6 +626,10 @@
       msg('Los descargos deben tener al menos 20 caracteres.');
       return;
     }
+    if (descargos.length > 5000) {
+      msg('Los descargos no pueden superar 5000 caracteres (tienen ' + descargos.length + ').');
+      return;
+    }
 
     var files = Array.prototype.slice.call($('casoDescargosEvidenciaInput').files || []);
     var estadoEl = $('casoDescargosEvidenciaEstado');
