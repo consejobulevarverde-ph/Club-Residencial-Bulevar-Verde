@@ -46,9 +46,19 @@ Cada bloque se muestra si la acción está en `acciones` **y** el estado del cas
 | `PROPONER_SANCION` | `casoAccionesProponerSancion` | ✓ | | proceso formal, en trámite |
 | `CONSEJO_DECISION` | `casoAccionesConsejo` | ✓ | | `PENDIENTE_APROBACION_CONSEJO` |
 | `RESOLVER_APELACION` | `casoAccionesApelacion` | ✓ | | `EN_APELACION` |
+| `DESCARGOS_EN_NOMBRE` | `casoAccionesDescargos` (registrar descargos por el residente) | ✓ | ✓ | `PENDIENTE_DESCARGOS`, sin `descargosResidente` — mismo endpoint/schema que usa el propio residente (`registrarDescargos` en `convivencia/actions.ts`) |
 
 El comité es conciliador (Ley 675, Art. 58): no aprueba ni propone sanciones y solo actúa antes de que el
 caso tenga una sanción impuesta. La API aplica las mismas reglas; la UI solo evita mostrar lo que fallaría.
+
+## Filtros de la lista
+
+`casosConvivenciaFiltroApartamento`/`Severidad`/`PalabraClave`, junto al filtro de estado — todos
+server-side (`GET /casos?estado=&severidad=&apartamento=&q=`). `apartamento`/`q` son coincidencia parcial
+(`contains`), **sensible a mayúsculas/minúsculas** (Data Connect no ofrece un `contains` case-insensitive
+aquí); `q` solo busca en `motivo` (no hay `_or` disponible en las queries de Data Connect de este
+repo para buscar también en `descripcion`/`razonNotificacion` en una sola consulta). Los inputs de texto
+usan debounce (~350 ms); el select de severidad recarga al `change`, igual que el de estado.
 
 ## Reglas
 

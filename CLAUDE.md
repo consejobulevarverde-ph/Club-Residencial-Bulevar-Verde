@@ -127,7 +127,10 @@ while no `Sancion` exists.
    `GET /sanciones/:caseCode`, `POST /sanciones/evidencias`, `POST /sanciones/:caseCode/descargos`, and
    `POST /sanciones/:caseCode/apelacion` (only once a sanction is `SANCION_APROBADA`). The unit is
    always derived server-side from the session — never sent by the client. The resident sees the
-   proposed sanction amount as soon as administración stages it, not only after Consejo approval.
+   proposed sanction amount as soon as administración stages it, not only after Consejo approval. If
+   administración/comité registered the descargos on the resident's behalf (they got them by another
+   channel, or a site error), the tab shows an attribution note instead of implying the resident typed
+   them — driven by `actorTipo` on the `DESCARGOS_REGISTRADOS` event, now included in the response.
    While that proposal is pending (`PENDIENTE_APROBACION_CONSEJO`) the resident can accept the charges
    with a 50% discount (`POST /sanciones/:caseCode/allanamiento`, `{ confirmo: true }`) — the API returns
    `allanamientoDisponible`/`valorAllanamiento` in the detail so the rule lives in one place. Legal basis:
@@ -137,16 +140,21 @@ while no `Sancion` exists.
    The old single "resolver" form is now a state-dependent dispatcher: from `PENDIENTE_DESCARGOS`/`CON_DESCARGOS`
    it shows close/archive plus (formal cases only) "registrar acta de comité" and "proponer sanción
    económica"; from `PENDIENTE_APROBACION_CONSEJO` it shows aprobar/rechazar/devolver; from
-   `EN_APELACION` it shows ratificar/revocar. Always shows the case's event timeline
+   `EN_APELACION` it shows ratificar/revocar. From `PENDIENTE_DESCARGOS` without descargos yet, it also
+   shows "Registrar descargos en nombre del residente" (for when they were received by another channel,
+   or a site error) — same evidence-upload flow as the acta-de-comité block, `contexto:
+   "descargo_residente"`. The list has quick filters (apartamento, severidad, palabra clave in motivo)
+   next to the estado filter, all server-side. Always shows the case's event timeline
    (`EventoCasoConvivencia`) and the linked `Sancion` record when one exists. Vigilancia never gets
    this panel — case creation is its only role in the process. See
    `layouts/partials/convivencia-casos/CLAUDE.md` for full architecture.
 4. **Comité de Convivencia** — `/comite-convivencia-datos/` renders the same partial in `comite` mode
    against `/api/v1/comite-convivencia`. The comité is conciliatory (Ley 675, Art. 58) and cannot impose
-   sanctions: it registers its acta, reclassifies severity, closes/archives and annuls — only while the
-   case has no `Sancion`. Members are registered residents in `MiembroOrganoGobierno`
-   (`organo: "COMITE_CONVIVENCIA"`, informational `cargo`), managed from the admin "Personal" tab with the
-   "Comité de Convivencia" filter. The same table is ready for `CONSEJO_ADMINISTRACION` later.
+   sanctions: it registers its acta, reclassifies severity, closes/archives, anula and registers
+   descargos in the resident's name — only while the case has no `Sancion`. Members are registered
+   residents in `MiembroOrganoGobierno` (`organo: "COMITE_CONVIVENCIA"`, informational `cargo`), managed
+   from the admin "Personal" tab with the "Comité de Convivencia" filter. The same table is ready for
+   `CONSEJO_ADMINISTRACION` later.
 
 Evidence still lands in the same Google Drive folder as before (`soporte-sanciones-convivencia`),
 now uploaded by the API itself (`src/services/drive.ts` in bulevar-verde-api) via an OAuth2 refresh

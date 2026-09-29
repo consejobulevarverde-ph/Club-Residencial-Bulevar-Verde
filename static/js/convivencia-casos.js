@@ -136,8 +136,14 @@
     var estados = seleccion === 'EN_TRAMITE'
       ? ['PENDIENTE_DESCARGOS', 'CON_DESCARGOS']
       : (seleccion ? [seleccion] : []);
+    var severidad = $('casosConvivenciaFiltroSeveridad').value;
+    var apartamento = $('casosConvivenciaFiltroApartamento').value.trim();
+    var palabraClave = $('casosConvivenciaFiltroPalabraClave').value.trim();
     var qs = '?limit=' + CASOS_CONVIVENCIA_LIMIT + '&offset=' + casosConvivenciaOffset +
-      estados.map(function (e) { return '&estado=' + encodeURIComponent(e); }).join('');
+      estados.map(function (e) { return '&estado=' + encodeURIComponent(e); }).join('') +
+      (severidad ? '&severidad=' + encodeURIComponent(severidad) : '') +
+      (apartamento ? '&apartamento=' + encodeURIComponent(apartamento) : '') +
+      (palabraClave.length >= 2 ? '&q=' + encodeURIComponent(palabraClave) : '');
 
     apiFetch('/casos' + qs).then(function (resp) {
       var items = resp.data || [];
@@ -275,6 +281,8 @@
     // El comité sesiona normalmente después de los descargos: se permite en ambos estados, una vez.
     mostrarElemento('casoAccionesComite',
       puede('ACTA_COMITE') && enTramite && caso.requiereProcesoFormal && !caso.actaComiteFecha);
+    mostrarElemento('casoAccionesDescargos',
+      puede('DESCARGOS_EN_NOMBRE') && caso.estado === 'PENDIENTE_DESCARGOS' && !caso.descargosResidente);
     mostrarElemento('casoAccionesCierre', puede('CIERRE') && enTramite);
     mostrarElemento('casoAccionesProponerSancion', puede('PROPONER_SANCION') && enTramite && caso.requiereProcesoFormal);
     mostrarElemento('casoAccionesConsejo', puede('CONSEJO_DECISION') && caso.estado === 'PENDIENTE_APROBACION_CONSEJO');
@@ -375,6 +383,8 @@
     $('casoCierreNotas').value = '';
     $('casoActaComiteForm').reset();
     $('casoActaComiteEvidenciaEstado').textContent = '';
+    $('casoDescargosForm').reset();
+    $('casoDescargosEvidenciaEstado').textContent = '';
     $('casoProponerSancionForm').reset();
     $('casoConsejoForm').reset();
     $('casoApelacionResolverForm').reset();
@@ -411,6 +421,15 @@
   // ===== EVENTOS =====
 
   $('casosConvivenciaFiltroEstado').addEventListener('change', function () { cargarCasosConvivencia(true); });
+  $('casosConvivenciaFiltroSeveridad').addEventListener('change', function () { cargarCasosConvivencia(true); });
+
+  var filtroTextoTimeout = null;
+  function filtrarConDebounce() {
+    if (filtroTextoTimeout) clearTimeout(filtroTextoTimeout);
+    filtroTextoTimeout = setTimeout(function () { cargarCasosConvivencia(true); }, 350);
+  }
+  $('casosConvivenciaFiltroApartamento').addEventListener('input', filtrarConDebounce);
+  $('casosConvivenciaFiltroPalabraClave').addEventListener('input', filtrarConDebounce);
 
   $('casosConvivenciaCargarMasBtn').addEventListener('click', function () {
     casosConvivenciaOffset += CASOS_CONVIVENCIA_LIMIT;
@@ -595,6 +614,41 @@
       estadoEl.textContent = '';
       msg(error.message);
     }).finally(function () { busy(button, false, 'Registrar acta'); });
+  });
+
+  $('casoDescargosForm').addEventListener('submit', function (event) {
+    event.preventDefault();
+    hideMsg();
+    if (!casoConvivenciaActual) return;
+
+    var descargos = $('casoDescargosTexto').value.trim();
+    if (descargos.length < 20) {
+      msg('Los descargos deben tener al menos 20 caracteres.');
+      return;
+    }
+
+    var files = Array.prototype.slice.call($('casoDescargosEvidenciaInput').files || []);
+    var estadoEl = $('casoDescargosEvidenciaEstado');
+    var button = event.target.querySelector('button[type="submit"]');
+    busy(button, true, 'Guardando…');
+
+    var subida = Promise.resolve([]);
+    if (files.length) {
+      estadoEl.textContent = 'Subiendo ' + files.length + ' archivo(s)…';
+      subida = subirEvidenciasConvivencia(files, 'descargo_residente', casoConvivenciaActual.caseCode, casoConvivenciaActual.apartamento);
+    }
+    subida.then(function (urls) {
+      estadoEl.textContent = '';
+      return apiFetch('/casos/' + casoConvivenciaActual.id + '/descargos', {
+        method: 'POST',
+        body: { descargos: descargos, evidencias: urls }
+      });
+    }).then(function (resp) {
+      aplicarCasoActualizado(resp.data, 'Descargos registrados en nombre del residente.');
+    }).catch(function (error) {
+      estadoEl.textContent = '';
+      msg(error.message);
+    }).finally(function () { busy(button, false, 'Registrar descargos'); });
   });
 
   $('casoCierreForm').addEventListener('submit', function (event) {

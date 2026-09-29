@@ -1048,6 +1048,7 @@
 
           <div id="sancionDescargosExistentes" class="surface p-4 mb-3 hidden">
             <h5 class="section-title h6 mb-3"><i class="bi bi-check-circle me-2"></i>Tus descargos registrados</h5>
+            <p id="sancionDescargosAtribucion" class="small-note hidden"><i class="bi bi-info-circle me-1"></i><span id="sancionDescargosAtribucionTexto"></span></p>
             <p><strong>Fecha de descargos:</strong> <span id="sancionFechaDescargosRegistrados"></span></p>
             <p><strong>Tu explicación:</strong></p>
             <div id="sancionDescargosTextoRegistrados" class="locked rounded p-3"></div>
@@ -1488,6 +1489,18 @@
           $('sancionDescargosExistentes').classList.remove('hidden');
           $('sancionFechaDescargosRegistrados').textContent = caso.fechaDescargos;
           $('sancionDescargosTextoRegistrados').textContent = caso.descargosResidente;
+
+          // Si administración/comité los registraron en tu nombre (p. ej. los recibieron por
+          // correo), se lo indicamos en vez de dar a entender que tú los escribiste en la página.
+          var eventoDescargos = (caso.eventos || []).filter(function (e) { return e.tipoEvento === 'DESCARGOS_REGISTRADOS'; }).pop();
+          var registradoPorStaff = eventoDescargos && eventoDescargos.actorTipo && eventoDescargos.actorTipo !== 'RESIDENTE';
+          if (registradoPorStaff) {
+            var quien = eventoDescargos.actorTipo === 'COMITE' ? 'el Comité de Convivencia' : 'administración';
+            $('sancionDescargosAtribucionTexto').textContent = 'Registrado por ' + quien + ' en tu nombre.';
+            $('sancionDescargosAtribucion').classList.remove('hidden');
+          } else {
+            $('sancionDescargosAtribucion').classList.add('hidden');
+          }
 
           if (Array.isArray(caso.evidenciasDescargos) && caso.evidenciasDescargos.length > 0) {
             $('sancionEvidenciasDescargosSection').classList.remove('hidden');

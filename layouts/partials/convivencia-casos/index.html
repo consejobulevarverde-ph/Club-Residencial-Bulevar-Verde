@@ -3,27 +3,39 @@
 <div id="casosConvivenciaListView">
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h3 class="section-title h5 mb-0">Casos de convivencia</h3>
-    <select id="casosConvivenciaFiltroEstado" class="form-select form-select-sm" style="max-width:260px" autocomplete="off">
-      <option value="">Todos los estados</option>
-      <option value="EN_TRAMITE" selected>En trámite (todos)</option>
-      <optgroup label="En trámite">
-        <option value="PENDIENTE_DESCARGOS">Pendiente de descargos</option>
-        <option value="CON_DESCARGOS">Descargos recibidos</option>
-      </optgroup>
-      <optgroup label="Proceso sancionatorio">
-        <option value="PENDIENTE_APROBACION_CONSEJO">Pendiente aprobación del Consejo</option>
-        <option value="SANCION_APROBADA">Sanción aprobada</option>
-        <option value="EN_APELACION">En apelación</option>
-      </optgroup>
-      <optgroup label="Cerrado">
-        <option value="CERRADO_SIN_SANCION">Cerrado sin sanción</option>
-        <option value="SANCION_RATIFICADA">Sanción ratificada</option>
-        <option value="SANCION_APROBADA_ALLANAMIENTO">Sanción aceptada con descuento</option>
-        <option value="SANCION_REVOCADA">Sanción revocada</option>
-        <option value="ARCHIVADO">Archivado</option>
-        <option value="ANULADO">Anulado</option>
-      </optgroup>
-    </select>
+    <div class="d-flex flex-wrap gap-2">
+      <input id="casosConvivenciaFiltroApartamento" type="text" class="form-control form-control-sm" style="max-width:140px" placeholder="Apartamento" autocomplete="off">
+      <select id="casosConvivenciaFiltroSeveridad" class="form-select form-select-sm" style="max-width:180px" autocomplete="off">
+        <option value="">Todas las severidades</option>
+        <option value="Llamado de Atención">Llamado de Atención</option>
+        <option value="Leve">Leve</option>
+        <option value="Moderada">Moderada</option>
+        <option value="Grave">Grave</option>
+        <option value="Muy Grave">Muy Grave</option>
+      </select>
+      <input id="casosConvivenciaFiltroPalabraClave" type="text" class="form-control form-control-sm" style="max-width:200px" placeholder="Buscar en el motivo…" autocomplete="off">
+      <select id="casosConvivenciaFiltroEstado" class="form-select form-select-sm" style="max-width:260px" autocomplete="off">
+        <option value="">Todos los estados</option>
+        <option value="EN_TRAMITE" selected>En trámite (todos)</option>
+        <optgroup label="En trámite">
+          <option value="PENDIENTE_DESCARGOS">Pendiente de descargos</option>
+          <option value="CON_DESCARGOS">Descargos recibidos</option>
+        </optgroup>
+        <optgroup label="Proceso sancionatorio">
+          <option value="PENDIENTE_APROBACION_CONSEJO">Pendiente aprobación del Consejo</option>
+          <option value="SANCION_APROBADA">Sanción aprobada</option>
+          <option value="EN_APELACION">En apelación</option>
+        </optgroup>
+        <optgroup label="Cerrado">
+          <option value="CERRADO_SIN_SANCION">Cerrado sin sanción</option>
+          <option value="SANCION_RATIFICADA">Sanción ratificada</option>
+          <option value="SANCION_APROBADA_ALLANAMIENTO">Sanción aceptada con descuento</option>
+          <option value="SANCION_REVOCADA">Sanción revocada</option>
+          <option value="ARCHIVADO">Archivado</option>
+          <option value="ANULADO">Anulado</option>
+        </optgroup>
+      </select>
+    </div>
   </div>
   <div class="surface p-4">
     <div id="casosConvivenciaTabla">Cargando…</div>
@@ -172,6 +184,26 @@
     </form>
   </div>
 
+  <div id="casoAccionesDescargos" class="surface p-4 mb-3 hidden">
+    <h5 class="section-title h6">Registrar descargos en nombre del residente</h5>
+    <p class="small text-muted">Úsalo solo cuando el residente ya te hizo llegar sus descargos por otro
+      medio (por ejemplo, correo electrónico) o no pudo registrarlos por un error en la página.</p>
+    <form id="casoDescargosForm" class="row g-2">
+      <div class="col-12">
+        <label for="casoDescargosTexto" class="form-label small">Descargos</label>
+        <textarea id="casoDescargosTexto" class="form-control form-control-sm" rows="4" minlength="20" required autocomplete="off"></textarea>
+      </div>
+      <div class="col-12">
+        <label for="casoDescargosEvidenciaInput" class="form-label small">Evidencia (opcional)</label>
+        <input type="file" id="casoDescargosEvidenciaInput" class="form-control form-control-sm" accept="image/*,video/mp4,video/quicktime,video/webm,application/pdf" multiple autocomplete="off">
+        <div id="casoDescargosEvidenciaEstado" class="small text-muted mt-1"></div>
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-outline-primary btn-sm">Registrar descargos</button>
+      </div>
+    </form>
+  </div>
+
   <div id="casoAccionesCierre" class="surface p-4 mb-3 hidden">
     <h5 class="section-title h6">Cerrar o archivar el caso</h5>
     <form id="casoCierreForm" class="row g-2">
@@ -267,12 +299,12 @@
     apiBase: {{ .ctx.Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }},
     {{- if eq $modo "comite" }}
     rutaCasos: '/api/v1/comite-convivencia',
-    acciones: ['ANULAR', 'ACTA_COMITE', 'CAMBIAR_SEVERIDAD', 'CIERRE'],
+    acciones: ['ANULAR', 'ACTA_COMITE', 'CAMBIAR_SEVERIDAD', 'CIERRE', 'DESCARGOS_EN_NOMBRE'],
     anularSoloSinSancion: true
     {{- else }}
     rutaCasos: '/api/v1/convivencia',
     acciones: ['EDITAR', 'ANULAR', 'EVIDENCIA_CASO', 'ACTA_COMITE', 'CAMBIAR_SEVERIDAD', 'CIERRE',
-      'PROPONER_SANCION', 'CONSEJO_DECISION', 'RESOLVER_APELACION'],
+      'PROPONER_SANCION', 'CONSEJO_DECISION', 'RESOLVER_APELACION', 'DESCARGOS_EN_NOMBRE'],
     anularSoloSinSancion: false
     {{- end }}
   });
