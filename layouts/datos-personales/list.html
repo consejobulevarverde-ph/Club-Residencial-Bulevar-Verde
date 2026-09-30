@@ -111,6 +111,26 @@
       margin-top: .75rem
     }
 
+    html:not(.modo-reservas) .solo-reservas,
+    html.modo-reservas .solo-datos,
+    html:not(.con-sesion) .solo-con-sesion,
+    html.con-sesion .solo-sin-sesion {
+      display: none !important
+    }
+
+    .reserva-beneficios li {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      color: var(--bv-muted);
+      padding: .3rem 0
+    }
+
+    .reserva-beneficios i {
+      color: var(--bv-primary);
+      font-size: 1.1rem
+    }
+
     .auth-step {
       display: flex;
       align-items: center;
@@ -534,10 +554,24 @@
 <body>
   {{ partial "header" . }}
 
+  <script>
+    // Modo reservas (/reservas/ redirige aquí con ?modulo=reservas): se aplica antes de pintar para evitar parpadeo.
+    // Con sesión iniciada, el modo lo decide la pestaña activa (ver actualizarEncabezado()).
+    if (new URLSearchParams(window.location.search).get('modulo') === 'reservas') {
+      document.documentElement.classList.add('modo-reservas');
+    }
+  </script>
+
   <header class="page-header">
-    <div class="container">
+    <div class="container solo-datos">
       <h1><i class="bi bi-person-vcard me-2"></i>Mis datos personales</h1>
-      <p class="mb-0">Consulta tu información y actualiza tus datos mediante una validación segura.</p>
+      <p class="mb-0 solo-sin-sesion">Consulta tu información y actualiza tus datos mediante una validación segura.</p>
+      <p class="mb-0 solo-con-sesion">Consulta y mantén al día la información de tu unidad, residentes, vehículos y contactos.</p>
+    </div>
+    <div class="container solo-reservas">
+      <h1><i class="bi bi-calendar2-check me-2"></i>Reserva de zonas comunes</h1>
+      <p class="mb-0 solo-sin-sesion">Identifícate con tu apartamento para consultar disponibilidad y reservar los espacios del club.</p>
+      <p class="mb-0 solo-con-sesion">Consulta la disponibilidad, reserva los espacios del club y sigue el estado de tus reservas.</p>
     </div>
   </header>
 
@@ -548,7 +582,15 @@
       <div class="row g-4 align-items-center">
         <div class="col-lg-5">
           <div class="auth-step mb-3"><span class="auth-step-number">1</span><strong>Identifica el apartamento</strong></div>
-          <h2 class="section-title h4">Ingresa tu apartamento</h2>
+          <h2 class="section-title h4 solo-datos">Ingresa tu apartamento</h2>
+          <div class="solo-reservas">
+            <h2 class="section-title h4">¿Desde qué apartamento vas a reservar?</h2>
+            <ul class="reserva-beneficios list-unstyled mb-0 mt-3">
+              <li><i class="bi bi-calendar-week"></i>Consulta la disponibilidad por fecha y hora</li>
+              <li><i class="bi bi-cash-coin"></i>Revisa el costo antes de confirmar</li>
+              <li><i class="bi bi-clock-history"></i>Sigue el estado de tus reservas</li>
+            </ul>
+          </div>
         </div>
         <div class="col-lg-7">
           <form id="unitForm" class="row g-3">
@@ -599,7 +641,7 @@
         <div id="emailOptions" class="d-grid gap-2 my-4"></div>
         <div class="row g-2">
           <div class="col-md-8 d-grid">
-            <button id="verifySecurityBtn" class="btn btn-primary btn-lg" type="submit">Verificar y entrar</button>
+            <button id="verifySecurityBtn" class="btn btn-primary btn-lg" type="submit"><span class="solo-datos">Verificar y entrar</span><span class="solo-reservas">Verificar e ir a reservas</span></button>
           </div>
           <div class="col-md-4 d-grid">
             <button id="backToDocumentBtn" class="btn btn-outline-secondary btn-lg" type="button">Regresar</button>
@@ -1265,10 +1307,25 @@
         }
       }
 
+      var MODO_RESERVAS_URL = document.documentElement.classList.contains('modo-reservas');
+      var TITULO_DATOS = document.title;
+      var TITULO_RESERVAS = 'Reserva de zonas comunes - {{ .Site.Title }}';
+      var tabActual = '';
+
+      // Sin sesión, el encabezado sigue al enlace de entrada (?modulo=reservas); con sesión, a la pestaña activa.
+      function actualizarEncabezado() {
+        var conSesion = !$('profilePanel').classList.contains('hidden');
+        var modoReservas = conSesion ? tabActual === 'tabReservas' : MODO_RESERVAS_URL;
+        document.documentElement.classList.toggle('con-sesion', conSesion);
+        document.documentElement.classList.toggle('modo-reservas', modoReservas);
+        document.title = modoReservas ? TITULO_RESERVAS : TITULO_DATOS;
+      }
+
       function switchPanel(id) {
         ['unitPanel', 'documentPanel', 'emailPanel', 'profilePanel'].forEach(function (panelId) {
           $(panelId).classList.toggle('hidden', panelId !== id);
         });
+        actualizarEncabezado();
       }
 
       function showTab(id) {
@@ -1278,6 +1335,8 @@
         document.querySelectorAll('#profileTabs .nav-link').forEach(function (element) {
           element.classList.toggle('active', element.dataset.target === id);
         });
+        tabActual = id;
+        actualizarEncabezado();
       }
 
       function hasPermission(section) {
@@ -2703,6 +2762,7 @@
           })
           .then(function () {
             switchPanel('profilePanel');
+            abrirTabInicial();
           })
           .catch(function (error) {
             alertMessage(error.message);
@@ -2734,6 +2794,13 @@
         $('documentForm').reset();
         switchPanel('unitPanel');
       });
+
+      // En modo reservas, al entrar se abre directamente la pestaña de Reservas.
+      function abrirTabInicial() {
+        if (!MODO_RESERVAS_URL) return;
+        showTab('tabReservas');
+        if (!reservasCargados) cargarReservas();
+      }
 
       function loadProfile() {
         return apiFetch('/perfil').then(function (result) {
@@ -3104,6 +3171,7 @@
         token = saved;
         loadProfile().then(function () {
           switchPanel('profilePanel');
+          abrirTabInicial();
         }).catch(function () {
           sessionStorage.removeItem(STORAGE_KEY);
           token = '';
