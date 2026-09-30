@@ -770,6 +770,10 @@
     var galleryBtn = $('convivenciaOpenGalleryBtn');
     var galleryInput = $('convivenciaGalleryInput');
 
+    if (galleryInput && window.BVEvidenceTypes) {
+      galleryInput.setAttribute('accept', window.BVEvidenceTypes.ACCEPT);
+    }
+
     if (cameraBtn) cameraBtn.addEventListener('click', captureEvidence);
     if (galleryBtn) galleryBtn.addEventListener('click', function () {
       if (galleryInput) galleryInput.click();
@@ -816,26 +820,39 @@
   // Valida y prepara un archivo de galería (comprime imágenes). Lanza Error con un
   // mensaje listo para mostrar si el archivo no es válido o no se pudo procesar.
   async function prepararArchivoEvidencia(file) {
-    var isImage = /^image\//i.test(file.type);
-    var isVideo = /^video\//i.test(file.type) &&
-                  /(mp4|quicktime|webm)/.test(file.type);
-    var isPdf = file.type === 'application/pdf';
-
-    if (!isImage && !isVideo && !isPdf) {
-      throw new Error('Solo se permiten archivos de imagen, video (MP4, MOV, WebM) o PDF');
+    var clasificacion = window.BVEvidenceTypes.clasificar(file);
+    if (!clasificacion) {
+      throw new Error(
+        'Tipo de archivo no permitido. Se aceptan: imágenes (JPEG, PNG, WebP), video (MP4, MOV, WebM), PDF, audio (MP3, M4A, AAC, WAV, OGG) y documentos (DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, RTF, ODT, ODS).'
+      );
     }
 
-    if (isVideo && file.size > 50 * 1024 * 1024) {
-      throw new Error('El video es demasiado grande (máximo 50 MB). Por favor selecciona un video más pequeño o más corto.');
-    }
-
-    if (isPdf && file.size > 50 * 1024 * 1024) {
-      throw new Error('El documento es demasiado grande (máximo 50 MB).');
+    var maxBytes = window.BVEvidenceTypes.maxBytes(clasificacion.categoria);
+    if (file.size > maxBytes) {
+      throw new Error(
+        'El archivo supera el tamaño máximo permitido (' +
+        window.BVEvidenceTypes.limiteLegible(clasificacion.categoria) +
+        ').'
+      );
     }
 
     try {
-      if (isImage) return { tipo: 'imagen', data: await compressImage(file) };
-      return { tipo: isVideo ? 'video' : 'documento', data: await readFileAsDataUrl(file) };
+      if (clasificacion.categoria === 'image') {
+        return { tipo: 'imagen', data: await compressImage(file) };
+      }
+      // Video, audio, PDF, documentos: leer como data URL sin comprimir
+      var datos = await readFileAsDataUrl(file);
+      // Asegurar que el mime esté correctamente asignado (inferir si viene vacío)
+      if (!datos.type) {
+        datos.type = clasificacion.mime;
+      }
+      var tipoLabel =
+        clasificacion.categoria === 'video'
+          ? 'video'
+          : clasificacion.categoria === 'audio'
+            ? 'audio'
+            : 'documento';
+      return { tipo: tipoLabel, data: datos };
     } catch (error) {
       throw new Error('Error al procesar archivo: ' + error.message);
     }
@@ -923,16 +940,25 @@
       return;
     }
     var html = evidencias.map(function (evidence, idx) {
-      var isVideo = /^video\//i.test(evidence.type);
-      var isPdf = evidence.type === 'application/pdf';
-      var icon = isPdf ? 'bi-file-earmark-pdf' : (isVideo ? 'bi-camera-video' : 'bi-image');
-      return '<div class="card mb-2">' +
+      var clasificacion = window.BVEvidenceTypes.clasificar({ name: evidence.name, type: evidence.type });
+      var icon = clasificacion ? window.BVEvidenceTypes.icono(clasificacion.categoria) : 'bi-file';
+      return (
+        '<div class="card mb-2">' +
         '<div class="card-body p-2">' +
         '<div class="d-flex justify-content-between align-items-center">' +
-        '<div><i class="bi ' + icon + ' me-2"></i><strong>' + esc(evidence.name) + '</strong><br>' +
-        '<small class="text-muted">' + (evidence.size / 1024).toFixed(1) + ' KB</small></div>' +
-        '<button type="button" class="btn btn-danger btn-sm cv-remove-evidence" data-idx="' + idx + '">' +
-        '<i class="bi bi-trash"></i></button></div></div></div>';
+        '<div><i class="bi ' +
+        icon +
+        ' me-2"></i><strong>' +
+        esc(evidence.name) +
+        '</strong><br>' +
+        '<small class="text-muted">' +
+        (evidence.size / 1024).toFixed(1) +
+        ' KB</small></div>' +
+        '<button type="button" class="btn btn-danger btn-sm cv-remove-evidence" data-idx="' +
+        idx +
+        '">' +
+        '<i class="bi bi-trash"></i></button></div></div></div>'
+      );
     }).join('');
     container.innerHTML = html;
   }

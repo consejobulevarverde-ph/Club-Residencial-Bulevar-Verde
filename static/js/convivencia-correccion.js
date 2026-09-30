@@ -236,6 +236,12 @@
     renderPendientes();
   }
 
+  // Inicializar inputs con el accept dinámico
+  if (window.BVEvidenceTypes) {
+    var input = $('cvCorreccionGaleriaInput');
+    if (input) input.setAttribute('accept', window.BVEvidenceTypes.ACCEPT);
+  }
+
   $('cvCorreccionCamaraBtn').addEventListener('click', function () {
     ocultarMsg();
     if (!casoActual) return;

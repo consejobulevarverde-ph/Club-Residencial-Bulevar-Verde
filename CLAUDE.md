@@ -159,17 +159,29 @@ while no `Sancion` exists.
 Evidence still lands in the same Google Drive folder as before (`soporte-sanciones-convivencia`),
 now uploaded by the API itself (`src/services/drive.ts` in bulevar-verde-api) via an OAuth2 refresh
 token for the same Gmail account used for SMTP — not a Drive API-incompatible app password. Accepts
-images (≤20MB), video (≤50MB), and PDF (≤50MB, with a quick pdf-lib optimization pass) — used for the
-Comité's acta and its anexos, and for appeal evidence, in addition to case/descargo evidence.
+(via allowlist in `static/js/evidence-types.js`):
+- **Imagen**: JPEG, PNG, WebP (≤20MB)
+- **Video**: MP4, QuickTime, WebM (≤50MB)
+- **PDF** (≤50MB, with a quick pdf-lib optimization pass)
+- **Audio** (NEW): MP3, M4A, AAC, WAV, OGG, WebM, Opus (≤50MB)
+- **Documentos** (NEW): DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, RTF, ODT, ODS (≤25MB)
+
+Used for the Comité's acta and its anexos, and for appeal evidence, in addition to case/descargo evidence.
 
 **Evidence gallery**:
 - Google Drive URLs with fallback chain: `drive.google.com/thumbnail` → `lh3.googleusercontent.com` → original
 - `window.handleSancionEvidenceError_` handles missing images on `<img onerror>` (resident tab)
+- Non-image files (audio, PDF, docs) render as icons: `window.BVEvidenceTypes.icono(categoria)`
 
-**Evidence capture**:
-- `window.BVEvidenceCamera` — self-contained module (`static/js/evidence-camera.js`), safe to include on multiple pages
-- Call: `BVEvidenceCamera.capture({ contextLabel, detailLines, filePrefix, maxDimension, quality })` → `{ name, size, dataUrl, blob, file, captureMetadata }`
-- Compress client-side before upload (max 1600px, quality 0.82-0.84)
+**Evidence capture & validation**:
+- `window.BVEvidenceTypes` — centralized module (`static/js/evidence-types.js`) for type allowlist, MIME validation, and size limits
+  - `clasificar(file)` → `{ categoria, ext, mime }`
+  - `validar(file)` → `{ ok, error? }`
+  - `icono(categoria)` → icon class (bi-image, bi-file-earmark-pdf, bi-file-earmark-music, etc.)
+  - ACCEPT string for `<input accept>` attributes; safe to include on multiple pages
+- `window.BVEvidenceCamera` — photo/video capture module (`static/js/evidence-camera.js`), GPS watermark, no audio recording
+- Call: `BVEvidenceCamera.capture({ contextLabel, detailLines, filePrefix, maxDimension, quality, allowVideo })` → `{ name, size, type, dataUrl, blob, file, captureMetadata }`
+- Compress client-side: images (max 1600px, quality 0.82-0.84); video (max 50 MB); PDFs (via pdf-lib optimization, no image recompression)
 
 ### 7. Permission-Based Visibility
 
@@ -239,7 +251,8 @@ layouts/
 
 static/
   js/
-    evidence-camera.js    # Camera module, reusable on multiple pages
+    evidence-types.js     # Evidence validation & metadata (allowlist, MIME, icons, sizes) — shared by all evidence workflows
+    evidence-camera.js    # Camera module (photo/video with GPS watermark) — reusable on multiple pages
   css/
   images/
 

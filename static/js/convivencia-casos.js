@@ -202,11 +202,27 @@
   function buildCasoEvidenceThumb(url, label) {
     var match = /\/file\/d\/([^/]+)/.exec(url || '');
     var thumbUrl = match ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(match[1]) + '&sz=w300') : url;
-    return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(label) + '">' +
-      '<img src="' + esc(thumbUrl) + '" alt="' + esc(label) + '" ' +
-      'style="width:96px;height:96px;object-fit:cover;border-radius:8px" ' +
-      'onerror="this.style.display=\'none\'">' +
-      '</a>';
+
+    // Extraer extensión del nombre del archivo de Drive para inferir tipo
+    var fileNameMatch = /([^/]+)$/.exec(url || '');
+    var fileName = fileNameMatch ? fileNameMatch[1] : '';
+    var clasificacion = window.BVEvidenceTypes ? window.BVEvidenceTypes.clasificar({ name: fileName, type: '' }) : null;
+    var esImagen = clasificacion && clasificacion.categoria === 'image';
+
+    if (esImagen) {
+      return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(label) + '">' +
+        '<img src="' + esc(thumbUrl) + '" alt="' + esc(label) + '" ' +
+        'style="width:96px;height:96px;object-fit:cover;border-radius:8px" ' +
+        'onerror="this.style.display=\'none\'">' +
+        '</a>';
+    } else {
+      // No-imagen: mostrar icono + enlace
+      var icono = clasificacion ? window.BVEvidenceTypes.icono(clasificacion.categoria) : 'bi-file';
+      return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(label) + '" ' +
+        'style="display:inline-flex;align-items:center;justify-content:center;width:96px;height:96px;border-radius:8px;background:#f1f1f1;text-decoration:none;color:#666">' +
+        '<i class="bi ' + icono + '" style="font-size:2rem;"></i>' +
+        '</a>';
+    }
   }
 
   function verDetalleCasoConvivencia(id) {
@@ -406,10 +422,23 @@
     var urls = [];
     var subirSiguiente = function (i) {
       if (i >= files.length) return Promise.resolve(urls);
-      return leerArchivoComoDataUrl(files[i]).then(function (dataUrl) {
+
+      // Validar archivo usando BVEvidenceTypes
+      var file = files[i];
+      var validacion = window.BVEvidenceTypes ? window.BVEvidenceTypes.validar(file) : null;
+      if (validacion && !validacion.ok) {
+        return Promise.reject(new Error('Archivo "' + file.name + '": ' + validacion.error));
+      }
+
+      return leerArchivoComoDataUrl(file).then(function (dataUrl) {
+        // Inferir mime si viene vacío
+        var mime = file.type;
+        if (!mime && window.BVEvidenceTypes) {
+          mime = window.BVEvidenceTypes.inferirMimePorExtension(file.name) || 'application/octet-stream';
+        }
         return apiFetch('/evidencias', {
           method: 'POST',
-          body: { mimeType: files[i].type, dataUrl: dataUrl, contexto: contexto, caseId: caseCode, apartamento: apartamento }
+          body: { mimeType: mime, dataUrl: dataUrl, contexto: contexto, caseId: caseCode, apartamento: apartamento }
         });
       }).then(function (resp) {
         urls.push(resp.data.url);
@@ -765,6 +794,14 @@
     }).catch(function (error) { msg(error.message); })
       .finally(function () { busy(button, false, 'Guardar'); });
   });
+
+  // Inicializar inputs con accept dinámico
+  if (window.BVEvidenceTypes) {
+    var acceptStr = window.BVEvidenceTypes.ACCEPT;
+    if ($('casoDetailEvidenciaInput')) $('casoDetailEvidenciaInput').setAttribute('accept', acceptStr);
+    if ($('casoActaComiteEvidenciaInput')) $('casoActaComiteEvidenciaInput').setAttribute('accept', acceptStr);
+    if ($('casoDescargosEvidenciaInput')) $('casoDescargosEvidenciaInput').setAttribute('accept', acceptStr);
+  }
 
   window.BVConvivenciaCasos = {
     // Muestra el listado (desde cero) — lo llaman el stub de administración y la página del comité.
