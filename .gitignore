@@ -5,6 +5,8 @@ resources/_gen/
 
 # Firebase
 .firebase/
+# Generado por la extensión/emulador de Data Connect (prelude y esquema para el editor)
+dataconnect/.dataconnect/
 
 # Fonts (commercial licenses - not for version control)
 static/fonts/*.woff
