@@ -52,6 +52,7 @@
         <div>
           <h2 class="section-title h3 mb-0">Panel administrativo</h2>
           <div id="userText" class="small-note"></div>
+          <div id="estadoSistemaBadge" class="mt-1"></div>
         </div>
         <div class="d-flex flex-wrap gap-2">
           <button id="showDashboard" type="button" class="btn btn-outline-success mode-button active">
@@ -78,6 +79,8 @@
           <button id="logout" class="btn btn-outline-secondary">Salir</button>
         </div>
       </div>
+
+      <div id="estadoSistemaAlerta" class="alert alert-danger d-flex gap-2 align-items-start hidden" role="alert"></div>
 
       <section id="dashboardView">
         {{ partial "administracion-datos/dashboard" . }}
@@ -132,6 +135,7 @@
   <script src="{{ "js/administracion-datos/casos-convivencia.js" | relURL }}?v=2"></script>
   <script src="{{ "js/administracion-datos/vehiculos.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/cartera-import.js" | relURL }}?v=1"></script>
+  <script src="{{ "js/administracion-datos/estado-sistema.js" | relURL }}?v=1"></script>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
