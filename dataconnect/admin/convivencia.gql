@@ -98,6 +98,10 @@ query ListarCasosConvivenciaAdmin(
     estado
     fechaCreacion
     descargosResidente
+    # Solo para saber si hay adjuntos (cualquier contexto) — basta con una fila.
+    evidencias: evidencias_convivencia_on_caso(limit: 1) {
+      id
+    }
   }
 }
 

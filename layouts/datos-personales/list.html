@@ -1418,7 +1418,7 @@
         $('sancionDetailCaseId').textContent = caso.id;
         $('sancionDetailMotivo').textContent = caso.motivo;
         $('sancionDetailSeveridad').textContent = caso.severidad || 'No especificada';
-        $('sancionDetailCuotas').textContent = Number(caso.sancionEquivalente || 0);
+        $('sancionDetailCuotas').textContent = Number(caso.sancionEquivalente || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 });
         $('sancionDetailFecha').textContent = caso.fechaRegistro || 'Sin fecha';
         $('sancionDetailEstado').innerHTML = obtenerBadgeEstadoSancion(caso.estado || 'PENDIENTE_DESCARGOS');
         $('sancionDetailNotificador').textContent = caso.notificadorAdmin || 'Administración';

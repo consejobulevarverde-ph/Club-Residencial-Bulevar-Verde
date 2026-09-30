@@ -165,6 +165,7 @@
       return '<div class="border-bottom py-2 d-flex justify-content-between align-items-center caso-convivencia-item" ' +
         'data-id="' + esc(caso.id) + '" style="cursor:pointer">' +
         '<div><strong>' + esc(caso.apartamento) + '</strong> · ' + esc(caso.motivo) +
+        (caso.tieneAdjuntos ? ' <i class="bi bi-image text-muted ms-1" title="Tiene adjuntos" aria-label="Tiene adjuntos"></i>' : '') +
         '<br><small class="text-muted">' + esc(caso.caseCode) + ' · ' + esc(caso.fechaCreacion) + '</small></div>' +
         '<div>' + obtenerBadgeEstadoCaso(caso.estado) +
         (caso.severidad ? ' <span class="badge bg-secondary ms-1">' + esc(caso.severidad) + '</span>' : '') +
@@ -310,7 +311,7 @@
       ? 'Proceso sancionatorio formal'
       : 'Llamado de atención — no requiere proceso formal';
     $('casoDetailSeveridad').textContent = caso.severidad || 'No especificada';
-    $('casoDetailCuotas').textContent = Number(caso.sancionEquivalente || 0);
+    $('casoDetailCuotas').textContent = Number(caso.sancionEquivalente || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 });
     $('casoDetailNotificador').textContent = caso.notificadorAdmin || '—';
     $('casoDetailFecha').textContent = caso.fechaCreacion || '';
     $('casoDetailDescripcion').textContent = caso.descripcion || '';

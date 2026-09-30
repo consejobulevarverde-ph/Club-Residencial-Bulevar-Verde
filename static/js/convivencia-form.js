@@ -62,6 +62,12 @@
     });
   }
 
+  // Las severidades pueden valer fracciones de cuota (0,5 · 1,5 CDAMV).
+  function formatearCuotas(cuotas) {
+    var valor = Number(cuotas) || 0;
+    return valor.toLocaleString('es-CO', { maximumFractionDigits: 2 }) + ' cuota' + (valor !== 1 ? 's' : '');
+  }
+
   function showAlert(message, type) {
     var alertEl = $('convivenciaAlert');
     if (!alertEl) return;
@@ -330,7 +336,7 @@
       var claseExtra = esLlamadoAtencion ? ' cv-severity-badge-informal' : '';
       var detalle = esLlamadoAtencion
         ? 'no requiere proceso formal'
-        : sev.cuotas + ' cuota' + (sev.cuotas !== 1 ? 's' : '') + ' referencial';
+        : formatearCuotas(sev.cuotas) + ' referencial';
       return '<button type="button" class="cv-severity-badge' + claseExtra + '" data-nombre="' + esc(sev.nombre) + '" data-cuotas="' + sev.cuotas + '">' +
         '<strong>' + esc(sev.nombre) + '</strong> (' + detalle + ')</button>';
     }).join('');
@@ -421,7 +427,7 @@
     if (severidadSeleccionada) {
       var severidadConfig = severidades.find(function (s) { return s.nombre === severidadSeleccionada; });
       if (severidadConfig) {
-        $('convivenciaReviewSeveridad').textContent = severidadSeleccionada + ' (' + severidadConfig.cuotas + ' cuota' + (severidadConfig.cuotas !== 1 ? 's' : '') + ')';
+        $('convivenciaReviewSeveridad').textContent = severidadSeleccionada + ' (' + formatearCuotas(severidadConfig.cuotas) + ')';
       }
     }
 
@@ -1008,7 +1014,7 @@
       severidadSeleccionada = badge.getAttribute('data-nombre') || '';
       var cuotas = badge.getAttribute('data-cuotas');
       var cuotasInfo = $('convivenciaCuotasInfo');
-      if (cuotasInfo) cuotasInfo.textContent = 'Equivalente a ' + cuotas + ' cuota' + (cuotas != 1 ? 's' : '') + ' de administración';
+      if (cuotasInfo) cuotasInfo.textContent = 'Equivalente a ' + formatearCuotas(cuotas) + ' de administración';
       var badges = severidadContainer.querySelectorAll('.cv-severity-badge');
       for (var i = 0; i < badges.length; i++) {
         badges[i].classList.remove('selected');
