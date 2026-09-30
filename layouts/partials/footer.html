@@ -16,6 +16,7 @@
 <footer class="bv-footer">
   <div class="container d-flex flex-wrap justify-content-center align-items-center gap-2" style="font-size: 0.85rem;">
     <span class="mb-0">&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</span>
+    <a href="{{ "politica-datos-personales/" | relURL }}">Política de tratamiento de datos personales</a>
     <span class="d-inline-flex align-items-center gap-2">
       {{ with .Site.Params.facebook }}<a href="{{ . }}" target="_blank"><i class="bi bi-facebook"></i></a>{{ end }}
       {{ with .Site.Params.instagram }}<a href="{{ . }}" target="_blank"><i class="bi bi-instagram"></i></a>{{ end }}
