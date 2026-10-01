@@ -404,6 +404,10 @@ type RegistroParqueaderoVisitante
   registradoPorUid: String!
   fechaCaptura: Timestamp!
   fechaPosprocesamiento: Timestamp
+  # Apartamento asignado a mano (desde la pestaña Sanciones) cuando la placa no lo identificó.
+  unidadAsignadaPorUid: String
+  unidadAsignadaPorNombre: String
+  fechaAsignacionUnidad: Timestamp
   clientRequestId: String! @unique
   fechaCreacion: Timestamp! @default(expr: "request.time")
   fechaActualizacion: Timestamp! @default(expr: "request.time")

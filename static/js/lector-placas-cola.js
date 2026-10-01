@@ -118,7 +118,8 @@
         placaDetectada: item.placaDetectada || undefined,
         tipoVehiculo: item.tipoVehiculo,
         fechaCaptura: item.fechaCaptura,
-        foto: await blobADataUrl(item.foto)
+        foto: await blobADataUrl(item.foto),
+        miniatura: item.miniatura || undefined
       })
     });
     var cuerpo = await respuesta.json().catch(function () { return {}; });
@@ -142,7 +143,7 @@
           resultado = await enviarUno(item, usuario);
         } catch (error) {
           item.intentos++;
-          item.error = 'Sin conexión; se reintentará.';
+          item.error = 'Sin conexión';
           await guardar(item);
           break;
         }
@@ -151,7 +152,7 @@
           var data = resultado.cuerpo.data || {};
           item.estado = 'enviado';
           item.error = null;
-          item.unidad = data.unidad || null;
+          item.apartamento = data.apartamento || null;
           item.registroId = data.id || null;
           item.enviadoEn = Date.now();
           item.foto = null; // la foto ya está en el servidor; se libera espacio en el teléfono

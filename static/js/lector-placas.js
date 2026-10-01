@@ -291,7 +291,7 @@
       if (!lecturas.length) {
         lecturaActual = null;
         pintarVista();
-        aviso('No se leyó la placa. Escríbela, o márcala con el dedo sobre la foto y pulsa "Leer selección".');
+        aviso('No se leyó la placa. Escríbela o márcala en la foto.');
         return;
       }
       mostrarLecturas(lecturas);
@@ -345,10 +345,10 @@
     var ayuda = $('lpFormato');
     if (valida) {
       ayuda.className = 'small mt-1 text-success';
-      ayuda.innerHTML = '<i class="bi bi-check-circle me-1"></i>Placa de ' + (tipo === 'MOTO' ? 'moto' : 'carro');
+      ayuda.innerHTML = '<i class="bi bi-check-circle" aria-label="Placa válida"></i>';
     } else if (valor) {
       ayuda.className = 'small mt-1 text-warning';
-      ayuda.innerHTML = '<i class="bi bi-x-circle me-1"></i>' + (tipo === 'MOTO' ? 'Moto: ABC12D' : 'Carro: ABC123');
+      ayuda.innerHTML = '<i class="bi bi-x-circle me-1"></i>' + (tipo === 'MOTO' ? 'ABC12D' : 'ABC123');
     } else {
       ayuda.className = 'small mt-1';
       ayuda.textContent = '';
@@ -396,7 +396,7 @@
     $('lpVista').classList.toggle('lp-marcando', activo);
     $('lpMarcar').classList.toggle('active', activo);
     $('lpMarcar').innerHTML = activo
-      ? '<i class="bi bi-x-lg me-1"></i>Cancelar marcado'
+      ? '<i class="bi bi-x-lg me-1"></i>Cancelar'
       : '<i class="bi bi-bounding-box me-1"></i>Marcar placa';
     if (!activo && seleccion) {
       seleccion = null;
@@ -534,7 +534,7 @@
       await iniciarCamara().catch(function () {});
     }
     mostrarVivo();
-    toast(placa + ' guardada' + (navigator.onLine === false ? ' · se enviará al haber conexión' : ''));
+    toast(placa + ' guardada' + (navigator.onLine === false ? ' · sin conexión' : ''));
   }
 
   function repetir() {
@@ -569,17 +569,27 @@
   // Lista de registros de la ronda
   // ---------------------------------------------------------------------------
 
+  // Lista pensada para el celular: íconos en vez de etiquetas; el texto completo va en title/aria-label.
   var ESTADOS = {
-    pendiente: { texto: 'En el teléfono', clase: 'text-bg-secondary', icono: 'bi-clock-history' },
+    pendiente: { texto: 'Pendiente de envío', clase: 'text-bg-secondary', icono: 'bi-clock-history' },
     enviado: { texto: 'Enviado', clase: 'text-bg-success', icono: 'bi-check2' },
     rechazado: { texto: 'Rechazado', clase: 'text-bg-danger', icono: 'bi-exclamation-triangle' }
   };
 
+  function iconoTipo(tipo) {
+    var moto = tipo === 'MOTO';
+    return '<i class="bi ' + (moto ? 'bi-scooter' : 'bi-car-front') + '" title="' + (moto ? 'Moto' : 'Carro') + '" ' +
+      'aria-label="' + (moto ? 'Moto' : 'Carro') + '"></i>';
+  }
+
   async function renderCola() {
     if (!$('lpCola')) return;
     var enLinea = navigator.onLine !== false;
+    var red = enLinea ? 'En línea' : 'Sin conexión';
     $('lpRed').className = 'badge ' + (enLinea ? 'text-bg-success' : 'text-bg-secondary');
-    $('lpRed').innerHTML = enLinea ? '<i class="bi bi-wifi me-1"></i>En línea' : '<i class="bi bi-wifi-off me-1"></i>Sin conexión';
+    $('lpRed').title = red;
+    $('lpRed').setAttribute('aria-label', red);
+    $('lpRed').innerHTML = '<i class="bi ' + (enLinea ? 'bi-wifi' : 'bi-wifi-off') + '"></i>';
 
     var datos;
     try {
@@ -589,38 +599,39 @@
       return;
     }
 
-    var partes = [datos.pendientes + ' por enviar', datos.enviados + ' enviados'];
+    var partes = [datos.pendientes + ' pendientes', datos.enviados + ' enviados'];
     if (datos.rechazados) partes.push(datos.rechazados + ' rechazados');
+    if (datos.deOtroVigilante) partes.push(datos.deOtroVigilante + ' de otro vigilante');
     if (datos.enviando) partes.push('enviando…');
-    $('lpResumen').textContent = partes.join(' · ') +
-      (datos.deOtroVigilante ? ' · ' + datos.deOtroVigilante + ' de otro vigilante: se enviarán cuando ese vigilante ingrese en este teléfono.' : '');
+    $('lpResumen').textContent = partes.join(' · ');
     $('lpEnviar').disabled = !datos.pendientes || !enLinea;
 
     if (!datos.items.length) {
-      $('lpCola').innerHTML = '<p class="small-note mb-0">Aún no hay registros en este teléfono.</p>';
+      $('lpCola').innerHTML = '<p class="small-note mb-0">Sin registros.</p>';
       return;
     }
     $('lpCola').innerHTML = datos.items.map(function (item) {
       var e = ESTADOS[item.estado] || ESTADOS.pendiente;
       var detalle = item.estado === 'enviado'
-        ? (item.unidad ? 'Unidad ' + esc(item.unidad) : 'Sin unidad asociada')
+        ? (item.apartamento
+          ? '<i class="bi bi-house-door me-1"></i>' + esc(item.apartamento)
+          : '<span class="text-danger">Sin apartamento</span>')
         : esc(item.error || '');
       var acciones = item.estado === 'rechazado'
-        ? '<div class="d-flex gap-2 mt-1">' +
-          '<button type="button" class="btn btn-outline-secondary btn-sm" data-lp-reintentar="' + esc(item.clientRequestId) + '">Reintentar</button>' +
-          '<button type="button" class="btn btn-outline-danger btn-sm" data-lp-descartar="' + esc(item.clientRequestId) + '">Descartar</button>' +
-          '</div>'
+        ? '<span class="d-inline-flex gap-1 ms-1">' +
+          '<button type="button" class="btn btn-outline-secondary btn-sm py-0" title="Reintentar" aria-label="Reintentar" data-lp-reintentar="' + esc(item.clientRequestId) + '"><i class="bi bi-arrow-repeat"></i></button>' +
+          '<button type="button" class="btn btn-outline-danger btn-sm py-0" title="Descartar" aria-label="Descartar" data-lp-descartar="' + esc(item.clientRequestId) + '"><i class="bi bi-trash"></i></button>' +
+          '</span>'
         : '';
       return '<div class="lp-cola-item">' +
         '<img src="' + esc(item.miniatura || '') + '" alt="">' +
         '<div class="flex-grow-1 small">' +
         '<div><span class="lp-placa-chip">' + esc(item.placa) + '</span> ' +
-        '<span class="text-muted">' + (item.tipoVehiculo === 'MOTO' ? 'Moto' : 'Carro') + ' · ' +
+        '<span class="text-muted">' + iconoTipo(item.tipoVehiculo) + ' ' +
         esc(FORMATO_HORA.format(new Date(item.fechaCaptura))) + '</span></div>' +
-        (detalle ? '<div class="text-muted">' + detalle + '</div>' : '') +
-        acciones +
+        (detalle || acciones ? '<div class="text-muted">' + detalle + acciones + '</div>' : '') +
         '</div>' +
-        '<span class="badge ' + e.clase + '"><i class="bi ' + e.icono + ' me-1"></i>' + e.texto + '</span>' +
+        '<span class="badge ' + e.clase + '" title="' + e.texto + '" aria-label="' + e.texto + '"><i class="bi ' + e.icono + '"></i></span>' +
         '</div>';
     }).join('');
   }

@@ -232,7 +232,7 @@
         <i class="bi bi-shield-check me-2"></i>Gestión operativa
       </h1>
       <p class="mb-0">
-        Consulta de unidades y registro de residentes principales.
+        Consulta de apartamentos y registro de residentes principales.
       </p>
     </div>
   </header>
@@ -293,7 +293,7 @@
           <form id="searchForm" class="row g-2">
             <div class="col-md-9">
               <label class="form-label" for="query">
-                Unidad, placa o parqueadero
+                Apartamento, placa o parqueadero
               </label>
               <input
                 id="query"
@@ -329,10 +329,10 @@
           </div>
 
           <form id="registrationForm" class="row g-3">
-            <!-- Unidad -->
-            <div class="col-12 pt-2"><small class="text-muted fw-semibold">Unidad</small></div>
+            <!-- Apartamento -->
+            <div class="col-12 pt-2"><small class="text-muted fw-semibold">Apartamento</small></div>
             <div class="col-12 col-md-4">
-              <label class="form-label" for="newApartment">Apartamento</label>
+              <label class="form-label" for="newApartment">Número de apartamento</label>
               <input
                 id="newApartment"
                 class="form-control"
@@ -720,7 +720,7 @@
 
         var searchTerm = $('query').value.trim();
         if (!searchTerm) {
-          msg('Ingresa un término de búsqueda (unidad, placa o parqueadero).', 'warning');
+          msg('Ingresa un término de búsqueda (apartamento, placa o parqueadero).', 'warning');
           busy($('searchBtn'), false, 'Consultar');
           return;
         }
@@ -907,7 +907,7 @@
           '<i class="bi bi-check-circle-fill me-2"></i>' +
           'Registro completado' +
           '</h3>' +
-          '<p class="mb-0"><strong>' + esc(data.nombreCompleto) + '</strong> quedó registrado en la unidad ' +
+          '<p class="mb-0"><strong>' + esc(data.nombreCompleto) + '</strong> quedó registrado en el apartamento ' +
           '<strong>' + esc(data.codigoOficial) + '</strong> como ' + esc(data.rol) + '.</p>' +
           '</article>';
       }
