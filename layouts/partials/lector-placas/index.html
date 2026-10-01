@@ -1,51 +1,4 @@
 <style>
-  .lector-placas-panel .lp-placa {
-    display: inline-block;
-    min-width: 11rem;
-    padding: .3rem 1.1rem;
-    background: #f7d117;
-    color: #111;
-    border: 3px solid #111;
-    border-radius: .6rem;
-    font-family: ui-monospace, monospace;
-    font-size: 2.4rem;
-    font-weight: 800;
-    letter-spacing: .15em;
-    text-align: center;
-  }
-
-  .lector-placas-panel .lp-vista {
-    display: block;
-    width: 100%;
-    height: auto;
-    border-radius: .75rem;
-    border: 1px solid var(--b, #d8e6d9);
-    background: #f5f7f5;
-  }
-
-  .lector-placas-panel .lp-vista.lp-marcando {
-    touch-action: none;
-    cursor: crosshair;
-    outline: 3px dashed #198754;
-    outline-offset: 2px;
-  }
-
-  .lector-placas-panel .lp-recorte {
-    display: block;
-    max-width: 100%;
-    height: auto;
-    border: 1px solid var(--b, #d8e6d9);
-    border-radius: .5rem;
-    background: #fff;
-  }
-
-  .lector-placas-panel .lp-input {
-    font-family: ui-monospace, monospace;
-    font-size: 1.3rem;
-    font-weight: 700;
-    letter-spacing: .1em;
-  }
-
   .lector-placas-panel .lp-archivo {
     position: absolute;
     width: 1px;
@@ -53,78 +6,371 @@
     opacity: 0;
     pointer-events: none;
   }
+
+  .lector-placas-panel .lp-cola-item {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .55rem 0;
+    border-top: 1px solid var(--b, #d8e6d9);
+  }
+
+  .lector-placas-panel .lp-cola-item img {
+    width: 72px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: .35rem;
+    background: #eef2ee;
+    flex: none;
+  }
+
+  .lp-placa-chip {
+    display: inline-block;
+    padding: .05rem .5rem;
+    background: #f7d117;
+    color: #111;
+    border: 2px solid #111;
+    border-radius: .35rem;
+    font-family: ui-monospace, monospace;
+    font-weight: 800;
+    letter-spacing: .1em;
+  }
+
+  /* Cámara a pantalla completa */
+  .lp-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: #000;
+    color: #fff;
+    font-family: Montserrat, sans-serif;
+  }
+
+  .lp-vivo,
+  .lp-revision {
+    position: absolute;
+    inset: 0;
+  }
+
+  .lp-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
+
+  .lp-guias {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .lp-horizonte {
+    position: absolute;
+    left: 4%;
+    right: 4%;
+    top: 50%;
+    border-top: 2px dashed rgba(255, 255, 255, .7);
+  }
+
+  .lp-horizonte.lp-nivelado {
+    border-top-color: #19c37d;
+    border-top-style: solid;
+  }
+
+  .lp-marco-placa {
+    position: absolute;
+    left: 50%;
+    top: 62%;
+    width: min(34vw, 260px);
+    aspect-ratio: 2 / 1;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgba(247, 209, 23, .85);
+    border-radius: .5rem;
+  }
+
+  .lp-marco-placa span {
+    position: absolute;
+    top: -1.5rem;
+    left: 0;
+    font-size: .75rem;
+    color: rgba(247, 209, 23, .95);
+  }
+
+  .lp-barra-superior {
+    position: absolute;
+    top: max(.6rem, env(safe-area-inset-top));
+    left: .6rem;
+    right: .6rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+
+  .lp-barra-superior .lp-espacio {
+    flex: 1;
+  }
+
+  .lp-aviso {
+    position: absolute;
+    left: 50%;
+    top: 20%;
+    transform: translateX(-50%);
+    max-width: 90%;
+    padding: .5rem .9rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .65);
+    font-size: .9rem;
+    text-align: center;
+  }
+
+  .lp-disparador {
+    position: absolute;
+    left: 50%;
+    bottom: max(1.2rem, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    border: 5px solid rgba(255, 255, 255, .85);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, .35);
+  }
+
+  .lp-disparador:active {
+    transform: translateX(-50%) scale(.92);
+  }
+
+  .lp-toast {
+    position: absolute;
+    left: 50%;
+    bottom: 110px;
+    transform: translateX(-50%);
+    padding: .45rem .9rem;
+    border-radius: 999px;
+    background: rgba(25, 135, 84, .92);
+    font-size: .9rem;
+    white-space: nowrap;
+  }
+
+  .lp-flash {
+    position: absolute;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s;
+  }
+
+  .lp-flash.lp-activo {
+    opacity: .7;
+    transition: none;
+  }
+
+  .lp-revision {
+    display: flex;
+    flex-direction: column;
+    background: #111;
+  }
+
+  .lp-revision-foto {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: .5rem;
+  }
+
+  .lp-vista {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: .5rem;
+  }
+
+  .lp-vista.lp-marcando {
+    touch-action: none;
+    cursor: crosshair;
+    outline: 3px dashed #19c37d;
+    outline-offset: 2px;
+  }
+
+  .lp-hoja {
+    padding: .8rem 1rem max(.8rem, env(safe-area-inset-bottom));
+    background: #1d1f1d;
+    overflow-y: auto;
+    max-height: 60vh;
+  }
+
+  .lp-placa-input {
+    font-family: ui-monospace, monospace;
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: .15em;
+    text-align: center;
+    background: #f7d117;
+    color: #111;
+    border: 3px solid #111;
+  }
+
+  .lp-placa-input:focus {
+    background: #f7d117;
+    color: #111;
+  }
+
+  .lp-recorte {
+    max-width: 55%;
+    max-height: 56px;
+    background: #fff;
+    border-radius: .35rem;
+  }
+
+  @media (orientation: landscape) {
+    .lp-disparador {
+      left: auto;
+      right: max(1.4rem, env(safe-area-inset-right));
+      bottom: 50%;
+      transform: translateY(50%);
+    }
+
+    .lp-disparador:active {
+      transform: translateY(50%) scale(.92);
+    }
+
+    .lp-toast {
+      bottom: 1rem;
+    }
+
+    .lp-revision {
+      flex-direction: row;
+    }
+
+    .lp-hoja {
+      width: min(360px, 45vw);
+      max-height: none;
+    }
+  }
 </style>
 
 <div class="lector-placas-panel">
   <div class="surface p-4 mb-4">
-    <h3 class="section-title h5 mb-2"><i class="bi bi-upc-scan me-2"></i>Lector de placas</h3>
+    <h3 class="section-title h5 mb-2"><i class="bi bi-upc-scan me-2"></i>Lector de placas — parqueadero de visitantes</h3>
     <p class="small-note mb-3">
-      Toma una foto del vehículo de frente o de espaldas, con la placa visible.
-      La lectura se hace en este dispositivo; la foto no se envía ni se guarda.
+      Toma la foto con el teléfono horizontal, confirma la placa y sigue con el siguiente vehículo.
+      Las fotos quedan guardadas en el teléfono y se envían solas cuando hay conexión.
     </p>
 
     <div class="d-flex flex-wrap gap-2 align-items-center">
-      <label for="lpCamara" class="btn btn-primary btn-lg mb-0">
-        <i class="bi bi-camera me-2"></i>Tomar foto
+      <button id="lpIniciar" type="button" class="btn btn-primary btn-lg">
+        <i class="bi bi-camera-fill me-2"></i>Iniciar ronda
+      </button>
+      <label id="lpCamaraNativa" for="lpCamara" class="btn btn-outline-secondary mb-0 hidden">
+        <i class="bi bi-camera me-1"></i>Tomar foto con la cámara del teléfono
       </label>
       <input id="lpCamara" class="lp-archivo" type="file" accept="image/*" capture="environment">
-      <label for="lpGaleria" class="btn btn-outline-secondary mb-0">
-        <i class="bi bi-image me-1"></i>Elegir imagen
-      </label>
-      <input id="lpGaleria" class="lp-archivo" type="file" accept="image/*">
     </div>
 
-    <div id="lpEstado" class="small-note mt-3 hidden" aria-live="polite">
-      <span class="spinner-border spinner-border-sm me-2"></span><span id="lpEstadoTexto"></span>
-    </div>
     <div id="lpAlert" class="alert mt-3 mb-0 hidden" aria-live="polite"></div>
   </div>
 
-  <div id="lpResultado" class="surface p-4 mb-4 hidden">
-    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
-      <div id="lpPlaca" class="lp-placa">------</div>
-      <div>
-        <span id="lpTipo" class="badge text-bg-secondary me-1"></span>
-        <span id="lpConfianza" class="badge"></span>
+  <div class="surface p-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+      <h4 class="section-title h6 mb-0"><i class="bi bi-cloud-upload me-2"></i>Registros de la ronda</h4>
+      <div class="d-flex align-items-center gap-2">
+        <span id="lpRed" class="badge"></span>
+        <button id="lpEnviar" type="button" class="btn btn-outline-success btn-sm">
+          <i class="bi bi-arrow-repeat me-1"></i>Enviar ahora
+        </button>
       </div>
     </div>
+    <div id="lpResumen" class="small-note mb-2" aria-live="polite"></div>
+    <div id="lpCola"></div>
+  </div>
+</div>
 
-    <canvas id="lpRecorte" class="lp-recorte mb-3" width="1" height="1" aria-label="Recorte de la placa leída"></canvas>
-
-    <label class="form-label" for="lpPlacaInput">Placa (puedes corregirla)</label>
-    <div class="input-group mb-1" style="max-width:360px">
-      <input id="lpPlacaInput" class="form-control lp-input text-uppercase" maxlength="6" autocomplete="off" placeholder="ABC123">
-      <button id="lpCopiar" type="button" class="btn btn-outline-success">
-        <i class="bi bi-clipboard me-1"></i>Copiar
+<div id="lpOverlay" class="lp-overlay hidden" role="dialog" aria-modal="true" aria-label="Cámara del lector de placas">
+  <div id="lpVivo" class="lp-vivo">
+    <video id="lpVideo" class="lp-video" playsinline muted autoplay></video>
+    <div class="lp-guias" aria-hidden="true">
+      <div id="lpHorizonte" class="lp-horizonte"></div>
+      <div class="lp-marco-placa"><span>Placa</span></div>
+    </div>
+    <div id="lpFlash" class="lp-flash"></div>
+    <div id="lpGirar" class="lp-aviso hidden">
+      <i class="bi bi-phone-landscape me-2"></i>Gira el teléfono: horizontal la placa se lee mejor
+    </div>
+    <div class="lp-barra-superior">
+      <button id="lpCerrar" type="button" class="btn btn-dark btn-sm" aria-label="Terminar ronda">
+        <i class="bi bi-x-lg me-1"></i>Terminar
       </button>
+      <span class="lp-espacio"></span>
+      <span id="lpNivel" class="badge hidden"></span>
+      <span id="lpContador" class="badge text-bg-light">0 en esta ronda</span>
     </div>
-    <div id="lpFormato" class="small mb-3"></div>
-
-    <div id="lpAlternativasBox" class="hidden">
-      <div class="small-note mb-1">Otras lecturas posibles:</div>
-      <div id="lpAlternativas" class="d-flex flex-wrap gap-2"></div>
-    </div>
+    <button id="lpDisparar" type="button" class="lp-disparador" aria-label="Tomar foto"></button>
+    <div id="lpToast" class="lp-toast hidden" aria-live="polite"></div>
   </div>
 
-  <div id="lpFotoBox" class="surface p-4 hidden">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-      <span class="small-note" id="lpFotoAyuda">Foto analizada. El recuadro verde marca la placa leída.</span>
-      <div class="d-flex flex-wrap gap-2">
-        <button id="lpMarcar" type="button" class="btn btn-outline-secondary btn-sm">
+  <div id="lpRevision" class="lp-revision hidden">
+    <div class="lp-revision-foto">
+      <canvas id="lpVista" class="lp-vista" width="1" height="1" aria-label="Foto del vehículo"></canvas>
+    </div>
+    <div class="lp-hoja">
+      <div id="lpEstado" class="small text-white-50 mb-2 hidden" aria-live="polite">
+        <span class="spinner-border spinner-border-sm me-2"></span><span id="lpEstadoTexto"></span>
+      </div>
+      <div id="lpAviso" class="alert alert-warning py-2 small mb-2 hidden"></div>
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <canvas id="lpRecorte" class="lp-recorte hidden" width="1" height="1" aria-label="Recorte de la placa leída"></canvas>
+        <span id="lpConfianza" class="badge hidden"></span>
+      </div>
+
+      <label class="form-label small mb-1" for="lpPlacaInput">Placa</label>
+      <input id="lpPlacaInput" class="form-control lp-placa-input text-uppercase" maxlength="6"
+        autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123">
+      <div id="lpFormato" class="small mt-1"></div>
+
+      <div class="btn-group w-100 my-2" role="group" aria-label="Tipo de vehículo">
+        <input type="radio" class="btn-check" name="lpTipo" id="lpTipoCarro" value="CARRO" checked>
+        <label class="btn btn-outline-light" for="lpTipoCarro"><i class="bi bi-car-front me-1"></i>Carro</label>
+        <input type="radio" class="btn-check" name="lpTipo" id="lpTipoMoto" value="MOTO">
+        <label class="btn btn-outline-light" for="lpTipoMoto"><i class="bi bi-scooter me-1"></i>Moto</label>
+      </div>
+
+      <div id="lpAlternativasBox" class="mb-2 hidden">
+        <div class="small text-white-50 mb-1">Otras lecturas posibles:</div>
+        <div id="lpAlternativas" class="d-flex flex-wrap gap-2"></div>
+      </div>
+
+      <div class="d-flex gap-2 mb-2">
+        <button id="lpMarcar" type="button" class="btn btn-outline-light btn-sm flex-fill">
           <i class="bi bi-bounding-box me-1"></i>Marcar placa
         </button>
-        <button id="lpLeerSeleccion" type="button" class="btn btn-primary btn-sm" disabled>
+        <button id="lpLeerSeleccion" type="button" class="btn btn-outline-light btn-sm flex-fill" disabled>
           <i class="bi bi-upc-scan me-1"></i>Leer selección
         </button>
       </div>
+      <div class="d-flex gap-2">
+        <button id="lpRepetir" type="button" class="btn btn-outline-light flex-fill">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Repetir
+        </button>
+        <button id="lpRegistrar" type="button" class="btn btn-success btn-lg flex-fill" disabled>
+          <i class="bi bi-check2-circle me-1"></i>Registrar
+        </button>
+      </div>
     </div>
-    <canvas id="lpVista" class="lp-vista" width="1" height="1" aria-label="Foto del vehículo"></canvas>
   </div>
 </div>
 
 <script>
   window.LECTOR_PLACAS_CONFIG = {
+    apiBase: {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }},
     vendorBase: {{ "vendor/tesseract/" | relURL | jsonify | safeJS }}
   };
 </script>
-<script src="{{ "js/lector-placas.js" | relURL }}?v=1"></script>
+<script src="{{ "js/lector-placas-ocr.js" | relURL }}?v=2"></script>
+<script src="{{ "js/lector-placas-cola.js" | relURL }}?v=1"></script>
+<script src="{{ "js/lector-placas.js" | relURL }}?v=2"></script>

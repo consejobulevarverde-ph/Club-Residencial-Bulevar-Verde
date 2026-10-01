@@ -2,50 +2,66 @@
 
 ## Propósito
 
-Pestaña "Lector de placas" de `/vigilancia-datos/`. El vigilante toma una foto del vehículo y el módulo
-reconoce la placa. **Etapa 1: solo reconocimiento, 100 % en el dispositivo** — no llama a la API, no
-usa Firebase, no guarda ni envía la foto. Buscar la placa en la API o registrar ingresos es etapa 2.
+Pestaña "Lector de placas" de `/vigilancia-datos/`: registro de vehículos en el **parqueadero de
+visitantes**. El vigilante hace una ronda (100+ vehículos por noche): foto → lectura de la placa en el
+dispositivo → confirma placa y tipo → el registro queda en una cola local y se envía a la API cuando
+hay conexión → la cámara queda lista para el siguiente vehículo.
+
+La sanción a la unidad (moto/carro, valor variable por mes) **no** se calcula aquí: es una etapa
+posterior que leerá estos registros y marcará `fechaPosprocesamiento`.
 
 ## Archivos
 
 | Archivo | Rol |
 |---------|-----|
-| `index.html` | UI (`.lector-placas-panel`, ids con prefijo `lp`), estilos propios y `window.LECTOR_PLACAS_CONFIG = { vendorBase }` |
-| `static/js/lector-placas.js` | IIFE autocontenido; expone `window.BVLectorPlacas.mostrar()` (lo llama `mode('lectorPlacas')`) |
-| `static/vendor/tesseract/` | Tesseract.js 5.1.1 autoalojado (ver `VERSION.txt`); se carga perezosamente al abrir la pestaña |
+| `index.html` | Panel (botón "Iniciar ronda", lista de registros), overlay de cámara (`#lpOverlay`, se mueve a `<body>` al iniciar), estilos y `window.LECTOR_PLACAS_CONFIG = { apiBase, vendorBase }` |
+| `static/js/lector-placas-ocr.js` | `window.BVPlacasOcr`: motor sin UI (localizar, enderezar, OCR, normalizar) |
+| `static/js/lector-placas-cola.js` | `window.BVLectorPlacasCola`: cola en IndexedDB (`bv-lector-placas`) y envío a la API |
+| `static/js/lector-placas.js` | UI: cámara en vivo, revisión, marca de fecha/hora, lista. Expone `window.BVLectorPlacas.mostrar()` (lo llama `mode('lectorPlacas')`) |
+| `static/vendor/tesseract/` | Tesseract.js 5.1.1 autoalojado (ver `VERSION.txt`) |
 
-Se incluye como `<section id="lectorPlacasView" class="hidden">{{ partial "lector-placas/index.html" . }}</section>`.
+## Captura
 
-## Pipeline
+- Cámara en vivo con `getUserMedia` (1920×1080 ideal, cámara trasera) para poder dibujar guías:
+  línea de horizonte (verde cuando el teléfono está nivelado, vía `devicemotion`; iOS pide permiso en
+  el toque de "Iniciar ronda") y marco de placa. Aviso "Gira el teléfono" en vertical; en Android se
+  intenta pantalla completa + bloqueo en horizontal.
+- Si la cámara en vivo no está disponible, aparece el respaldo `<input capture="environment">`.
+- Al registrar, la foto (≤1600 px, JPEG 0,82) lleva una marca discreta con fecha y hora (Bogotá) en la
+  esquina inferior derecha. El OCR siempre corre sobre la foto **sin** marca.
 
-1. **Captura**: `<input type="file" capture="environment">` (cámara nativa) o "Elegir imagen" (galería).
-   No usa `evidence-camera.js`: su marca de agua y GPS estorban al OCR.
-2. **Foto**: `createImageBitmap(..., { imageOrientation: 'from-image' })`, lado mayor ≤ 1600 px.
-3. **Localización** (`localizarPlacas`): máscara de amarillo en HSV sobre copia de 640 px → cierre
-   morfológico → componentes conexos → filtro por tamaño, relación (carro ~2:1, moto ~1.35:1) y relleno.
-   Hasta 3 regiones.
-4. **Recorte** (`prepararRecorte` + `filtrarCaracteres`): escala, gris, Otsu y deja solo manchas con
-   forma y altura de carácter dentro de la placa (quita marco, emblema entre grupos, tornillos y
-   ciudad). Carro omite la franja de la ciudad; moto lee las dos líneas.
-5. **OCR**: PSM 7 (carro) / PSM 6 (moto), whitelist `A-Z0-9`; si no hay lectura de confianza alta
-   prueba el otro tipo y la siguiente región.
-6. **Respaldo** (`leerFotoCompleta`): si por color no hubo lectura de confianza media, PSM 11 (texto
-   disperso) sobre toda la foto, una línea por fragmento. Cubre placas blancas (servicio público) y
-   plateadas antiguas. Si tampoco hay lectura, se pide "Marcar placa" (arrastre sobre la foto).
-7. **Normalización** (`fragmentosOcr` + `lecturasDesdeFragmento`): ventanas de 6 caracteres, corrige
-   confusiones por posición (`0↔O`, `1↔I`, `8↔B`…) y valida con los regex de carro/moto. El puntaje
-   usa la **confianza por carácter** (con whitelist, Tesseract devuelve 0 en palabra/línea), resta
-   por corrección y por caracteres sobrantes, y suma si varias pasadas coinciden. Bajo
-   `PUNTAJE_MINIMO` se descarta.
+## Pipeline OCR (`lector-placas-ocr.js`)
 
-Probado en Chrome de escritorio con fotos reales de Wikimedia Commons (placas amarillas, blancas y
-plateadas, de cerca y a distancia): ~0,3–0,9 s por foto con el motor ya cargado. Falta validar en
-teléfonos reales (tiempos y cámara nativa).
+1. **Localización** por color amarillo (HSV) sobre copia de 640 px → cierre morfológico → componentes
+   con momentos de segundo orden: centro, largo/ancho reales y **ángulo** de la placa (hasta 25°).
+2. **Recorte enderezado**: se dibuja la foto girada `-ángulo` alrededor del centro de la placa; gris,
+   Otsu y `filtrarCaracteres` (solo manchas con forma/altura de carácter dentro de la placa). Con los
+   centros de los caracteres se mide la inclinación residual (mínimos cuadrados) y, si pasa de 1,5°,
+   se vuelve a recortar corregido.
+3. **OCR**: PSM 7 (carro) / PSM 6 (moto), whitelist `A-Z0-9`. Respaldo PSM 11 sobre toda la foto para
+   placas blancas/plateadas. Si nada funciona, el vigilante escribe la placa o usa "Marcar placa".
+4. **Normalización**: ventanas de 6 caracteres, corrección de confusiones por posición, puntaje con la
+   confianza por carácter (Tesseract da 0 en palabra/línea con whitelist).
+
+Probado en Chrome de escritorio con fotos reales de Wikimedia Commons, también giradas ±10°.
+
+## Cola y envío (`lector-placas-cola.js`)
+
+- `POST /api/v1/vigilancia/parqueadero-visitantes/registros` con `{ clientRequestId, placa,
+  placaDetectada, tipoVehiculo, fechaCaptura, foto (dataUrl JPEG) }`. Idempotente por
+  `clientRequestId`: reintentar nunca duplica.
+- Cada registro guarda el `uid` del vigilante y solo se envía con esa sesión (la API toma el nombre
+  del vigilante del token, nunca del cliente).
+- Envío en orden; se detiene al primer error de red y reintenta cada 30 s y al volver la conexión.
+  Errores de validación (4xx) quedan como "Rechazado" con Reintentar/Descartar.
+- Tras enviar se borra la foto del teléfono; los enviados se muestran 24 h.
+- Limitación: la página debe haberse abierto con conexión (no hay service worker). La cola y el
+  motor OCR sí funcionan sin conexión una vez cargados.
 
 ## Reglas
 
-- Los regex de `FORMATOS` deben coincidir con `placaValida` en `static/js/vehiculos.js` (y con
-  `placaCoincideConTipo` en la API).
-- `/vendor/**` se sirve con `Cache-Control` inmutable de 1 año (`firebase.json`): para actualizar
-  Tesseract, usar una ruta nueva versionada en vez de sobrescribir los archivos.
+- Los regex de `FORMATOS` deben coincidir con `placaValida` en `static/js/vehiculos.js` y con
+  `src/modules/vigilancia/placas.ts` en la API.
+- `/vendor/**` se sirve con `Cache-Control` inmutable de 1 año: para actualizar Tesseract, usar una
+  ruta nueva versionada.
 - El texto del OCR se trata como no confiable: todo lo que va a `innerHTML` pasa por `esc()`.

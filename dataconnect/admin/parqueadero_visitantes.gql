@@ -1,0 +1,53 @@
+# Registros del parqueadero de visitantes (vigilancia/lector de placas).
+# NO_ACCESS: la API restringe las rutas a vigilancia/administrador/superadmin y deriva el vigilante
+# (uid y nombre) del token, nunca del cliente.
+
+query ObtenerRegistroParqueaderoVisitantePorClientRequestIdAdmin($clientRequestId: String!)
+@auth(level: NO_ACCESS) {
+  registros_parqueadero_visitante(where: { clientRequestId: { eq: $clientRequestId } }, limit: 1) {
+    id
+    placa
+    tipoVehiculo
+    fechaCaptura
+    unidad {
+      id
+      codigoOficial
+    }
+  }
+}
+
+mutation CrearRegistroParqueaderoVisitanteAdmin(
+  $input: RegistroParqueaderoVisitante_Data!
+    @allow(
+      fields: """
+        id
+        placa
+        placaDetectada
+        tipoVehiculo
+        unidadId
+        fotoObjeto
+        fotoTamanoBytes
+        vigilanteNombre
+        registradoPorUid
+        fechaCaptura
+        clientRequestId
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  registro_parqueadero_visitante_insert(data: $input)
+}
+
+# Unidades con vínculo vigente para una placa exacta (para asignar la unidad del registro).
+query UnidadesVigentesPorPlacaAdmin($placa: String!)
+@auth(level: NO_ACCESS) {
+  vehiculos(where: { placa: { eq: $placa } }, limit: 1) {
+    vinculos: vinculos_vehiculo_unidad_on_vehiculo(where: { esActual: { eq: true } }) {
+      unidad {
+        id
+        codigoOficial
+      }
+    }
+  }
+}

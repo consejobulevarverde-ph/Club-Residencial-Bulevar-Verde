@@ -408,9 +408,9 @@ Contacto [opcional badge]
 - **Registrar** → `POST /api/v1/vigilancia/registrar-vehiculo` (router allows vigilancia, administrador, superadmin).
 - **Reporte** → `GET /api/v1/vigilancia/reportes/vehiculos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD` (max 93 days, Colombia time) → Data Connect `ReporteMovimientosVehiculos`. "Asignado" = link's `vigenteDesde` in range; "Desasignado" = `vigenteHasta` in range. Client-side filters + CSV export (`;` separator, UTF-8 BOM for Excel).
 
-### Lector de placas tab (on-device plate recognition)
+### Lector de placas tab (visitor parking rounds)
 
-`partials/lector-placas/index.html` + `static/js/lector-placas.js` (`window.BVLectorPlacas.mostrar()`, via `mode('lectorPlacas')`). The guard photographs a vehicle and the plate is recognized **entirely on the device**: yellow-plate localization on canvas + Tesseract.js 5.1.1 self-hosted in `static/vendor/tesseract/` (lazy-loaded). Stage 1 is recognition only — no API calls, nothing stored. Manual "Marcar placa" fallback for white or undetected plates. See `layouts/partials/lector-placas/CLAUDE.md`.
+`partials/lector-placas/index.html` + `static/js/lector-placas-ocr.js` (on-device OCR engine) + `lector-placas-cola.js` (IndexedDB offline queue) + `lector-placas.js` (UI, `window.BVLectorPlacas.mostrar()`, via `mode('lectorPlacas')`). The guard does a continuous round with a live camera (horizon/level guide, plate frame): photo → plate read **on the device** (yellow-plate localization with tilt correction + Tesseract.js 5.1.1 self-hosted in `static/vendor/tesseract/`) → guard confirms plate and car/moto → record queued locally with a small date/time watermark → sent when online to `POST /api/v1/vigilancia/parqueadero-visitantes/registros` (idempotent by `clientRequestId`; guard name taken from the token). Photos go to a private Cloud Storage bucket (`Parqueadero-Visitantes-Evidencias/AAAA/MM/DD/<id>.jpg`), the record to Data Connect `RegistroParqueaderoVisitante`. Sanctions are a later stage (`fechaPosprocesamiento`). See `layouts/partials/lector-placas/CLAUDE.md`.
 
 ## UI Design & Sample Data Practices
 
