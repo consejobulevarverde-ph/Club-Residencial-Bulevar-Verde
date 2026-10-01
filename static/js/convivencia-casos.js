@@ -199,14 +199,16 @@
     }
   }
 
-  function buildCasoEvidenceThumb(url, label) {
+  function buildCasoEvidenceThumb(evidencia, label) {
+    var url = evidencia.url;
     var match = /\/file\/d\/([^/]+)/.exec(url || '');
     var thumbUrl = match ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(match[1]) + '&sz=w300') : url;
 
-    // Extraer extensión del nombre del archivo de Drive para inferir tipo
-    var fileNameMatch = /([^/]+)$/.exec(url || '');
-    var fileName = fileNameMatch ? fileNameMatch[1] : '';
-    var clasificacion = window.BVEvidenceTypes ? window.BVEvidenceTypes.clasificar({ name: fileName, type: '' }) : null;
+    // La URL de Drive es .../file/d/<id>/view — sin extensión ni tipo real, así que el
+    // tipo hay que tomarlo de los metadatos que guardó la API (nombreArchivo/mimeType).
+    var clasificacion = window.BVEvidenceTypes
+      ? window.BVEvidenceTypes.clasificar({ name: evidencia.nombreArchivo || '', type: evidencia.mimeType || '' })
+      : null;
     var esImagen = clasificacion && clasificacion.categoria === 'image';
 
     if (esImagen) {
@@ -310,7 +312,7 @@
     if (evidencias.length) {
       if (seccionId) $(seccionId).classList.remove('hidden');
       $(contenedorId).innerHTML = evidencias.map(function (e, idx) {
-        return buildCasoEvidenceThumb(e.url, prefijo + ' ' + (idx + 1));
+        return buildCasoEvidenceThumb(e, prefijo + ' ' + (idx + 1));
       }).join('');
     } else {
       if (seccionId) $(seccionId).classList.add('hidden');
