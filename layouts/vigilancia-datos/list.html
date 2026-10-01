@@ -273,6 +273,9 @@
           <button id="showVehiculos" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-car-front me-1"></i>Vehículos
           </button>
+          <button id="showLectorPlacas" type="button" class="btn btn-outline-success mode-button">
+            <i class="bi bi-upc-scan me-1"></i>Lector de placas
+          </button>
           <button id="showConvivencia" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-exclamation-circle me-1"></i>Registrar Caso
           </button>
@@ -452,6 +455,10 @@
         {{ partial "vehiculos/index.html" . }}
       </section>
 
+      <section id="lectorPlacasView" class="hidden">
+        {{ partial "lector-placas/index.html" . }}
+      </section>
+
       <section id="convivenciaView" class="hidden">
         {{ partial "convivencia-form.html" . }}
       </section>
@@ -567,14 +574,17 @@
         var vehicle = name === 'vehicle';
         var convivencia = name === 'convivencia';
         var reservas = name === 'reservas';
-        $('searchView').classList.toggle('hidden', registration || vehicle || convivencia || reservas);
+        var lectorPlacas = name === 'lectorPlacas';
+        $('searchView').classList.toggle('hidden', registration || vehicle || convivencia || reservas || lectorPlacas);
         $('registrationView').classList.toggle('hidden', !registration);
         $('vehiculosView').classList.toggle('hidden', !vehicle);
+        $('lectorPlacasView').classList.toggle('hidden', !lectorPlacas);
         $('convivenciaView').classList.toggle('hidden', !convivencia);
         $('reservasAgendaView').classList.toggle('hidden', !reservas);
-        $('showSearch').classList.toggle('active', !registration && !vehicle && !convivencia && !reservas);
+        $('showSearch').classList.toggle('active', !registration && !vehicle && !convivencia && !reservas && !lectorPlacas);
         $('showRegistration').classList.toggle('active', registration);
         $('showVehiculos').classList.toggle('active', vehicle);
+        $('showLectorPlacas').classList.toggle('active', lectorPlacas);
         $('showConvivencia').classList.toggle('active', convivencia);
         $('showReservasAgenda').classList.toggle('active', reservas);
 
@@ -582,6 +592,8 @@
           $('newApartment').focus();
         } else if (vehicle) {
           if (window.BVVehiculos) window.BVVehiculos.mostrar();
+        } else if (lectorPlacas) {
+          if (window.BVLectorPlacas) window.BVLectorPlacas.mostrar();
         } else if (convivencia) {
           $('convivenciaApto').focus();
         } else if (reservas) {
@@ -599,6 +611,7 @@
       $('showSearch').addEventListener('click', function () { mode('search'); });
       $('showRegistration').addEventListener('click', function () { mode('registration'); });
       $('showVehiculos').addEventListener('click', function () { mode('vehicle'); });
+      $('showLectorPlacas').addEventListener('click', function () { mode('lectorPlacas'); });
       $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
       function initAgendaFechas() {
         var today = new Date();

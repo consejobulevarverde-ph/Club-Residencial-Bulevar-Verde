@@ -1,0 +1,11 @@
+Tesseract.js 5.1.1 (Apache-2.0, see LICENSE) — vendored for the vigilancia "Lector de placas" module.
+Downloaded once from jsDelivr; served from Firebase Hosting so OCR runs without third-party requests.
+The files are immutable per version: to upgrade, put them in a new versioned path or bump the ?v= of
+lector-placas.js, since /vendor/** is served with a 1-year immutable Cache-Control.
+
+tesseract.min.js                       https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js
+worker.min.js                          https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js
+LICENSE                                https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/LICENSE.md
+core/tesseract-core-simd-lstm.wasm.js  https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-simd-lstm.wasm.js
+core/tesseract-core-lstm.wasm.js       https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js
+lang/eng.traineddata.gz                https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int/eng.traineddata.gz

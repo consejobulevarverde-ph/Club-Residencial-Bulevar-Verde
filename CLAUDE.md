@@ -408,6 +408,10 @@ Contacto [opcional badge]
 - **Registrar** → `POST /api/v1/vigilancia/registrar-vehiculo` (router allows vigilancia, administrador, superadmin).
 - **Reporte** → `GET /api/v1/vigilancia/reportes/vehiculos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD` (max 93 days, Colombia time) → Data Connect `ReporteMovimientosVehiculos`. "Asignado" = link's `vigenteDesde` in range; "Desasignado" = `vigenteHasta` in range. Client-side filters + CSV export (`;` separator, UTF-8 BOM for Excel).
 
+### Lector de placas tab (on-device plate recognition)
+
+`partials/lector-placas/index.html` + `static/js/lector-placas.js` (`window.BVLectorPlacas.mostrar()`, via `mode('lectorPlacas')`). The guard photographs a vehicle and the plate is recognized **entirely on the device**: yellow-plate localization on canvas + Tesseract.js 5.1.1 self-hosted in `static/vendor/tesseract/` (lazy-loaded). Stage 1 is recognition only — no API calls, nothing stored. Manual "Marcar placa" fallback for white or undetected plates. See `layouts/partials/lector-placas/CLAUDE.md`.
+
 ## UI Design & Sample Data Practices
 
 ### Using Generic Sample Data
