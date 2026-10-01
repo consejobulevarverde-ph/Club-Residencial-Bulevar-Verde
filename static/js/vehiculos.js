@@ -18,6 +18,8 @@
   var registrosSancion = [];
   var sancionesIniciado = false;
   var editandoId = null;
+  var fotosUrl = {};
+  var observadorMiniaturas = null;
 
   function $(id) { return document.getElementById(id); }
 
@@ -429,7 +431,8 @@
       var estado = procesado ? 'Procesado' : 'Por procesar';
       var tipo = r.tipoVehiculo === 'MOTO' ? 'Moto' : 'Carro';
       return '<div class="vs-item">' +
-        '<button type="button" class="vs-foto" data-vs-foto="' + esc(r.id) + '" aria-label="Ver foto de ' + esc(r.placa) + '">' +
+        '<button type="button" class="vs-foto" data-vs-foto="' + esc(r.id) + '"' + (r.miniatura ? '' : ' data-vs-sin-miniatura') +
+        ' aria-label="Ver foto de ' + esc(r.placa) + '">' +
         (r.miniatura ? '<img src="' + esc(r.miniatura) + '" alt="">' : '<i class="bi bi-image fs-4"></i>') +
         '</button>' +
         '<div class="flex-grow-1 small">' +
@@ -446,6 +449,7 @@
 
     var input = $('vsLista').querySelector('[data-vs-input]');
     if (input) input.focus();
+    cargarMiniaturasFaltantes();
   }
 
   function consultarSanciones() {
@@ -507,7 +511,51 @@
     });
   }
 
-  // La foto vive en un bucket privado: se pide a la API con el token y se muestra como blob.
+  // La foto vive en un bucket privado: se pide a la API con el token y se guarda como blob URL, que
+  // sirve para el visor y como miniatura de los registros que no tienen una.
+  function fotoUrl(id) {
+    if (!fotosUrl[id]) {
+      fotosUrl[id] = getAuthToken().then(function (token) {
+        return fetch(API_BASE + RUTA_REGISTROS + '/' + encodeURIComponent(id) + '/foto', {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+      }).then(function (res) {
+        if (!res.ok) throw new Error('No se pudo cargar la foto.');
+        return res.blob();
+      }).then(function (blob) {
+        return URL.createObjectURL(blob);
+      }).catch(function (error) {
+        delete fotosUrl[id];
+        throw error;
+      });
+    }
+    return fotosUrl[id];
+  }
+
+  // Registros sin miniatura (tomados antes de que el lector la enviara): se usa la foto completa,
+  // cargada solo cuando la fila se acerca a la pantalla.
+  function cargarMiniaturasFaltantes() {
+    var botones = Array.prototype.slice.call($('vsLista').querySelectorAll('[data-vs-sin-miniatura]'));
+    if (observadorMiniaturas) observadorMiniaturas.disconnect();
+    function cargar(boton) {
+      fotoUrl(boton.dataset.vsFoto).then(function (url) {
+        if (boton.isConnected) boton.innerHTML = '<img src="' + esc(url) + '" alt="">';
+      }).catch(function () { /* queda el ícono; el visor mostrará el error */ });
+    }
+    if (!('IntersectionObserver' in window)) {
+      botones.forEach(cargar);
+      return;
+    }
+    observadorMiniaturas = new IntersectionObserver(function (entradas) {
+      entradas.forEach(function (entrada) {
+        if (!entrada.isIntersecting) return;
+        observadorMiniaturas.unobserve(entrada.target);
+        cargar(entrada.target);
+      });
+    }, { rootMargin: '200px' });
+    botones.forEach(function (boton) { observadorMiniaturas.observe(boton); });
+  }
+
   function verFoto(id) {
     var registro = registrosSancion.filter(function (r) { return r.id === id; })[0];
     var img = $('vsVisorImg');
@@ -517,16 +565,8 @@
     $('vsVisorTexto').textContent = registro
       ? registro.placa + ' · ' + formatFechaCorta(registro.fechaCaptura) + (registro.apartamento ? ' · ' + registro.apartamento : '')
       : '';
-    getAuthToken().then(function (token) {
-      return fetch(API_BASE + RUTA_REGISTROS + '/' + encodeURIComponent(id) + '/foto', {
-        headers: { Authorization: 'Bearer ' + token }
-      });
-    }).then(function (res) {
-      if (!res.ok) throw new Error('No se pudo cargar la foto.');
-      return res.blob();
-    }).then(function (blob) {
-      if (img.src) URL.revokeObjectURL(img.src);
-      img.src = URL.createObjectURL(blob);
+    fotoUrl(id).then(function (url) {
+      img.src = url;
       show('vsVisorImg', true);
     }).catch(function (error) {
       $('vsVisorTexto').textContent = error.message;
