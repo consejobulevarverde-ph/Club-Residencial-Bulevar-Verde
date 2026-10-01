@@ -26,7 +26,13 @@ posterior que leerá estos registros y marcará `fechaPosprocesamiento`.
   línea de horizonte (verde cuando el teléfono está nivelado, vía `devicemotion`; iOS pide permiso en
   el toque de "Iniciar ronda") y marco de placa. Aviso "Gira el teléfono" en vertical; en Android se
   intenta pantalla completa + bloqueo en horizontal.
-- Si la cámara en vivo no está disponible, aparece el respaldo `<input capture="environment">`.
+- **Flash**: la cámara en vivo de una página no expone el flash de foto, solo la linterna (luz
+  continua, constraint `torch`). Se enciende por defecto; el botón ⚡ de la barra la apaga/enciende y
+  la preferencia queda en `localStorage.bvLectorPlacasLinterna`. Se apaga mientras se revisa la foto y
+  vuelve al regresar a la cámara. Solo aparece donde `track.getCapabilities().torch` existe (Chrome en
+  Android; Safari en iOS no lo permite).
+- Si la cámara en vivo no está disponible, aparece el respaldo `<input capture="environment">` (ahí el
+  flash lo maneja la app de cámara del teléfono).
 - Al registrar, la foto (≤1600 px, JPEG 0,82) lleva una marca discreta con fecha y hora (Bogotá) en la
   esquina inferior derecha. El OCR siempre corre sobre la foto **sin** marca.
 

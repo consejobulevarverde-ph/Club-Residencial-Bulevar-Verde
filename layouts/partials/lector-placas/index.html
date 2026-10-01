@@ -109,6 +109,10 @@
     gap: .5rem;
   }
 
+  .lp-linterna[aria-pressed="true"] {
+    color: #f7d117;
+  }
+
   .lp-barra-superior .lp-espacio {
     flex: 1;
   }
@@ -306,6 +310,10 @@
       <button id="lpCerrar" type="button" class="btn btn-dark btn-sm" aria-label="Terminar ronda">
         <i class="bi bi-x-lg me-1"></i>Terminar
       </button>
+      <button id="lpLinterna" type="button" class="btn btn-dark btn-sm lp-linterna hidden"
+        aria-pressed="true" aria-label="Flash" title="Flash">
+        <i class="bi bi-lightning-charge-fill"></i>
+      </button>
       <span class="lp-espacio"></span>
       <span id="lpNivel" class="badge hidden"></span>
       <span id="lpContador" class="badge text-bg-light">0 en esta ronda</span>
@@ -373,4 +381,4 @@
 </script>
 <script src="{{ "js/lector-placas-ocr.js" | relURL }}?v=2"></script>
 <script src="{{ "js/lector-placas-cola.js" | relURL }}?v=3"></script>
-<script src="{{ "js/lector-placas.js" | relURL }}?v=4"></script>
+<script src="{{ "js/lector-placas.js" | relURL }}?v=5"></script>

@@ -41,6 +41,14 @@
   var ejecucion = 0;
   var enRonda = 0;
   var temporizadorToast = null;
+  var CLAVE_LINTERNA = 'bvLectorPlacasLinterna';
+  var linternaPreferida = (function () {
+    try {
+      return localStorage.getItem(CLAVE_LINTERNA) !== '0';
+    } catch (error) {
+      return true;
+    }
+  }());
 
   function $(id) { return document.getElementById(id); }
 
@@ -140,11 +148,54 @@
     var video = $('lpVideo');
     video.srcObject = stream;
     await video.play().catch(function () {});
+    // Algunos Android solo aceptan la linterna con el video ya reproduciéndose.
+    prepararLinterna();
   }
 
   function camaraActiva() {
     var track = stream && stream.getVideoTracks()[0];
     return !!track && track.readyState === 'live';
+  }
+
+  // Flash: en una página web la cámara en vivo no expone el flash de foto, sino la linterna (luz
+  // continua). Encendida por defecto para las rondas nocturnas; el vigilante la apaga con el botón y
+  // la preferencia queda en el teléfono. Solo donde el navegador lo permite (Chrome en Android).
+  function linternaDisponible() {
+    var track = stream && stream.getVideoTracks()[0];
+    var capacidades = track && track.getCapabilities ? track.getCapabilities() : {};
+    return !!capacidades.torch;
+  }
+
+  function aplicarLinterna(encendida) {
+    var track = stream && stream.getVideoTracks()[0];
+    if (!track || !linternaDisponible()) return;
+    track.applyConstraints({ advanced: [{ torch: encendida }] }).catch(function () {});
+  }
+
+  function pintarBotonLinterna() {
+    var boton = $('lpLinterna');
+    boton.setAttribute('aria-pressed', linternaPreferida ? 'true' : 'false');
+    boton.title = linternaPreferida ? 'Flash encendido' : 'Flash apagado';
+    boton.innerHTML = '<i class="bi ' + (linternaPreferida ? 'bi-lightning-charge-fill' : 'bi-lightning-charge') + '"></i>';
+  }
+
+  function prepararLinterna() {
+    var disponible = linternaDisponible();
+    $('lpLinterna').classList.toggle('hidden', !disponible);
+    if (!disponible) return;
+    pintarBotonLinterna();
+    aplicarLinterna(linternaPreferida);
+  }
+
+  function alternarLinterna() {
+    linternaPreferida = !linternaPreferida;
+    try {
+      localStorage.setItem(CLAVE_LINTERNA, linternaPreferida ? '1' : '0');
+    } catch (error) {
+      // Sin almacenamiento la preferencia dura solo esta ronda.
+    }
+    pintarBotonLinterna();
+    aplicarLinterna(linternaPreferida);
   }
 
   function actualizarOrientacion() {
@@ -219,11 +270,14 @@
     $('lpRevision').classList.add('hidden');
     $('lpVivo').classList.remove('hidden');
     $('lpContador').textContent = enRonda + ' en esta ronda';
+    aplicarLinterna(linternaPreferida);
   }
 
   function mostrarRevision() {
     $('lpVivo').classList.add('hidden');
     $('lpRevision').classList.remove('hidden');
+    // Mientras se revisa la foto la luz no hace falta: ahorra batería y no encandila.
+    aplicarLinterna(false);
   }
 
   function destello() {
@@ -664,6 +718,7 @@
       procesarArchivoNativo(file);
     });
     $('lpCerrar').addEventListener('click', cerrarRonda);
+    $('lpLinterna').addEventListener('click', alternarLinterna);
     $('lpDisparar').addEventListener('click', disparar);
     $('lpRepetir').addEventListener('click', repetir);
     $('lpRegistrar').addEventListener('click', registrar);
