@@ -401,12 +401,18 @@ Contacto [opcional badge]
 - Email: "pepito.perez@ejemplo.com"
 - Phone: "+57 300 123 4567"
 
-### Vehículos tab (shared partial: registrar + reporte)
+### Vehículos tab (shared partial: registrar + reporte + sanciones)
 
 `partials/vehiculos/` (`index.html` sub-tab container + `registrar.html` + `reporte.html`) with a single script `static/js/vehiculos.js`, rendered identically in `vigilancia-datos` (`#vehiculosView`, via its inline `mode('vehicle')`) and `administracion-datos` (`#vehiculosView`, via the `administracion-datos/vehiculos.js` stub on `AdminDatos.registrarModulo`). Entry point `window.BVVehiculos.mostrar()`. See `layouts/partials/vehiculos/CLAUDE.md`.
 
 - **Registrar** → `POST /api/v1/vigilancia/registrar-vehiculo` (router allows vigilancia, administrador, superadmin).
 - **Reporte** → `GET /api/v1/vigilancia/reportes/vehiculos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD` (max 93 days, Colombia time) → Data Connect `ReporteMovimientosVehiculos`. "Asignado" = link's `vigenteDesde` in range; "Desasignado" = `vigenteHasta` in range. Client-side filters + CSV export (`;` separator, UTF-8 BOM for Excel).
+- **Sanciones** → visitor-parking records from the plate reader (`GET /api/v1/vigilancia/parqueadero-visitantes/registros?desde=&hasta=`, thumbnails inline; full photo via `/registros/:id/foto`), same list format as the guard's round. Records "Sin apartamento" get a pencil to assign the apartment (`PATCH /registros/:id/apartamento`, only when none is set; records who assigned it).
+- UI wording: say **apartamento**, not "unidad", in every vigilancia-facing label and message (the data model keeps `Unidad`).
+
+### Lector de placas tab (visitor parking rounds)
+
+`partials/lector-placas/index.html` + `static/js/lector-placas-ocr.js` (on-device OCR engine) + `lector-placas-cola.js` (IndexedDB offline queue) + `lector-placas.js` (UI, `window.BVLectorPlacas.mostrar()`, via `mode('lectorPlacas')`). The guard does a continuous round with a live camera (horizon/level guide, plate frame): photo → plate read **on the device** (yellow-plate localization with tilt correction + Tesseract.js 5.1.1 self-hosted in `static/vendor/tesseract/`) → guard confirms plate and car/moto → record queued locally with a small date/time watermark → sent when online to `POST /api/v1/vigilancia/parqueadero-visitantes/registros` (idempotent by `clientRequestId`; guard name taken from the token). Photos go to a private Cloud Storage bucket (`Parqueadero-Visitantes-Evidencias/AAAA/MM/DD/<id>.jpg`), the record to Data Connect `RegistroParqueaderoVisitante`. Sanctions are a later stage (`fechaPosprocesamiento`). See `layouts/partials/lector-placas/CLAUDE.md`.
 
 ## UI Design & Sample Data Practices
 
@@ -470,6 +476,9 @@ While not strict compliance, the UI should embrace:
    - Avoid exposing internal IDs, technical jargon, or debug info to end-user labels
    - Use semantic HTML (form labels, buttons, modals) for accessibility
    - Batch related fields (e.g., contact info grouped under "Contacto (opcional)")
+   - **Mobile-first, minimal text** in lists and `innerHTML` (vigilancia uses phones): show the value, not a label
+     plus value (`T4-1029`, not `Apartamento T4-1029`); prefer icons for type/status with the full word in
+     `title`/`aria-label`; short dates (`30/9 22:15`); short messages ("Sin conexión", "Sin registros.")
 
 ---
 

@@ -379,3 +379,36 @@ type MiembroOrganoGobierno
   fechaCreacion: Timestamp! @default(expr: "request.time")
   fechaActualizacion: Timestamp! @default(expr: "request.time")
 }
+
+# Vehículo fotografiado por vigilancia en el parqueadero de visitantes. Este registro solo guarda la
+# evidencia; la sanción (moto/carro, con valor que puede cambiar de un mes a otro) se calcula en una
+# etapa posterior, que marca fechaPosprocesamiento. `placa` es la confirmada por el vigilante y
+# `placaDetectada` la que leyó el OCR del dispositivo. `unidad` se asigna solo si la placa coincide
+# exactamente con un vehículo con vínculo vigente. La foto vive en Cloud Storage (`fotoObjeto` es la
+# ruta dentro del bucket, nunca una URL pública).
+type RegistroParqueaderoVisitante
+  @table(
+    name: "registros_parqueadero_visitante"
+    singular: "registro_parqueadero_visitante"
+    plural: "registros_parqueadero_visitante"
+    key: "id"
+  ) {
+  id: UUID! @default(expr: "uuidV4()")
+  placa: String!
+  placaDetectada: String
+  tipoVehiculo: String!
+  unidad: Unidad
+  fotoObjeto: String!
+  fotoTamanoBytes: Int
+  vigilanteNombre: String!
+  registradoPorUid: String!
+  fechaCaptura: Timestamp!
+  fechaPosprocesamiento: Timestamp
+  # Apartamento asignado a mano (desde la pestaña Sanciones) cuando la placa no lo identificó.
+  unidadAsignadaPorUid: String
+  unidadAsignadaPorNombre: String
+  fechaAsignacionUnidad: Timestamp
+  clientRequestId: String! @unique
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}

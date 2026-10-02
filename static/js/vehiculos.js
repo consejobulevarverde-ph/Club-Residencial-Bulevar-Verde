@@ -15,6 +15,11 @@
   var rangoActual = null;
   var reporteIniciado = false;
   var reporteDesactualizado = false;
+  var registrosSancion = [];
+  var sancionesIniciado = false;
+  var editandoId = null;
+  var fotosUrl = {};
+  var observadorMiniaturas = null;
 
   function $(id) { return document.getElementById(id); }
 
@@ -90,13 +95,23 @@
   function modoVehiculos(name) {
     subVista = name;
     var registrar = name === 'registrar';
+    var sanciones = name === 'sanciones';
+    var reporte = !registrar && !sanciones;
     show('vehiculosRegistrarView', registrar);
-    show('vehiculosReporteView', !registrar);
+    show('vehiculosReporteView', reporte);
+    show('vehiculosSancionesView', sanciones);
     $('showVehiculosRegistrar').classList.toggle('active', registrar);
-    $('showVehiculosReporte').classList.toggle('active', !registrar);
+    $('showVehiculosReporte').classList.toggle('active', reporte);
+    $('showVehiculosSanciones').classList.toggle('active', sanciones);
 
     if (registrar) {
       $('vehApartment').focus();
+    } else if (sanciones) {
+      if (!sancionesIniciado) {
+        sancionesIniciado = true;
+        setRangoSanciones('mes');
+        consultarSanciones();
+      }
     } else if (!reporteIniciado) {
       reporteIniciado = true;
       setRango('mes');
@@ -178,7 +193,7 @@
       '<i class="bi bi-check-circle-fill me-2"></i>' +
       'Registro completado' +
       '</h3>' +
-      '<p class="mb-0">Vehículo <span class="plate">' + esc(data.placa) + '</span> (' + esc(data.tipoVehiculo) + ') quedó registrado en la unidad ' +
+      '<p class="mb-0">Vehículo <span class="plate">' + esc(data.placa) + '</span> (' + esc(data.tipoVehiculo) + ') quedó registrado en el apartamento ' +
       '<strong>' + esc(data.codigoOficial) + '</strong> como ' + esc(data.tipoVinculo) + '.</p>' +
       '</article>';
   }
@@ -308,7 +323,7 @@
   function descargarCsv() {
     var filas = filtrados();
     if (!filas.length) return;
-    var encabezado = ['Fecha', 'Movimiento', 'Unidad', 'Placa', 'Tipo vehículo', 'Vínculo', 'Estado vínculo', 'Origen', 'Estado vehículo', 'Vehículo activo', 'Fuentes', 'Vigente desde', 'Vigente hasta', 'Creación vehículo'];
+    var encabezado = ['Fecha', 'Movimiento', 'Apartamento', 'Placa', 'Tipo vehículo', 'Vínculo', 'Estado vínculo', 'Origen', 'Estado vehículo', 'Vehículo activo', 'Fuentes', 'Vigente desde', 'Vigente hasta', 'Creación vehículo'];
     var lineas = filas.map(function (m) {
       var v = m.vehiculo || {};
       return [
@@ -337,6 +352,249 @@
     link.click();
     link.remove();
     setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+  }
+
+  // ===== Sanciones (parqueadero de visitantes) =====
+
+  var RUTA_REGISTROS = '/api/v1/vigilancia/parqueadero-visitantes/registros';
+
+  function setRangoSanciones(tipo) {
+    var hoy = new Date();
+    var desde;
+    if (tipo === 'anoche') {
+      // La ronda nocturna cruza la medianoche: hoy y ayer.
+      desde = new Date(hoy);
+      desde.setDate(desde.getDate() - 1);
+    } else if (tipo === '7') {
+      desde = new Date(hoy);
+      desde.setDate(desde.getDate() - 6);
+    } else {
+      desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    }
+    $('vsDesde').value = toIsoDate(desde);
+    $('vsHasta').value = toIsoDate(hoy);
+  }
+
+  function sancionesFiltrados() {
+    var texto = $('vsFiltroTexto').value.trim().toUpperCase();
+    var soloSin = $('vsSoloSinApartamento').checked;
+    return registrosSancion.filter(function (r) {
+      if (soloSin && r.apartamento) return false;
+      if (!texto) return true;
+      return r.placa.indexOf(texto) !== -1 || String(r.apartamento || '').toUpperCase().indexOf(texto) !== -1;
+    });
+  }
+
+  function lineaApartamento(r) {
+    if (editandoId === r.id) {
+      return '<form class="d-flex flex-wrap gap-2 align-items-center mt-1" data-vs-form="' + esc(r.id) + '">' +
+        '<input class="form-control form-control-sm" style="width:9rem" inputmode="numeric" maxlength="4" ' +
+        'placeholder="Apartamento" aria-label="Apartamento" required data-vs-input>' +
+        '<button type="submit" class="btn btn-primary btn-sm" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>' +
+        '<button type="button" class="btn btn-outline-secondary btn-sm" title="Cancelar" aria-label="Cancelar" data-vs-cancelar><i class="bi bi-x-lg"></i></button>' +
+        '<span class="text-danger w-100" data-vs-error></span>' +
+        '</form>';
+    }
+    if (r.apartamento) {
+      // Quién lo asignó a mano va en el title: en el celular, menos texto.
+      return '<div><i class="bi bi-house-door me-1"></i><strong>' + esc(r.apartamento) + '</strong>' +
+        (r.apartamentoAsignadoPor
+          ? ' <i class="bi bi-person-check text-muted" title="Asignado por ' + esc(r.apartamentoAsignadoPor) + '" ' +
+            'aria-label="Asignado por ' + esc(r.apartamentoAsignadoPor) + '"></i>'
+          : '') +
+        '</div>';
+    }
+    return '<div class="text-danger">Sin apartamento' +
+      '<button type="button" class="btn btn-link btn-sm p-0 ms-2 align-baseline" data-vs-editar="' + esc(r.id) + '" ' +
+      'title="Asignar apartamento" aria-label="Asignar apartamento a ' + esc(r.placa) + '">' +
+      '<i class="bi bi-pencil-square"></i></button></div>';
+  }
+
+  function formatFechaCorta(value) {
+    return new Date(value).toLocaleString('es-CO', {
+      timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+    }).replace(',', '');
+  }
+
+  function renderSanciones() {
+    var filas = sancionesFiltrados();
+    $('vsTotal').textContent = registrosSancion.length;
+    $('vsCarros').textContent = registrosSancion.filter(function (r) { return r.tipoVehiculo === 'CARRO'; }).length;
+    $('vsMotos').textContent = registrosSancion.filter(function (r) { return r.tipoVehiculo === 'MOTO'; }).length;
+    $('vsSinApartamento').textContent = registrosSancion.filter(function (r) { return !r.apartamento; }).length;
+    $('vsConteoVisible').textContent = registrosSancion.length && filas.length !== registrosSancion.length
+      ? filas.length + ' de ' + registrosSancion.length
+      : '';
+
+    $('vsLista').innerHTML = filas.map(function (r) {
+      var procesado = Boolean(r.fechaPosprocesamiento);
+      var estado = procesado ? 'Procesado' : 'Por procesar';
+      var tipo = r.tipoVehiculo === 'MOTO' ? 'Moto' : 'Carro';
+      return '<div class="vs-item">' +
+        '<button type="button" class="vs-foto" data-vs-foto="' + esc(r.id) + '"' + (r.miniatura ? '' : ' data-vs-sin-miniatura') +
+        ' aria-label="Ver foto de ' + esc(r.placa) + '">' +
+        (r.miniatura ? '<img src="' + esc(r.miniatura) + '" alt="">' : '<i class="bi bi-image fs-4"></i>') +
+        '</button>' +
+        '<div class="flex-grow-1 small">' +
+        '<div><span class="vs-placa">' + esc(r.placa) + '</span> ' +
+        '<span class="text-muted"><i class="bi ' + (tipo === 'Moto' ? 'bi-scooter' : 'bi-car-front') + '" title="' + tipo + '" aria-label="' + tipo + '"></i> ' +
+        esc(formatFechaCorta(r.fechaCaptura)) + '</span></div>' +
+        lineaApartamento(r) +
+        '<div class="text-muted"><i class="bi bi-person-badge me-1" aria-label="Vigilante"></i>' + esc(r.vigilanteNombre) + '</div>' +
+        '</div>' +
+        '<span class="badge ' + (procesado ? 'text-bg-success' : 'text-bg-secondary') + '" title="' + estado + '" aria-label="' + estado + '">' +
+        '<i class="bi ' + (procesado ? 'bi-check2' : 'bi-clock-history') + '"></i></span>' +
+        '</div>';
+    }).join('');
+
+    var input = $('vsLista').querySelector('[data-vs-input]');
+    if (input) input.focus();
+    cargarMiniaturasFaltantes();
+  }
+
+  function consultarSanciones() {
+    var desde = $('vsDesde').value;
+    var hasta = $('vsHasta').value;
+    if (!desde || !hasta || desde > hasta) {
+      $('vsError').textContent = 'Revisa el rango de fechas.';
+      show('vsError', true);
+      return;
+    }
+    show('vsError', false);
+    show('vsEmpty', false);
+    show('vsTruncado', false);
+    show('vsLoading', true);
+    $('vsConsultar').disabled = true;
+    editandoId = null;
+
+    apiFetch(RUTA_REGISTROS + '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta))
+      .then(function (body) {
+        registrosSancion = body.data.registros || [];
+        show('vsTruncado', Boolean(body.data.truncado));
+        show('vsEmpty', registrosSancion.length === 0);
+      }).catch(function (error) {
+        registrosSancion = [];
+        $('vsError').textContent = error.message;
+        show('vsError', true);
+      }).then(function () {
+        renderSanciones();
+        show('vsLoading', false);
+        $('vsConsultar').disabled = false;
+      });
+  }
+
+  function guardarApartamento(form) {
+    var id = form.dataset.vsForm;
+    var apartamento = form.querySelector('[data-vs-input]').value.trim();
+    var errorBox = form.querySelector('[data-vs-error]');
+    if (!/^\d{1,4}$/.test(apartamento)) {
+      errorBox.textContent = 'Solo números.';
+      return;
+    }
+    var boton = form.querySelector('button[type="submit"]');
+    busy(boton, true, '');
+    apiFetch(RUTA_REGISTROS + '/' + encodeURIComponent(id) + '/apartamento', {
+      method: 'PATCH',
+      body: { apartamento: apartamento }
+    }).then(function (body) {
+      registrosSancion.forEach(function (r) {
+        if (r.id === id) {
+          r.apartamento = body.data.apartamento;
+          r.apartamentoAsignadoPor = body.data.apartamentoAsignadoPor;
+        }
+      });
+      editandoId = null;
+      renderSanciones();
+    }).catch(function (error) {
+      errorBox.textContent = error.message;
+      busy(boton, false, '');
+    });
+  }
+
+  // La foto vive en un bucket privado: se pide a la API con el token y se guarda como blob URL, que
+  // sirve para el visor y como miniatura de los registros que no tienen una.
+  function fotoUrl(id) {
+    if (!fotosUrl[id]) {
+      fotosUrl[id] = getAuthToken().then(function (token) {
+        return fetch(API_BASE + RUTA_REGISTROS + '/' + encodeURIComponent(id) + '/foto', {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+      }).then(function (res) {
+        if (!res.ok) throw new Error('No se pudo cargar la foto.');
+        return res.blob();
+      }).then(function (blob) {
+        return URL.createObjectURL(blob);
+      }).catch(function (error) {
+        delete fotosUrl[id];
+        throw error;
+      });
+    }
+    return fotosUrl[id];
+  }
+
+  // Registros sin miniatura (tomados antes de que el lector la enviara): se usa la foto completa,
+  // cargada solo cuando la fila se acerca a la pantalla.
+  function cargarMiniaturasFaltantes() {
+    var botones = Array.prototype.slice.call($('vsLista').querySelectorAll('[data-vs-sin-miniatura]'));
+    if (observadorMiniaturas) observadorMiniaturas.disconnect();
+    function cargar(boton) {
+      fotoUrl(boton.dataset.vsFoto).then(function (url) {
+        if (boton.isConnected) boton.innerHTML = '<img src="' + esc(url) + '" alt="">';
+      }).catch(function () { /* queda el ícono; el visor mostrará el error */ });
+    }
+    if (!('IntersectionObserver' in window)) {
+      botones.forEach(cargar);
+      return;
+    }
+    observadorMiniaturas = new IntersectionObserver(function (entradas) {
+      entradas.forEach(function (entrada) {
+        if (!entrada.isIntersecting) return;
+        observadorMiniaturas.unobserve(entrada.target);
+        cargar(entrada.target);
+      });
+    }, { rootMargin: '200px' });
+    botones.forEach(function (boton) { observadorMiniaturas.observe(boton); });
+  }
+
+  function verFoto(id) {
+    var registro = registrosSancion.filter(function (r) { return r.id === id; })[0];
+    var img = $('vsVisorImg');
+    show('vsVisor', true);
+    show('vsVisorCargando', true);
+    show('vsVisorImg', false);
+    $('vsVisorTexto').textContent = registro
+      ? registro.placa + ' · ' + formatFechaCorta(registro.fechaCaptura) + (registro.apartamento ? ' · ' + registro.apartamento : '')
+      : '';
+    fotoUrl(id).then(function (url) {
+      img.src = url;
+      show('vsVisorImg', true);
+    }).catch(function (error) {
+      $('vsVisorTexto').textContent = error.message;
+    }).then(function () {
+      show('vsVisorCargando', false);
+    });
+  }
+
+  function cerrarFoto() {
+    show('vsVisor', false);
+  }
+
+  function alClicSanciones(event) {
+    var foto = event.target.closest('[data-vs-foto]');
+    if (foto) {
+      verFoto(foto.dataset.vsFoto);
+      return;
+    }
+    var editar = event.target.closest('[data-vs-editar]');
+    if (editar) {
+      editandoId = editar.dataset.vsEditar;
+      renderSanciones();
+      return;
+    }
+    if (event.target.closest('[data-vs-cancelar]')) {
+      editandoId = null;
+      renderSanciones();
+    }
   }
 
   // ===== Init =====
@@ -368,6 +626,39 @@
     $('vrFiltroMovimiento').addEventListener('change', render);
     $('vrFiltroTexto').addEventListener('input', render);
     $('vrDescargar').addEventListener('click', descargarCsv);
+
+    $('showVehiculosSanciones').addEventListener('click', function () { modoVehiculos('sanciones'); });
+    $('vsForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      consultarSanciones();
+    });
+    document.querySelectorAll('[data-vs-rango]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        setRangoSanciones(button.dataset.vsRango);
+        consultarSanciones();
+      });
+    });
+    $('vsFiltroTexto').addEventListener('input', renderSanciones);
+    $('vsSoloSinApartamento').addEventListener('change', renderSanciones);
+    $('vsLista').addEventListener('click', alClicSanciones);
+    $('vsLista').addEventListener('submit', function (event) {
+      var form = event.target.closest('[data-vs-form]');
+      if (!form) return;
+      event.preventDefault();
+      guardarApartamento(form);
+    });
+    $('vsLista').addEventListener('input', function (event) {
+      if (event.target.matches('[data-vs-input]')) event.target.value = event.target.value.replace(/\D/g, '').slice(0, 4);
+    });
+    // Fuera de la vista para que position: fixed cubra toda la pantalla.
+    document.body.appendChild($('vsVisor'));
+    $('vsVisorCerrar').addEventListener('click', cerrarFoto);
+    $('vsVisor').addEventListener('click', function (event) {
+      if (event.target === this) cerrarFoto();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !$('vsVisor').classList.contains('hidden')) cerrarFoto();
+    });
   }
 
   function mostrar() {

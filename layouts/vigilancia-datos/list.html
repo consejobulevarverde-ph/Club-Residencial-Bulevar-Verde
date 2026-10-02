@@ -232,7 +232,7 @@
         <i class="bi bi-shield-check me-2"></i>Gestión operativa
       </h1>
       <p class="mb-0">
-        Consulta de unidades y registro de residentes principales.
+        Consulta de apartamentos y registro de residentes principales.
       </p>
     </div>
   </header>
@@ -273,6 +273,9 @@
           <button id="showVehiculos" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-car-front me-1"></i>Vehículos
           </button>
+          <button id="showLectorPlacas" type="button" class="btn btn-outline-success mode-button">
+            <i class="bi bi-upc-scan me-1"></i>Lector de placas
+          </button>
           <button id="showConvivencia" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-exclamation-circle me-1"></i>Registrar Caso
           </button>
@@ -290,7 +293,7 @@
           <form id="searchForm" class="row g-2">
             <div class="col-md-9">
               <label class="form-label" for="query">
-                Unidad, placa o parqueadero
+                Apartamento, placa o parqueadero
               </label>
               <input
                 id="query"
@@ -326,10 +329,10 @@
           </div>
 
           <form id="registrationForm" class="row g-3">
-            <!-- Unidad -->
-            <div class="col-12 pt-2"><small class="text-muted fw-semibold">Unidad</small></div>
+            <!-- Apartamento -->
+            <div class="col-12 pt-2"><small class="text-muted fw-semibold">Apartamento</small></div>
             <div class="col-12 col-md-4">
-              <label class="form-label" for="newApartment">Apartamento</label>
+              <label class="form-label" for="newApartment">Número de apartamento</label>
               <input
                 id="newApartment"
                 class="form-control"
@@ -452,6 +455,10 @@
         {{ partial "vehiculos/index.html" . }}
       </section>
 
+      <section id="lectorPlacasView" class="hidden">
+        {{ partial "lector-placas/index.html" . }}
+      </section>
+
       <section id="convivenciaView" class="hidden">
         {{ partial "convivencia-form.html" . }}
       </section>
@@ -567,14 +574,17 @@
         var vehicle = name === 'vehicle';
         var convivencia = name === 'convivencia';
         var reservas = name === 'reservas';
-        $('searchView').classList.toggle('hidden', registration || vehicle || convivencia || reservas);
+        var lectorPlacas = name === 'lectorPlacas';
+        $('searchView').classList.toggle('hidden', registration || vehicle || convivencia || reservas || lectorPlacas);
         $('registrationView').classList.toggle('hidden', !registration);
         $('vehiculosView').classList.toggle('hidden', !vehicle);
+        $('lectorPlacasView').classList.toggle('hidden', !lectorPlacas);
         $('convivenciaView').classList.toggle('hidden', !convivencia);
         $('reservasAgendaView').classList.toggle('hidden', !reservas);
-        $('showSearch').classList.toggle('active', !registration && !vehicle && !convivencia && !reservas);
+        $('showSearch').classList.toggle('active', !registration && !vehicle && !convivencia && !reservas && !lectorPlacas);
         $('showRegistration').classList.toggle('active', registration);
         $('showVehiculos').classList.toggle('active', vehicle);
+        $('showLectorPlacas').classList.toggle('active', lectorPlacas);
         $('showConvivencia').classList.toggle('active', convivencia);
         $('showReservasAgenda').classList.toggle('active', reservas);
 
@@ -582,6 +592,8 @@
           $('newApartment').focus();
         } else if (vehicle) {
           if (window.BVVehiculos) window.BVVehiculos.mostrar();
+        } else if (lectorPlacas) {
+          if (window.BVLectorPlacas) window.BVLectorPlacas.mostrar();
         } else if (convivencia) {
           $('convivenciaApto').focus();
         } else if (reservas) {
@@ -599,6 +611,7 @@
       $('showSearch').addEventListener('click', function () { mode('search'); });
       $('showRegistration').addEventListener('click', function () { mode('registration'); });
       $('showVehiculos').addEventListener('click', function () { mode('vehicle'); });
+      $('showLectorPlacas').addEventListener('click', function () { mode('lectorPlacas'); });
       $('showConvivencia').addEventListener('click', function () { mode('convivencia'); });
       function initAgendaFechas() {
         var today = new Date();
@@ -707,7 +720,7 @@
 
         var searchTerm = $('query').value.trim();
         if (!searchTerm) {
-          msg('Ingresa un término de búsqueda (unidad, placa o parqueadero).', 'warning');
+          msg('Ingresa un término de búsqueda (apartamento, placa o parqueadero).', 'warning');
           busy($('searchBtn'), false, 'Consultar');
           return;
         }
@@ -894,7 +907,7 @@
           '<i class="bi bi-check-circle-fill me-2"></i>' +
           'Registro completado' +
           '</h3>' +
-          '<p class="mb-0"><strong>' + esc(data.nombreCompleto) + '</strong> quedó registrado en la unidad ' +
+          '<p class="mb-0"><strong>' + esc(data.nombreCompleto) + '</strong> quedó registrado en el apartamento ' +
           '<strong>' + esc(data.codigoOficial) + '</strong> como ' + esc(data.rol) + '.</p>' +
           '</article>';
       }

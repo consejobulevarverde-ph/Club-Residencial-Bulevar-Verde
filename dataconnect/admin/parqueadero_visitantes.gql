@@ -1,0 +1,112 @@
+# Registros del parqueadero de visitantes (vigilancia/lector de placas y pestaña Sanciones).
+# NO_ACCESS: la API restringe las rutas a vigilancia/administrador/superadmin y deriva el vigilante
+# (uid y nombre) del token, nunca del cliente.
+
+query ObtenerRegistroParqueaderoVisitantePorClientRequestIdAdmin($clientRequestId: String!)
+@auth(level: NO_ACCESS) {
+  registros_parqueadero_visitante(where: { clientRequestId: { eq: $clientRequestId } }, limit: 1) {
+    id
+    placa
+    tipoVehiculo
+    fechaCaptura
+    unidad {
+      id
+      apartamento
+      codigoOficial
+    }
+  }
+}
+
+mutation CrearRegistroParqueaderoVisitanteAdmin(
+  $input: RegistroParqueaderoVisitante_Data!
+    @allow(
+      fields: """
+        id
+        placa
+        placaDetectada
+        tipoVehiculo
+        unidadId
+        fotoObjeto
+        fotoTamanoBytes
+        vigilanteNombre
+        registradoPorUid
+        fechaCaptura
+        clientRequestId
+      """
+    )
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  registro_parqueadero_visitante_insert(data: $input)
+}
+
+# Unidades con vínculo vigente para una placa exacta (para asignar la unidad del registro).
+query UnidadesVigentesPorPlacaAdmin($placa: String!)
+@auth(level: NO_ACCESS) {
+  vehiculos(where: { placa: { eq: $placa } }, limit: 1) {
+    vinculos: vinculos_vehiculo_unidad_on_vehiculo(where: { esActual: { eq: true } }) {
+      unidad {
+        id
+        apartamento
+        codigoOficial
+      }
+    }
+  }
+}
+
+# Pestaña Sanciones: registros con fecha de captura en [desde, hasta), más recientes primero.
+query ListarRegistrosParqueaderoVisitanteAdmin($desde: Timestamp!, $hasta: Timestamp!, $limite: Int!)
+@auth(level: NO_ACCESS) {
+  registros_parqueadero_visitante(
+    where: { fechaCaptura: { ge: $desde, lt: $hasta } }
+    orderBy: [{ fechaCaptura: DESC }]
+    limit: $limite
+  ) {
+    id
+    placa
+    placaDetectada
+    tipoVehiculo
+    fechaCaptura
+    fotoObjeto
+    vigilanteNombre
+    fechaPosprocesamiento
+    unidadAsignadaPorNombre
+    fechaAsignacionUnidad
+    unidad {
+      id
+      apartamento
+      codigoOficial
+    }
+  }
+}
+
+query ObtenerRegistroParqueaderoVisitanteAdmin($id: UUID!)
+@auth(level: NO_ACCESS) {
+  registro_parqueadero_visitante(id: $id) {
+    id
+    fotoObjeto
+    unidad {
+      id
+    }
+  }
+}
+
+mutation AsignarUnidadRegistroParqueaderoVisitanteAdmin(
+  $id: UUID!
+  $unidadId: UUID!
+  $asignadaPorUid: String!
+  $asignadaPorNombre: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  registro_parqueadero_visitante_update(
+    id: $id
+    data: {
+      unidadId: $unidadId
+      unidadAsignadaPorUid: $asignadaPorUid
+      unidadAsignadaPorNombre: $asignadaPorNombre
+      fechaAsignacionUnidad_expr: "request.time"
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}

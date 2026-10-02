@@ -204,8 +204,8 @@
     var match = /\/file\/d\/([^/]+)/.exec(url || '');
     var thumbUrl = match ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(match[1]) + '&sz=w300') : url;
 
-    // Usar metadata guardada en la evidencia (nombreArchivo/mimeType), no la URL de Drive
-    // (que termina en "/view" y nunca trae el nombre real del archivo).
+    // La URL de Drive es .../file/d/<id>/view — sin extensión ni tipo real, así que el
+    // tipo hay que tomarlo de los metadatos que guardó la API (nombreArchivo/mimeType).
     var clasificacion = window.BVEvidenceTypes
       ? window.BVEvidenceTypes.clasificar({ name: evidencia.nombreArchivo || '', type: evidencia.mimeType || '' })
       : null;

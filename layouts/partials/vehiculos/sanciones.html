@@ -1,0 +1,140 @@
+<style>
+  .vehiculos-panel .vs-item {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .6rem 0;
+    border-top: 1px solid var(--b, #d8e6d9);
+  }
+
+  .vehiculos-panel .vs-foto {
+    width: 96px;
+    height: 64px;
+    flex: none;
+    padding: 0;
+    border: 0;
+    border-radius: .35rem;
+    overflow: hidden;
+    background: #eef2ee;
+    color: #7a867b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-in;
+  }
+
+  .vehiculos-panel .vs-foto img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .vehiculos-panel .vs-placa {
+    display: inline-block;
+    padding: .05rem .5rem;
+    background: #f7d117;
+    color: #111;
+    border: 2px solid #111;
+    border-radius: .35rem;
+    font-family: ui-monospace, monospace;
+    font-weight: 800;
+    letter-spacing: .1em;
+  }
+
+  .vehiculos-panel .vs-total {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .35rem .75rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: .85rem;
+    border: 1px solid var(--b, #d8e6d9);
+    background: #fff;
+  }
+
+  .vs-visor {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(0, 0, 0, .9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    color: #fff;
+  }
+
+  .vs-visor img {
+    max-width: 100%;
+    max-height: calc(100% - 4rem);
+    border-radius: .5rem;
+  }
+
+  .vs-visor .vs-visor-cerrar {
+    position: absolute;
+    top: max(.75rem, env(safe-area-inset-top));
+    right: .75rem;
+  }
+</style>
+
+<div id="vehiculosSancionesView" class="hidden">
+  <div class="surface p-3 p-lg-5">
+    <h3 class="section-title h5 mb-3">
+      <i class="bi bi-p-square me-2"></i>Parqueadero de visitantes
+    </h3>
+
+    <form id="vsForm" class="row g-2 align-items-end mb-3">
+      <div class="col-6 col-md-3">
+        <label for="vsDesde" class="form-label small mb-1">Desde</label>
+        <input id="vsDesde" type="date" class="form-control form-control-sm" required>
+      </div>
+      <div class="col-6 col-md-3">
+        <label for="vsHasta" class="form-label small mb-1">Hasta</label>
+        <input id="vsHasta" type="date" class="form-control form-control-sm" required>
+      </div>
+      <div class="col-md-6 d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-vs-rango="anoche">Hoy y ayer</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-vs-rango="7">7 días</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-vs-rango="mes">Este mes</button>
+        <button id="vsConsultar" type="submit" class="btn btn-primary btn-sm flex-grow-1" aria-label="Consultar">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+    </form>
+
+    <!-- Totales con íconos: en el celular, menos texto. El nombre completo va en title/aria-label. -->
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <span class="vs-total" title="Registros" aria-label="Registros"><i class="bi bi-list-check"></i><strong id="vsTotal">0</strong></span>
+      <span class="vs-total" title="Carros" aria-label="Carros"><i class="bi bi-car-front"></i><strong id="vsCarros">0</strong></span>
+      <span class="vs-total" title="Motos" aria-label="Motos"><i class="bi bi-scooter"></i><strong id="vsMotos">0</strong></span>
+      <span class="vs-total text-danger" title="Sin apartamento" aria-label="Sin apartamento"><i class="bi bi-house-slash"></i><strong id="vsSinApartamento">0</strong></span>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+      <input id="vsFiltroTexto" type="search" class="form-control form-control-sm text-uppercase" style="max-width:14rem"
+        placeholder="Placa o apartamento" aria-label="Buscar por placa o apartamento">
+      <div class="form-check mb-0">
+        <input id="vsSoloSinApartamento" class="form-check-input" type="checkbox">
+        <label class="form-check-label small" for="vsSoloSinApartamento">Sin apartamento</label>
+      </div>
+      <span id="vsConteoVisible" class="small-note"></span>
+    </div>
+
+    <div id="vsLoading" class="small-note my-3 hidden"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+    <div id="vsError" class="alert alert-danger hidden"></div>
+    <div id="vsTruncado" class="alert alert-warning small hidden">Solo 500 registros. Reduce el rango.</div>
+    <p id="vsEmpty" class="small-note my-3 hidden">Sin registros.</p>
+    <div id="vsLista"></div>
+  </div>
+</div>
+
+<div id="vsVisor" class="vs-visor hidden" role="dialog" aria-modal="true" aria-label="Foto del vehículo">
+  <button id="vsVisorCerrar" type="button" class="btn btn-light btn-sm vs-visor-cerrar" aria-label="Cerrar">
+    <i class="bi bi-x-lg"></i>
+  </button>
+  <div id="vsVisorCargando" class="hidden"><span class="spinner-border me-2"></span>Cargando foto…</div>
+  <img id="vsVisorImg" class="hidden" alt="">
+  <div id="vsVisorTexto" class="mt-2 small"></div>
+</div>
