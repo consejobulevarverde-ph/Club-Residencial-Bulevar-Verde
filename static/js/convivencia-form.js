@@ -198,7 +198,7 @@
           '<div style="font-size: 0.8rem; color: #666;">';
 
         (item.evidencias || []).forEach(function (ev) {
-          var isUploaded = item.evidenciasSubidas.some(function (sub) { return sub.name === ev.name; });
+          var isUploaded = (item.evidenciasSubidas || []).some(function (sub) { return sub.name === ev.name; });
           var icon = isUploaded ? '✓' : '⏳';
           var color = isUploaded ? '#28a745' : '#ffc107';
           evidenciasHtml += '<span style="color: ' + color + ';">' + icon + ' ' + esc(ev.name) + '</span><br>';

@@ -91,6 +91,23 @@
       color: #b42318;
     }
 
+    @media (max-width: 576px) {
+      /* Consulta: botón debajo del campo para dar más espacio al texto */
+      .consult-search-group > .form-control {
+        border-top-right-radius: var(--bs-border-radius-lg) !important;
+        border-bottom-right-radius: var(--bs-border-radius-lg) !important;
+      }
+
+      .consult-search-group > .btn {
+        flex: 1 1 100%;
+        margin-top: .5rem;
+        margin-left: 0 !important;
+        padding-top: .75rem;
+        padding-bottom: .75rem;
+        border-radius: var(--bs-border-radius-lg) !important;
+      }
+    }
+
   </style>
 </head>
 
@@ -135,7 +152,7 @@
                   <label id="consultQueryLabel" for="consultQueryInput" class="form-label required">
                     Número de Radicado (ID):
                   </label>
-                  <div class="input-group">
+                  <div class="input-group consult-search-group">
                     <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
                     <input id="consultQueryInput" type="text" class="form-control form-control-lg"
                       placeholder="Ej: MANT-20260903-151328-LAUGS" required autocomplete="off">

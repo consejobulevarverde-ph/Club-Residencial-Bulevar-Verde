@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redirigiendo...</title>
-    <meta http-equiv="refresh" content="0; url={{ .Site.BaseURL }}datos-personales/">
+    <meta http-equiv="refresh" content="0; url={{ "datos-personales/" | relURL }}?modulo=reservas">
 </head>
 <body>
-    <p>Redirigiendo a datos personales...</p>
+    <p>Redirigiendo a reservas...</p>
     <script>
-        window.location.href = "{{ .Site.BaseURL }}datos-personales/";
+        window.location.replace({{ "datos-personales/" | relURL }} + '?modulo=reservas');
     </script>
 </body>
 </html>
