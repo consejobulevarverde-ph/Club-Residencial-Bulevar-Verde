@@ -1624,7 +1624,7 @@
           '<img src="' + esc(initialUrl) + '" data-original-url="' + esc(originalUrl) + '" data-fallback-urls="' + esc(fallbackUrls) + '" ' +
           'alt="' + esc(label) + '" class="evidence-preview-thumb" loading="eager" decoding="async" referrerpolicy="no-referrer" ' +
           'onerror="window.handleSancionEvidenceError_(this)">' +
-          '<span><i class="bi bi-image me-1"></i>' + esc(label) + '</span></a>';
+          '<span><i class="bi bi-image me-1 evidence-preview-icon"></i>' + esc(label) + '</span></a>';
       }
 
       window.handleSancionEvidenceError_ = function (img) {
@@ -1641,7 +1641,15 @@
           img.src = nextUrl;
           return;
         }
+        // No se pudo cargar como imagen (puede ser audio/PDF/documento, que no tienen
+        // miniatura de Drive): mostrar un ícono genérico de archivo en vez de ocultar
+        // el ícono de imagen y dejar la evidencia sin ninguna indicación visual.
         img.style.display = 'none';
+        var icon = img.parentElement ? img.parentElement.querySelector('.evidence-preview-icon') : null;
+        if (icon) {
+          icon.classList.remove('bi-image');
+          icon.classList.add('bi-file-earmark');
+        }
       };
 
       function buildSancionMediaDisplayUrls(url) {
