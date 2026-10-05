@@ -7,7 +7,7 @@
  * - window.BVEvidenceTypes.clasificar(file) → { categoria, ext, mime } | null
  * - window.BVEvidenceTypes.icono(categoria) → string (nombre clase bi-icon)
  * - window.BVEvidenceTypes.maxBytes(categoria) → number
- * - window.BVEvidenceTypes.limiteLegible(categoria) → string ("20MB", "50MB", "25MB")
+ * - window.BVEvidenceTypes.limiteLegible(categoria) → string ("20MB", "23MB")
  * - window.BVEvidenceTypes.validar(file) → { ok: true } | { ok: false, error: string }
  */
 (function () {
@@ -88,20 +88,25 @@
     ods: "application/vnd.oasis.opendocument.spreadsheet",
   };
 
+  // Límite transitorio del transporte actual: la evidencia viaja en base64 dentro de un JSON
+  // (crece ×4/3) y Cloud Run rechaza peticiones HTTP/1 de más de 32 MiB antes de llegar a la
+  // API. Un archivo de más de ~23 MiB nunca llegaría; se rechaza aquí con un mensaje claro.
+  var TRANSPORTE_MAX_BYTES = 23 * 1024 * 1024;
+
   var MAX_BYTES = {
     image: 20 * 1024 * 1024,
-    video: 50 * 1024 * 1024,
-    pdf: 50 * 1024 * 1024,
-    audio: 50 * 1024 * 1024,
-    documento: 25 * 1024 * 1024,
+    video: TRANSPORTE_MAX_BYTES,
+    pdf: TRANSPORTE_MAX_BYTES,
+    audio: TRANSPORTE_MAX_BYTES,
+    documento: TRANSPORTE_MAX_BYTES,
   };
 
   var LIMITE_LEGIBLE = {
     image: "20MB",
-    video: "50MB",
-    pdf: "50MB",
-    audio: "50MB",
-    documento: "25MB",
+    video: "23MB",
+    pdf: "23MB",
+    audio: "23MB",
+    documento: "23MB",
   };
 
   var ICONO = {

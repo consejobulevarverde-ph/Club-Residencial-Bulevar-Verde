@@ -183,9 +183,10 @@
     }
 
     var html = '<div>' + items.map(function (item, idx) {
+      normalizarItemCola(item);
       var isError = !!item.lastError;
-      var uploadedCount = (item.evidenciasSubidas || []).length;
-      var totalCount = (item.evidencias || []).length;
+      var uploadedCount = item.evidencias.filter(function (ev) { return !!subidaDe(item, ev); }).length;
+      var totalCount = item.evidencias.length;
       var percentComplete = totalCount > 0 ? Math.round((uploadedCount / totalCount) * 100) : 0;
 
       var attemptText = item.attempts ? ' · ' + item.attempts + ' intento(s)' : '';
@@ -197,11 +198,20 @@
           '<strong>Evidencias:</strong> ' + uploadedCount + '/' + totalCount + ' subidas (' + percentComplete + '%)<br>' +
           '<div style="font-size: 0.8rem; color: #666;">';
 
-        (item.evidencias || []).forEach(function (ev) {
-          var isUploaded = (item.evidenciasSubidas || []).some(function (sub) { return sub.name === ev.name; });
-          var icon = isUploaded ? '✓' : '⏳';
-          var color = isUploaded ? '#28a745' : '#ffc107';
-          evidenciasHtml += '<span style="color: ' + color + ';">' + icon + ' ' + esc(ev.name) + '</span><br>';
+        item.evidencias.forEach(function (ev) {
+          var isUploaded = !!subidaDe(item, ev);
+          var icon = isUploaded ? '✓' : (ev.error ? '✗' : '⏳');
+          var color = isUploaded ? '#28a745' : (ev.error ? '#dc3545' : '#b8860b');
+          evidenciasHtml += '<span style="color: ' + color + ';">' + icon + ' ' + esc(ev.name) + '</span>';
+          if (ev.error) {
+            evidenciasHtml += ' <small class="text-danger">' + esc(ev.error) + '</small>';
+          }
+          if (!isUploaded) {
+            evidenciasHtml += ' <button type="button" class="btn btn-link btn-sm p-0 ms-1 cv-queue-remove-ev-btn"' +
+              ' data-client-request-id="' + esc(item.clientRequestId) + '" data-client-file-id="' + esc(ev.clientFileId) + '">' +
+              'Retirar</button>';
+          }
+          evidenciasHtml += '<br>';
         });
 
         evidenciasHtml += '</div></div>';
@@ -232,8 +242,19 @@
 
     container.innerHTML = html;
 
-    // Delegación de eventos para botones de reintento
+    // Delegación de eventos (una sola vez: el panel se vuelve a renderizar a menudo)
+    if (container.dataset.eventosQueue) return;
+    container.dataset.eventosQueue = '1';
     container.addEventListener('click', function (event) {
+      var removeBtn = event.target.closest('.cv-queue-remove-ev-btn');
+      if (removeBtn) {
+        retirarEvidenciaDeCola(
+          removeBtn.getAttribute('data-client-request-id'),
+          removeBtn.getAttribute('data-client-file-id')
+        );
+        return;
+      }
+
       var btn = event.target.closest('.cv-queue-retry-btn');
       if (!btn) return;
 
@@ -243,6 +264,35 @@
         flushQueue(true, clientRequestId, 'reintento desde panel de cola');
       }
     });
+  }
+
+  // Retiro explícito de una evidencia que no se pudo subir (p. ej. rechazada por tamaño o
+  // tipo). Es la única forma de enviar el caso sin ella: nunca se descarta en silencio.
+  async function retirarEvidenciaDeCola(clientRequestId, clientFileId) {
+    var items = await getQueueItems();
+    var item = items.find(function (it) { return it.clientRequestId === clientRequestId; });
+    if (!item) return;
+    normalizarItemCola(item);
+    var evidencia = item.evidencias.find(function (ev) { return ev.clientFileId === clientFileId; });
+    if (!evidencia || subidaDe(item, evidencia)) return;
+
+    var confirmado = window.confirm(
+      'Se retirará la evidencia "' + evidencia.name + '" de este caso y no se enviará. ¿Continuar?'
+    );
+    if (!confirmado) return;
+
+    item.evidencias = item.evidencias.filter(function (ev) { return ev.clientFileId !== clientFileId; });
+    item.evidenciasRetiradas = (item.evidenciasRetiradas || []).concat([{
+      name: evidencia.name,
+      clientFileId: clientFileId,
+      retiradaAt: new Date().toISOString()
+    }]);
+    delete item.requiereAccion;
+    delete item.lastError;
+    await putQueueItem(item);
+    log('warn', 'Evidencia retirada explícitamente del caso en cola.', { clientRequestId: clientRequestId, name: evidencia.name });
+    await refreshQueueCount();
+    await renderQueuePanel();
   }
 
   var form = $('convivenciaCasoForm');
@@ -464,6 +514,10 @@
       var btn = $('convivenciaSubmitBtn');
       if (btn) btn.disabled = true;
 
+      evidencias.forEach(function (ev) {
+        if (!ev.clientFileId) ev.clientFileId = createFileId();
+      });
+
       var caso = {
         clientRequestId: createRequestId(),
         reportedAt: new Date().toISOString(),
@@ -564,59 +618,90 @@
 
       for (var index = 0; index < items.length; index += 1) {
         var item = items[index];
+        if (normalizarItemCola(item)) await putQueueItem(item);
+
+        // Una evidencia rechazada por el servidor (tipo, tamaño) no se reenvía sola: volvería a
+        // fallar y gastaría datos. Espera a que el usuario reintente o la retire desde la cola.
+        var reintentoManual = Boolean(force) && (!preferredId || preferredId === item.clientRequestId);
+        if (item.requiereAccion && !reintentoManual) {
+          log('info', 'Caso en cola espera acción del usuario; se omite en reintento automático.', {
+            clientRequestId: item.clientRequestId
+          });
+          continue;
+        }
 
         try {
           item.attempts = Number(item.attempts || 0) + 1;
           item.lastAttemptAt = new Date().toISOString();
           delete item.lastError;
+          delete item.requiereAccion;
+          item.evidencias.forEach(function (ev) { delete ev.error; });
           await putQueueItem(item);
 
           log('info', 'Enviando caso al servidor.', { clientRequestId: item.clientRequestId });
 
-          var evidenciasRestantes = (item.evidencias || []).filter(function (ev) {
-            return !item.evidenciasSubidas.some(function (sub) { return sub.name === ev.name; });
-          });
+          var evidenciasRestantes = item.evidencias.filter(function (ev) { return !subidaDe(item, ev); });
+          var falloSubida = null;
 
           if (evidenciasRestantes.length > 0) {
             log('info', 'Subiendo evidencias.', { count: evidenciasRestantes.length });
             for (var i = 0; i < evidenciasRestantes.length; i++) {
+              var evidencia = evidenciasRestantes[i];
               try {
-                var uploadResult = await uploadEvidenceToGoogle(evidenciasRestantes[i], item.apto);
+                var uploadResult = await uploadEvidenceToGoogle(evidencia, item.apto);
                 if (uploadResult.ok) {
-                  item.evidenciasSubidas.push({ name: evidenciasRestantes[i].name, url: uploadResult.url });
+                  item.evidenciasSubidas.push({
+                    clientFileId: evidencia.clientFileId,
+                    name: evidencia.name,
+                    url: uploadResult.url,
+                    fileId: uploadResult.fileId,
+                    fileName: uploadResult.fileName,
+                    mimeType: uploadResult.mimeType,
+                    sizeBytes: uploadResult.sizeBytes
+                  });
                   await putQueueItem(item);
-                  log('info', 'Evidencia subida.', { name: evidenciasRestantes[i].name });
+                  log('info', 'Evidencia subida.', { name: evidencia.name });
                 } else {
-                  log('error', 'Error al subir evidencia (rechazada por servidor).', { name: evidenciasRestantes[i].name, error: uploadResult.error });
-                  item.lastError = uploadResult.error || 'La evidencia fue rechazada por el servidor';
-                  await putQueueItem(item);
-                  showStatus('warning', 'La evidencia "' + evidenciasRestantes[i].name + '" fue rechazada: ' + (uploadResult.error || 'error desconocido') + '. El caso permanece en la cola.');
+                  log('error', 'Evidencia rechazada por el servidor.', { name: evidencia.name, error: uploadResult.error });
+                  evidencia.error = uploadResult.error || 'rechazada por el servidor';
+                  falloSubida = {
+                    transporte: false,
+                    definitivo: Boolean(uploadResult.definitivo),
+                    mensaje: 'La evidencia "' + evidencia.name + '" no se pudo subir: ' + evidencia.error + '.'
+                  };
                   break;
                 }
               } catch (uploadError) {
-                var transportFailure = Boolean(
-                  uploadError && (
-                    uploadError.code === 'POST_TIMEOUT' ||
-                    uploadError.code === 'POST_SUBMIT_FAILED' ||
-                    /conectar|cargar el servicio|POST no recibió|tiempo permitido|Failed to fetch/i.test((uploadError.message || ''))
-                  )
-                );
-
-                if (transportFailure) {
-                  log('error', 'Error de transporte subiendo evidencia; se detiene la cola.', uploadError);
-                  item.lastError = uploadError.message || 'Error de transporte al subir evidencia';
-                  await putQueueItem(item);
-                  showStatus('warning', 'El caso continúa guardado en la cola. Se reintentará cuando haya una conexión estable.');
-
-                  if (!navigator.onLine) {
-                    break;
-                  }
-                  break;
-                } else {
-                  log('warn', 'Error al subir evidencia (no es de transporte); se continúa.', uploadError);
-                }
+                log('error', 'Error subiendo evidencia.', uploadError);
+                evidencia.error = (uploadError && uploadError.message) || 'error al subir';
+                falloSubida = {
+                  transporte: esFalloTransporte(uploadError),
+                  definitivo: false,
+                  mensaje: 'La evidencia "' + evidencia.name + '" no se pudo subir: ' + evidencia.error + '.'
+                };
+                break;
               }
             }
+          }
+
+          // Si falta cualquier evidencia, el caso NO se crea: crearlo con un subconjunto y borrar
+          // la cola era la vía de pérdida silenciosa de adjuntos.
+          if (falloSubida) {
+            item.lastError = falloSubida.mensaje;
+            if (falloSubida.definitivo) item.requiereAccion = true;
+            await putQueueItem(item);
+            showStatus(
+              'warning',
+              falloSubida.mensaje + ' El caso no se ha enviado y sigue guardado en este dispositivo. ' +
+              (falloSubida.definitivo
+                ? 'Revisa la cola: puedes reintentar o retirar esa evidencia.'
+                : 'Se reintentará cuando haya una conexión estable.')
+            );
+            if (falloSubida.transporte || !navigator.onLine) {
+              log('warn', 'Fallo de transporte subiendo evidencias; se detiene la cola.');
+              break;
+            }
+            continue;
           }
 
           if (!navigator.onLine) {
@@ -632,7 +717,9 @@
             razonNotificacion: item.razonNotificacion,
             notificador: item.notificador,
             severidad: item.severidad,
-            evidencias: item.evidenciasSubidas.map(function (sub) { return sub.url; })
+            evidencias: item.evidencias.map(function (ev) {
+              return { url: subidaDe(item, ev).url, clientFileId: ev.clientFileId };
+            })
           };
 
           var token = await getAuthToken();
@@ -645,19 +732,46 @@
             body: JSON.stringify(caseData)
           });
 
-          var createBody = await createResponse.json();
+          var createBody = await leerJson(createResponse);
           if (!createResponse.ok) {
-            throw new Error((createBody.error && createBody.error.message) || 'El servidor no confirmó el registro.');
+            throw new Error(
+              (createBody && createBody.error && createBody.error.message) ||
+              mensajePorEstado(createResponse.status, 'El servidor no confirmó el registro.')
+            );
+          }
+          if (!createBody || !createBody.data) {
+            throw new Error('Respuesta inválida del servidor al registrar el caso.');
           }
 
           var createResult = createBody.data;
+          var noVinculadas = (createResult.evidencias && createResult.evidencias.fallidas) || [];
+
+          // El caso existe pero le faltan adjuntos: se conserva en la cola y el reintento (mismo
+          // clientRequestId) vincula solo lo que falte, sin duplicar el caso ni la notificación.
+          if (noVinculadas.length > 0) {
+            item.caseCode = createResult.caseCode;
+            item.lastError = 'El caso ' + createResult.caseCode + ' quedó registrado, pero ' + noVinculadas.length +
+              ' evidencia(s) no se vincularon. Se reintentará sin duplicar el caso.';
+            await putQueueItem(item);
+            log('error', 'Caso creado con evidencias sin vincular; permanece en la cola.', {
+              clientRequestId: item.clientRequestId,
+              caseId: createResult.caseCode,
+              fallidas: noVinculadas.length
+            });
+            showStatus('warning', item.lastError);
+            continue;
+          }
 
           await deleteQueueItem(item.clientRequestId);
           log('info', 'Caso confirmado y eliminado de la cola.', { clientRequestId: item.clientRequestId, caseId: createResult.caseCode });
 
+          var totalEvidencias = item.evidencias.length;
+          var retiradas = (item.evidenciasRetiradas || []).length;
           showStatus(
             'success',
             'Caso enviado correctamente. ID: ' + createResult.caseCode +
+            (totalEvidencias ? '. Evidencias vinculadas: ' + totalEvidencias : '') +
+            (retiradas ? ' (' + retiradas + ' retirada(s) por el usuario)' : '') +
             '. Si olvidaste una evidencia o un dato, puedes corregirlo en "Corregir un caso reciente".'
           );
           document.dispatchEvent(new CustomEvent('bv:caso-convivencia-creado', { detail: createResult }));
@@ -692,15 +806,7 @@
             break;
           }
 
-          var transportFailure = Boolean(
-            error && (
-              error.code === 'POST_TIMEOUT' ||
-              error.code === 'POST_SUBMIT_FAILED' ||
-              /conectar|cargar el servicio|POST no recibió|tiempo permitido|Failed to fetch/i.test(item.lastError)
-            )
-          );
-
-          if (transportFailure) {
+          if (esFalloTransporte(error)) {
             log('warn', 'Fallo de transporte; se detiene la cola para no repetir con otros casos.');
             break;
           }
@@ -747,22 +853,61 @@
         })
       });
 
-      var result = null;
-      try {
-        result = await response.json();
-      } catch (parseError) {
-        throw new Error('Respuesta inválida del servidor al subir evidencia (no es JSON válido)');
-      }
+      // Un cuerpo demasiado grande lo rechaza Cloud Run antes de llegar a la API, con una
+      // respuesta que no es JSON: debe tratarse como rechazo, no ignorarse.
+      var result = await leerJson(response);
 
       if (!response.ok) {
-        return { ok: false, error: (result.error && result.error.message) || ('Error del servidor: ' + response.status) };
+        return {
+          ok: false,
+          definitivo: [400, 413, 415, 422].indexOf(response.status) !== -1,
+          error: (result && result.error && result.error.message) ||
+            mensajePorEstado(response.status, 'error del servidor (' + response.status + ')')
+        };
       }
 
-      return { ok: true, url: result.data.url };
+      if (!result || !result.data || !result.data.url) {
+        throw new Error('Respuesta inválida del servidor al subir evidencia.');
+      }
+
+      return {
+        ok: true,
+        url: result.data.url,
+        fileId: result.data.fileId,
+        fileName: result.data.fileName,
+        mimeType: result.data.mimeType,
+        sizeBytes: result.data.sizeBytes
+      };
     } catch (error) {
       log('error', 'Error subiendo evidencia:', error);
       throw error;
     }
+  }
+
+  async function leerJson(response) {
+    var texto = await response.text();
+    if (!texto) return null;
+    try {
+      return JSON.parse(texto);
+    } catch (parseError) {
+      return null;
+    }
+  }
+
+  function mensajePorEstado(status, porDefecto) {
+    if (status === 413) return 'el archivo es demasiado grande para enviarlo';
+    if (status === 401) return 'la sesión expiró; vuelve a iniciar sesión';
+    return porDefecto;
+  }
+
+  function esFalloTransporte(error) {
+    return Boolean(
+      error && (
+        error.code === 'POST_TIMEOUT' ||
+        error.code === 'POST_SUBMIT_FAILED' ||
+        /conectar|cargar el servicio|POST no recibió|tiempo permitido|Failed to fetch|NetworkError|Load failed/i.test(error.message || '')
+      )
+    );
   }
 
   function setupEvidenceHandlers() {
@@ -798,7 +943,7 @@
         quality: 0.84,
         allowVideo: true,
         maxVideoSeconds: 30,
-        maxVideoBytes: 50 * 1024 * 1024
+        maxVideoBytes: window.BVEvidenceTypes.maxBytes('video')
       });
 
       evidencias.push(evidence);
@@ -840,12 +985,9 @@
       if (clasificacion.categoria === 'image') {
         return { tipo: 'imagen', data: await compressImage(file) };
       }
-      // Video, audio, PDF, documentos: leer como data URL sin comprimir
-      var datos = await readFileAsDataUrl(file);
-      // Asegurar que el mime esté correctamente asignado (inferir si viene vacío)
-      if (!datos.type) {
-        datos.type = clasificacion.mime;
-      }
+      // Video, audio, PDF, documentos: leer como data URL sin comprimir, con el MIME
+      // inferido ya dentro del data URL (la API toma el tipo de ahí, no del campo mimeType).
+      var datos = await readFileAsDataUrl(file, clasificacion.mime);
       var tipoLabel =
         clasificacion.categoria === 'video'
           ? 'video'
@@ -876,8 +1018,14 @@
   async function compressImage(file) {
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
+      reader.onerror = function () {
+        reject(new Error('No se pudo leer la imagen'));
+      };
       reader.onload = function (e) {
         var img = new Image();
+        img.onerror = function () {
+          reject(new Error('El navegador no pudo abrir la imagen'));
+        };
         img.onload = function () {
           var canvas = document.createElement('canvas');
           var width = img.width;
@@ -895,11 +1043,19 @@
 
           var quality = 0.82;
           canvas.toBlob(function (blob) {
+            if (!blob) {
+              reject(new Error('No se pudo comprimir la imagen'));
+              return;
+            }
             var reader2 = new FileReader();
+            reader2.onerror = function () {
+              reject(new Error('No se pudo preparar la imagen comprimida'));
+            };
             reader2.onload = function () {
               resolve({
                 name: file.name,
                 size: blob.size,
+                type: 'image/jpeg',
                 dataUrl: reader2.result,
                 blob: blob
               });
@@ -913,22 +1069,24 @@
     });
   }
 
-  async function readFileAsDataUrl(file) {
+  async function readFileAsDataUrl(file, mimeType) {
+    var tipo = mimeType || file.type;
+    var fuente = tipo && tipo !== file.type ? new Blob([file], { type: tipo }) : file;
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
       reader.onload = function (e) {
         resolve({
           name: file.name,
           size: file.size,
-          type: file.type,
+          type: tipo,
           dataUrl: e.target.result,
-          blob: file
+          blob: fuente
         });
       };
       reader.onerror = function () {
         reject(new Error('No se pudo leer el archivo'));
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(fuente);
     });
   }
 
@@ -1163,6 +1321,50 @@
     motivoSeleccionado = '';
     severidadSeleccionada = '';
     actualizarListaEvidencias();
+  }
+
+  function createFileId() {
+    if (window.crypto && window.crypto.randomUUID) {
+      return 'EVF-' + window.crypto.randomUUID();
+    }
+    return 'EVF-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+  }
+
+  // Los items guardados por versiones anteriores identificaban evidencias por nombre (dos
+  // archivos homónimos se confundían). Se les asigna un clientFileId una sola vez, emparejando
+  // cada subida previa con la primera evidencia homónima aún libre.
+  function normalizarItemCola(item) {
+    var cambiado = false;
+    if (!Array.isArray(item.evidencias)) { item.evidencias = []; cambiado = true; }
+    if (!Array.isArray(item.evidenciasSubidas)) { item.evidenciasSubidas = []; cambiado = true; }
+
+    item.evidencias.forEach(function (ev) {
+      if (!ev.clientFileId) {
+        ev.clientFileId = createFileId();
+        cambiado = true;
+      }
+    });
+
+    var asignadas = {};
+    item.evidenciasSubidas.forEach(function (sub) {
+      if (sub.clientFileId) asignadas[sub.clientFileId] = true;
+    });
+    item.evidenciasSubidas.forEach(function (sub) {
+      if (sub.clientFileId) return;
+      var ev = item.evidencias.find(function (e) { return e.name === sub.name && !asignadas[e.clientFileId]; });
+      if (ev) {
+        sub.clientFileId = ev.clientFileId;
+        asignadas[ev.clientFileId] = true;
+        cambiado = true;
+      }
+    });
+    return cambiado;
+  }
+
+  function subidaDe(item, evidencia) {
+    return (item.evidenciasSubidas || []).find(function (sub) {
+      return sub.clientFileId === evidencia.clientFileId;
+    }) || null;
   }
 
   function createRequestId() {
