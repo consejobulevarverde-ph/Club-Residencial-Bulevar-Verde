@@ -163,8 +163,64 @@
     return { ok: true };
   }
 
+  // Archivo final para la subida directa a Cloud Storage (registro progresivo de casos). El
+  // servidor no convierte ni comprime: valida y rechaza con un motivo lo que no cumple. Video:
+  // solo MP4 (H.264 + AAC, hasta 5 minutos; el códec lo verifica el servidor).
+  var MiB = 1024 * 1024;
+  var TIPOS_FINALES = {
+    "image/jpeg": "image", "image/jpg": "image", "image/png": "image", "image/webp": "image",
+    "video/mp4": "video",
+    "application/pdf": "pdf",
+    "audio/mpeg": "audio", "audio/mp4": "audio", "audio/x-m4a": "audio", "audio/aac": "audio",
+    "audio/wav": "audio", "audio/x-wav": "audio", "audio/ogg": "audio", "audio/webm": "audio", "audio/opus": "audio",
+  };
+  var MAX_BYTES_FINAL = { image: 20 * MiB, video: 200 * MiB, pdf: 50 * MiB, audio: 50 * MiB, documento: 25 * MiB };
+
+  function clasificarFinal(file) {
+    var c = clasificar(file);
+    if (!c) return null;
+    var categoria = TIPOS_FINALES[c.mime] || (c.categoria === "documento" ? "documento" : null);
+    if (!categoria) return null;
+    return { categoria: categoria, ext: c.ext, mime: c.mime === "image/jpg" ? "image/jpeg" : c.mime };
+  }
+
+  function motivoNoPermitidoFinal(file) {
+    var ext = extensionDe(file.name || "");
+    var tipo = file.type || "";
+    if (/^video\//.test(tipo) || /^(avi|mov|webm|mkv|3gp|wmv)$/.test(ext)) {
+      return "El video debe ser MP4 (H.264) de máximo 5 minutos. Conviértelo antes de adjuntarlo con la herramienta de preparación de evidencias.";
+    }
+    if (tipo === "image/bmp" || ext === "bmp" || tipo === "image/heic" || ext === "heic") {
+      return "Esta imagen debe convertirse a JPEG antes de adjuntarla.";
+    }
+    return "Tipo de archivo no permitido. Se aceptan: imágenes (JPEG, PNG, WebP), video MP4, PDF, audio (MP3, M4A, AAC, WAV, OGG) y documentos (DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV, RTF, ODT, ODS).";
+  }
+
+  function formatearTamano(bytes) {
+    if (!(bytes >= 0)) return "";
+    if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1).replace(".", ",") + " MB";
+  }
+
   // Público
   window.BVEvidenceTypes = {
+    // Registro progresivo (subida directa)
+    ACCEPT_FINAL:
+      "image/jpeg,image/png,image/webp,video/mp4,application/pdf," +
+      "audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/opus," +
+      "application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+      "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
+      "application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation," +
+      "text/plain,text/csv,application/rtf,application/vnd.oasis.opendocument.text," +
+      "application/vnd.oasis.opendocument.spreadsheet",
+    clasificarFinal: clasificarFinal,
+    motivoNoPermitidoFinal: motivoNoPermitidoFinal,
+    maxBytesFinal: function (categoria) {
+      return MAX_BYTES_FINAL[categoria] || MAX_BYTES_FINAL.image;
+    },
+    VIDEO_MAX_SEGUNDOS: 300,
+    formatearTamano: formatearTamano,
+
     // String de accept para <input accept>
     ACCEPT:
       "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm,application/pdf," +

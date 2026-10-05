@@ -114,6 +114,18 @@
     }
     contenedor.innerHTML = casos.map(function (caso) {
       var resaltado = caso.caseCode === caseCodeResaltado ? ' resaltado' : '';
+      if (caso.registro === 'BORRADOR') {
+        // Borrador propio (posiblemente creado en otro dispositivo): se completa con el registro
+        // progresivo; aún no se notificó, así que no aplica la ventana de corrección.
+        return '<div class="border rounded p-2 mb-2 d-flex justify-content-between align-items-center gap-2 cv-correccion-item' + resaltado + '">' +
+          '<div><strong>' + esc(caso.caseCode) + '</strong> · Apto ' + esc(caso.apartamento) + ' · ' + esc(caso.motivo) +
+          ' <span class="badge text-bg-warning">Pendiente de completar y notificar</span>' +
+          '<br><small class="text-muted">Guardado ' + esc(haceCuanto(caso.fechaCreacion)) + ' · ' +
+          caso.cantidadEvidencias + ' evidencia(s) cargada(s)</small></div>' +
+          '<button type="button" class="btn btn-sm btn-outline-success cv-correccion-completar" data-id="' + esc(caso.id) + '">' +
+          '<i class="bi bi-send-check me-1"></i>Completar y notificar</button>' +
+          '</div>';
+      }
       return '<div class="border rounded p-2 mb-2 d-flex justify-content-between align-items-center gap-2 cv-correccion-item' + resaltado + '">' +
         '<div><strong>' + esc(caso.caseCode) + '</strong> · Apto ' + esc(caso.apartamento) + ' · ' + esc(caso.motivo) +
         ' <span class="badge bg-secondary">' + esc(caso.severidad) + '</span>' +
@@ -336,6 +348,16 @@
   // ===== NAVEGACIÓN =====
 
   $('cvCorreccionLista').addEventListener('click', function (event) {
+    var completar = event.target.closest('.cv-correccion-completar');
+    if (completar) {
+      var abrir = formulario().abrirRegistro;
+      if (typeof abrir !== 'function') {
+        msg('No fue posible abrir el registro. Recarga la página e intenta nuevamente.');
+        return;
+      }
+      abrir(completar.dataset.id).catch(function (error) { msg(error.message || String(error)); });
+      return;
+    }
     var boton = event.target.closest('.cv-correccion-abrir');
     if (boton) abrirCaso(boton.dataset.id);
   });

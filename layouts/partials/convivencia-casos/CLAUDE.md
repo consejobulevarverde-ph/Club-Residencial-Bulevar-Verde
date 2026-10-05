@@ -47,6 +47,13 @@ Cada bloque se muestra si la acción está en `acciones` **y** el estado del cas
 | `CONSEJO_DECISION` | `casoAccionesConsejo` | ✓ | | `PENDIENTE_APROBACION_CONSEJO` |
 | `RESOLVER_APELACION` | `casoAccionesApelacion` | ✓ | | `EN_APELACION` |
 | `DESCARGOS_EN_NOMBRE` | `casoAccionesDescargos` (registrar descargos por el residente) | ✓ | ✓ | `PENDIENTE_DESCARGOS`, sin `descargosResidente` — mismo endpoint/schema que usa el propio residente (`registrarDescargos` en `convivencia/actions.ts`) |
+| `NOTIFICACIONES` | botones en `casoDetailRegistro` (reintentar / marcar como enviada) | ✓ | | notificación `FALLIDA`, `INCIERTA` o `SIN_DESTINATARIOS` (marcar enviada: solo `INCIERTA`) |
+
+**Registro progresivo:** un caso con `registro: BORRADOR` («Pendiente de completar y notificar») aún no se notificó. La lista de
+administración lo muestra con insignia; el comité no lo ve (la API lo filtra). En el detalle solo quedan editar, severidad y anular:
+las acciones del procedimiento las rechaza la API (`caso_en_borrador`). `casoDetailRegistroSection` muestra los archivos declarados
+del borrador y el estado de cada notificación; «Enviada» significa aceptada por el servidor de correo. Evidencias con
+`almacenamiento: GCS` se abren con `GET {rutaCasos}/casos/{id}/evidencias/{evidenciaId}/acceso` (URL firmada de 15 min).
 
 El comité es conciliador (Ley 675, Art. 58): no aprueba ni propone sanciones y solo actúa antes de que el
 caso tenga una sanción impuesta. La API aplica las mismas reglas; la UI solo evita mostrar lo que fallaría.

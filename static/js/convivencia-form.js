@@ -28,6 +28,7 @@
   var categorias = [];
   var severidades = [];
   var evidencias = [];
+  var urlsVistaPrevia = [];
   var motivoSeleccionado = '';
   var severidadSeleccionada = '';
 
@@ -158,8 +159,8 @@
       } else {
         statusEl.className = 'alert alert-warning';
         statusEl.innerHTML = '<i class="bi bi-cloud-arrow-up me-2"></i>' +
-          '<strong>' + count + '</strong> caso(s) pendiente(s) de envío. ' +
-          'La información permanece guardada en este dispositivo.';
+          '<strong>' + count + '</strong> caso(s) pendiente(s) de completar y notificar. ' +
+          'La información permanece guardada en este dispositivo; el residente aún no ha sido notificado.';
       }
     } else if (statusEl && (!statusEl.dataset.persistent)) {
       statusEl.hidden = true;
@@ -182,7 +183,11 @@
       return;
     }
 
-    var html = '<div>' + items.map(function (item, idx) {
+    var registros = items.filter(function (item) { return item.version === 2; });
+    items = items.filter(function (item) { return item.version !== 2; });
+    enlazarAccionesRegistro(container);
+
+    var html = '<div>' + registros.map(htmlRegistro).join('') + items.map(function (item, idx) {
       normalizarItemCola(item);
       var isError = !!item.lastError;
       var uploadedCount = item.evidencias.filter(function (ev) { return !!subidaDe(item, ev); }).length;
@@ -481,20 +486,26 @@
       }
     }
 
+    urlsVistaPrevia.forEach(function (u) { URL.revokeObjectURL(u); });
+    urlsVistaPrevia = [];
     if (evidencias.length > 0) {
       var reviewSection = $('convivenciaReviewEvidenciasSection');
       if (reviewSection) reviewSection.classList.remove('hidden');
       var html = evidencias.map(function (evidence, idx) {
+        var urlPrevia = evidence.blob ? URL.createObjectURL(evidence.blob) : '';
+        if (urlPrevia) urlsVistaPrevia.push(urlPrevia);
         var isVideo = /^video\//i.test(evidence.type);
         var isPdf = evidence.type === 'application/pdf';
         var media = isPdf
           ? '<div style="width: 200px; height: 80px; display:flex; align-items:center; gap:.5rem; border:1px solid #ddd; border-radius:4px; padding:.5rem;">' +
             '<i class="bi bi-file-earmark-pdf text-danger" style="font-size:1.8rem;"></i><span class="small text-truncate">' + esc(evidence.name) + '</span></div>'
           : isVideo
-          ? '<video controls style="max-width: 200px; max-height: 150px; border-radius: 4px;" src="' + evidence.dataUrl + '" />'
-          : '<img src="' + evidence.dataUrl + '" style="max-width: 200px; max-height: 150px; border-radius: 4px;" alt="Evidencia ' + (idx + 1) + '">';
+          ? '<video controls playsinline preload="metadata" style="max-width: 200px; max-height: 150px; border-radius: 4px;" src="' + urlPrevia + '"></video>'
+          : /^image\//i.test(evidence.type)
+          ? '<img src="' + urlPrevia + '" style="max-width: 200px; max-height: 150px; border-radius: 4px;" alt="Evidencia ' + (idx + 1) + '">'
+          : '<div class="small"><i class="bi bi-file-earmark me-1"></i>' + esc(evidence.name) + '</div>';
         return '<div class="mb-2">' + media +
-          '<p class="small text-muted mt-1">' + esc(evidence.name) + ' (' + (evidence.size / 1024).toFixed(1) + ' KB)</p></div>';
+          '<p class="small text-muted mt-1">' + esc(evidence.name) + ' (' + esc(window.BVEvidenceTypes.formatearTamano(evidence.size)) + ')</p></div>';
       }).join('');
       $('convivenciaReviewEvidencias').innerHTML = html;
     }
@@ -514,11 +525,10 @@
       var btn = $('convivenciaSubmitBtn');
       if (btn) btn.disabled = true;
 
-      evidencias.forEach(function (ev) {
-        if (!ev.clientFileId) ev.clientFileId = createFileId();
-      });
-
+      // Registro progresivo: el texto y los archivos quedan en este dispositivo hasta que el
+      // servidor confirme cada uno; el residente solo se notifica con «Finalizar y notificar».
       var caso = {
+        version: 2,
         clientRequestId: createRequestId(),
         reportedAt: new Date().toISOString(),
         queuedAt: new Date().toISOString(),
@@ -529,18 +539,24 @@
         razonNotificacion: razon ? razon.value.trim() : '',
         notificador: notificador ? notificador.value.trim() : '',
         severidad: severidadSeleccionada,
-        evidencias: evidencias,
-        evidenciasSubidas: []
+        adjuntos: evidencias.map(function (ev) {
+          return { clientFileId: crearUuid(), name: ev.name, type: ev.type, size: ev.size, blob: ev.blob, estado: 'PENDIENTE' };
+        }),
+        casoId: null,
+        caseCode: null,
+        registro: null
       };
 
       await putQueueItem(caso);
       log('info', 'Caso guardado en IndexedDB.', { clientRequestId: caso.clientRequestId });
       resetForm();
       await refreshQueueCount();
+      renderRegistros();
 
       showStatus(
-        'success',
-        'El caso quedó guardado de forma segura en este dispositivo. Se intentará enviar ahora.'
+        'info',
+        'Caso guardado como «Pendiente de completar y notificar». Se están subiendo sus evidencias; ' +
+        'cuando todas estén cargadas, pulsa «Finalizar y notificar».'
       );
 
       await flushQueue(true, caso.clientRequestId, 'envío inmediato después de guardar');
@@ -618,199 +634,16 @@
 
       for (var index = 0; index < items.length; index += 1) {
         var item = items[index];
-        if (normalizarItemCola(item)) await putQueueItem(item);
-
-        // Una evidencia rechazada por el servidor (tipo, tamaño) no se reenvía sola: volvería a
-        // fallar y gastaría datos. Espera a que el usuario reintente o la retire desde la cola.
-        var reintentoManual = Boolean(force) && (!preferredId || preferredId === item.clientRequestId);
-        if (item.requiereAccion && !reintentoManual) {
-          log('info', 'Caso en cola espera acción del usuario; se omite en reintento automático.', {
-            clientRequestId: item.clientRequestId
-          });
-          continue;
+        var resultado;
+        if (item.version === 2) {
+          resultado = await procesarRegistro(item, force, preferredId);
+        } else if (item.caseCode) {
+          resultado = await procesarItemLegado(item, force, preferredId);
+        } else {
+          item = await migrarItemLegado(item);
+          resultado = await procesarRegistro(item, force, preferredId);
         }
-
-        try {
-          item.attempts = Number(item.attempts || 0) + 1;
-          item.lastAttemptAt = new Date().toISOString();
-          delete item.lastError;
-          delete item.requiereAccion;
-          item.evidencias.forEach(function (ev) { delete ev.error; });
-          await putQueueItem(item);
-
-          log('info', 'Enviando caso al servidor.', { clientRequestId: item.clientRequestId });
-
-          var evidenciasRestantes = item.evidencias.filter(function (ev) { return !subidaDe(item, ev); });
-          var falloSubida = null;
-
-          if (evidenciasRestantes.length > 0) {
-            log('info', 'Subiendo evidencias.', { count: evidenciasRestantes.length });
-            for (var i = 0; i < evidenciasRestantes.length; i++) {
-              var evidencia = evidenciasRestantes[i];
-              try {
-                var uploadResult = await uploadEvidenceToGoogle(evidencia, item.apto);
-                if (uploadResult.ok) {
-                  item.evidenciasSubidas.push({
-                    clientFileId: evidencia.clientFileId,
-                    name: evidencia.name,
-                    url: uploadResult.url,
-                    fileId: uploadResult.fileId,
-                    fileName: uploadResult.fileName,
-                    mimeType: uploadResult.mimeType,
-                    sizeBytes: uploadResult.sizeBytes
-                  });
-                  await putQueueItem(item);
-                  log('info', 'Evidencia subida.', { name: evidencia.name });
-                } else {
-                  log('error', 'Evidencia rechazada por el servidor.', { name: evidencia.name, error: uploadResult.error });
-                  evidencia.error = uploadResult.error || 'rechazada por el servidor';
-                  falloSubida = {
-                    transporte: false,
-                    definitivo: Boolean(uploadResult.definitivo),
-                    mensaje: 'La evidencia "' + evidencia.name + '" no se pudo subir: ' + evidencia.error + '.'
-                  };
-                  break;
-                }
-              } catch (uploadError) {
-                log('error', 'Error subiendo evidencia.', uploadError);
-                evidencia.error = (uploadError && uploadError.message) || 'error al subir';
-                falloSubida = {
-                  transporte: esFalloTransporte(uploadError),
-                  definitivo: false,
-                  mensaje: 'La evidencia "' + evidencia.name + '" no se pudo subir: ' + evidencia.error + '.'
-                };
-                break;
-              }
-            }
-          }
-
-          // Si falta cualquier evidencia, el caso NO se crea: crearlo con un subconjunto y borrar
-          // la cola era la vía de pérdida silenciosa de adjuntos.
-          if (falloSubida) {
-            item.lastError = falloSubida.mensaje;
-            if (falloSubida.definitivo) item.requiereAccion = true;
-            await putQueueItem(item);
-            showStatus(
-              'warning',
-              falloSubida.mensaje + ' El caso no se ha enviado y sigue guardado en este dispositivo. ' +
-              (falloSubida.definitivo
-                ? 'Revisa la cola: puedes reintentar o retirar esa evidencia.'
-                : 'Se reintentará cuando haya una conexión estable.')
-            );
-            if (falloSubida.transporte || !navigator.onLine) {
-              log('warn', 'Fallo de transporte subiendo evidencias; se detiene la cola.');
-              break;
-            }
-            continue;
-          }
-
-          if (!navigator.onLine) {
-            log('info', 'Se detectó que el navegador está offline; se detiene la cola.');
-            break;
-          }
-
-          var caseData = {
-            clientRequestId: item.clientRequestId,
-            apartamento: item.apto,
-            motivo: item.motivo,
-            descripcion: item.descripcion,
-            razonNotificacion: item.razonNotificacion,
-            notificador: item.notificador,
-            severidad: item.severidad,
-            evidencias: item.evidencias.map(function (ev) {
-              return { url: subidaDe(item, ev).url, clientFileId: ev.clientFileId };
-            })
-          };
-
-          var token = await getAuthToken();
-          var createResponse = await fetch(API_BASE + '/api/v1/convivencia/casos', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: 'Bearer ' + token
-            },
-            body: JSON.stringify(caseData)
-          });
-
-          var createBody = await leerJson(createResponse);
-          if (!createResponse.ok) {
-            throw new Error(
-              (createBody && createBody.error && createBody.error.message) ||
-              mensajePorEstado(createResponse.status, 'El servidor no confirmó el registro.')
-            );
-          }
-          if (!createBody || !createBody.data) {
-            throw new Error('Respuesta inválida del servidor al registrar el caso.');
-          }
-
-          var createResult = createBody.data;
-          var noVinculadas = (createResult.evidencias && createResult.evidencias.fallidas) || [];
-
-          // El caso existe pero le faltan adjuntos: se conserva en la cola y el reintento (mismo
-          // clientRequestId) vincula solo lo que falte, sin duplicar el caso ni la notificación.
-          if (noVinculadas.length > 0) {
-            item.caseCode = createResult.caseCode;
-            item.lastError = 'El caso ' + createResult.caseCode + ' quedó registrado, pero ' + noVinculadas.length +
-              ' evidencia(s) no se vincularon. Se reintentará sin duplicar el caso.';
-            await putQueueItem(item);
-            log('error', 'Caso creado con evidencias sin vincular; permanece en la cola.', {
-              clientRequestId: item.clientRequestId,
-              caseId: createResult.caseCode,
-              fallidas: noVinculadas.length
-            });
-            showStatus('warning', item.lastError);
-            continue;
-          }
-
-          await deleteQueueItem(item.clientRequestId);
-          log('info', 'Caso confirmado y eliminado de la cola.', { clientRequestId: item.clientRequestId, caseId: createResult.caseCode });
-
-          var totalEvidencias = item.evidencias.length;
-          var retiradas = (item.evidenciasRetiradas || []).length;
-          showStatus(
-            'success',
-            'Caso enviado correctamente. ID: ' + createResult.caseCode +
-            (totalEvidencias ? '. Evidencias vinculadas: ' + totalEvidencias : '') +
-            (retiradas ? ' (' + retiradas + ' retirada(s) por el usuario)' : '') +
-            '. Si olvidaste una evidencia o un dato, puedes corregirlo en "Corregir un caso reciente".'
-          );
-          document.dispatchEvent(new CustomEvent('bv:caso-convivencia-creado', { detail: createResult }));
-
-          setTimeout(function () {
-            ocultarPasos();
-            var paso1 = $('convivenciaPaso1');
-            if (paso1) paso1.classList.remove('hidden');
-            var steps = document.querySelectorAll('[id^="convivenciaStep"]');
-            for (var j = 0; j < steps.length; j++) {
-              steps[j].classList.remove('completed');
-            }
-          }, 3000);
-
-        } catch (error) {
-          item.lastError = error.message || String(error);
-          await putQueueItem(item);
-
-          log('error', 'Falló el envío del caso; permanece en la cola.', {
-            clientRequestId: item.clientRequestId,
-            error: item.lastError,
-            online: navigator.onLine
-          });
-
-          showStatus(
-            'warning',
-            'El caso continúa guardado en la cola. Se reintentará cuando haya una conexión estable.'
-          );
-
-          if (!navigator.onLine) {
-            log('warn', 'Navegador offline; se detiene la cola.');
-            break;
-          }
-
-          if (esFalloTransporte(error)) {
-            log('warn', 'Fallo de transporte; se detiene la cola para no repetir con otros casos.');
-            break;
-          }
-        }
+        if (resultado === 'detener') break;
       }
     } catch (error) {
       log('error', 'Error general procesando la cola.', error);
@@ -833,6 +666,206 @@
         }, 0);
       }
     }
+  }
+
+  // Item de la cola anterior cuyo caso ya existe en el servidor (contrato con URL de Drive):
+  // el reintento de POST /casos con el mismo clientRequestId vincula lo que falte, sin
+  // duplicar el caso ni la notificación. Se conserva sin cambios del flujo desplegado.
+  async function procesarItemLegado(item, force, preferredId) {
+    if (normalizarItemCola(item)) await putQueueItem(item);
+
+    // Una evidencia rechazada por el servidor (tipo, tamaño) no se reenvía sola: volvería a
+    // fallar y gastaría datos. Espera a que el usuario reintente o la retire desde la cola.
+    var reintentoManual = Boolean(force) && (!preferredId || preferredId === item.clientRequestId);
+    if (item.requiereAccion && !reintentoManual) {
+      log('info', 'Caso en cola espera acción del usuario; se omite en reintento automático.', {
+        clientRequestId: item.clientRequestId
+      });
+      return 'continuar';
+    }
+
+    try {
+      item.attempts = Number(item.attempts || 0) + 1;
+      item.lastAttemptAt = new Date().toISOString();
+      delete item.lastError;
+      delete item.requiereAccion;
+      item.evidencias.forEach(function (ev) { delete ev.error; });
+      await putQueueItem(item);
+
+      log('info', 'Enviando caso al servidor.', { clientRequestId: item.clientRequestId });
+
+      var evidenciasRestantes = item.evidencias.filter(function (ev) { return !subidaDe(item, ev); });
+      var falloSubida = null;
+
+      if (evidenciasRestantes.length > 0) {
+        log('info', 'Subiendo evidencias.', { count: evidenciasRestantes.length });
+        for (var i = 0; i < evidenciasRestantes.length; i++) {
+          var evidencia = evidenciasRestantes[i];
+          try {
+            var uploadResult = await uploadEvidenceToGoogle(evidencia, item.apto);
+            if (uploadResult.ok) {
+              item.evidenciasSubidas.push({
+                clientFileId: evidencia.clientFileId,
+                name: evidencia.name,
+                url: uploadResult.url,
+                fileId: uploadResult.fileId,
+                fileName: uploadResult.fileName,
+                mimeType: uploadResult.mimeType,
+                sizeBytes: uploadResult.sizeBytes
+              });
+              await putQueueItem(item);
+              log('info', 'Evidencia subida.', { name: evidencia.name });
+            } else {
+              log('error', 'Evidencia rechazada por el servidor.', { name: evidencia.name, error: uploadResult.error });
+              evidencia.error = uploadResult.error || 'rechazada por el servidor';
+              falloSubida = {
+                transporte: false,
+                definitivo: Boolean(uploadResult.definitivo),
+                mensaje: 'La evidencia "' + evidencia.name + '" no se pudo subir: ' + evidencia.error + '.'
+              };
+              break;
+            }
+          } catch (uploadError) {
+            log('error', 'Error subiendo evidencia.', uploadError);
+            evidencia.error = (uploadError && uploadError.message) || 'error al subir';
+            falloSubida = {
+              transporte: esFalloTransporte(uploadError),
+              definitivo: false,
+              mensaje: 'La evidencia "' + evidencia.name + '" no se pudo subir: ' + evidencia.error + '.'
+            };
+            break;
+          }
+        }
+      }
+
+      // Si falta cualquier evidencia, el caso NO se crea: crearlo con un subconjunto y borrar
+      // la cola era la vía de pérdida silenciosa de adjuntos.
+      if (falloSubida) {
+        item.lastError = falloSubida.mensaje;
+        if (falloSubida.definitivo) item.requiereAccion = true;
+        await putQueueItem(item);
+        showStatus(
+          'warning',
+          falloSubida.mensaje + ' El caso no se ha enviado y sigue guardado en este dispositivo. ' +
+          (falloSubida.definitivo
+            ? 'Revisa la cola: puedes reintentar o retirar esa evidencia.'
+            : 'Se reintentará cuando haya una conexión estable.')
+        );
+        if (falloSubida.transporte || !navigator.onLine) {
+          log('warn', 'Fallo de transporte subiendo evidencias; se detiene la cola.');
+          return 'detener';
+        }
+        return 'continuar';
+      }
+
+      if (!navigator.onLine) {
+        log('info', 'Se detectó que el navegador está offline; se detiene la cola.');
+        return 'detener';
+      }
+
+      var caseData = {
+        clientRequestId: item.clientRequestId,
+        apartamento: item.apto,
+        motivo: item.motivo,
+        descripcion: item.descripcion,
+        razonNotificacion: item.razonNotificacion,
+        notificador: item.notificador,
+        severidad: item.severidad,
+        evidencias: item.evidencias.map(function (ev) {
+          return { url: subidaDe(item, ev).url, clientFileId: ev.clientFileId };
+        })
+      };
+
+      var token = await getAuthToken();
+      var createResponse = await fetch(API_BASE + '/api/v1/convivencia/casos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + token
+        },
+        body: JSON.stringify(caseData)
+      });
+
+      var createBody = await leerJson(createResponse);
+      if (!createResponse.ok) {
+        throw new Error(
+          (createBody && createBody.error && createBody.error.message) ||
+          mensajePorEstado(createResponse.status, 'El servidor no confirmó el registro.')
+        );
+      }
+      if (!createBody || !createBody.data) {
+        throw new Error('Respuesta inválida del servidor al registrar el caso.');
+      }
+
+      var createResult = createBody.data;
+      var noVinculadas = (createResult.evidencias && createResult.evidencias.fallidas) || [];
+
+      // El caso existe pero le faltan adjuntos: se conserva en la cola y el reintento (mismo
+      // clientRequestId) vincula solo lo que falte, sin duplicar el caso ni la notificación.
+      if (noVinculadas.length > 0) {
+        item.caseCode = createResult.caseCode;
+        item.lastError = 'El caso ' + createResult.caseCode + ' quedó registrado, pero ' + noVinculadas.length +
+          ' evidencia(s) no se vincularon. Se reintentará sin duplicar el caso.';
+        await putQueueItem(item);
+        log('error', 'Caso creado con evidencias sin vincular; permanece en la cola.', {
+          clientRequestId: item.clientRequestId,
+          caseId: createResult.caseCode,
+          fallidas: noVinculadas.length
+        });
+        showStatus('warning', item.lastError);
+        return 'continuar';
+      }
+
+      await deleteQueueItem(item.clientRequestId);
+      log('info', 'Caso confirmado y eliminado de la cola.', { clientRequestId: item.clientRequestId, caseId: createResult.caseCode });
+
+      var totalEvidencias = item.evidencias.length;
+      var retiradas = (item.evidenciasRetiradas || []).length;
+      showStatus(
+        'success',
+        'Caso enviado correctamente. ID: ' + createResult.caseCode +
+        (totalEvidencias ? '. Evidencias vinculadas: ' + totalEvidencias : '') +
+        (retiradas ? ' (' + retiradas + ' retirada(s) por el usuario)' : '') +
+        '. Si olvidaste una evidencia o un dato, puedes corregirlo en "Corregir un caso reciente".'
+      );
+      document.dispatchEvent(new CustomEvent('bv:caso-convivencia-creado', { detail: createResult }));
+
+      setTimeout(function () {
+        ocultarPasos();
+        var paso1 = $('convivenciaPaso1');
+        if (paso1) paso1.classList.remove('hidden');
+        var steps = document.querySelectorAll('[id^="convivenciaStep"]');
+        for (var j = 0; j < steps.length; j++) {
+          steps[j].classList.remove('completed');
+        }
+      }, 3000);
+
+    } catch (error) {
+      item.lastError = error.message || String(error);
+      await putQueueItem(item);
+
+      log('error', 'Falló el envío del caso; permanece en la cola.', {
+        clientRequestId: item.clientRequestId,
+        error: item.lastError,
+        online: navigator.onLine
+      });
+
+      showStatus(
+        'warning',
+        'El caso continúa guardado en la cola. Se reintentará cuando haya una conexión estable.'
+      );
+
+      if (!navigator.onLine) {
+        log('warn', 'Navegador offline; se detiene la cola.');
+        return 'detener';
+      }
+
+      if (esFalloTransporte(error)) {
+        log('warn', 'Fallo de transporte; se detiene la cola para no repetir con otros casos.');
+        return 'detener';
+      }
+    }
+    return 'continuar';
   }
 
   async function uploadEvidenceToGoogle(evidence, apto, caseCode) {
@@ -910,13 +943,630 @@
     );
   }
 
+  // =====================================================================================
+  // Registro progresivo (cola v2): el texto se guarda como borrador en el servidor sin
+  // notificar; cada archivo se declara, se sube directo a Cloud Storage (sesión reanudable)
+  // y se confirma. El caso solo se notifica cuando el usuario pulsa «Finalizar y notificar»
+  // y el servidor comprueba que no quedan archivos pendientes.
+  // =====================================================================================
+
+  var CHUNK_SUBIDA = 8 * 1024 * 1024; // múltiplo de 256 KiB, como exige Cloud Storage
+  var TIEMPO_MAX_BLOQUE_MS = 2 * 60 * 1000;
+  var REINTENTOS_SUBIDA_AUTOMATICOS = 5;
+  var ESTADOS_LISTOS = ['LISTO', 'RETIRADO'];
+
+  var ETIQUETA_ESTADO = {
+    PENDIENTE: 'Por registrar',
+    DECLARADO: 'En espera de subida',
+    SUBIENDO: 'Subiendo',
+    LISTO: 'Cargado',
+    RECHAZADO: 'Rechazado',
+    RETIRADO: 'Retirado',
+    ABANDONADO: 'Subida abandonada',
+    NO_PERMITIDO: 'No permitido'
+  };
+
+  function crearUuid() {
+    if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+    var b = new Uint8Array(16);
+    window.crypto.getRandomValues(b);
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    var h = Array.prototype.map.call(b, function (x) { return (x + 0x100).toString(16).slice(1); }).join('');
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+  }
+
+  function normalizarId(id) {
+    return String(id || '').replace(/-/g, '').toLowerCase();
+  }
+
+  async function api(method, ruta, body) {
+    var token = await getAuthToken();
+    var headers = { Authorization: 'Bearer ' + token };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    var response = await fetch(API_BASE + '/api/v1/convivencia' + ruta, {
+      method: method,
+      headers: headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined
+    });
+    var json = await leerJson(response);
+    if (!response.ok) {
+      var error = new Error((json && json.error && json.error.message) || mensajePorEstado(response.status, 'Error del servidor (' + response.status + ')'));
+      error.status = response.status;
+      error.code = json && json.error && json.error.code;
+      error.details = json && json.error && json.error.details;
+      throw error;
+    }
+    return json;
+  }
+
+  // CRC32C (Castagnoli) del archivo, en base64 como lo reporta Cloud Storage: el servidor
+  // lo compara con el objeto recibido para detectar archivos dañados en la subida.
+  var tablaCrc32c = null;
+  async function crc32cBase64(blob) {
+    if (!tablaCrc32c) {
+      tablaCrc32c = new Uint32Array(256);
+      for (var n = 0; n < 256; n++) {
+        var c = n;
+        for (var k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0x82f63b78 : c >>> 1;
+        tablaCrc32c[n] = c >>> 0;
+      }
+    }
+    var crc = 0xffffffff;
+    var paso = 4 * 1024 * 1024;
+    for (var inicio = 0; inicio < blob.size; inicio += paso) {
+      var datos = new Uint8Array(await blob.slice(inicio, inicio + paso).arrayBuffer());
+      for (var i = 0; i < datos.length; i++) crc = tablaCrc32c[(crc ^ datos[i]) & 0xff] ^ (crc >>> 8);
+    }
+    crc = (crc ^ 0xffffffff) >>> 0;
+    return btoa(String.fromCharCode((crc >>> 24) & 0xff, (crc >>> 16) & 0xff, (crc >>> 8) & 0xff, crc & 0xff));
+  }
+
+  function errorSesionVencida() {
+    var error = new Error('La sesión de subida venció; se abrirá una nueva.');
+    error.sesionVencida = true;
+    return error;
+  }
+
+  function errorTransporteSubida(offset, total) {
+    var error = new Error('Se interrumpió la subida (' + Math.floor((offset / total) * 100) + '%); se reanudará desde ese punto.');
+    error.code = 'POST_SUBMIT_FAILED';
+    return error;
+  }
+
+  function siguienteOffset(response) {
+    var rango = response.headers.get('Range');
+    var m = rango && /bytes=0-(\d+)/.exec(rango);
+    return m ? Number(m[1]) + 1 : 0;
+  }
+
+  // Cuántos bytes ya tiene la sesión (tras un corte, una recarga o al reabrir el dispositivo).
+  async function consultarOffset(uri, total) {
+    var response;
+    try {
+      response = await fetch(uri, { method: 'PUT', headers: { 'Content-Range': 'bytes */' + total } });
+    } catch (e) {
+      throw errorTransporteSubida(0, total);
+    }
+    if (response.status === 308) return siguienteOffset(response);
+    if (response.ok) return total;
+    if (response.status === 404 || response.status === 410) throw errorSesionVencida();
+    throw new Error('Cloud Storage no respondió el estado de la subida (' + response.status + ').');
+  }
+
+  async function subirReanudable(item, adjunto, uri) {
+    var total = adjunto.blob.size;
+    var offset = await consultarOffset(uri, total);
+    while (offset < total) {
+      var fin = Math.min(offset + CHUNK_SUBIDA, total);
+      var control = new AbortController();
+      var temporizador = setTimeout(function () { control.abort(); }, TIEMPO_MAX_BLOQUE_MS);
+      var response;
+      try {
+        response = await fetch(uri, {
+          method: 'PUT',
+          headers: { 'Content-Range': 'bytes ' + offset + '-' + (fin - 1) + '/' + total },
+          body: adjunto.blob.slice(offset, fin),
+          signal: control.signal
+        });
+      } catch (e) {
+        throw errorTransporteSubida(offset, total);
+      } finally {
+        clearTimeout(temporizador);
+      }
+      if (response.status === 308) offset = siguienteOffset(response);
+      else if (response.ok) offset = total;
+      else if (response.status === 404 || response.status === 410) throw errorSesionVencida();
+      else throw new Error('Cloud Storage rechazó la subida (' + response.status + ').');
+      adjunto.progreso = offset / total;
+      renderRegistrosPronto();
+    }
+  }
+
+  async function subirAdjunto(item, adjunto) {
+    var id = normalizarId(adjunto.clientFileId);
+    var uri = adjunto.sessionUri || null;
+    var completo = false;
+    if (uri) {
+      try {
+        completo = (await consultarOffset(uri, adjunto.blob.size)) === adjunto.blob.size;
+      } catch (error) {
+        if (!error.sesionVencida) throw error;
+        uri = null;
+      }
+    }
+    if (!uri && !completo) {
+      var sesion = await api('POST', '/adjuntos/' + id + '/sesion');
+      if (sesion.data.yaSubido) {
+        completo = true;
+      } else {
+        uri = sesion.data.sessionUri;
+        adjunto.sessionUri = uri;
+        adjunto.estado = 'SUBIENDO';
+        await putQueueItem(item);
+      }
+    }
+    if (!completo) {
+      try {
+        await subirReanudable(item, adjunto, uri);
+      } catch (error) {
+        if (error.sesionVencida) {
+          adjunto.sessionUri = null;
+          await putQueueItem(item);
+        }
+        throw error;
+      }
+    }
+    adjunto.progreso = 1;
+    renderRegistrosPronto();
+    var crc = await crc32cBase64(adjunto.blob);
+    var confirmacion = await api('POST', '/adjuntos/' + id + '/confirmar', { crc32c: crc });
+    adjunto.estado = confirmacion.data.estado;
+    adjunto.motivo = confirmacion.data.motivo || null;
+    adjunto.sessionUri = null;
+    delete adjunto.error;
+    if (adjunto.estado === 'LISTO') adjunto.blob = null; // ya está en el servidor: libera espacio local
+    await putQueueItem(item);
+    renderRegistros();
+  }
+
+  // Estado del servidor → copia local (los archivos cuyo id el servidor conoce quedan "declarados").
+  function aplicarVistaRegistro(item, vista) {
+    item.casoId = vista.id;
+    item.caseCode = vista.caseCode;
+    item.registro = vista.registro;
+    item.notificaciones = vista.notificaciones || [];
+    (vista.adjuntos || []).forEach(function (sa) {
+      var local = item.adjuntos.find(function (a) { return normalizarId(a.clientFileId) === sa.id; });
+      if (!local) {
+        local = { clientFileId: sa.id, name: sa.nombreOriginal, type: sa.mimeType, size: sa.tamanoBytes, blob: null };
+        item.adjuntos.push(local);
+      }
+      local.declarado = true;
+      local.estado = sa.estado;
+      local.motivo = sa.motivo || null;
+      if (sa.estado === 'LISTO' || sa.estado === 'RETIRADO') {
+        local.blob = null;
+        local.sessionUri = null;
+        local.progreso = sa.estado === 'LISTO' ? 1 : local.progreso;
+      }
+    });
+  }
+
+  function puedeFinalizar(item) {
+    return item.registro === 'BORRADOR' && item.adjuntos.every(function (a) { return ESTADOS_LISTOS.indexOf(a.estado) !== -1; });
+  }
+
+  async function declararPendientes(item) {
+    var porDeclarar = item.adjuntos.filter(function (a) { return a.estado === 'PENDIENTE'; });
+    if (porDeclarar.length === 0) return;
+    try {
+      var r = await api('POST', '/casos/' + item.casoId + '/adjuntos', {
+        archivos: porDeclarar.map(function (a) {
+          return { id: a.clientFileId, nombre: a.name, mimeType: a.type, tamanoBytes: a.size };
+        })
+      });
+      aplicarVistaRegistro(item, r.data);
+    } catch (error) {
+      if (error.code !== 'adjunto_no_permitido' || !error.details || !error.details.rechazados) throw error;
+      error.details.rechazados.forEach(function (rechazo) {
+        var a = item.adjuntos.find(function (x) { return normalizarId(x.clientFileId) === normalizarId(rechazo.id); });
+        if (a) { a.estado = 'NO_PERMITIDO'; a.motivo = rechazo.motivo; a.blob = null; }
+      });
+      await putQueueItem(item);
+      await declararPendientes(item);
+    }
+  }
+
+  async function procesarRegistro(item, force, preferredId) {
+    var manual = Boolean(force) && (!preferredId || preferredId === item.clientRequestId);
+    if (item.requiereAccion && !manual) return 'continuar';
+    try {
+      item.attempts = Number(item.attempts || 0) + 1;
+      item.lastAttemptAt = new Date().toISOString();
+      delete item.lastError;
+      delete item.requiereAccion;
+
+      if (!item.casoId) {
+        var creado = await api('POST', '/casos', {
+          clientRequestId: item.clientRequestId,
+          modo: 'borrador',
+          apartamento: item.apto,
+          motivo: item.motivo,
+          descripcion: item.descripcion,
+          razonNotificacion: item.razonNotificacion,
+          notificador: item.notificador,
+          severidad: item.severidad
+        });
+        item.casoId = creado.data.id;
+        item.caseCode = creado.data.caseCode;
+        item.registro = creado.data.registro;
+        await putQueueItem(item);
+        renderRegistros();
+      }
+
+      if (item.registro === 'FINALIZADO') {
+        // Solo ocurre si un envío anterior (versión previa del formulario) ya creó y notificó el caso.
+        if (item.adjuntos.every(function (a) { return ESTADOS_LISTOS.indexOf(a.estado) !== -1; })) {
+          await deleteQueueItem(item.clientRequestId);
+          renderRegistros();
+          return 'continuar';
+        }
+        item.requiereAccion = true;
+        item.lastError = 'El caso ' + item.caseCode + ' ya estaba registrado y notificado. Agrega los archivos faltantes desde «Corregir un caso reciente».';
+        await putQueueItem(item);
+        renderRegistros();
+        return 'continuar';
+      }
+
+      await declararPendientes(item);
+      await putQueueItem(item);
+      renderRegistros();
+
+      var porSubir = item.adjuntos.filter(function (a) { return a.estado === 'DECLARADO' || a.estado === 'SUBIENDO'; });
+      for (var i = 0; i < porSubir.length; i++) {
+        var adjunto = porSubir[i];
+        if (!adjunto.blob) {
+          adjunto.error = 'Vuelve a seleccionar este archivo en este dispositivo para terminar de subirlo, o retíralo.';
+          continue;
+        }
+        if (Number(adjunto.intentosSubida || 0) >= REINTENTOS_SUBIDA_AUTOMATICOS && !manual) continue;
+        try {
+          await subirAdjunto(item, adjunto);
+        } catch (error) {
+          adjunto.intentosSubida = Number(adjunto.intentosSubida || 0) + 1;
+          adjunto.error = error.message || String(error);
+          await putQueueItem(item);
+          renderRegistros();
+          if (!navigator.onLine || esFalloTransporte(error)) return 'detener';
+        }
+      }
+
+      aplicarVistaRegistro(item, (await api('GET', '/casos/' + item.casoId + '/registro')).data);
+      await putQueueItem(item);
+      renderRegistros();
+      return 'continuar';
+    } catch (error) {
+      item.lastError = error.message || String(error);
+      if (error.status && error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 409) {
+        item.requiereAccion = true;
+      }
+      await putQueueItem(item);
+      renderRegistros();
+      log('error', 'Falló el registro del caso; permanece guardado en este dispositivo.', { clientRequestId: item.clientRequestId, error: item.lastError });
+      if (!navigator.onLine || esFalloTransporte(error)) return 'detener';
+      return 'continuar';
+    }
+  }
+
+  // Items de la versión anterior del formulario que nunca llegaron a crear el caso: se
+  // convierten en un registro progresivo. Las copias que hubieran llegado a Drive quedan
+  // huérfanas (las reporta el inventario de la migración) y el caso no se notifica hasta
+  // «Finalizar y notificar».
+  async function migrarItemLegado(item) {
+    normalizarItemCola(item);
+    var adjuntos = [];
+    for (var i = 0; i < item.evidencias.length; i++) {
+      var ev = item.evidencias[i];
+      var blob = ev.blob instanceof Blob ? ev.blob : null;
+      if (!blob && ev.dataUrl) {
+        try { blob = await (await fetch(ev.dataUrl)).blob(); } catch (e) { blob = null; }
+      }
+      adjuntos.push({
+        clientFileId: crearUuid(),
+        name: ev.name,
+        type: ev.type || (blob && blob.type) || '',
+        size: blob ? blob.size : ev.size,
+        blob: blob,
+        estado: blob ? 'PENDIENTE' : 'NO_PERMITIDO',
+        motivo: blob ? null : 'El archivo no se conservó en este dispositivo; vuelve a agregarlo.'
+      });
+    }
+    var nuevo = {
+      version: 2,
+      clientRequestId: item.clientRequestId,
+      reportedAt: item.reportedAt,
+      queuedAt: item.queuedAt,
+      attempts: 0,
+      apto: item.apto,
+      motivo: item.motivo,
+      descripcion: item.descripcion,
+      razonNotificacion: item.razonNotificacion,
+      notificador: item.notificador,
+      severidad: item.severidad,
+      adjuntos: adjuntos,
+      casoId: null,
+      caseCode: null,
+      registro: null,
+      migradoDeVersionAnterior: true
+    };
+    await putQueueItem(nuevo);
+    log('info', 'Caso de la cola anterior convertido a registro progresivo.', { clientRequestId: nuevo.clientRequestId });
+    return nuevo;
+  }
+
+  async function obtenerItem(clientRequestId) {
+    var items = await getQueueItems();
+    return items.find(function (it) { return it.clientRequestId === clientRequestId; }) || null;
+  }
+
+  async function finalizarRegistro(clientRequestId) {
+    var item = await obtenerItem(clientRequestId);
+    if (!item || !item.casoId) return;
+    var boton = document.querySelector('[data-accion="finalizar"][data-registro="' + CSS.escape(clientRequestId) + '"]');
+    if (boton) boton.disabled = true;
+    try {
+      var r = await api('POST', '/casos/' + item.casoId + '/finalizar');
+      await deleteQueueItem(clientRequestId);
+      showStatus(
+        'success',
+        'Caso ' + r.data.caseCode + (r.data.yaFinalizado ? ' ya estaba finalizado' : ' finalizado') +
+        '. Notificación solicitada: el envío se confirma en el detalle del caso.'
+      );
+      document.dispatchEvent(new CustomEvent('bv:caso-convivencia-creado', { detail: r.data }));
+    } catch (error) {
+      if (error.code === 'adjuntos_pendientes' || error.code === 'concurrencia_reintentar') {
+        try {
+          aplicarVistaRegistro(item, (await api('GET', '/casos/' + item.casoId + '/registro')).data);
+          await putQueueItem(item);
+        } catch (e) { /* se reintenta en la siguiente sincronización */ }
+      }
+      showStatus('warning', 'No se pudo finalizar: ' + (error.message || error));
+    } finally {
+      await refreshQueueCount();
+      renderRegistros();
+    }
+  }
+
+  async function retirarDeRegistro(clientRequestId, clientFileId) {
+    var item = await obtenerItem(clientRequestId);
+    if (!item) return;
+    var adjunto = item.adjuntos.find(function (a) { return a.clientFileId === clientFileId; });
+    if (!adjunto) return;
+    if (!window.confirm('Se retirará "' + adjunto.name + '" de este caso y no se adjuntará. ¿Continuar?')) return;
+    try {
+      if (adjunto.declarado) {
+        var r = await api('POST', '/adjuntos/' + normalizarId(clientFileId) + '/retirar');
+        adjunto.estado = r.data.estado;
+      } else {
+        adjunto.estado = 'RETIRADO';
+      }
+      adjunto.blob = null;
+      adjunto.sessionUri = null;
+      adjunto.motivo = 'Retirado por el usuario';
+      delete adjunto.error;
+      if (!adjunto.declarado) {
+        item.adjuntos = item.adjuntos.filter(function (a) { return a !== adjunto; });
+      }
+      await putQueueItem(item);
+    } catch (error) {
+      showStatus('warning', 'No se pudo retirar el archivo: ' + (error.message || error));
+    }
+    renderRegistros();
+    await refreshQueueCount();
+  }
+
+  async function agregarArchivoARegistro(clientRequestId, file, reemplazaId) {
+    var item = await obtenerItem(clientRequestId);
+    if (!item) return;
+    try {
+      var preparado = await prepararArchivoFinal(file);
+      if (reemplazaId) {
+        // Volver a seleccionar un archivo ya declarado (p. ej. en otro dispositivo): debe ser el mismo.
+        var adjunto = item.adjuntos.find(function (a) { return a.clientFileId === reemplazaId; });
+        if (!adjunto) return;
+        if (preparado.size !== adjunto.size || preparado.type !== adjunto.type) {
+          throw new Error('El archivo seleccionado no coincide con "' + adjunto.name + '" (tamaño o tipo distinto). Retíralo y agrégalo como archivo nuevo.');
+        }
+        adjunto.blob = preparado.blob;
+        adjunto.intentosSubida = 0;
+        delete adjunto.error;
+      } else {
+        item.adjuntos.push({
+          clientFileId: crearUuid(),
+          name: preparado.name,
+          type: preparado.type,
+          size: preparado.size,
+          blob: preparado.blob,
+          estado: 'PENDIENTE'
+        });
+      }
+      delete item.requiereAccion;
+      await putQueueItem(item);
+      renderRegistros();
+      await flushQueue(true, clientRequestId, 'archivo agregado al registro');
+    } catch (error) {
+      showStatus('warning', error.message || String(error));
+    }
+  }
+
+  // Abre en este dispositivo un borrador creado en otro (desde «Corregir un caso reciente»).
+  async function abrirRegistro(casoId) {
+    var items = await getQueueItems();
+    var existente = items.find(function (it) { return it.version === 2 && normalizarId(it.casoId) === normalizarId(casoId); });
+    if (!existente) {
+      var vista = (await api('GET', '/casos/' + casoId + '/registro')).data;
+      existente = {
+        version: 2,
+        clientRequestId: 'REG-' + normalizarId(casoId),
+        queuedAt: new Date().toISOString(),
+        attempts: 0,
+        apto: vista.apartamento,
+        motivo: vista.motivo,
+        adjuntos: [],
+        casoId: vista.id
+      };
+      aplicarVistaRegistro(existente, vista);
+      await putQueueItem(existente);
+    }
+    renderRegistros();
+    await refreshQueueCount();
+    var seccion = $('convivenciaRegistros');
+    if (seccion) seccion.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function htmlAdjunto(item, a) {
+    var clasif = window.BVEvidenceTypes.clasificar({ name: a.name || '', type: a.type || '' });
+    var icono = clasif ? window.BVEvidenceTypes.icono(clasif.categoria) : 'bi-file';
+    var estado = a.estado || 'PENDIENTE';
+    var etiqueta = ETIQUETA_ESTADO[estado] || estado;
+    var clase = estado === 'LISTO' ? 'text-bg-success'
+      : (estado === 'RECHAZADO' || estado === 'NO_PERMITIDO' || estado === 'ABANDONADO') ? 'text-bg-danger'
+        : estado === 'RETIRADO' ? 'text-bg-secondary' : 'text-bg-warning';
+    var progreso = '';
+    if (estado === 'SUBIENDO' || (estado === 'DECLARADO' && a.progreso)) {
+      var pct = Math.floor((a.progreso || 0) * 100);
+      etiqueta = 'Subiendo ' + pct + '%';
+      progreso = '<div class="progress mt-1" style="height:6px" role="progressbar" aria-label="Progreso de ' + esc(a.name) + '" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100">' +
+        '<div class="progress-bar" style="width:' + pct + '%"></div></div>';
+    }
+    var detalle = a.motivo || a.error;
+    var acciones = '';
+    if (ESTADOS_LISTOS.indexOf(estado) === -1) {
+      if (a.declarado && !a.blob && (estado === 'DECLARADO' || estado === 'SUBIENDO')) {
+        acciones += '<label class="btn btn-link btn-sm p-0 me-2 mb-0">Seleccionar de nuevo' +
+          '<input type="file" class="d-none" data-accion="reseleccionar" data-registro="' + esc(item.clientRequestId) + '" data-archivo="' + esc(a.clientFileId) + '" accept="' + esc(window.BVEvidenceTypes.ACCEPT_FINAL) + '"></label>';
+      }
+      acciones += '<button type="button" class="btn btn-link btn-sm p-0 text-danger" data-accion="retirar" data-registro="' + esc(item.clientRequestId) + '" data-archivo="' + esc(a.clientFileId) + '">Retirar</button>';
+    }
+    return '<li class="list-group-item">' +
+      '<div class="d-flex justify-content-between align-items-start gap-2">' +
+      '<div class="text-break"><i class="bi ' + icono + ' me-1"></i>' + esc(a.name) +
+      ' <small class="text-muted">' + esc(window.BVEvidenceTypes.formatearTamano(a.size)) + '</small></div>' +
+      '<span class="badge ' + clase + '">' + esc(etiqueta) + '</span></div>' +
+      progreso +
+      (detalle ? '<small class="d-block text-danger mt-1">' + esc(detalle) + '</small>' : '') +
+      (acciones ? '<div class="mt-1">' + acciones + '</div>' : '') +
+      '</li>';
+  }
+
+  function htmlRegistro(item) {
+    var listos = item.adjuntos.filter(function (a) { return a.estado === 'LISTO'; }).length;
+    var activos = item.adjuntos.filter(function (a) { return a.estado !== 'RETIRADO'; }).length;
+    var listo = puedeFinalizar(item);
+    var titulo = (item.caseCode ? item.caseCode + ' · ' : '') + 'Apto. ' + item.apto + ' · ' + item.motivo;
+    return '<div class="card mb-3" data-registro-card="' + esc(item.clientRequestId) + '">' +
+      '<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">' +
+      '<strong class="text-break">' + esc(titulo) + '</strong>' +
+      '<span class="badge text-bg-warning">Pendiente de completar y notificar</span></div>' +
+      '<div class="card-body">' +
+      '<p class="small mb-2">' + (item.casoId ? 'Texto del caso guardado. ' : 'Guardando el texto del caso… ') +
+      'Evidencias: ' + listos + ' de ' + activos + ' cargadas. El residente no ha sido notificado.</p>' +
+      (item.adjuntos.length ? '<ul class="list-group mb-2">' + item.adjuntos.map(function (a) { return htmlAdjunto(item, a); }).join('') + '</ul>' : '') +
+      (item.lastError ? '<div class="alert alert-warning py-2 small mb-2">' + esc(item.lastError) + '</div>' : '') +
+      '<div class="d-flex flex-wrap gap-2">' +
+      (item.casoId ? '<label class="btn btn-outline-secondary btn-sm mb-0"><i class="bi bi-paperclip me-1"></i>Agregar archivo' +
+        '<input type="file" class="d-none" data-accion="agregar" data-registro="' + esc(item.clientRequestId) + '" accept="' + esc(window.BVEvidenceTypes.ACCEPT_FINAL) + '"></label>' : '') +
+      '<button type="button" class="btn btn-outline-primary btn-sm" data-accion="reintentar" data-registro="' + esc(item.clientRequestId) + '"><i class="bi bi-arrow-repeat me-1"></i>Reintentar</button>' +
+      '<button type="button" class="btn btn-success btn-sm" data-accion="finalizar" data-registro="' + esc(item.clientRequestId) + '"' + (listo ? '' : ' disabled') + '>' +
+      '<i class="bi bi-send-check me-1"></i>Finalizar y notificar</button>' +
+      '</div>' +
+      (listo ? '' : '<small class="d-block text-muted mt-2">Se habilita cuando todos los archivos estén cargados o retirados.</small>') +
+      '</div></div>';
+  }
+
+  var renderPendiente = null;
+  function renderRegistrosPronto() {
+    if (renderPendiente) return;
+    renderPendiente = setTimeout(function () { renderPendiente = null; renderRegistros(); }, 400);
+  }
+
+  async function renderRegistros() {
+    var seccion = $('convivenciaRegistros');
+    var lista = $('convivenciaRegistrosLista');
+    if (!seccion || !lista) return;
+    var items = (await getQueueItems()).filter(function (it) { return it.version === 2; });
+    seccion.classList.toggle('hidden', items.length === 0);
+    lista.innerHTML = items.map(htmlRegistro).join('');
+  }
+
+  function enlazarAccionesRegistro(contenedor) {
+    if (!contenedor || contenedor.dataset.accionesRegistro) return;
+    contenedor.dataset.accionesRegistro = '1';
+    contenedor.addEventListener('click', function (event) {
+      var boton = event.target.closest('button[data-accion]');
+      if (!boton) return;
+      var id = boton.getAttribute('data-registro');
+      var accion = boton.getAttribute('data-accion');
+      if (accion === 'finalizar') finalizarRegistro(id);
+      if (accion === 'retirar') retirarDeRegistro(id, boton.getAttribute('data-archivo'));
+      if (accion === 'reintentar') flushQueue(true, id, 'reintento manual del registro');
+    });
+    contenedor.addEventListener('change', function (event) {
+      var input = event.target.closest('input[data-accion]');
+      if (!input || !input.files || !input.files[0]) return;
+      var file = input.files[0];
+      input.value = '';
+      var accion = input.getAttribute('data-accion');
+      agregarArchivoARegistro(input.getAttribute('data-registro'), file, accion === 'reseleccionar' ? input.getAttribute('data-archivo') : null);
+    });
+  }
+
+  function duracionVideo(blob) {
+    return new Promise(function (resolve) {
+      var video = document.createElement('video');
+      var url = URL.createObjectURL(blob);
+      var listo = function (valor) { clearTimeout(t); URL.revokeObjectURL(url); resolve(valor); };
+      var t = setTimeout(function () { listo(null); }, 10000);
+      video.preload = 'metadata';
+      video.onloadedmetadata = function () { listo(isFinite(video.duration) ? video.duration : null); };
+      video.onerror = function () { listo(null); };
+      video.src = url;
+    });
+  }
+
+  // Valida el archivo final para el registro progresivo (sin conversión: el video debe ser MP4
+  // de hasta 5 minutos; las imágenes se comprimen a JPEG como antes). El servidor repite la
+  // validación (incluido el códec H.264) y rechaza con motivo lo que no cumpla.
+  async function prepararArchivoFinal(file) {
+    var clasificacion = window.BVEvidenceTypes.clasificarFinal(file);
+    if (!clasificacion) throw new Error(window.BVEvidenceTypes.motivoNoPermitidoFinal(file));
+    var maximo = window.BVEvidenceTypes.maxBytesFinal(clasificacion.categoria);
+    if (clasificacion.categoria === 'image') {
+      var imagen = await compressImage(file);
+      if (imagen.blob.size > maximo) throw new Error('La imagen supera el máximo de ' + window.BVEvidenceTypes.formatearTamano(maximo) + '.');
+      return { tipo: 'imagen', name: file.name, type: 'image/jpeg', size: imagen.blob.size, blob: imagen.blob };
+    }
+    if (file.size > maximo) {
+      throw new Error('El archivo supera el máximo de ' + window.BVEvidenceTypes.formatearTamano(maximo) + '.');
+    }
+    if (clasificacion.categoria === 'video') {
+      var duracion = await duracionVideo(file);
+      if (duracion !== null && duracion > window.BVEvidenceTypes.VIDEO_MAX_SEGUNDOS + 0.5) {
+        throw new Error('El video dura ' + Math.round(duracion / 60 * 10) / 10 + ' minutos; el máximo es 5. Recórtalo antes de adjuntarlo.');
+      }
+    }
+    var tipos = { video: 'video', audio: 'audio' };
+    return { tipo: tipos[clasificacion.categoria] || 'documento', name: file.name, type: clasificacion.mime, size: file.size, blob: file };
+  }
+
   function setupEvidenceHandlers() {
     var cameraBtn = $('convivenciaOpenCameraBtn');
     var galleryBtn = $('convivenciaOpenGalleryBtn');
     var galleryInput = $('convivenciaGalleryInput');
 
     if (galleryInput && window.BVEvidenceTypes) {
-      galleryInput.setAttribute('accept', window.BVEvidenceTypes.ACCEPT);
+      galleryInput.setAttribute('accept', window.BVEvidenceTypes.ACCEPT_FINAL);
     }
 
     if (cameraBtn) cameraBtn.addEventListener('click', captureEvidence);
@@ -943,12 +1593,18 @@
         quality: 0.84,
         allowVideo: true,
         maxVideoSeconds: 30,
-        maxVideoBytes: window.BVEvidenceTypes.maxBytes('video')
+        maxVideoBytes: window.BVEvidenceTypes.maxBytesFinal('video')
       });
 
-      evidencias.push(evidence);
+      // La evidencia debe llegar en su formato final: un video que el navegador grabe en WebM
+      // no es compatible (el servidor solo acepta MP4 H.264).
+      var archivoCamara = evidence.blob || evidence.file;
+      var resultadoCamara = await prepararArchivoFinal(
+        new File([archivoCamara], evidence.name, { type: evidence.type || archivoCamara.type })
+      );
+      evidencias.push({ name: resultadoCamara.name, type: resultadoCamara.type, size: resultadoCamara.size, blob: resultadoCamara.blob });
       actualizarListaEvidencias();
-      var isVideo = /^video\//i.test(evidence.file.type);
+      var isVideo = /^video\//i.test(resultadoCamara.type);
       showAlert((isVideo ? 'Video' : 'Fotografía') + ' grabado con fecha y ubicación incorporadas.', 'success');
     } catch (error) {
       if (error && error.name === 'AbortError') return;
@@ -1006,12 +1662,12 @@
     if (!file) return;
 
     try {
-      var resultado = await prepararArchivoEvidencia(file);
-      evidencias.push(resultado.data);
+      var resultado = await prepararArchivoFinal(file);
+      evidencias.push({ name: resultado.name, type: resultado.type, size: resultado.size, blob: resultado.blob });
       actualizarListaEvidencias();
-      showAlert(MENSAJE_EVIDENCIA_AGREGADA[resultado.tipo], 'success');
+      showAlert(MENSAJE_EVIDENCIA_AGREGADA[resultado.tipo] || 'Archivo agregado', 'success');
     } catch (error) {
-      showAlert(error.message);
+      showAlert(esc(error.message));
     }
   }
 
@@ -1110,8 +1766,8 @@
         esc(evidence.name) +
         '</strong><br>' +
         '<small class="text-muted">' +
-        (evidence.size / 1024).toFixed(1) +
-        ' KB</small></div>' +
+        esc(window.BVEvidenceTypes.formatearTamano(evidence.size)) +
+        '</small></div>' +
         '<button type="button" class="btn btn-danger btn-sm cv-remove-evidence" data-idx="' +
         idx +
         '">' +
@@ -1520,7 +2176,8 @@
   window.BVConvivenciaForm = {
     obtenerToken: getAuthToken,
     prepararArchivoEvidencia: prepararArchivoEvidencia,
-    subirEvidencia: uploadEvidenceToGoogle
+    subirEvidencia: uploadEvidenceToGoogle,
+    abrirRegistro: abrirRegistro
   };
 
   async function init() {
@@ -1533,6 +2190,8 @@
     initEventListeners();
     llenarNotificadorActual();
     cargarConfiguracion();
+    enlazarAccionesRegistro($('convivenciaRegistrosLista'));
+    renderRegistros();
     refreshQueueCount();
     flushQueue(false, null, 'inicio del módulo');
   }

@@ -1,0 +1,294 @@
+# Registro progresivo de casos de convivencia: adjuntos, finalización y notificación.
+# Igual que el resto del conector admin, todo queda en NO_ACCESS: la autenticación y la
+# autorización las hace bulevar-verde-api.
+#
+# Las transiciones con invariantes (declarar, confirmar, finalizar) son una sola mutación
+# (un solo statement SQL) con un updateMany condicional por versión y @check(this == 1):
+# atómico por fila aunque haya solicitudes simultáneas. Mismo patrón que el cupo diario de
+# reservas (bulevar-verde-api/doc/RESERVAS_CUPO_DIARIO.md).
+
+query ObtenerRegistroCasoConvivenciaAdmin($id: UUID!)
+@auth(level: NO_ACCESS) {
+  caso_convivencia(id: $id) {
+    id
+    caseCode
+    apartamento
+    motivo
+    descripcion
+    razonNotificacion
+    severidad
+    notificadorAdmin
+    creadoPorUid
+    estado
+    registro
+    registroVersion
+    fechaCreacion
+    fechaFinalizacion
+    evidencias: evidencias_convivencia_on_caso {
+      id
+      contexto
+    }
+    adjuntos: adjuntos_convivencia_on_caso(orderBy: [{ fechaCreacion: ASC }]) {
+      id
+      contexto
+      estado
+      nombreOriginal
+      mimeType
+      tamanoBytes
+      objetoRuta
+      crc32c
+      motivo
+      version
+      fechaActualizacion
+    }
+    notificaciones: notificaciones_caso_convivencia_on_caso {
+      tipo
+      estado
+      intentos
+      destinatarios
+      aceptados
+      rechazados
+      ultimoError
+      fechaEnvio
+      fechaActualizacion
+    }
+  }
+}
+
+# Declara archivos de un borrador. Falla con CASO_CONCURRENCIA si otro cambio avanzó la
+# versión (la API vuelve a leer) y por clave duplicada si un id ya existe (la API trata el
+# reintento del mismo archivo como idempotente).
+mutation DeclararAdjuntosConvivenciaAdmin(
+  $casoId: UUID!
+  $versionEsperada: Int!
+  $adjuntos: [AdjuntoConvivencia_Data!]!
+    @allow(fields: "id casoId contexto estado nombreOriginal mimeType tamanoBytes objetoRuta creadoPorUid")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  versionAvanzada: caso_convivencia_updateMany(
+    where: { id: { eq: $casoId }, registro: { eq: "BORRADOR" }, registroVersion: { eq: $versionEsperada } }
+    data: { registroVersion_update: [{ inc: 1 }], fechaActualizacion_expr: "request.time" }
+  ) @check(expr: "this == 1", message: "CASO_CONCURRENCIA")
+  adjunto_convivencia_insertMany(data: $adjuntos)
+}
+
+query ObtenerAdjuntoConvivenciaAdmin($id: UUID!)
+@auth(level: NO_ACCESS) {
+  adjunto_convivencia(id: $id) {
+    id
+    contexto
+    estado
+    nombreOriginal
+    mimeType
+    tamanoBytes
+    objetoRuta
+    crc32c
+    motivo
+    version
+    creadoPorUid
+    fechaActualizacion
+    caso {
+      id
+      caseCode
+      apartamento
+      creadoPorUid
+      estado
+      registro
+    }
+  }
+}
+
+# Transición de estado de un adjunto solo desde los estados permitidos y con la versión
+# leída. Devuelve cuántas filas cambió (0 = otro cambio ganó; la API vuelve a leer).
+mutation ActualizarEstadoAdjuntoConvivenciaAdmin(
+  $id: UUID!
+  $estadosPermitidos: [String!]!
+  $versionEsperada: Int!
+  $estado: String!
+  $motivo: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  adjunto_convivencia_updateMany(
+    where: { id: { eq: $id }, estado: { in: $estadosPermitidos }, version: { eq: $versionEsperada } }
+    data: {
+      estado: $estado
+      motivo: $motivo
+      version_update: [{ inc: 1 }]
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}
+
+# SUBIENDO → LISTO y creación de la evidencia con el mismo id, en un solo paso: dos
+# confirmaciones simultáneas no pueden crear dos evidencias.
+mutation ConfirmarAdjuntoConvivenciaAdmin(
+  $id: UUID!
+  $versionEsperada: Int!
+  $crc32c: String
+  $evidencia: EvidenciaConvivencia_Data!
+    @allow(fields: "id casoId contexto url nombreArchivo mimeType tamanoBytes almacenamiento objetoRuta")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  adjuntoListo: adjunto_convivencia_updateMany(
+    where: { id: { eq: $id }, estado: { eq: "SUBIENDO" }, version: { eq: $versionEsperada } }
+    data: { estado: "LISTO", crc32c: $crc32c, version_update: [{ inc: 1 }], fechaActualizacion_expr: "request.time" }
+  ) @check(expr: "this == 1", message: "ADJUNTO_CONCURRENCIA")
+  evidencia_convivencia_insert(data: $evidencia)
+}
+
+# "Finalizar y notificar": exige que todo adjunto declarado esté LISTO o RETIRADO, avanza la
+# versión del borrador (una declaración simultánea hace fallar este paso) y crea en la misma
+# transacción las solicitudes de notificación (clave [caso, tipo]: nunca duplicadas) y el
+# evento CASO_CREADO. El envío lo hace después una tarea de Cloud Tasks.
+mutation FinalizarCasoConvivenciaAdmin(
+  $id: UUID!
+  $versionEsperada: Int!
+  $finalizadoPorUid: String
+  $notificaciones: [NotificacionCasoConvivencia_Data!]!
+    @allow(fields: "casoId tipo estado")
+  $evento: EventoCasoConvivencia_Data!
+    @allow(fields: "casoId tipoEvento estadoAnterior estadoNuevo descripcion actorUid actorTipo")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  query {
+    pendientes: adjuntos_convivencia(
+      where: { casoId: { eq: $id }, estado: { nin: ["LISTO", "RETIRADO"] } }
+    ) @check(expr: "this.size() == 0", message: "ADJUNTOS_PENDIENTES") {
+      id
+    }
+  }
+  finalizado: caso_convivencia_updateMany(
+    where: { id: { eq: $id }, registro: { eq: "BORRADOR" }, registroVersion: { eq: $versionEsperada } }
+    data: {
+      registro: "FINALIZADO"
+      fechaFinalizacion_expr: "request.time"
+      finalizadoPorUid: $finalizadoPorUid
+      registroVersion_update: [{ inc: 1 }]
+      fechaActualizacion_expr: "request.time"
+    }
+  ) @check(expr: "this == 1", message: "CASO_CONCURRENCIA")
+  notificacion_caso_convivencia_insertMany(data: $notificaciones)
+  evento_caso_convivencia_insert(data: $evento)
+}
+
+# Toma una notificación para enviarla: solo una ejecución a la vez (ENVIANDO con plazo).
+# Devuelve 0 si otra ejecución ya la tomó o ya no es reintentable.
+mutation ReclamarNotificacionCasoConvivenciaAdmin(
+  $casoId: UUID!
+  $tipo: String!
+  $intentosMax: Int!
+  $leaseHasta: Timestamp!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  notificacion_caso_convivencia_updateMany(
+    where: {
+      casoId: { eq: $casoId }
+      tipo: { eq: $tipo }
+      estado: { in: ["SOLICITADA", "FALLIDA_REINTENTABLE"] }
+      intentos: { lt: $intentosMax }
+    }
+    data: {
+      estado: "ENVIANDO"
+      intentos_update: [{ inc: 1 }]
+      leaseHasta: $leaseHasta
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}
+
+# Registra el resultado de un envío o de una acción manual solo si la notificación sigue en
+# uno de los estados esperados. Devuelve cuántas filas cambió.
+mutation ResolverNotificacionCasoConvivenciaAdmin(
+  $casoId: UUID!
+  $tipo: String!
+  $estadosEsperados: [String!]!
+  $estado: String!
+  $destinatarios: Int
+  $aceptados: Int
+  $rechazados: Int
+  $messageId: String
+  $ultimoError: String
+  $fechaEnvio: Timestamp
+  $resueltoPorUid: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  notificacion_caso_convivencia_updateMany(
+    where: { casoId: { eq: $casoId }, tipo: { eq: $tipo }, estado: { in: $estadosEsperados } }
+    data: {
+      estado: $estado
+      destinatarios: $destinatarios
+      aceptados: $aceptados
+      rechazados: $rechazados
+      messageId: $messageId
+      ultimoError: $ultimoError
+      fechaEnvio: $fechaEnvio
+      resueltoPorUid: $resueltoPorUid
+      leaseHasta: null
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}
+
+# Barrido periódico: solicitudes que no llegaron a encolarse (o fallaron y esperan
+# reintento), envíos con plazo vencido y adjuntos sin terminar de subir.
+query ListarPendientesBarridoConvivenciaAdmin(
+  $solicitadasAntesDe: Timestamp!
+  $ahora: Timestamp!
+  $adjuntosAntesDe: Timestamp!
+)
+@auth(level: NO_ACCESS) {
+  solicitadas: notificaciones_caso_convivencia(
+    where: { estado: { in: ["SOLICITADA", "FALLIDA_REINTENTABLE"] }, fechaActualizacion: { lt: $solicitadasAntesDe } }
+    limit: 100
+  ) {
+    casoId
+    tipo
+    estado
+    intentos
+  }
+  vencidas: notificaciones_caso_convivencia(
+    where: { estado: { eq: "ENVIANDO" }, leaseHasta: { lt: $ahora } }
+    limit: 100
+  ) {
+    casoId
+    tipo
+  }
+  adjuntos: adjuntos_convivencia(
+    where: { estado: { in: ["DECLARADO", "SUBIENDO"] }, fechaActualizacion: { lt: $adjuntosAntesDe } }
+    limit: 100
+  ) {
+    id
+    estado
+    version
+    objetoRuta
+  }
+}
+
+# Reintento manual (administración) de una notificación FALLIDA, INCIERTA o SIN_DESTINATARIOS:
+# vuelve a SOLICITADA con los intentos en 0. Devuelve cuántas filas cambió.
+mutation ReiniciarNotificacionCasoConvivenciaAdmin(
+  $casoId: UUID!
+  $tipo: String!
+  $estadosEsperados: [String!]!
+  $resueltoPorUid: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  notificacion_caso_convivencia_updateMany(
+    where: { casoId: { eq: $casoId }, tipo: { eq: $tipo }, estado: { in: $estadosEsperados } }
+    data: {
+      estado: "SOLICITADA"
+      intentos: 0
+      leaseHasta: null
+      ultimoError: null
+      resueltoPorUid: $resueltoPorUid
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}

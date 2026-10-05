@@ -345,6 +345,14 @@ type CasoConvivencia
   notasAdmin: String
   resueltoPorUid: String
   clientRequestId: String @unique
+  # Registro progresivo: BORRADOR mientras se cargan adjuntos ("Pendiente de completar y
+  # notificar"); FINALIZADO tras "Finalizar y notificar". Es independiente de `estado` (la
+  # máquina del procedimiento). El valor por defecto deja los casos existentes como FINALIZADO.
+  registro: String! @default(value: "FINALIZADO")
+  # Control de concurrencia: declarar adjuntos y finalizar exigen la versión leída.
+  registroVersion: Int! @default(value: 0)
+  fechaFinalizacion: Timestamp
+  finalizadoPorUid: String
   fechaCreacion: Timestamp! @default(expr: "request.time")
   fechaActualizacion: Timestamp! @default(expr: "request.time")
 }
@@ -364,7 +372,65 @@ type EvidenciaConvivencia
   nombreArchivo: String
   mimeType: String
   tamanoBytes: Int
+  # null = histórico en Google Drive (url de Drive); "GCS" = bucket privado de evidencias
+  # (url = gs://bucket/objeto, solo accesible con URL firmada emitida por la API).
+  almacenamiento: String
+  objetoRuta: String
   fechaCreacion: Timestamp! @default(expr: "request.time")
+}
+
+# Archivo declarado para un caso antes de subirse. La clave `id` la genera el cliente
+# (clientFileId), así la base de datos garantiza una sola fila por archivo incluso con
+# solicitudes simultáneas. Cuando el archivo queda LISTO se crea la EvidenciaConvivencia
+# con el mismo id; mientras tanto no existe evidencia ni URL.
+# estado: DECLARADO → SUBIENDO → LISTO; RECHAZADO (motivo) | RETIRADO | ABANDONADO.
+type AdjuntoConvivencia
+  @table(
+    name: "adjuntos_convivencia"
+    singular: "adjunto_convivencia"
+    plural: "adjuntos_convivencia"
+    key: "id"
+  ) {
+  id: UUID!
+  caso: CasoConvivencia!
+  contexto: String!
+  estado: String!
+  nombreOriginal: String!
+  mimeType: String!
+  tamanoBytes: Int64!
+  objetoRuta: String!
+  crc32c: String
+  motivo: String
+  creadoPorUid: String
+  version: Int! @default(value: 0)
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+# Una fila por caso y destinatario (RESIDENTES | ADMINISTRACION): la clave compuesta impide
+# solicitudes duplicadas. estado: SOLICITADA → ENVIANDO → ENVIADA; FALLIDA_REINTENTABLE,
+# FALLIDA (requiere acción), INCIERTA (resultado ambiguo; no se reenvía sola), SIN_DESTINATARIOS.
+type NotificacionCasoConvivencia
+  @table(
+    name: "notificaciones_caso_convivencia"
+    singular: "notificacion_caso_convivencia"
+    plural: "notificaciones_caso_convivencia"
+    key: ["caso", "tipo"]
+  ) {
+  caso: CasoConvivencia!
+  tipo: String!
+  estado: String!
+  intentos: Int! @default(value: 0)
+  leaseHasta: Timestamp
+  destinatarios: Int
+  aceptados: Int
+  rechazados: Int
+  messageId: String
+  ultimoError: String
+  resueltoPorUid: String
+  fechaEnvio: Timestamp
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
 }
 
 type EventoCasoConvivencia

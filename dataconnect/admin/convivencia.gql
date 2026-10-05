@@ -14,6 +14,8 @@ query ObtenerCasoConvivenciaPorClientRequestIdAdmin(
     apartamento
     motivo
     estado
+    registro
+    registroVersion
   }
 }
 
@@ -33,6 +35,7 @@ mutation CrearCasoConvivenciaAdmin(
         creadoPorUid
         requiereProcesoFormal
         clientRequestId
+        registro
       """
     )
 )
@@ -52,6 +55,8 @@ mutation CrearEvidenciaConvivenciaAdmin(
         nombreArchivo
         mimeType
         tamanoBytes
+        almacenamiento
+        objetoRuta
       """
     )
 )
@@ -105,6 +110,48 @@ query ListarCasosConvivenciaAdmin(
   }
 }
 
+# Igual que ListarCasosConvivenciaAdmin, filtrando por registro (administración ve también los
+# borradores "Pendiente de completar y notificar"; el comité solo FINALIZADO). Operación nueva
+# para no cambiar la firma de la anterior mientras convive con la versión desplegada de la API.
+query ListarCasosConvivenciaPorRegistroAdmin(
+  $estados: [String!]!
+  $severidades: [String!]!
+  $apartamentoContiene: String!
+  $motivoContiene: String!
+  $registros: [String!]!
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: NO_ACCESS) {
+  casos_convivencia(
+    where: {
+      registro: { in: $registros }
+      estado: { in: $estados }
+      severidad: { in: $severidades }
+      apartamento: { contains: $apartamentoContiene }
+      motivo: { contains: $motivoContiene }
+    }
+    orderBy: [{ fechaCreacion: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    caseCode
+    apartamento
+    motivo
+    severidad
+    requiereProcesoFormal
+    estado
+    registro
+    fechaCreacion
+    descargosResidente
+    # Solo para saber si hay adjuntos (cualquier contexto) — basta con una fila.
+    evidencias: evidencias_convivencia_on_caso(limit: 1) {
+      id
+    }
+  }
+}
+
 query ObtenerCasoConvivenciaDetalleAdmin(
   $id: UUID!
 )
@@ -141,6 +188,10 @@ query ObtenerCasoConvivenciaDetalleAdmin(
     resolucion
     notasAdmin
     clientRequestId
+    registro
+    registroVersion
+    fechaFinalizacion
+    finalizadoPorUid
     fechaCreacion
     fechaActualizacion
     evidencias: evidencias_convivencia_on_caso {
@@ -149,7 +200,30 @@ query ObtenerCasoConvivenciaDetalleAdmin(
       url
       nombreArchivo
       mimeType
+      tamanoBytes
+      almacenamiento
       fechaCreacion
+    }
+    adjuntos: adjuntos_convivencia_on_caso(orderBy: [{ fechaCreacion: ASC }]) {
+      id
+      contexto
+      estado
+      nombreOriginal
+      mimeType
+      tamanoBytes
+      motivo
+      fechaActualizacion
+    }
+    notificaciones: notificaciones_caso_convivencia_on_caso {
+      tipo
+      estado
+      intentos
+      destinatarios
+      aceptados
+      rechazados
+      ultimoError
+      fechaEnvio
+      fechaActualizacion
     }
     sancion: sanciones_on_caso {
       id
@@ -176,9 +250,11 @@ query ObtenerCasoConvivenciaDetalleAdmin(
 }
 
 # Casos que quien los creó todavía puede corregir: siguen en PENDIENTE_DESCARGOS y se
-# crearon desde $desde (la API pasa "ahora - ventana de corrección"). Devuelve los
-# campos narrativos completos para precargar el formulario de corrección de vigilancia,
-# que no tiene acceso al detalle administrativo del caso.
+# finalizaron desde $desde (la API pasa "ahora - ventana de corrección"; los casos
+# anteriores al registro progresivo no tienen fechaFinalizacion y cuentan desde su
+# creación). Incluye además sus borradores, sin límite de tiempo, para completarlos.
+# Devuelve los campos narrativos completos para precargar el formulario de corrección de
+# vigilancia, que no tiene acceso al detalle administrativo del caso.
 query ListarCasosPropiosCorregiblesAdmin(
   $creadoPorUid: String!
   $desde: Timestamp!
@@ -186,9 +262,17 @@ query ListarCasosPropiosCorregiblesAdmin(
 @auth(level: NO_ACCESS) {
   casos_convivencia(
     where: {
-      creadoPorUid: { eq: $creadoPorUid }
-      estado: { eq: "PENDIENTE_DESCARGOS" }
-      fechaCreacion: { ge: $desde }
+      _and: [
+        { creadoPorUid: { eq: $creadoPorUid } }
+        { estado: { eq: "PENDIENTE_DESCARGOS" } }
+        {
+          _or: [
+            { registro: { eq: "BORRADOR" } }
+            { fechaFinalizacion: { ge: $desde } }
+            { _and: [{ fechaFinalizacion: { isNull: true } }, { fechaCreacion: { ge: $desde } }] }
+          ]
+        }
+      ]
     }
     orderBy: [{ fechaCreacion: DESC }]
   ) {
@@ -200,7 +284,9 @@ query ListarCasosPropiosCorregiblesAdmin(
     razonNotificacion
     notificadorAdmin
     severidad
+    registro
     fechaCreacion
+    fechaFinalizacion
     evidencias: evidencias_convivencia_on_caso(where: { contexto: { eq: "CASO" } }) {
       id
       contexto
@@ -454,7 +540,7 @@ query ListarCasosConvivenciaPorUnidadAdmin(
 @auth(level: NO_ACCESS) {
   unidad(id: $unidadId) {
     casos: casos_convivencia_on_unidad(
-      where: { estado: { ne: "ANULADO" } }
+      where: { estado: { ne: "ANULADO" }, registro: { eq: "FINALIZADO" } }
       orderBy: [{ fechaCreacion: DESC }]
       limit: $limit
       offset: $offset
@@ -476,7 +562,7 @@ query ListarCasosConvivenciaResumenPorUnidadAdmin(
 @auth(level: NO_ACCESS) {
   unidad(id: $unidadId) {
     casos: casos_convivencia_on_unidad(
-      where: { estado: { ne: "ANULADO" } }
+      where: { estado: { ne: "ANULADO" }, registro: { eq: "FINALIZADO" } }
       orderBy: [{ fechaCreacion: DESC }]
       limit: 100
     ) {
@@ -495,7 +581,7 @@ query ObtenerCasoConvivenciaResidenteAdmin(
 )
 @auth(level: NO_ACCESS) {
   unidad(id: $unidadId) {
-    casos: casos_convivencia_on_unidad(where: { caseCode: { eq: $caseCode }, estado: { ne: "ANULADO" } }, limit: 1) {
+    casos: casos_convivencia_on_unidad(where: { caseCode: { eq: $caseCode }, estado: { ne: "ANULADO" }, registro: { eq: "FINALIZADO" } }, limit: 1) {
       id
       caseCode
       apartamento
@@ -525,6 +611,9 @@ query ObtenerCasoConvivenciaResidenteAdmin(
         contexto
         url
         nombreArchivo
+        mimeType
+        tamanoBytes
+        almacenamiento
       }
       sancion: sanciones_on_caso {
         id

@@ -1238,7 +1238,7 @@
   {{ partial "footer" . }}
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="{{ "js/evidence-types.js" | relURL }}?v=1"></script>
+  <script src="{{ "js/evidence-types.js" | relURL }}?v=2"></script>
   <script src="{{ "js/evidence-camera.js" | relURL }}?v=20260815-1"></script>
   <script>
     (function () {
@@ -1485,9 +1485,12 @@
         $('sancionDetailDescripcion').textContent = caso.descripcion || 'No se registraron los hechos en este caso.';
         $('sancionDetailRazonNotificacion').textContent = caso.razonNotificacion || 'No se registró la justificación de la notificación en este caso.';
 
-        if (Array.isArray(caso.evidencias) && caso.evidencias.length > 0) {
+        var evidenciasGcs = evidenciasGcsDe(caso, 'CASO');
+        if ((Array.isArray(caso.evidencias) && caso.evidencias.length > 0) || evidenciasGcs.length > 0) {
           $('sancionEvidenciasSection').classList.remove('hidden');
-          $('sancionDetailEvidencias').innerHTML = renderSancionEvidenceGallery(caso.evidencias, 'Evidencia');
+          $('sancionDetailEvidencias').innerHTML = renderSancionEvidenceGallery(caso.evidencias || [], 'Evidencia') +
+            renderSancionEvidenciasGcs(evidenciasGcs, (caso.evidencias || []).length);
+          cargarMiniaturasSancionGcs($('sancionDetailEvidencias'), caso.id);
         } else {
           $('sancionEvidenciasSection').classList.add('hidden');
           $('sancionDetailEvidencias').innerHTML = '';
@@ -1606,6 +1609,52 @@
       }
 
       /* Estrategia de visualización de evidencias almacenadas en Google Drive (con fallback si la miniatura falla) */
+      // Evidencias en Cloud Storage (bucket privado): se ven con una URL firmada de corta
+      // duración que la API emite solo para casos del propio apartamento.
+      function evidenciasGcsDe(caso, contexto) {
+        return (caso.evidenciasDetalle || []).filter(function (e) { return e.contexto === contexto && e.almacenamiento === 'GCS'; });
+      }
+
+      function renderSancionEvidenciasGcs(evidencias, desde) {
+        return evidencias.map(function (e, idx) {
+          var tamano = window.BVEvidenceTypes && window.BVEvidenceTypes.formatearTamano ? window.BVEvidenceTypes.formatearTamano(e.tamanoBytes) : '';
+          var esVideo = /^video\//.test(e.mimeType || '');
+          var esImagen = /^image\//.test(e.mimeType || '');
+          var icono = esVideo ? 'bi-play-circle' : esImagen ? 'bi-image' : 'bi-file-earmark';
+          return '<a href="#" class="evidence-link evidence-preview-link sancion-evidencia-gcs" data-evidencia-id="' + esc(e.id) + '" data-imagen="' + (esImagen ? '1' : '') + '">' +
+            '<span class="sancion-evidencia-gcs-miniatura"></span>' +
+            '<span><i class="bi ' + icono + ' me-1 evidence-preview-icon"></i>Evidencia ' + (desde + idx + 1) +
+            (e.nombreArchivo ? ' · ' + esc(e.nombreArchivo) : '') + (tamano ? ' · ' + esc(tamano) : '') + '</span></a>';
+        }).join('');
+      }
+
+      function accesoEvidenciaSancion(caseId, evidenciaId) {
+        return apiFetch('/sanciones/' + encodeURIComponent(caseId) + '/evidencias/' + encodeURIComponent(evidenciaId) + '/acceso');
+      }
+
+      function cargarMiniaturasSancionGcs(contenedor, caseId) {
+        Array.prototype.forEach.call(contenedor.querySelectorAll('.sancion-evidencia-gcs[data-imagen="1"]'), function (enlace) {
+          accesoEvidenciaSancion(caseId, enlace.dataset.evidenciaId).then(function (resp) {
+            enlace.querySelector('.sancion-evidencia-gcs-miniatura').innerHTML =
+              '<img src="' + esc(resp.data.url) + '" alt="" class="evidence-preview-thumb" decoding="async">';
+          }).catch(function () { /* queda el ícono; el clic vuelve a intentar */ });
+        });
+      }
+
+      document.addEventListener('click', function (event) {
+        var enlace = event.target.closest('.sancion-evidencia-gcs');
+        if (!enlace || !currentSancion) return;
+        event.preventDefault();
+        var ventana = window.open('', '_blank');
+        accesoEvidenciaSancion(currentSancion.id, enlace.dataset.evidenciaId).then(function (resp) {
+          if (ventana) { ventana.opener = null; ventana.location.href = resp.data.url; }
+          else { window.location.href = resp.data.url; }
+        }).catch(function (error) {
+          if (ventana) ventana.close();
+          window.alert('No fue posible abrir la evidencia: ' + (error.message || error));
+        });
+      });
+
       function renderSancionEvidenceGallery(urls, labelPrefix) {
         return urls.map(function (url, index) {
           return buildSancionEvidenceHtml(url, (labelPrefix || 'Evidencia') + ' ' + (index + 1));

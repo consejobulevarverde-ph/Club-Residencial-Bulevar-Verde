@@ -168,6 +168,7 @@
         (caso.tieneAdjuntos ? ' <i class="bi bi-image text-muted ms-1" title="Tiene adjuntos" aria-label="Tiene adjuntos"></i>' : '') +
         '<br><small class="text-muted">' + esc(caso.caseCode) + ' · ' + esc(caso.fechaCreacion) + '</small></div>' +
         '<div>' + obtenerBadgeEstadoCaso(caso.estado) +
+        (caso.registro === 'BORRADOR' ? ' <span class="badge text-bg-warning">Pendiente de completar y notificar</span>' : '') +
         (caso.severidad ? ' <span class="badge bg-secondary ms-1">' + esc(caso.severidad) + '</span>' : '') +
         (caso.tieneDescargos ? ' <span class="badge bg-info text-dark ms-1">Con descargos</span>' : '') +
         '</div></div>';
@@ -199,7 +200,63 @@
     }
   }
 
+  var ESTILO_TILE = 'display:inline-flex;align-items:center;justify-content:center;width:96px;height:96px;border-radius:8px;background:#f1f1f1;text-decoration:none;color:#666';
+
+  function pieEvidencia(evidencia) {
+    var partes = [];
+    if (evidencia.nombreArchivo) partes.push(esc(evidencia.nombreArchivo));
+    if (evidencia.tamanoBytes && window.BVEvidenceTypes && window.BVEvidenceTypes.formatearTamano) {
+      partes.push(esc(window.BVEvidenceTypes.formatearTamano(evidencia.tamanoBytes)));
+    }
+    return partes.length
+      ? '<small class="d-block text-muted text-truncate" style="max-width:96px" title="' + partes.join(' · ') + '">' + partes.join(' · ') + '</small>'
+      : '';
+  }
+
+  // Evidencias en Cloud Storage (bucket privado): se muestran con una URL firmada de corta
+  // duración que la API emite tras verificar el acceso al caso. Videos MP4: el navegador los
+  // reproduce y permite buscar sin descargarlos completos.
+  function buildEvidenciaGcs(evidencia, label) {
+    var clasificacion = window.BVEvidenceTypes
+      ? window.BVEvidenceTypes.clasificar({ name: evidencia.nombreArchivo || '', type: evidencia.mimeType || '' })
+      : null;
+    var categoria = clasificacion ? clasificacion.categoria : '';
+    var icono = categoria === 'video' ? 'bi-play-circle' : clasificacion ? window.BVEvidenceTypes.icono(categoria) : 'bi-file';
+    return '<div class="text-center">' +
+      '<a href="#" class="cv-evidencia-gcs" data-evidencia-id="' + esc(evidencia.id) + '" data-categoria="' + esc(categoria) + '" title="' + esc(label) + '" style="' + ESTILO_TILE + '">' +
+      '<i class="bi ' + icono + '" style="font-size:2rem;"></i></a>' + pieEvidencia(evidencia) + '</div>';
+  }
+
+  function cargarMiniaturasGcs(contenedor) {
+    var casoId = casoConvivenciaActual && casoConvivenciaActual.id;
+    if (!contenedor || !casoId) return;
+    Array.prototype.forEach.call(contenedor.querySelectorAll('.cv-evidencia-gcs[data-categoria="image"]'), function (enlace) {
+      apiFetch('/casos/' + casoId + '/evidencias/' + encodeURIComponent(enlace.dataset.evidenciaId) + '/acceso').then(function (resp) {
+        enlace.innerHTML = '<img src="' + esc(resp.data.url) + '" alt="' + esc(enlace.title) + '" style="width:96px;height:96px;object-fit:cover;border-radius:8px">';
+      }).catch(function () { /* queda el ícono; al hacer clic se reintenta */ });
+    });
+  }
+
+  function abrirEvidenciaGcs(enlace) {
+    var casoId = casoConvivenciaActual && casoConvivenciaActual.id;
+    if (!casoId) return;
+    // Abrir la pestaña antes de la petición evita el bloqueador de ventanas emergentes.
+    var ventana = window.open('', '_blank');
+    apiFetch('/casos/' + casoId + '/evidencias/' + encodeURIComponent(enlace.dataset.evidenciaId) + '/acceso').then(function (resp) {
+      if (ventana) {
+        ventana.opener = null;
+        ventana.location.href = resp.data.url;
+      } else {
+        window.location.href = resp.data.url;
+      }
+    }).catch(function (error) {
+      if (ventana) ventana.close();
+      msg('No fue posible abrir la evidencia: ' + error.message);
+    });
+  }
+
   function buildCasoEvidenceThumb(evidencia, label) {
+    if (evidencia.almacenamiento === 'GCS') return buildEvidenciaGcs(evidencia, label);
     var url = evidencia.url;
     var match = /\/file\/d\/([^/]+)/.exec(url || '');
     var thumbUrl = match ? ('https://drive.google.com/thumbnail?id=' + encodeURIComponent(match[1]) + '&sz=w300') : url;
@@ -210,6 +267,15 @@
       ? window.BVEvidenceTypes.clasificar({ name: evidencia.nombreArchivo || '', type: evidencia.mimeType || '' })
       : null;
     var esImagen = clasificacion && clasificacion.categoria === 'image';
+
+    if (!clasificacion && match) {
+      // Histórico sin metadatos: se intenta la miniatura de Drive (imagen o video) y, si no
+      // carga, queda el ícono con el enlace. No se infiere el tipo desde la URL.
+      return '<div class="text-center"><a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(label) + '" style="' + ESTILO_TILE + ';position:relative">' +
+        '<i class="bi bi-file-earmark" style="font-size:2rem;"></i>' +
+        '<img src="' + esc(thumbUrl) + '" alt="" style="position:absolute;inset:0;width:96px;height:96px;object-fit:cover;border-radius:8px" onerror="this.remove()">' +
+        '</a>' + pieEvidencia(evidencia) + '</div>';
+    }
 
     if (esImagen) {
       return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(label) + '">' +
@@ -290,7 +356,8 @@
 
   // Cada bloque se muestra si el llamador tiene la acción Y el estado del caso la admite.
   function actualizarAccionesDisponibles(caso) {
-    var enTramite = caso.estado === 'PENDIENTE_DESCARGOS' || caso.estado === 'CON_DESCARGOS';
+    var borrador = caso.registro === 'BORRADOR';
+    var enTramite = !borrador && (caso.estado === 'PENDIENTE_DESCARGOS' || caso.estado === 'CON_DESCARGOS');
     var terminal = ESTADOS_TERMINALES.indexOf(caso.estado) !== -1;
 
     mostrarElemento('casoDetailEditarBtn', puede('EDITAR'));
@@ -301,11 +368,76 @@
     mostrarElemento('casoAccionesComite',
       puede('ACTA_COMITE') && enTramite && caso.requiereProcesoFormal && !caso.actaComiteFecha);
     mostrarElemento('casoAccionesDescargos',
-      puede('DESCARGOS_EN_NOMBRE') && caso.estado === 'PENDIENTE_DESCARGOS' && !caso.descargosResidente);
+      puede('DESCARGOS_EN_NOMBRE') && !borrador && caso.estado === 'PENDIENTE_DESCARGOS' && !caso.descargosResidente);
     mostrarElemento('casoAccionesCierre', puede('CIERRE') && enTramite);
     mostrarElemento('casoAccionesProponerSancion', puede('PROPONER_SANCION') && enTramite && caso.requiereProcesoFormal);
-    mostrarElemento('casoAccionesConsejo', puede('CONSEJO_DECISION') && caso.estado === 'PENDIENTE_APROBACION_CONSEJO');
-    mostrarElemento('casoAccionesApelacion', puede('RESOLVER_APELACION') && caso.estado === 'EN_APELACION');
+    mostrarElemento('casoAccionesConsejo', puede('CONSEJO_DECISION') && !borrador && caso.estado === 'PENDIENTE_APROBACION_CONSEJO');
+    mostrarElemento('casoAccionesApelacion', puede('RESOLVER_APELACION') && !borrador && caso.estado === 'EN_APELACION');
+  }
+
+  var ETIQUETA_ADJUNTO = {
+    DECLARADO: 'En espera de subida', SUBIENDO: 'Subiendo', LISTO: 'Cargado', RECHAZADO: 'Rechazado',
+    RETIRADO: 'Retirado', ABANDONADO: 'Subida abandonada'
+  };
+  // "Enviada" significa aceptada por el servidor de correo; nunca se muestra "Notificado" solo
+  // porque se solicitó el envío.
+  var ETIQUETA_NOTIFICACION = {
+    SOLICITADA: ['Envío solicitado', 'text-bg-info'],
+    ENVIANDO: ['Enviando', 'text-bg-info'],
+    ENVIADA: ['Enviada (aceptada por el servidor de correo)', 'text-bg-success'],
+    FALLIDA_REINTENTABLE: ['Falló; se reintentará', 'text-bg-warning'],
+    FALLIDA: ['Falló; requiere acción', 'text-bg-danger'],
+    INCIERTA: ['Resultado incierto; revisar', 'text-bg-danger'],
+    SIN_DESTINATARIOS: ['Sin destinatarios con correo', 'text-bg-danger']
+  };
+  var DESTINATARIO_NOTIFICACION = { RESIDENTES: 'Residentes', ADMINISTRACION: 'Administración' };
+
+  function renderRegistroYNotificacion(caso) {
+    var seccion = $('casoDetailRegistroSection');
+    if (!seccion) return;
+    var adjuntos = caso.adjuntos || [];
+    var notificaciones = caso.notificaciones || [];
+    var borrador = caso.registro === 'BORRADOR';
+    if (!borrador && !notificaciones.length) {
+      seccion.classList.add('hidden');
+      return;
+    }
+    seccion.classList.remove('hidden');
+    var html = '';
+    if (borrador) {
+      html += '<p class="small mb-2">El residente aún no ha sido notificado. Quien registró el caso debe terminar de cargar las evidencias y pulsar «Finalizar y notificar».</p>';
+      if (adjuntos.length) {
+        html += '<ul class="list-group mb-2">' + adjuntos.map(function (a) {
+          return '<li class="list-group-item d-flex justify-content-between gap-2"><span class="text-break">' + esc(a.nombreOriginal) +
+            (window.BVEvidenceTypes && window.BVEvidenceTypes.formatearTamano ? ' <small class="text-muted">' + esc(window.BVEvidenceTypes.formatearTamano(a.tamanoBytes)) + '</small>' : '') +
+            (a.motivo ? '<small class="d-block text-danger">' + esc(a.motivo) + '</small>' : '') + '</span>' +
+            '<span class="badge text-bg-secondary align-self-start">' + esc(ETIQUETA_ADJUNTO[a.estado] || a.estado) + '</span></li>';
+        }).join('') + '</ul>';
+      }
+    }
+    if (notificaciones.length) {
+      html += '<ul class="list-group">' + notificaciones.map(function (n) {
+        var etiqueta = ETIQUETA_NOTIFICACION[n.estado] || [n.estado, 'text-bg-secondary'];
+        var acciones = '';
+        if (puede('NOTIFICACIONES') && ['FALLIDA', 'INCIERTA', 'SIN_DESTINATARIOS'].indexOf(n.estado) !== -1) {
+          acciones += '<button type="button" class="btn btn-outline-primary btn-sm cv-notificacion-accion" data-tipo="' + esc(n.tipo) + '" data-accion="reintentar">Reintentar</button>';
+        }
+        if (puede('NOTIFICACIONES') && n.estado === 'INCIERTA') {
+          acciones += ' <button type="button" class="btn btn-outline-secondary btn-sm cv-notificacion-accion" data-tipo="' + esc(n.tipo) + '" data-accion="marcar-enviada">Marcar como enviada</button>';
+        }
+        return '<li class="list-group-item">' +
+          '<div class="d-flex justify-content-between gap-2"><span>Notificación a ' + esc(DESTINATARIO_NOTIFICACION[n.tipo] || n.tipo) + '</span>' +
+          '<span class="badge ' + etiqueta[1] + ' align-self-start">' + esc(etiqueta[0]) + '</span></div>' +
+          '<small class="text-muted d-block">Intentos: ' + Number(n.intentos || 0) +
+          (n.fechaEnvio ? ' · Enviada ' + esc(n.fechaEnvio) : '') +
+          (n.aceptados != null ? ' · Destinatarios aceptados: ' + Number(n.aceptados) : '') + '</small>' +
+          (n.ultimoError ? '<small class="d-block text-danger">' + esc(n.ultimoError) + '</small>' : '') +
+          (n.estado === 'INCIERTA' ? '<small class="d-block text-muted">El correo pudo haber salido. Revise el registro del proveedor antes de reintentar para evitar un duplicado.</small>' : '') +
+          (acciones ? '<div class="mt-1">' + acciones + '</div>' : '') +
+          '</li>';
+      }).join('') + '</ul>';
+    }
+    $('casoDetailRegistro').innerHTML = html;
   }
 
   function renderGaleria(contenedorId, seccionId, evidencias, prefijo) {
@@ -314,6 +446,7 @@
       $(contenedorId).innerHTML = evidencias.map(function (e, idx) {
         return buildCasoEvidenceThumb(e, prefijo + ' ' + (idx + 1));
       }).join('');
+      cargarMiniaturasGcs($(contenedorId));
     } else {
       if (seccionId) $(seccionId).classList.add('hidden');
       $(contenedorId).innerHTML = '';
@@ -325,6 +458,10 @@
     $('casoDetailApto').textContent = caso.apartamento;
     $('casoDetailMotivo').textContent = caso.motivo;
     $('casoDetailEstado').innerHTML = obtenerBadgeEstadoCaso(caso.estado);
+    $('casoDetailRegistroBadge').innerHTML = caso.registro === 'BORRADOR'
+      ? '<span class="badge text-bg-warning mt-1">Pendiente de completar y notificar</span>'
+      : '';
+    renderRegistroYNotificacion(caso);
     $('casoDetailTipoProceso').textContent = caso.requiereProcesoFormal
       ? 'Proceso sancionatorio formal'
       : 'Llamado de atención — no requiere proceso formal';
@@ -574,6 +711,22 @@
       aplicarCasoActualizado(resp.data, 'Severidad actualizada.');
     }).catch(function (error) { msg(error.message); })
       .finally(function () { busy(button, false, 'Guardar severidad'); });
+  });
+
+  document.addEventListener('click', function (event) {
+    var enlace = event.target.closest('.cv-evidencia-gcs');
+    if (enlace) {
+      event.preventDefault();
+      abrirEvidenciaGcs(enlace);
+      return;
+    }
+    var accion = event.target.closest('.cv-notificacion-accion');
+    if (!accion || !casoConvivenciaActual) return;
+    accion.disabled = true;
+    apiFetch('/casos/' + casoConvivenciaActual.id + '/notificaciones/' + accion.dataset.tipo + '/' + accion.dataset.accion, { method: 'POST' })
+      .then(function () { return apiFetch('/casos/' + casoConvivenciaActual.id); })
+      .then(function (resp) { aplicarCasoActualizado(resp.data, 'Notificación actualizada.'); })
+      .catch(function (error) { msg(error.message); accion.disabled = false; });
   });
 
   $('casoDetailEvidenciaForm').addEventListener('submit', function (event) {

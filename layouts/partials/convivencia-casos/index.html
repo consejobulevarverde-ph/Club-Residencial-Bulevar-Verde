@@ -66,6 +66,7 @@
       </div>
       <div class="text-end">
         <div id="casoDetailEstado"></div>
+        <div id="casoDetailRegistroBadge"></div>
         <div id="casoDetailTipoProceso" class="small text-muted mt-1"></div>
       </div>
     </div>
@@ -93,6 +94,11 @@
         </div>
       </form>
     </div>
+  </div>
+
+  <div id="casoDetailRegistroSection" class="surface p-4 mb-3 hidden">
+    <h6 class="mb-2">Registro y notificación</h6>
+    <div id="casoDetailRegistro"></div>
   </div>
 
   <div id="casoDetailDescargosSection" class="surface p-4 mb-3 hidden">
@@ -304,7 +310,7 @@
     {{- else }}
     rutaCasos: '/api/v1/convivencia',
     acciones: ['EDITAR', 'ANULAR', 'EVIDENCIA_CASO', 'ACTA_COMITE', 'CAMBIAR_SEVERIDAD', 'CIERRE',
-      'PROPONER_SANCION', 'CONSEJO_DECISION', 'RESOLVER_APELACION', 'DESCARGOS_EN_NOMBRE'],
+      'PROPONER_SANCION', 'CONSEJO_DECISION', 'RESOLVER_APELACION', 'DESCARGOS_EN_NOMBRE', 'NOTIFICACIONES'],
     anularSoloSinSancion: false
     {{- end }}
   });

@@ -440,20 +440,27 @@
       </div>
       <div class="alert alert-info">
         <i class="bi bi-info-circle me-2"></i>
-        <strong>Confirmación:</strong> Al guardar, se creará el caso y se notificará al residente.
-        El residente podrá consultar y aportar sus descargos.
+        <strong>Confirmación:</strong> Al guardar, el caso queda como «Pendiente de completar y notificar»
+        y se suben sus evidencias. El residente solo se notifica cuando pulses «Finalizar y notificar»,
+        con todas las evidencias cargadas o retiradas.
       </div>
       <div class="d-flex gap-2">
         <button type="button" class="btn btn-outline-secondary" id="convivenciaAnterior4">
           <i class="bi bi-arrow-left me-2"></i>Anterior
         </button>
         <button type="submit" class="btn btn-primary cv-btn-primary" id="convivenciaSubmitBtn">
-          <i class="bi bi-check-circle me-2"></i>Crear Caso
+          <i class="bi bi-cloud-arrow-up me-2"></i>Guardar y subir evidencias
         </button>
         <span id="convivenciaSubmitStatus" class="ms-2"></span>
       </div>
     </div>
   </form>
+
+  <section id="convivenciaRegistros" class="hidden mt-4" aria-labelledby="convivenciaRegistrosTitulo">
+    <h5 id="convivenciaRegistrosTitulo"><i class="bi bi-hourglass-split me-2"></i>Pendientes de completar y notificar</h5>
+    <p class="small text-muted">Casos guardados cuyo residente aún no ha sido notificado. Se conservan en este dispositivo aunque recargues la página o pierdas la conexión.</p>
+    <div id="convivenciaRegistrosLista" aria-live="polite"></div>
+  </section>
 
   {{ partial "convivencia-correccion.html" . }}
 
@@ -486,12 +493,12 @@
   </div>
 </div>
 
-<script src="{{ "js/evidence-types.js" | relURL }}?v=1"></script>
+<script src="{{ "js/evidence-types.js" | relURL }}?v=2"></script>
 <script src="{{ "js/evidence-camera.js" | relURL }}?v=20260813-1"></script>
 <script>
   window.CONVIVENCIA_FORM_CONFIG = {
     apiBase: {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }}
   };
 </script>
-<script src="{{ "js/convivencia-form.js" | relURL }}?v=6"></script>
-<script src="{{ "js/convivencia-correccion.js" | relURL }}?v=1"></script>
+<script src="{{ "js/convivencia-form.js" | relURL }}?v=8"></script>
+<script src="{{ "js/convivencia-correccion.js" | relURL }}?v=2"></script>
