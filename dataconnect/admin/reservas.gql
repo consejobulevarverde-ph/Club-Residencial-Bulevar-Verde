@@ -118,6 +118,8 @@ query ObtenerReserva($id: UUID!)
     observaciones
     motivoRechazo
     motivoCancelacion
+    fechaCancelacion
+    cupoLiberado
     fechaCreacion
     unidad {
       id
@@ -347,6 +349,8 @@ query ObtenerReservaAdmin($id: UUID!)
     observaciones
     motivoRechazo
     motivoCancelacion
+    fechaCancelacion
+    cupoLiberado
     fechaCreacion
     unidad {
       id
@@ -390,5 +394,189 @@ query ObtenerDisponibilidadZonaAdmin(
     fechaHoraInicio
     fechaHoraFin
     estado
+  }
+}
+
+# ---------------------------------------------------------------------------------------------
+# Cupo diario por apartamento y categoría de zona (p. ej. CANCHA = 2 reservas/día/apartamento)
+#
+# Data Connect compila cada mutación en UN solo statement SQL (CTEs): los pasos comparten snapshot y
+# un "bloquear fila y luego contar" NO ve lo que otra transacción confirmó mientras esperaba el
+# bloqueo (probado con Postgres real: dejaba pasar más del máximo). Por eso el control es optimista:
+#   1. AsegurarCupoReservaDiaAdmin crea la fila si no existe y devuelve su `version`.
+#   2. CrearReservaConCupoAdmin hace, en una transacción, `UPDATE ... SET version = version + 1
+#      WHERE ... AND version = $versionEsperada` (atómico por fila, se reevalúa tras esperar el
+#      bloqueo) + conteo + insert. @check aborta y revierte todo si el UPDATE no afecta 1 fila
+#      (CUPO_CONCURRENCIA: la API reintenta) o si el conteo ya alcanzó el máximo (CUPO_DIARIO_AGOTADO).
+# El conteo en el mismo statement usa el snapshot del inicio: si el UPDATE tiene éxito nadie añadió
+# reservas desde que se leyó la versión, así que ese conteo nunca es menor que el real (solo mayor si
+# hubo cancelaciones, lo que es conservador). Quien llama (API) elige la variante según el rol.
+#
+# Consumen cupo: todo estado salvo RECHAZADA y CANCELADA; y las CANCELADA con cupoLiberado = false
+# (canceladas con < 72 h). Las CANCELADA con cupoLiberado NULL (históricas) o true no consumen.
+# ---------------------------------------------------------------------------------------------
+
+mutation AsegurarCupoReservaDiaAdmin($unidadId: UUID!, $categoria: String!, $dia: Date!)
+@auth(level: NO_ACCESS)
+@transaction
+{
+  cupo_reserva_dia_upsert(data: {unidadId: $unidadId, categoria: $categoria, dia: $dia, fechaActualizacion_expr: "request.time"})
+  query {
+    cupo: cupo_reserva_dia(key: {unidadId: $unidadId, categoria: $categoria, dia: $dia}) {
+      version
+    }
+  }
+}
+
+mutation CrearReservaConCupoAdmin(
+  $input: Reserva_Data!
+    @allow(fields: "id unidadId personaSolicitanteId zonaComunId modalidadUso fechaHoraInicio fechaHoraFin estado precio depositoGarantia requierePago requiereAprobacion confirmacionAutomatica estadoPago origen creadoPorUid observaciones")
+  $unidadId: UUID!
+  $categoria: String!
+  $dia: Date!
+  $inicioDia: Timestamp!
+  $finDia: Timestamp!
+  $maximo: Int!
+  $versionEsperada: Int!
+)
+@auth(level: NO_ACCESS)
+@transaction
+{
+  query {
+    consumidas: reservas(
+      where: {
+        _and: [
+          {unidadId: {eq: $unidadId}}
+          {zonaComun: {tipo: {eq: $categoria}}}
+          {fechaHoraInicio: {ge: $inicioDia, lt: $finDia}}
+          {_or: [
+            {estado: {nin: ["RECHAZADA", "CANCELADA"]}}
+            {_and: [{estado: {eq: "CANCELADA"}}, {cupoLiberado: {eq: false}}]}
+          ]}
+        ]
+      }
+    ) @check(expr: "this.size() < vars.maximo", message: "CUPO_DIARIO_AGOTADO") {
+      id
+    }
+  }
+  versionAvanzada: cupo_reserva_dia_updateMany(
+    where: {unidadId: {eq: $unidadId}, categoria: {eq: $categoria}, dia: {eq: $dia}, version: {eq: $versionEsperada}}
+    data: {version_update: [{inc: 1}]}
+  ) @check(expr: "this == 1", message: "CUPO_CONCURRENCIA")
+  reserva_insert(data: $input)
+}
+
+# Creación administrativa: puede superar el máximo, pero igualmente sube la versión para que una
+# solicitud de residente que se esté evaluando en paralelo no ignore esta reserva.
+mutation CrearReservaExentaCupoAdmin(
+  $input: Reserva_Data!
+    @allow(fields: "id unidadId personaSolicitanteId zonaComunId modalidadUso fechaHoraInicio fechaHoraFin estado precio depositoGarantia requierePago requiereAprobacion confirmacionAutomatica estadoPago origen creadoPorUid observaciones")
+  $unidadId: UUID!
+  $categoria: String!
+  $dia: Date!
+)
+@auth(level: NO_ACCESS)
+@transaction
+{
+  versionAvanzada: cupo_reserva_dia_updateMany(
+    where: {unidadId: {eq: $unidadId}, categoria: {eq: $categoria}, dia: {eq: $dia}}
+    data: {version_update: [{inc: 1}]}
+  ) @check(expr: "this == 1", message: "CUPO_FILA_AUSENTE")
+  reserva_insert(data: $input)
+}
+
+# Edición administrativa de una reserva activa (solo PENDIENTE/CONFIRMADA: mover una cancelada tarde
+# movería también el cupo que consumió). Sube la versión de la tupla de destino.
+mutation ActualizarReservaExentaCupoAdmin(
+  $id: UUID!
+  $zonaComunId: UUID!
+  $modalidadUso: String!
+  $fechaHoraInicio: Timestamp!
+  $fechaHoraFin: Timestamp!
+  $observaciones: String
+  $precio: Float
+  $depositoGarantia: Float
+  $requierePago: Boolean!
+  $requiereAprobacion: Boolean!
+  $confirmacionAutomatica: Boolean!
+  $unidadId: UUID!
+  $categoria: String!
+  $dia: Date!
+)
+@auth(level: NO_ACCESS)
+@transaction
+{
+  versionAvanzada: cupo_reserva_dia_updateMany(
+    where: {unidadId: {eq: $unidadId}, categoria: {eq: $categoria}, dia: {eq: $dia}}
+    data: {version_update: [{inc: 1}]}
+  ) @check(expr: "this == 1", message: "CUPO_FILA_AUSENTE")
+  actualizadas: reserva_updateMany(
+    where: {id: {eq: $id}, estado: {in: ["PENDIENTE", "CONFIRMADA"]}}
+    data: {
+      zonaComunId: $zonaComunId
+      modalidadUso: $modalidadUso
+      fechaHoraInicio: $fechaHoraInicio
+      fechaHoraFin: $fechaHoraFin
+      observaciones: $observaciones
+      precio: $precio
+      depositoGarantia: $depositoGarantia
+      requierePago: $requierePago
+      requiereAprobacion: $requiereAprobacion
+      confirmacionAutomatica: $confirmacionAutomatica
+    }
+  ) @check(expr: "this == 1", message: "RESERVA_NO_EDITABLE")
+}
+
+# Cancela solo desde PENDIENTE/CONFIRMADA y clasifica el cupo en la misma transacción, contra el
+# fechaHoraInicio que la fila tiene en ese instante. $umbralLiberacion = $ahora + 72 h (calculado por
+# la API); "exactamente 72 h" cumple fechaHoraInicio >= umbral y libera. Los dos pasos son mutuamente
+# excluyentes por fechaHoraInicio, así que una reserva queda en exactamente una clasificación.
+# Repetir la cancelación no coincide con ningún where (ya está CANCELADA): no reescribe
+# fechaCancelacion ni cupoLiberado. Devuelve cuántas filas cambió cada paso.
+mutation CancelarReservaConCupoAdmin(
+  $id: UUID!
+  $motivo: String!
+  $ahora: Timestamp!
+  $umbralLiberacion: Timestamp!
+)
+@auth(level: NO_ACCESS)
+@transaction
+{
+  liberadas: reserva_updateMany(
+    where: {id: {eq: $id}, estado: {in: ["PENDIENTE", "CONFIRMADA"]}, fechaHoraInicio: {ge: $umbralLiberacion}}
+    data: {estado: "CANCELADA", motivoCancelacion: $motivo, fechaCancelacion: $ahora, cupoLiberado: true}
+  )
+  retenidas: reserva_updateMany(
+    where: {id: {eq: $id}, estado: {in: ["PENDIENTE", "CONFIRMADA"]}, fechaHoraInicio: {lt: $umbralLiberacion}}
+    data: {estado: "CANCELADA", motivoCancelacion: $motivo, fechaCancelacion: $ahora, cupoLiberado: false}
+  )
+}
+
+# Desglose del cupo de una tupla (apartamento, categoría, día) para explicar un rechazo sin revelar
+# datos de otros apartamentos. Solo lectura.
+query ListarCupoReservasDiaAdmin(
+  $unidadId: UUID!
+  $categoria: String!
+  $inicioDia: Timestamp!
+  $finDia: Timestamp!
+)
+@auth(level: NO_ACCESS)
+{
+  reservas(
+    where: {
+      _and: [
+        {unidadId: {eq: $unidadId}}
+        {zonaComun: {tipo: {eq: $categoria}}}
+        {fechaHoraInicio: {ge: $inicioDia, lt: $finDia}}
+        {_or: [
+          {estado: {nin: ["RECHAZADA", "CANCELADA"]}}
+          {_and: [{estado: {eq: "CANCELADA"}}, {cupoLiberado: {eq: false}}]}
+        ]}
+      ]
+    }
+  ) {
+    id
+    estado
+    cupoLiberado
   }
 }

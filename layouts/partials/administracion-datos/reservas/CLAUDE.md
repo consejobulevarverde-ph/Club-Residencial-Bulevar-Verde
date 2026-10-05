@@ -41,6 +41,10 @@ Partials de la pestaña "Reservas" (`/administracion-datos/`, panel administrati
 
 Los modales en `modal-zona.html` y `modales.html` **siempre se llaman aparte, al final de `<main>`**, como hermanos directos de `<section id="app">` — **nunca anidados** dentro de `<section id="reservasView">`. Razón: un modal dentro de un `<section>` oculto con `.hidden` (`display:none`) no se mostraría, aunque Bootstrap intente abrirlo.
 
+## Cupo diario y cancelaciones
+
+Cancelar una reserva de cancha con menos de 72 h libera el horario pero **no devuelve el cupo diario** del apartamento (máximo 2 reservas de cancha por apartamento y día). `modales.html` tiene `#reservasAvisoCancelacion`; `core.js` (`avisarCancelacionTardia`) lo llena con el objeto `cancelacion` de `GET /api/v1/reservas/:id` antes de confirmar. La clasificación real la fija la API; el cliente solo informa. Reglas, contrato y despliegue: `bulevar-verde-api/doc/RESERVAS_CUPO_DIARIO.md`.
+
 ## Particularidades Preservadas (No Corregidas)
 
 1. **Código muerto**: `cargarReservasFiltroZonas()` en `core.js` apunta a `#filtroZona` que no existe en ningún partial — se reubicó tal cual durante el refactor, sin eliminar.

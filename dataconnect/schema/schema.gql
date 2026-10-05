@@ -226,8 +226,37 @@ type Reserva @table(name: "reservas", singular: "reserva", plural: "reservas", k
   creadoPorUid: String
   motivoRechazo: String
   motivoCancelacion: String
+  # Momento exacto de la cancelación (reloj de la API, escrito junto con el cambio de estado).
+  # Solo cambia en la transición PENDIENTE/CONFIRMADA -> CANCELADA; nunca se reescribe.
+  # NULL en reservas canceladas antes del cupo diario (sin dato fiable: no se inventa).
+  fechaCancelacion: Timestamp
+  # Clasificación de cupo fijada al cancelar: true = cancelada con >= 72 h de anticipación (devuelve
+  # el cupo del apartamento), false = cancelada tarde (el cupo sigue consumido). NULL = no cancelada
+  # o cancelada antes del cupo diario (tratamiento histórico: no consume cupo).
+  cupoLiberado: Boolean
   observaciones: String
   fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+# Control de concurrencia (optimista) del cupo diario de reservas, una fila por (apartamento,
+# categoría de zona, día de Bogotá). No guarda conteos: el cupo siempre se deriva de Reserva.
+# `version` sube en la misma transacción que cualquier escritura que AÑADA una reserva consumidora a
+# la tupla (crear, o mover una reserva a ella). Quien crea con límite lee `version`, y al escribir hace
+# `UPDATE ... WHERE version = <leída>`: si otra transacción añadió una reserva entretanto, ese UPDATE
+# afecta 0 filas, el @check aborta la transacción y la API reintenta. Cancelar/rechazar solo reducen
+# el conteo y no necesitan subir la versión.
+type CupoReservaDia
+  @table(
+    name: "cupos_reserva_dia"
+    singular: "cupo_reserva_dia"
+    plural: "cupos_reserva_dia"
+    key: ["unidad", "categoria", "dia"]
+  ) {
+  unidad: Unidad!
+  categoria: String!
+  dia: Date!
+  version: Int! @default(value: 0)
   fechaActualizacion: Timestamp! @default(expr: "request.time")
 }
 

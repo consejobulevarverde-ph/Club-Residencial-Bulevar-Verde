@@ -1663,6 +1663,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         } else if (accion === 'cancelar') {
           accionesPendiente = function () {
             var m = $('reservasMotivoCancelacion'); if (m) m.value = '';
+            avisarCancelacionTardia(reservaActualId);
             if (reservasModalCancelar) reservasModalCancelar.show();
           };
         } else if (accion === 'pago') {
@@ -1708,6 +1709,25 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         }).catch(function (error) { msg(error.message); });
       });
 
+      // Si cancelar con poca anticipación no devuelve el cupo diario del apartamento, se explica antes de confirmar.
+      // `cancelacion` es orientativo (lo calcula la API); la clasificación real la fija el servidor al cancelar.
+      function avisarCancelacionTardia(reservaId) {
+        var aviso = $('reservasAvisoCancelacion');
+        if (!aviso) return;
+        aviso.classList.add('hidden');
+        aviso.textContent = '';
+        withIdToken(function (idToken) {
+          return apiFetch('/api/v1/reservas/' + reservaId, idToken);
+        }).then(function (result) {
+          var info = result.data && result.data.cancelacion;
+          if (reservaId !== reservaActualId || !info || !info.aplicaCupo || info.liberaCupo) return;
+          aviso.textContent = 'Faltan menos de ' + info.horasLiberacion + ' horas. Al cancelar, la cancha queda libre ' +
+            'para otros apartamentos, pero el apartamento NO recupera este cupo (máximo ' + info.maximoDiario +
+            ' reservas de cancha por día).';
+          aviso.classList.remove('hidden');
+        }).catch(function () { /* el aviso es informativo; cancelar sigue disponible */ });
+      }
+
       var confirmarCancelacion = $('reservasConfirmarCancelacion');
       if (confirmarCancelacion) confirmarCancelacion.addEventListener('click', function () {
         var motivo = $('reservasMotivoCancelacion').value.trim() || 'Cancelada por administrador';
@@ -1716,8 +1736,11 @@ var config = window.ADMIN_DATOS_CONFIG || {};
             method: 'PATCH',
             body: { motivo: motivo }
           });
-        }).then(function () {
-          msg('Reserva cancelada', 'success');
+        }).then(function (result) {
+          var cancelada = result && result.data;
+          msg(cancelada && cancelada.cupoLiberado === false
+            ? 'Reserva cancelada. La cancha quedó libre; el apartamento conserva el cupo del día.'
+            : 'Reserva cancelada', 'success');
           if (reservasModalCancelar) reservasModalCancelar.hide();
           cargarReservasAgenda();
         }).catch(function (error) { msg(error.message); });

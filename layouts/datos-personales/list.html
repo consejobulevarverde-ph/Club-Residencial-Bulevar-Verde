@@ -2649,6 +2649,19 @@
           });
       }
 
+      // Antes de confirmar: si cancelar con poca anticipación no devuelve el cupo diario, se explica.
+      // `cancelacion` es orientativo (lo calcula la API al listar); la clasificación real la fija el servidor.
+      function textoConfirmarCancelacion(reserva) {
+        var texto = '¿Estás seguro de que deseas cancelar esta reserva?';
+        var info = reserva && reserva.cancelacion;
+        if (info && info.aplicaCupo && !info.liberaCupo) {
+          texto += '\n\nFaltan menos de ' + info.horasLiberacion + ' horas para la reserva. Al cancelar, la cancha queda libre ' +
+            'para otros apartamentos, pero tu apartamento NO recupera este cupo: seguirá contando dentro del máximo de ' +
+            info.maximoDiario + ' reservas de cancha por día.';
+        }
+        return texto;
+      }
+
       function renderMisReservas(reservas) {
         $('misReservasList').innerHTML = reservas.map(function (r) {
           var estadoBadge = (function() {
@@ -2687,17 +2700,24 @@
 
         var button = event.target.closest('.cancelar-reserva');
         if (!button) return;
-        if (!confirm('¿Estás seguro de que deseas cancelar esta reserva?')) return;
 
         var reservaId = button.dataset.id;
+        var reservaACancelar = misReservasData.find(function (r) { return r.id === reservaId; });
+        if (!confirm(textoConfirmarCancelacion(reservaACancelar))) return;
+
         var submitBtn = button;
         loading(submitBtn, true, 'Cancelando…');
 
         apiFetch('/reservas/' + encodeURIComponent(reservaId) + '/cancelar', {
           method: 'PATCH',
           body: { motivo: 'Cancelada por residente' }
-        }).then(function () {
-          alertMessage('Reserva cancelada.', 'success');
+        }).then(function (result) {
+          var cancelada = result.data || {};
+          if (cancelada.cupoLiberado === false) {
+            alertMessage('Reserva cancelada. La cancha quedó libre, pero tu apartamento conserva este cupo del día.', 'success');
+          } else {
+            alertMessage('Reserva cancelada.', 'success');
+          }
           cargarMisReservas();
         }).catch(function (error) {
           alertMessage(error.message);
