@@ -22,8 +22,19 @@ jobs:
           hugo-version: '0.157.0'
           extended: true
 
+      # Enlaces de Google Drive/Sheets configurables sin PR desde Settings → Secrets and variables →
+      # Actions → Variables. Solo se aplican si tienen valor; si no, se usa lo de hugo.toml.
+      # Para aplicar un cambio: Actions → este workflow → Run workflow.
       - name: Build with Hugo
-        run: hugo --gc --minify
+        env:
+          AVISOS_HOJA_URL: ${{ vars.AVISOS_HOJA_URL }}
+          PERSONAL_DRIVE_FOLDER_ID: ${{ vars.PERSONAL_DRIVE_FOLDER_ID }}
+          DOCUMENTOS_DRIVE_FOLDER_ID: ${{ vars.DOCUMENTOS_DRIVE_FOLDER_ID }}
+        run: |
+          if [ -n "$AVISOS_HOJA_URL" ]; then export HUGO_PARAMS_AVISOSHOJAURL="$AVISOS_HOJA_URL"; fi
+          if [ -n "$PERSONAL_DRIVE_FOLDER_ID" ]; then export HUGO_PARAMS_PERSONALDRIVEFOLDERID="$PERSONAL_DRIVE_FOLDER_ID"; fi
+          if [ -n "$DOCUMENTOS_DRIVE_FOLDER_ID" ]; then export HUGO_PARAMS_DOCUMENTOSDRIVEFOLDERID="$DOCUMENTOS_DRIVE_FOLDER_ID"; fi
+          hugo --gc --minify
 
       # Firebase CLI can use the ADC file exported by google-github-actions/auth.
       # Do not pass GITHUB_TOKEN to `firebase deploy --token`: that token belongs
