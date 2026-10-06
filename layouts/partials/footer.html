@@ -12,15 +12,74 @@
   .bv-footer a:hover {
     opacity: 0.8;
   }
+  .bv-footer .bv-politica-trigger {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .bv-politica-popover {
+    max-width: 340px;
+  }
+  .bv-politica-popover .popover-body p {
+    margin-bottom: .6rem;
+  }
+  .bv-politica-popover .popover-body p:last-child {
+    margin-bottom: 0;
+  }
 </style>
 <footer class="bv-footer">
   <div class="container d-flex flex-wrap justify-content-center align-items-center gap-2" style="font-size: 0.85rem;">
     <span class="mb-0">&copy; {{ now.Year }} {{ .Site.Title }}. Todos los derechos reservados.</span>
-    <a href="{{ "politica-datos-personales/" | relURL }}">Política de tratamiento de datos personales</a>
-    <span class="d-inline-flex align-items-center gap-2">
-      {{ with .Site.Params.facebook }}<a href="{{ . }}" target="_blank"><i class="bi bi-facebook"></i></a>{{ end }}
-      {{ with .Site.Params.instagram }}<a href="{{ . }}" target="_blank"><i class="bi bi-instagram"></i></a>{{ end }}
-      {{ with .Site.Params.whatsappComunidad }}<a href="{{ . }}" target="_blank"><i class="bi bi-whatsapp"></i></a>{{ end }}
-    </span>
+    {{/* Resumen de la Ley 1581 en un recuadro; sin JavaScript/Bootstrap el enlace abre la política completa. */}}
+    <a href="{{ "politica-datos-personales/" | relURL }}" class="bv-politica-trigger" role="button" aria-haspopup="dialog">
+      <i class="bi bi-shield-lock me-1"></i>Tratamiento de datos
+    </a>
+    {{ with .Site.Params.facebook }}<a href="{{ . }}" target="_blank" rel="noopener" aria-label="Facebook"><i class="bi bi-facebook"></i></a>{{ end }}
+    {{ with .Site.Params.instagram }}<a href="{{ . }}" target="_blank" rel="noopener" aria-label="Instagram"><i class="bi bi-instagram"></i></a>{{ end }}
   </div>
+  <template id="bvPoliticaContenido">
+    <p>En cumplimiento de la Ley 1581 de 2012 y el Decreto 1377 de 2013, el Club Residencial Bulevar Verde recolecta, almacena, usa, circula y suprime los datos personales que registras en sus servicios en línea, con el fin de: garantizar la seguridad y el control de acceso a la copropiedad; informarte sobre eventos, novedades y situaciones de emergencia; gestionar comunicaciones administrativas; mantener actualizada la base de datos de residentes; y cumplir con las disposiciones legales aplicables a la propiedad horizontal.</p>
+    <p>Tus datos serán tratados de forma confidencial y segura. Tienes derecho a conocer, actualizar, rectificar y solicitar la supresión de tus datos personales escribiendo a <a href="mailto:{{ .Site.Params.email }}">{{ .Site.Params.email }}</a> o en la oficina de administración.</p>
+    <p><a href="{{ "politica-datos-personales/" | relURL }}"><strong>Ver la política completa →</strong></a></p>
+  </template>
 </footer>
+<script>
+  (function () {
+    'use strict';
+    // Bootstrap se carga al final de cada página: el recuadro se crea al primer clic. Tiene su propio script
+    // (sin data-bs-toggle) para no chocar con los recuadros que inicializa el portal de residentes.
+    var trigger = document.querySelector('.bv-politica-trigger');
+    var plantilla = document.getElementById('bvPoliticaContenido');
+    if (!trigger || !plantilla) return;
+
+    function recuadro() {
+      return window.bootstrap.Popover.getOrCreateInstance(trigger, {
+        trigger: 'manual',
+        html: true,
+        placement: 'top',
+        title: 'Tratamiento de datos personales',
+        content: plantilla.innerHTML,
+        customClass: 'bv-politica-popover'
+      });
+    }
+
+    function abierto() {
+      var id = trigger.getAttribute('aria-describedby');
+      return id ? document.getElementById(id) : null;
+    }
+
+    trigger.addEventListener('click', function (event) {
+      if (!window.bootstrap || !window.bootstrap.Popover) return; // sin Bootstrap: abre la página de la política
+      event.preventDefault();
+      recuadro().toggle();
+    });
+
+    // Se cierra al tocar fuera del recuadro o con Esc.
+    document.addEventListener('click', function (event) {
+      var pop = abierto();
+      if (pop && !pop.contains(event.target) && !trigger.contains(event.target)) recuadro().hide();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && abierto()) recuadro().hide();
+    });
+  }());
+</script>
