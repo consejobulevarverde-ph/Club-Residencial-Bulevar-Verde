@@ -1,0 +1,340 @@
+{{/*
+  Documentos del club: se leen al generar el sitio desde la carpeta pública de Google Drive (documentosDriveFolderId).
+  Para agregar o quitar un documento basta con hacerlo en Drive: aparece en la siguiente publicación del sitio.
+  El nombre que se muestra es el nombre del archivo en Drive (sin extensión); la categoría se deduce de ese nombre.
+  Uso: {{ partial "documentos-club.html" . }} (se muestra en la pestaña "Documentos del club" del portal de residentes).
+*/}}
+{{ $folderId := site.Params.documentosDriveFolderId | default "" }}
+{{ $docs := slice }}
+{{ $errorCarga := false }}
+{{ if $folderId }}
+    {{ $res := partial "drive-carpeta.html" $folderId }}
+    {{ $errorCarga = not $res.ok }}
+    {{/* Las subcarpetas (p. ej. "Personal vigilancia" / "Personal aseo") no se listan como documentos. */}}
+    {{ range $res.items }}
+        {{ if not .carpeta }}
+            {{ $mime := .mime }}
+            {{ $nombre := .nombre }}
+            {{ $titulo := $nombre | replaceRE `(?i)\.(pdf|docx?|xlsx?|pptx?|jpe?g|png|webp)$` "" | replaceRE `(?i)\.(docx?|xlsx?)\s*-?\s*$` "" | replaceRE `_+` " " | replaceRE `\s+` " " }}
+            {{ $titulo = strings.Trim $titulo " -" }}
+            {{/* Nombres mayormente en MAYÚSCULAS pasan a formato oración; a todos se les pone la inicial en mayúscula. */}}
+            {{ if gt (len (findRE `\p{Lu}` $titulo)) (len (findRE `\p{Ll}` $titulo)) }}{{ $titulo = lower $titulo }}{{ end }}
+            {{ $titulo = strings.FirstUpper $titulo }}
+            {{ $clave := lower $nombre }}
+            {{ $categoria := "otros" }}
+            {{ if findRE `comunicado|circular` $clave }}{{ $categoria = "comunicados" }}
+            {{ else if findRE `reglamento|rph|manual` $clave }}{{ $categoria = "reglamentos" }}
+            {{ else if findRE `asamblea|acta|coeficiente` $clave }}{{ $categoria = "asamblea" }}
+            {{ else if findRE `presupuesto|bancari|pago|financ|cartera` $clave }}{{ $categoria = "finanzas" }}
+            {{ else if findRE `plano|parqueadero` $clave }}{{ $categoria = "planos" }}
+            {{ end }}
+            {{ $tipo := cond (strings.Contains $mime "pdf") "pdf" (cond (strings.HasPrefix $mime "image") "imagen" "otro") }}
+            {{ $docs = $docs | append (dict "id" .id "titulo" $titulo "categoria" $categoria "tipo" $tipo "fecha" .fecha) }}
+        {{ end }}
+    {{ end }}
+{{ end }}
+
+{{ $categorias := slice
+    (dict "clave" "reglamentos" "nombre" "Reglamentos" "icono" "bi-journal-bookmark")
+    (dict "clave" "comunicados" "nombre" "Comunicados" "icono" "bi-megaphone")
+    (dict "clave" "asamblea" "nombre" "Asamblea" "icono" "bi-people")
+    (dict "clave" "finanzas" "nombre" "Finanzas y pagos" "icono" "bi-cash-coin")
+    (dict "clave" "planos" "nombre" "Planos y parqueaderos" "icono" "bi-map")
+    (dict "clave" "otros" "nombre" "Otros documentos" "icono" "bi-folder2")
+}}
+
+<style>
+    .docs-toolbar {
+        margin-bottom: 20px;
+    }
+
+    .docs-chips {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: thin;
+    }
+
+    .docs-chip {
+        flex: 0 0 auto;
+        border: 1px solid #cfe0cf;
+        background: #fff;
+        color: var(--bv-primary, #2c5f2d);
+        border-radius: 50px;
+        padding: 6px 14px;
+        font-weight: 600;
+        font-size: .9rem;
+    }
+
+    .docs-chip.active {
+        background: var(--bv-primary, #2c5f2d);
+        border-color: var(--bv-primary, #2c5f2d);
+        color: #fff;
+    }
+
+    .docs-categoria {
+        margin-bottom: 24px;
+    }
+
+    .docs-categoria h4 {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--bv-primary, #2c5f2d);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .docs-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 12px;
+    }
+
+    .doc-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: #fff;
+        border: 1px solid var(--bv-border, #dfe9df);
+        border-radius: 12px;
+        padding: 12px 14px;
+        text-align: left;
+        width: 100%;
+        transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+    }
+
+    .doc-card:hover,
+    .doc-card:focus-visible {
+        border-color: #7bb77d;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, .08);
+    }
+
+    .doc-icon {
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.35rem;
+    }
+
+    .doc-icon.pdf { background: #fdecea; color: #c62828; }
+    .doc-icon.imagen { background: #e8f0fe; color: #1a5fb4; }
+    .doc-icon.otro { background: #e8f5e9; color: #2c5f2d; }
+
+    .doc-info {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .doc-titulo {
+        display: block;
+        font-weight: 600;
+        color: #1f2a1f;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    .doc-meta {
+        display: block;
+        font-size: .8rem;
+        color: #5f6f60;
+        margin-top: 2px;
+    }
+
+    .doc-accion {
+        flex: 0 0 auto;
+        color: var(--bv-primary, #2c5f2d);
+        font-size: 1.25rem;
+    }
+
+    .docs-vacio {
+        padding: 28px 16px;
+        text-align: center;
+        color: #5f6f60;
+    }
+
+    .doc-visor .modal-content {
+        border: 0;
+        overflow: hidden;
+    }
+
+    .doc-visor .modal-header {
+        background: var(--bv-primary, #2c5f2d);
+        color: #fff;
+    }
+
+    .doc-visor .modal-title {
+        font-size: 1rem;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .doc-visor .modal-body {
+        padding: 0;
+        height: 78vh;
+        background: #525659;
+    }
+
+    .doc-visor iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+    }
+
+    @media (max-width: 767.98px) {
+        .doc-visor .modal-body {
+            height: auto;
+            flex: 1 1 auto;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .docs-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="documentos-club">
+    {{ if $docs }}
+        <div class="docs-toolbar">
+            <div class="input-group mb-3">
+                <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                <input id="docsBuscar" type="search" class="form-control" placeholder="Buscar documento…" aria-label="Buscar documento" autocomplete="off">
+            </div>
+            <div class="docs-chips" role="group" aria-label="Filtrar por categoría">
+                <button type="button" class="docs-chip active" data-categoria="">Todos</button>
+                {{ range $categorias }}
+                    {{ $clave := .clave }}
+                    {{ if where $docs "categoria" $clave }}
+                        <button type="button" class="docs-chip" data-categoria="{{ $clave }}">{{ .nombre }}</button>
+                    {{ end }}
+                {{ end }}
+            </div>
+        </div>
+
+        {{ range $categorias }}
+            {{ $clave := .clave }}
+            {{ $items := sort (where $docs "categoria" $clave) "titulo" }}
+            {{ if $items }}
+                <section class="docs-categoria" data-categoria="{{ $clave }}">
+                    <h4><i class="bi {{ .icono }}"></i>{{ .nombre }}</h4>
+                    <div class="docs-grid">
+                        {{ range $items }}
+                            <button type="button" class="doc-card" data-doc-id="{{ .id }}" data-doc-titulo="{{ .titulo }}">
+                                <span class="doc-icon {{ .tipo }}"><i class="bi {{ cond (eq .tipo "pdf") "bi-file-earmark-pdf" (cond (eq .tipo "imagen") "bi-image" "bi-file-earmark-text") }}"></i></span>
+                                <span class="doc-info">
+                                    <span class="doc-titulo">{{ .titulo }}</span>
+                                    <span class="doc-meta">{{ cond (eq .tipo "pdf") "PDF" (cond (eq .tipo "imagen") "Imagen" "Documento") }}{{ with .fecha }} · Actualizado: {{ . }}{{ end }}</span>
+                                </span>
+                                <i class="bi bi-eye doc-accion" aria-hidden="true"></i>
+                            </button>
+                        {{ end }}
+                    </div>
+                </section>
+            {{ end }}
+        {{ end }}
+
+        <div id="docsSinResultados" class="docs-vacio" hidden>
+            <i class="bi bi-search fs-3 d-block mb-2"></i>
+            No encontramos documentos con ese nombre.
+        </div>
+    {{ else }}
+        <div class="docs-vacio">
+            <i class="bi bi-folder2-open fs-2 d-block mb-2"></i>
+            {{ if $errorCarga }}No pudimos cargar los documentos en este momento.{{ else }}Aún no hay documentos publicados.{{ end }}
+        </div>
+    {{ end }}
+
+    <!-- Visor del documento (se abre dentro de la página) -->
+    <div class="modal fade doc-visor" id="docVisor" tabindex="-1" aria-labelledby="docVisorTitulo" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-md-down">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="docVisorTitulo"></h2>
+                    <a id="docVisorDescargar" class="btn btn-sm btn-light ms-auto me-2" target="_blank" rel="noopener">
+                        <i class="bi bi-download"></i><span class="d-none d-sm-inline ms-1">Descargar</span>
+                    </a>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <iframe id="docVisorFrame" title="Vista previa del documento"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        'use strict';
+
+        var raiz = document.querySelector('.documentos-club');
+        var visorEl = document.getElementById('docVisor');
+        if (!raiz || !visorEl) return;
+
+        // El visor se pasa a <body> para que no quede dentro de contenedores ocultos o con overflow.
+        document.body.appendChild(visorEl);
+
+        // Abrir un documento en el visor de la misma página (vista previa de Google Drive).
+        // Bootstrap se carga al final de la página, por eso el modal se crea al primer clic.
+        raiz.addEventListener('click', function (event) {
+            var card = event.target.closest('[data-doc-id]');
+            if (!card || !window.bootstrap) return;
+            var id = encodeURIComponent(card.getAttribute('data-doc-id'));
+            document.getElementById('docVisorTitulo').textContent = card.getAttribute('data-doc-titulo');
+            document.getElementById('docVisorFrame').src = 'https://drive.google.com/file/d/' + id + '/preview';
+            document.getElementById('docVisorDescargar').href = 'https://drive.google.com/uc?export=download&id=' + id;
+            window.bootstrap.Modal.getOrCreateInstance(visorEl).show();
+        });
+
+        // Al cerrar se vacía el visor para detener la carga del documento.
+        visorEl.addEventListener('hidden.bs.modal', function () {
+            document.getElementById('docVisorFrame').src = 'about:blank';
+        });
+
+        /* ---------- Búsqueda y filtro por categoría ---------- */
+        var buscar = document.getElementById('docsBuscar');
+        var categoriaActiva = '';
+
+        function normalizar(texto) {
+            return String(texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        }
+
+        function filtrar() {
+            var termino = normalizar(buscar ? buscar.value : '').trim();
+            var visibles = 0;
+            raiz.querySelectorAll('.docs-categoria').forEach(function (seccion) {
+                var enCategoria = !categoriaActiva || seccion.getAttribute('data-categoria') === categoriaActiva;
+                var conResultados = 0;
+                seccion.querySelectorAll('.doc-card').forEach(function (card) {
+                    var coincide = enCategoria && normalizar(card.getAttribute('data-doc-titulo')).indexOf(termino) !== -1;
+                    card.hidden = !coincide;
+                    if (coincide) conResultados++;
+                });
+                seccion.hidden = conResultados === 0;
+                visibles += conResultados;
+            });
+            var vacio = document.getElementById('docsSinResultados');
+            if (vacio) vacio.hidden = visibles > 0;
+        }
+
+        if (buscar) buscar.addEventListener('input', filtrar);
+        raiz.querySelectorAll('.docs-chip').forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                categoriaActiva = chip.getAttribute('data-categoria');
+                raiz.querySelectorAll('.docs-chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
+                filtrar();
+            });
+        });
+    }());
+</script>

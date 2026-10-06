@@ -1,0 +1,39 @@
+{{/*
+  Lee AL GENERAR el sitio el contenido de una carpeta pública de Google Drive (vista embeddedfolderview).
+  Uso:    {{ $res := partial "drive-carpeta.html" "<ID o enlace de la carpeta>" }}
+  Retorna: dict "ok" (bool) "items" (slice de dict: id, nombre, carpeta (bool), mime, fecha)
+  Cada entrada se analiza por separado: las subcarpetas no traen ícono de tipo, así que un patrón único
+  sobre todo el HTML mezclaría una carpeta con el archivo siguiente.
+*/}}
+{{ $items := slice }}
+{{ $ok := false }}
+{{/* Acepta el ID o el enlace completo de la carpeta (…/folders/ID?usp=sharing, …open?id=ID). */}}
+{{ $carpeta := . | default "" | strings.TrimSpace | replaceRE `^.*/folders/([\w-]+).*$` "$1" | replaceRE `^.*[?&]id=([\w-]+).*$` "$1" }}
+{{ with $carpeta }}
+    {{ $url := printf "https://drive.google.com/embeddedfolderview?id=%s" . }}
+    {{ with try (resources.GetRemote $url (dict "headers" (dict "Accept-Language" "es-CO,es;q=0.9"))) }}
+        {{ with .Err }}
+            {{ warnf "Drive: no se pudo leer la carpeta %s: %s" $url . }}
+        {{ else with .Value }}
+            {{ $ok = true }}
+            {{ range after 1 (split .Content `<div class="flip-entry" `) }}
+                {{ $entrada := . }}
+                {{ $mId := findRESubmatch `id="entry-([\w-]+)"` $entrada 1 }}
+                {{ $mTitulo := findRESubmatch `flip-entry-title">([^<]*)<` $entrada 1 }}
+                {{ if and $mId $mTitulo }}
+                    {{ $mime := "" }}
+                    {{ with findRESubmatch `/type/([^"]+)"` $entrada 1 }}{{ $mime = index (index . 0) 1 }}{{ end }}
+                    {{ $fecha := "" }}
+                    {{ with findRESubmatch `flip-entry-last-modified"><div>([^<]*)<` $entrada 1 }}{{ $fecha = index (index . 0) 1 }}{{ end }}
+                    {{ $items = $items | append (dict
+                        "id" (index (index $mId 0) 1)
+                        "nombre" (index (index $mTitulo 0) 1 | htmlUnescape)
+                        "carpeta" (strings.Contains $entrada "/drive/folders/")
+                        "mime" $mime
+                        "fecha" $fecha) }}
+                {{ end }}
+            {{ end }}
+        {{ end }}
+    {{ end }}
+{{ end }}
+{{ return (dict "ok" $ok "items" $items) }}
