@@ -57,12 +57,12 @@ Club-Residencial-Bulevar-Verde/
 - **title**: Club Residencial Bulevar Verde
 - **themeColor**: `#2c5f2d`
 
-### Menú de Navegación
-1. Inicio (/)
-2. Documentos (#galeria - sección de documentos compartidos en Drive)
-3. Comunidad (#comunidad - grupo de WhatsApp)
-4. PQRS (/pqrs/ - formulario de peticiones, quejas, reclamos y sugerencias)
-5. Contacto (#contacto)
+### Menú de Navegación (`layouts/partials/header.html`)
+1. Reservas (/reservas/ → portal de residentes en modo reservas)
+2. PQRS & Mantenimientos (/pqrs/)
+3. Sanciones (/sanciones/)
+4. Datos (/datos-personales/)
+5. Contacto (#contacto en la página principal)
 ## 🔐 Información de Contacto
 
 ### Administración
@@ -88,24 +88,74 @@ Todos los números de teléfono en el sitio son enlaces clickeables que abren Wh
   <i class="bi bi-whatsapp"></i> +57 322 228 9066
 </a>
 ```
-## �️ Galería de Instalaciones
+## 🧭 Accesos rápidos del inicio
 
-### Google Drive Embebido
+`layouts/index.html` (sección `#accesos`) muestra 8 tarjetas: Reservas, PQRS y mantenimiento, Personal,
+Sanciones, Mis datos, Documentos (`/documentos/`, requiere identificarse), Comunidad (grupo de WhatsApp) y Contacto (`#contacto`).
+Ya no hay secciones propias de Documentos, Comunidad, Reservas ni PQRS en el inicio.
 
-El sitio incluye una galería de instalaciones embebida desde Google Drive:
+### Enlaces de Drive/Sheets configurables sin PR
+| Variable de GitHub (Actions → Variables) | Parámetro de `hugo.toml` | Para qué |
+|---|---|---|
+| `AVISOS_HOJA_URL` | `avisosHojaUrl` | Hoja de avisos del inicio |
+| `PERSONAL_DRIVE_FOLDER_ID` | `personalDriveFolderId` | Carpeta con las subcarpetas del personal |
+| `DOCUMENTOS_DRIVE_FOLDER_ID` | `documentosDriveFolderId` | Carpeta de documentos del club |
 
-- **Ubicación en el código**: `layouts/index.html` sección `#galeria`
-- **Cómo actualizar**: Reemplaza el ID de la carpeta de Google Drive en el iframe
-- **Formato del enlace**: `https://drive.google.com/embeddedfolderview?id=ID_DE_TU_CARPETA#grid`
+- `firebase-deploy.yml` las pasa a Hugo (`HUGO_PARAMS_…`) **solo si tienen valor**; vacías → se usa `hugo.toml`.
+- Las carpetas aceptan el ID o el enlace completo de Drive (`drive-carpeta.html` extrae el ID).
+- Para aplicar un cambio de variable, o refrescar Documentos/Personal tras cambios en Drive:
+  Actions → "Deploy Firebase Hosting and Data Connect" → **Run workflow** (rama `firebase`).
+- El contenido de la hoja de avisos se lee en el navegador: editar avisos no requiere publicar.
+- En local se simulan con `$env:HUGO_PARAMS_AVISOSHOJAURL = '…'` (etc.) antes de `hugo server`.
 
-#### Pasos para configurar tu propia galería:
+### Módulos del portal de residentes (`layouts/datos-personales/list.html`)
+- Un solo login para todo. `/reservas/`, `/personal/` y `/documentos/` redirigen a `/datos-personales/?modulo=...`.
+- **Dentro de un módulo** se muestra solo ese módulo con la franja "Ir a: Reservas · Personal · Documentos · Mis datos"
+  (`#moduloNav`); cambiar de módulo no recarga ni pide identificarse de nuevo (`irAModulo()` actualiza `?modulo=`).
+- **Mis datos** (sin `?modulo=`) muestra solo las pestañas de la unidad: Resumen, Contacto, Residentes, Vehículos,
+  Mascotas y emergencia, Facturación y Sanciones. En celular se deslizan de lado en una fila.
 
-1. Crea una carpeta en Google Drive con las fotos del club
-2. Configura la carpeta como pública (cualquiera con el enlace puede ver)
-3. Extrae el ID de la carpeta del enlace: 
-   - Enlace: `https://drive.google.com/drive/folders/ID_DE_TU_CARPETA?usp=sharing`
-   - ID: `ID_DE_TU_CARPETA`
-4. Reemplaza el ID en el iframe de `layouts/index.html`
+### Personal de aseo y vigilancia (`/personal/` → portal de residentes)
+- Imágenes leídas **al generar el sitio** desde las subcarpetas de Drive cuyo nombre contiene "vigilancia" y "aseo"
+  (p. ej. "Personal vigilancia" / "Personal aseo"), dentro de `personalDriveFolderId` (vacío = carpeta de documentos).
+- Cambio mensual: borrar la imagen vieja y subir la nueva a la subcarpeta. Varias imágenes en una subcarpeta → se
+  muestran todas, ordenadas por nombre. Se amplían en un visor dentro de la página (X, zoom, Esc).
+- Lectura de carpetas de Drive: `layouts/partials/drive-carpeta.html` (compartido con Documentos; analiza cada entrada
+  por separado porque las subcarpetas no traen ícono de tipo).
+
+### Documentos del club (`/documentos/` → portal de residentes)
+- `/documentos/` redirige a `/datos-personales/?modulo=documentos`: el residente se identifica (mismo login de
+  Datos/Reservas/Personal) y entra directo al módulo Documentos (`tabDocumentosClub`).
+  No confundir con la pestaña "Facturación" de Mis datos (`tabDocumentos`, solo propietarios).
+- `layouts/partials/documentos-club.html` lee **al generar el sitio** la carpeta pública de Drive `documentosDriveFolderId`
+  (`resources.GetRemote` sobre `embeddedfolderview`; `[caches.getresource] maxAge = 0` para no usar caché vieja).
+- La carpeta sigue siendo pública en Drive: el login decide quién ve la pestaña, no protege los archivos.
+- Agregar/quitar/renombrar archivos en Drive → se refleja en la siguiente publicación del sitio.
+- Las subcarpetas no se listan como documentos (ahí viven "Personal vigilancia" / "Personal aseo").
+- Nombre mostrado = nombre del archivo sin extensión. Categoría deducida por palabras clave del nombre
+  (comunicado, reglamento/rph, asamblea/acta, presupuesto/pago, plano/parqueadero; si no, "Otros").
+- Cada documento se abre en un visor dentro de la página (vista previa de Drive) con botón Descargar.
+
+### Avisos (Google Sheet)
+- Franja `#avisos` encima de la bienvenida; se oculta si no hay avisos vigentes o si la hoja no responde.
+- Fuente: `avisosHojaUrl` en `hugo.toml` = enlace normal de una Google Sheet compartida como "Cualquier persona con el
+  enlace: Lector". El navegador la lee vía `.../gviz/tq?tqx=out:csv&headers=1` (permite CORS). Región de la hoja: Colombia.
+- Columnas (se reconocen por nombre, sin importar mayúsculas/tildes; si no, por orden): Mensaje, Tipo
+  (`Info` | `Importante` | `Urgente`, idealmente con lista desplegable), Desde y Hasta (opcionales; sin Hasta el aviso
+  queda publicado hasta que lo borren). Fechas `DD/MM/AAAA` o `AAAA-MM-DD`.
+- Orden: Urgente → Importante → Info; dentro de cada tipo, la fila más abajo de la hoja (la más reciente) primero.
+  Se ven 3; el resto queda tras el botón "Ver más avisos (n)".
+
+### Indicador "Abierto ahora"
+- Se calcula en el navegador con la hora de Colombia a partir de `[[params.horarioAtencion]]` en `hugo.toml`.
+- Debe coincidir con el texto de `horario`.
+- **Festivos** → "Cerrado hoy · festivo (nombre)". Se calculan en el navegador (`festivosDelAnio()` en
+  `layouts/index.html`): fijos, trasladables al lunes (Ley Emiliani) y los que dependen de la Pascua.
+  Portado de https://github.com/alejandrocastellanos/colombian-holidays (MIT). Si una ley crea o cambia un
+  festivo, actualizar `FESTIVOS_FIJOS` / `FESTIVOS_AL_LUNES` (el cuarto valor es el año desde el que aplica).
+
+### Botón flotante de Portería
+- Solo en pantallas ≤ 768px; abre WhatsApp con `phonePorteria1`.
 
 ## 📝 Formulario PQRS
 
@@ -123,10 +173,7 @@ El sitio incluye un formulario PQRS (Peticiones, Quejas, Reclamos y Sugerencias)
    - **Formulario embebido**: Se puede completar directamente en la página `/pqrs/`
    - **Enlace externo**: Botón para abrir el formulario en una nueva pestaña de Google Forms
 
-2. **Acceso desde Index**:
-   - Sección `#pqrs` en la página principal con tarjeta informativa
-   - Botón "Ir al Formulario" → Lleva a `/pqrs/`
-   - Botón "Abrir en ventana externa" → Abre Google Forms directamente
+2. **Acceso desde Index**: tarjeta "PQRS y mantenimiento" en Accesos rápidos → `/pqrs/`
 
 3. **Entrada en el Menú**: El menú principal incluye enlace directo a PQRS
 
@@ -134,9 +181,7 @@ El sitio incluye un formulario PQRS (Peticiones, Quejas, Reclamos y Sugerencias)
 
 1. Crea un nuevo Google Form o modifica el existente
 2. Obtén el enlace para compartir
-3. Reemplaza la URL en:
-   - `layouts/index.html` (sección PQRS - botón externo)
-   - `layouts/pqrs/list.html` (iframe embebido y botón externo)
+3. Reemplaza la URL en `layouts/pqrs/list.html` (iframe embebido y botón externo)
 
 ## �📁 Sistema de Documentos Compartidos
 
@@ -217,16 +262,15 @@ static/images/
 ## 🎯 Características Principales
 
 ### Página Principal
-- Hero section con logo y descripción
-- 6 tarjetas de características (seguridad, áreas verdes, comunidad, salón social, ubicación, documentos)
-- **Documentos Compartidos - Google Drive**: Iframe embebido mostrando carpeta de documentos del club
-- **Comunidad WhatsApp**: Botón para unirse al grupo de residentes
-- **PQRS**: Tarjeta con enlaces al formulario (embebido en `/pqrs/` y externo)
-- **Directorio de Contacto**: Información completa de:
-  - Administración (dirección, teléfono WhatsApp, email, horario)
-  - Consejo de Administración (email)
-  - Comité de Convivencia (email)
+- Foto aérea (drone) con indicador "Explorar"
+- **Avisos** desde Google Sheet (opcional, ver arriba)
+- Bienvenida corta (`content/_index.md`)
+- **Accesos rápidos**: 8 tarjetas a todos los servicios (4 columnas en escritorio, 3 en tablet, 2 en celular)
+- **Directorio de Contacto** en tarjetas:
+  - Administración (dirección, horario con indicador "Abierto ahora", email, WhatsApp)
   - Portería (2 teléfonos con enlaces WhatsApp)
+  - Consejo de Administración y Comité de Convivencia (email)
+- Botón flotante de Portería en celular
 - Footer con copyright
 
 ### Página de Documentos (Opcional)
@@ -357,5 +401,5 @@ Para preguntas sobre el desarrollo del sitio, contactar a: handresc1127
 
 ---
 
-**Última actualización**: 18 de Marzo, 2026  
+**Última actualización**: 2 de Octubre, 2026 (rediseño del inicio: accesos rápidos, avisos, horario y portería)  
 **Versión**: 1.0.0
