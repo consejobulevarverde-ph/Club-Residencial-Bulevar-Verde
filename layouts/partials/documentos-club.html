@@ -251,7 +251,7 @@
     {{ else }}
         <div class="docs-vacio">
             <i class="bi bi-folder2-open fs-2 d-block mb-2"></i>
-            {{ if $errorCarga }}No pudimos cargar los documentos en este momento.{{ else }}Aún no hay documentos publicados.{{ end }}
+            {{ if $errorCarga }}No pudimos cargar los documentos en este momento. Por favor <a href="mailto:{{ site.Params.email }}">contacta a la administración</a> para reportar el problema.{{ else }}Aún no hay documentos publicados.{{ end }}
         </div>
     {{ end }}
 
