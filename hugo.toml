@@ -26,6 +26,17 @@ title = 'Club Residencial Bulevar Verde'
   # Comunidad
   whatsappComunidad = 'https://chat.whatsapp.com/HonY8ALBTlR6ivBNxyx0pv'
   
+  # personalDriveFolderId, documentosDriveFolderId y avisosHojaUrl se pueden cambiar SIN PR con las variables de
+  # GitHub PERSONAL_DRIVE_FOLDER_ID, DOCUMENTOS_DRIVE_FOLDER_ID y AVISOS_HOJA_URL (Settings → Secrets and variables →
+  # Actions → Variables) y luego Actions → "Deploy Firebase Hosting…" → Run workflow. Si la variable tiene valor, manda.
+  # Las carpetas aceptan el ID o el enlace completo de Drive.
+
+  # Personal de la unidad (módulo "Personal" del portal): carpeta de Drive que contiene las subcarpetas
+  # "Personal vigilancia" y "Personal aseo" (se reconocen por las palabras "vigilancia" y "aseo").
+  # Vacío = se usan esas subcarpetas dentro de la carpeta de documentos (documentosDriveFolderId).
+  # Cambio mensual: borrar la imagen vieja y subir la nueva a la subcarpeta; aparece en la siguiente publicación.
+  personalDriveFolderId = ''
+
   # Redes sociales
   facebook = ''
   instagram = ''
@@ -47,6 +58,28 @@ title = 'Club Residencial Bulevar Verde'
   apiFirebaseApiKey = "AIzaSyApa7cyLeX3grhBX6fGlIBpIEDJnVaDO6A"
   apiFirebaseAuthDomain = "project-7dd6d100-d8c2-427a-a80.firebaseapp.com"
   apiFirebaseProjectId = "project-7dd6d100-d8c2-427a-a80"
+
+  # Documentos del club (/documentos/): carpeta pública de Google Drive que se lee al generar el sitio.
+  # Agregar o quitar archivos en esa carpeta; los cambios aparecen en la siguiente publicación.
+  documentosDriveFolderId = '17_uBX6ZQvAjK5m1B1kvI6ONycOKjno7Z'
+
+  # Avisos del inicio: enlace de una Google Sheet compartida como "Cualquier persona con el enlace: Lector"
+  # (el enlace normal de compartir; no hace falta "Publicar en la web"). Configuración regional de la hoja: Colombia.
+  # Columnas: Mensaje, Tipo (Info | Importante | Urgente), Desde y Hasta (opcionales; sin "Hasta" el aviso queda
+  # publicado hasta que lo borren). Fechas DD/MM/AAAA o AAAA-MM-DD.
+  # Orden: Urgente, Importante, Info; dentro de cada tipo, la fila más abajo (la más reciente) primero.
+  # Se ven 3 y el resto tras el botón "Ver más avisos (n)". Vacío = no se muestra la franja de avisos.
+  avisosHojaUrl = ''
+
+  # Horario de atención de la administración para el indicador "Abierto ahora" (hora de Colombia).
+  # dias: 1 = lunes … 7 = domingo. Debe coincidir con el texto de "horario".
+  # Los festivos de Colombia se marcan como cerrado (cálculo en layouts/index.html: fijos, Ley Emiliani y Pascua).
+  [[params.horarioAtencion]]
+    dias = [1, 2, 3, 4, 5]
+    franjas = [["09:00", "13:00"], ["14:00", "17:00"]]
+  [[params.horarioAtencion]]
+    dias = [6]
+    franjas = [["09:00", "13:00"]]
 
 [menu]
   [[menu.main]]
@@ -73,3 +106,8 @@ title = 'Club Residencial Bulevar Verde'
     name = 'Datos'
     pageRef = '/datos-personales'
     weight = 6
+
+# Documentos: leer siempre la carpeta de Drive actualizada al generar el sitio (sin caché persistente).
+[caches]
+  [caches.getresource]
+    maxAge = 0

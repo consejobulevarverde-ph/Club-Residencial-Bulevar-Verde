@@ -223,30 +223,104 @@
             margin-bottom: 20px;
         }
         
-        .feature-card {
-            background-color: var(--color-white);
-            border-radius: 10px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        /* Accesos rápidos */
+        .accesos-section {
+            margin-bottom: 40px;
         }
-        
-        .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-        }
-        
-        .feature-card i {
-            font-size: 2.5rem;
-            color: var(--color-primary);
-            margin-bottom: 15px;
-        }
-        
-        .feature-card h3 {
+
+        .accesos-heading {
             color: var(--color-primary);
             font-weight: var(--font-weight-bold);
-            font-size: 1.3rem;
+            font-size: 1.5rem;
+            text-align: center;
+            margin-bottom: 18px;
+        }
+
+        .accesos-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .acceso-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 6px;
+            padding: 22px 14px;
+            background-color: var(--color-white);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            text-decoration: none;
+            color: inherit;
+            transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+        }
+
+        .acceso-card:hover,
+        .acceso-card:focus-visible {
+            transform: translateY(-3px);
+            border-color: var(--color-tertiary);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+            color: inherit;
+        }
+
+        .acceso-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--color-light);
+            color: var(--color-primary);
+            font-size: 1.6rem;
+            margin-bottom: 4px;
+        }
+
+        .acceso-titulo {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-bold);
+            font-size: 1.05rem;
+            line-height: 1.25;
+        }
+
+        .acceso-desc {
+            color: #5f6f60;
+            font-size: .85rem;
+            line-height: 1.3;
+        }
+
+        @media (max-width: 992px) {
+            .accesos-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 576px) {
+            .accesos-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+
+            .acceso-card {
+                padding: 16px 8px;
+            }
+
+            .acceso-icon {
+                width: 46px;
+                height: 46px;
+                font-size: 1.3rem;
+            }
+
+            .acceso-titulo {
+                font-size: .95rem;
+            }
+
+            .acceso-desc {
+                font-size: .76rem;
+            }
         }
         
         .btn-primary {
@@ -258,25 +332,6 @@
         .btn-primary:hover {
             background-color: var(--color-secondary);
             border-color: var(--color-secondary);
-        }
-        
-        .gallery-container {
-            position: relative;
-            width: 100%;
-            padding-bottom: 75%; /* 4:3 aspect ratio */
-            height: 0;
-            overflow: hidden;
-            border-radius: 0.5rem;
-        }
-        
-        .gallery-container iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border: 0;
-            border-radius: 0.5rem;
         }
         
         .section-card {
@@ -291,6 +346,174 @@
             color: var(--color-primary);
             font-weight: var(--font-weight-bold);
             margin-bottom: 20px;
+        }
+
+        /* Avisos de la administración */
+        .avisos {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+
+        .aviso {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 18px;
+            border-radius: 10px;
+            border-left: 5px solid;
+            background: var(--color-white);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .aviso i {
+            font-size: 1.25rem;
+            line-height: 1.3;
+            flex: 0 0 auto;
+        }
+
+        .avisos-extra {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .avisos-mas {
+            align-self: center;
+            border: 1px solid #cfe0cf;
+            background: var(--color-white);
+            color: var(--color-primary);
+            font-weight: var(--font-weight-semibold);
+            font-size: .9rem;
+            border-radius: 50px;
+            padding: 6px 18px;
+        }
+
+        .avisos-mas:hover,
+        .avisos-mas:focus-visible {
+            background: var(--color-light);
+        }
+
+        .aviso-info { border-color: var(--color-secondary); }
+        .aviso-info i { color: var(--color-secondary); }
+        .aviso-importante { border-color: #e0a100; background: #fff9e6; }
+        .aviso-importante i { color: #b07d00; }
+        .aviso-urgente { border-color: #c62828; background: #fdecea; }
+        .aviso-urgente i { color: #c62828; }
+
+        /* Indicador de horario de la administración */
+        .estado-admin {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+            padding: 2px 10px;
+            border-radius: 50px;
+            font-size: .82rem;
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .estado-admin::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .estado-admin.abierto { background: #e3f4e4; color: #1f7a2e; }
+        .estado-admin.cerrado { background: #f1f1f1; color: #6b6b6b; }
+
+        /* Botón flotante de Portería (solo celular) */
+        .porteria-flotante {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .porteria-flotante {
+                position: fixed;
+                right: 16px;
+                bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+                z-index: 1030;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 12px 18px;
+                border-radius: 50px;
+                background: #25d366;
+                color: #fff;
+                font-weight: var(--font-weight-bold);
+                text-decoration: none;
+                box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+            }
+
+            .porteria-flotante i {
+                font-size: 1.35rem;
+            }
+
+            .porteria-flotante:hover,
+            .porteria-flotante:focus-visible {
+                color: #fff;
+                background: #1ebe5b;
+            }
+
+            /* Espacio para que el botón no tape el final de la página */
+            body {
+                padding-bottom: 76px;
+            }
+        }
+
+        /* Directorio de contacto */
+        .contact-card {
+            height: 100%;
+            border: 1px solid #dfe9df;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .contact-card h3 {
+            font-size: 1.1rem;
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .contact-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .contact-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            overflow-wrap: anywhere;
+        }
+
+        .contact-list li > i {
+            color: var(--color-primary);
+            font-size: 1.15rem;
+            line-height: 1.4;
+            flex: 0 0 auto;
+        }
+
+        @media (max-width: 576px) {
+            .content-section {
+                padding: 24px 18px;
+            }
+
+            #contacto .content-section {
+                padding: 20px 16px !important;
+            }
         }
         
     </style>
@@ -315,263 +538,131 @@
 
     <!-- Main Content -->
     <div id="contenido" class="container pt-3">
+        <!-- Avisos (se cargan desde una Google Sheet; ver avisosHojaUrl en hugo.toml) -->
+        <div id="avisos" class="avisos" role="region" aria-label="Avisos de la administración" hidden></div>
+
         <div class="content-section">
             {{ .Content }}
         </div>
 
-        <!-- Features/Benefits -->
-        <div class="row">
-            <div class="col-md-4">
-                <div class="feature-card text-center">
-                    <i class="bi bi-shield-check"></i>
-                    <h3>Seguridad 24/7</h3>
-                    <p>Vigilancia permanente para tu tranquilidad y la de tu familia.</p>
-                </div>
+        <!-- Accesos rápidos -->
+        <section id="accesos" class="accesos-section" aria-labelledby="accesosTitulo">
+            <h2 id="accesosTitulo" class="accesos-heading">Accesos rápidos</h2>
+            <div class="accesos-grid">
+                <a class="acceso-card" href="{{ "reservas/" | relURL }}">
+                    <span class="acceso-icon"><i class="bi bi-calendar2-check"></i></span>
+                    <span class="acceso-titulo">Reservas</span>
+                    <span class="acceso-desc">Salones y canchas</span>
+                </a>
+                <a class="acceso-card" href="{{ "pqrs/" | relURL }}">
+                    <span class="acceso-icon"><i class="bi bi-tools"></i></span>
+                    <span class="acceso-titulo">PQRS y mantenimiento</span>
+                    <span class="acceso-desc">Reporta y consulta solicitudes</span>
+                </a>
+                <a class="acceso-card" href="{{ "personal/" | relURL }}">
+                    <span class="acceso-icon"><i class="bi bi-people-fill"></i></span>
+                    <span class="acceso-titulo">Personal</span>
+                    <span class="acceso-desc">Aseo y vigilancia</span>
+                </a>
+                <a class="acceso-card" href="{{ "sanciones/" | relURL }}">
+                    <span class="acceso-icon"><i class="bi bi-shield-exclamation"></i></span>
+                    <span class="acceso-titulo">Sanciones</span>
+                    <span class="acceso-desc">Consulta con tu placa</span>
+                </a>
+                <a class="acceso-card" href="{{ "datos-personales/" | relURL }}">
+                    <span class="acceso-icon"><i class="bi bi-person-vcard"></i></span>
+                    <span class="acceso-titulo">Mis datos</span>
+                    <span class="acceso-desc">Residentes, vehículos y más</span>
+                </a>
+                <a class="acceso-card" href="{{ "documentos/" | relURL }}">
+                    <span class="acceso-icon"><i class="bi bi-folder2-open"></i></span>
+                    <span class="acceso-titulo">Documentos</span>
+                    <span class="acceso-desc">Reglamentos, actas y comunicados</span>
+                </a>
+                <a class="acceso-card" href="{{ .Site.Params.whatsappComunidad }}" target="_blank" rel="noopener">
+                    <span class="acceso-icon"><i class="bi bi-whatsapp"></i></span>
+                    <span class="acceso-titulo">Comunidad</span>
+                    <span class="acceso-desc">Mantente informado y conectado con los demás residentes</span>
+                </a>
+                <a class="acceso-card" href="#contacto">
+                    <span class="acceso-icon"><i class="bi bi-telephone"></i></span>
+                    <span class="acceso-titulo">Contacto</span>
+                    <span class="acceso-desc">Administración y portería</span>
+                </a>
             </div>
-            <div class="col-md-4">
-                <div class="feature-card text-center">
-                    <i class="bi bi-tree"></i>
-                    <h3>Áreas Verdes</h3>
-                    <p>Espacios naturales diseñados para el disfrute y bienestar.</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="feature-card text-center">
-                    <i class="bi bi-people"></i>
-                    <h3>Comunidad</h3>
-                    <p>Un ambiente familiar donde todos nos conocemos.</p>
-                </div>
-            </div>
-        </div>
+        </section>
 
-        <div class="row mt-4">
-            <div class="col-md-4">
-                <div class="feature-card text-center">
-                    <i class="bi bi-building"></i>
-                    <h3>Salón Social</h3>
-                    <p>Espacio para eventos y reuniones de la comunidad.</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="feature-card text-center">
-                    <i class="bi bi-geo-alt"></i>
-                    <h3>Ubicación</h3>
-                    <p>Fácil acceso a vías principales, comercio y servicios.</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="feature-card text-center">
-                    <i class="bi bi-file-earmark-text"></i>
-                    <h3>Documentos</h3>
-                    <p>Acceso a reglamentos, actas y comunicados oficiales.</p>
-                </div>
-            </div>
-        </div>
 
-        <!-- Documentos Compartidos - Google Drive -->
-        <div id="galeria" class="section-card">
-            <h2 class="text-center">
-                <i class="bi bi-google"></i> Documentos Compartidos
-            </h2>
-            <p class="text-center"><i class="bi bi-folder-fill" style="color: var(--color-secondary);"></i> <strong>Accede a todos los documentos importantes del club</strong></p>
-            <div class="gallery-container">
-                <!-- Todos los documentos están almacenados en Google Drive -->
-                <iframe src="https://drive.google.com/embeddedfolderview?id=17_uBX6ZQvAjK5m1B1kvI6ONycOKjno7Z#grid" 
-                        allowfullscreen 
-                        loading="lazy"
-                        title="Documentos Compartidos Club Residencial Bulevar Verde">
-                </iframe>
-            </div>
-        </div>
-
-        <!-- Comunidad WhatsApp -->
-        <div id="comunidad" class="section-card">
-            <h2 class="text-center">
-                <i class="bi bi-whatsapp"></i> Únete a Nuestra Comunidad
-            </h2>
-            <p class="text-center mb-4">
-                Mantente informado y conectado con los demás
-            </p>
-            
-            <div class="row align-items-center">
-                <div class="col-md-6 mb-4 mb-md-0">
-                    <img src="{{ "images/Comunidad.png" | relURL }}" 
-                         alt="Comunidad Club Residencial Bulevar Verde" 
-                         class="img-fluid rounded shadow"
-                         style="max-width: 100%; height: auto;">
-                </div>
-                <div class="col-md-6 text-center">
-                    <h4 style="color: var(--color-primary); margin-bottom: 20px;">
-                        <i class="bi bi-people-fill"></i> Nuestra Comunidad
-                    </h4>
-                    <a href="{{ .Site.Params.whatsappComunidad }}" 
-                       target="_blank" 
-                       class="btn btn-success btn-lg">
-                        <i class="bi bi-whatsapp"></i> Grupo de WhatsApp
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Reservas de Zonas Comunes -->
-        <div id="reservas" class="section-card">
-            <h2 class="text-center">
-                <i class="bi bi-calendar-check"></i> Reservas de Zonas Comunes
-            </h2>
-            <p class="text-center mb-4">
-                Reserva los salones sociales y canchas del club. Consulta disponibilidad en tiempo real.
-            </p>
-            
-            <div class="row justify-content-center">
-                <div class="col-md-8">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-body text-center p-5">
-                            <i class="bi bi-building" style="font-size: 4rem; color: var(--color-primary);"></i>
-                            <h3 class="mt-3 mb-3" style="color: var(--color-primary);">Salones y Canchas</h3>
-                            <p class="text-muted mb-2">Salón Social 1 &bull; Salón Social 2 &bull; Salón Social 3</p>
-                            <p class="text-muted mb-4">Cancha Sintética 1 &bull; Cancha Sintética 2</p>
-                            <a href="{{ "reservas/" | relURL }}" class="btn btn-primary btn-lg">
-                                <i class="bi bi-calendar-check"></i> Ir a Reservas
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- PQRS - Peticiones, Quejas, Reclamos y Sugerencias -->
-        <div id="pqrs" class="section-card">
-            <h2 class="text-center">
-                <i class="bi bi-chat-left-text"></i> PQRS - Peticiones, Quejas, Reclamos y Sugerencias
-            </h2>
-            <p class="text-center mb-4">
-                Tu opinión es importante para nosotros. Comparte tus peticiones, quejas, reclamos o sugerencias.
-            </p>
-            
-            <div class="row justify-content-center">
-                <div class="col-md-8">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-body text-center p-5">
-                            <i class="bi bi-clipboard-check" style="font-size: 4rem; color: var(--color-primary);"></i>
-                            <h3 class="mt-3 mb-3" style="color: var(--color-primary);">Formulario PQRS</h3>
-                            <p class="text-muted mb-4">
-                                Envíanos tus peticiones, quejas, reclamos o sugerencias. 
-                                Tu feedback nos ayuda a mejorar continuamente.
-                            </p>
-                            <div class="d-flex flex-column gap-3">
-                                <a href="{{ "pqrs/" | relURL }}" class="btn btn-primary btn-lg">
-                                    <i class="bi bi-pencil-square"></i> Ir al Formulario
-                                </a>
-                                <a href="https://docs.google.com/forms/d/e/1FAIpQLSfUum_qRdTFr2Pl1n1Z_p0rkI162pxVyFqRm-jHbiGP_LwARg/viewform" 
-                                   target="_blank" 
-                                   class="btn btn-outline-primary">
-                                    <i class="bi bi-box-arrow-up-right"></i> Abrir en ventana externa
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <p class="text-center mt-3 text-muted">
-                <small><i class="bi bi-info-circle"></i> Todas las solicitudes serán atendidas por la administración</small>
-            </p>
-        </div>
     </div>
 
     <!-- Contact Section -->
     <section id="contacto" class="container my-4">
         <div class="content-section" style="padding: 30px;">
-            <h2 class="text-center mb-3">Directorio de Contacto</h2>
-            
-            <!-- Administración -->
-            <div class="mb-3">
-                <h4 class="text-center mb-3" style="color: var(--color-primary);">
-                    <i class="bi bi-building"></i> Administración
-                </h4>
-                <div class="row justify-content-center">
-                    <div class="col-12 col-md-5 mb-2">
-                        <p class="d-flex align-items-start mb-0">
-                            <i class="bi bi-geo-alt-fill me-2" style="font-size: 1.5rem; color: var(--color-primary); margin-top: 2px;"></i>
-                            <span>{{ .Site.Params.address }}</span>
-                        </p>
-                    </div>
-                    <div class="col-12 col-md-5 mb-2">
-                        <p class="d-flex align-items-start mb-0">
-                            <i class="bi bi-whatsapp me-2" style="font-size: 1.5rem; color: var(--color-primary); margin-top: 2px;"></i>
-                            <span>
-                                <a href="https://wa.me/{{ .Site.Params.phone }}" target="_blank" class="btn btn-sm btn-outline-success">
+            <h2 class="text-center mb-4">Directorio de Contacto</h2>
+
+            <div class="row g-3">
+                <!-- Administración -->
+                <div class="col-12 col-lg-6">
+                    <div class="contact-card">
+                        <h3><i class="bi bi-building"></i> Administración</h3>
+                        <ul class="contact-list">
+                            <li><i class="bi bi-geo-alt-fill"></i><span>{{ .Site.Params.address }}</span></li>
+                            <li>
+                                <i class="bi bi-clock-fill"></i>
+                                <span>
+                                    {{ .Site.Params.horario }}
+                                    <span id="estadoAdmin" class="estado-admin" hidden></span>
+                                </span>
+                            </li>
+                            <li><i class="bi bi-envelope-fill"></i><a href="mailto:{{ .Site.Params.email }}">{{ .Site.Params.email }}</a></li>
+                            <li>
+                                <i class="bi bi-whatsapp"></i>
+                                <a href="https://wa.me/{{ .Site.Params.phone }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success">
                                     <i class="bi bi-whatsapp"></i> +57 322 228 9066
                                 </a>
-                            </span>
-                        </p>
-                    </div>
-                    <div class="col-12 col-md-5 mb-2">
-                        <p class="d-flex align-items-start mb-0">
-                            <i class="bi bi-envelope-fill me-2" style="font-size: 1.5rem; color: var(--color-primary); margin-top: 2px;"></i>
-                            <span><a href="mailto:{{ .Site.Params.email }}" style="margin-top: 2px; display: inline-block;">{{ .Site.Params.email }}</a></span>
-                        </p>
-                    </div>
-                    <div class="col-12 col-md-5 mb-2">
-                        <p class="d-flex align-items-start mb-0">
-                            <i class="bi bi-clock-fill me-2" style="font-size: 1.5rem; color: var(--color-primary); margin-top: 2px;"></i>
-                            <span style="margin-top: 2px;"><small>{{ .Site.Params.horario }}</small></span>
-                        </p>
+                            </li>
+                        </ul>
                     </div>
                 </div>
-            </div>
 
-            <!-- Consejo de Administración -->
-            <div class="mb-3">
-                <h4 class="text-center mb-3" style="color: var(--color-primary);">
-                    <i class="bi bi-people-fill"></i> Consejo de Administración
-                </h4>
-                <div class="d-flex justify-content-center">
-                    <p class="d-flex align-items-center mb-0">
-                        <i class="bi bi-envelope-fill me-2" style="font-size: 1.5rem; color: var(--color-primary);"></i>
-                        <a href="mailto:{{ .Site.Params.emailConsejo }}">{{ .Site.Params.emailConsejo }}</a>
-                    </p>
-                </div>
-            </div>
-
-            <!-- Comité de Convivencia -->
-            <div class="mb-3">
-                <h4 class="text-center mb-3" style="color: var(--color-primary);">
-                    <i class="bi bi-heart-fill"></i> Comité de Convivencia
-                </h4>
-                <div class="d-flex justify-content-center">
-                    <p class="d-flex align-items-center mb-0">
-                        <i class="bi bi-envelope-fill me-2" style="font-size: 1.5rem; color: var(--color-primary);"></i>
-                        <a href="mailto:{{ .Site.Params.emailConvivencia }}">{{ .Site.Params.emailConvivencia }}</a>
-                    </p>
-                </div>
-            </div>
-
-            <!-- Portería -->
-            <div class="mb-2">
-                <h4 class="text-center mb-3" style="color: var(--color-primary);">
-                    <i class="bi bi-shield-check"></i> Portería
-                </h4>
-                <div class="row justify-content-center">
-                    <div class="col-12 col-md-5 mb-2">
-                        <p class="d-flex align-items-start mb-0">
-                            <i class="bi bi-telephone-fill me-2" style="font-size: 1.5rem; color: var(--color-primary); margin-top: 2px;"></i>
-                            <span style="margin-top: 2px;">
-                                <a href="https://wa.me/{{ .Site.Params.phonePorteria1 }}" target="_blank" class="btn btn-sm btn-outline-success">
+                <!-- Portería -->
+                <div class="col-12 col-lg-6">
+                    <div class="contact-card">
+                        <h3><i class="bi bi-shield-check"></i> Portería</h3>
+                        <ul class="contact-list">
+                            <li>
+                                <i class="bi bi-telephone-fill"></i>
+                                <a href="https://wa.me/{{ .Site.Params.phonePorteria1 }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success">
                                     <i class="bi bi-whatsapp"></i> +57 300 972 8851
                                 </a>
-                            </span>
-                        </p>
-                    </div>
-                    <div class="col-12 col-md-5 mb-2">
-                        <p class="d-flex align-items-start mb-0">
-                            <i class="bi bi-telephone-fill me-2" style="font-size: 1.5rem; color: var(--color-primary); margin-top: 2px;"></i>
-                            <span style="margin-top: 2px;">
-                                <a href="https://wa.me/{{ .Site.Params.phonePorteria2 }}" target="_blank" class="btn btn-sm btn-outline-success">
+                            </li>
+                            <li>
+                                <i class="bi bi-telephone-fill"></i>
+                                <a href="https://wa.me/{{ .Site.Params.phonePorteria2 }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success">
                                     <i class="bi bi-whatsapp"></i> +57 324 582 0968
                                 </a>
-                            </span>
-                        </p>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Consejo de Administración -->
+                <div class="col-12 col-md-6">
+                    <div class="contact-card">
+                        <h3><i class="bi bi-people-fill"></i> Consejo de Administración</h3>
+                        <ul class="contact-list">
+                            <li><i class="bi bi-envelope-fill"></i><a href="mailto:{{ .Site.Params.emailConsejo }}">{{ .Site.Params.emailConsejo }}</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Comité de Convivencia -->
+                <div class="col-12 col-md-6">
+                    <div class="contact-card">
+                        <h3><i class="bi bi-heart-fill"></i> Comité de Convivencia</h3>
+                        <ul class="contact-list">
+                            <li><i class="bi bi-envelope-fill"></i><a href="mailto:{{ .Site.Params.emailConvivencia }}">{{ .Site.Params.emailConvivencia }}</a></li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -580,7 +671,274 @@
 
     {{ partial "footer" . }}
 
+    <!-- Botón flotante de Portería (solo en celular) -->
+    <a href="https://wa.me/{{ .Site.Params.phonePorteria1 }}" target="_blank" rel="noopener" class="porteria-flotante" aria-label="Escribir a portería por WhatsApp">
+        <i class="bi bi-whatsapp"></i><span>Portería</span>
+    </a>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (function () {
+            'use strict';
+
+            var HORARIO = {{ .Site.Params.horarioAtencion | default slice | jsonify | safeJS }};
+            var AVISOS_HOJA_URL = {{ .Site.Params.avisosHojaUrl | default "" | jsonify | safeJS }};
+            var ZONA = 'America/Bogota';
+
+            // Fecha y hora actuales en Colombia, sin depender de la zona horaria del dispositivo.
+            function ahoraColombia() {
+                var partes = {};
+                new Intl.DateTimeFormat('en-US', {
+                    timeZone: ZONA, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+                }).formatToParts(new Date()).forEach(function (p) { partes[p.type] = p.value; });
+                return {
+                    dia: { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[partes.weekday],
+                    minutos: Number(partes.hour) * 60 + Number(partes.minute),
+                    fecha: partes.year + '-' + partes.month + '-' + partes.day,
+                    anio: Number(partes.year),
+                    mes: Number(partes.month),
+                    diaMes: Number(partes.day)
+                };
+            }
+
+            /* ---------- Festivos de Colombia ----------
+               Portado a JavaScript desde https://github.com/alejandrocastellanos/colombian-holidays (MIT):
+               fijos, trasladables al lunes (Ley 51 de 1983, "Ley Emiliani") y los que dependen de la Pascua. */
+            var FESTIVOS_FIJOS = [
+                [1, 1, 'Año Nuevo'], [5, 1, 'Día del Trabajo'], [7, 20, 'Día de la Independencia'],
+                [8, 7, 'Batalla de Boyacá'], [12, 8, 'Inmaculada Concepción'], [12, 25, 'Navidad']
+            ];
+            // [mes, día, nombre, año desde el que aplica (opcional)]
+            var FESTIVOS_AL_LUNES = [
+                [1, 6, 'Reyes Magos'], [3, 19, 'San José'], [6, 29, 'San Pedro y San Pablo'],
+                [7, 9, 'Nuestra Señora del Rosario de Chiquinquirá', 2026], // Ley 2578 de 2026
+                [8, 15, 'Asunción de la Virgen'], [10, 12, 'Día de la Raza'], [11, 1, 'Todos los Santos'],
+                [11, 11, 'Independencia de Cartagena']
+            ];
+            var festivosPorAnio = {};
+
+            // Domingo de Pascua (algoritmo de Meeus/Jones/Butcher), en UTC para evitar saltos por zona horaria.
+            function pascua(anio) {
+                var a = anio % 19, b = Math.floor(anio / 100), c = anio % 100, d = Math.floor(b / 4), e = b % 4;
+                var f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+                var h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+                var l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+                var mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+                return Date.UTC(anio, mes - 1, dia);
+            }
+
+            function claveFecha(ms) {
+                var f = new Date(ms);
+                return (f.getUTCMonth() + 1) + '-' + f.getUTCDate();
+            }
+
+            function alLunes(ms) {
+                var diaSemana = new Date(ms).getUTCDay(); // 0 = domingo, 1 = lunes
+                return ms + ((8 - diaSemana) % 7) * 86400000;
+            }
+
+            function festivosDelAnio(anio) {
+                if (festivosPorAnio[anio]) return festivosPorAnio[anio];
+                var lista = {};
+                FESTIVOS_FIJOS.forEach(function (f) { lista[f[0] + '-' + f[1]] = f[2]; });
+                FESTIVOS_AL_LUNES.forEach(function (f) {
+                    if (!f[3] || anio >= f[3]) lista[claveFecha(alLunes(Date.UTC(anio, f[0] - 1, f[1])))] = f[2];
+                });
+                var p = pascua(anio), dia = 86400000;
+                lista[claveFecha(p - 3 * dia)] = 'Jueves Santo';
+                lista[claveFecha(p - 2 * dia)] = 'Viernes Santo';
+                lista[claveFecha(p + 43 * dia)] = 'Ascensión del Señor';
+                lista[claveFecha(p + 64 * dia)] = 'Corpus Christi';
+                lista[claveFecha(p + 71 * dia)] = 'Sagrado Corazón';
+                festivosPorAnio[anio] = lista;
+                return lista;
+            }
+
+            function festivoDeHoy(ahora) {
+                return festivosDelAnio(ahora.anio)[ahora.mes + '-' + ahora.diaMes] || '';
+            }
+
+            function aMinutos(hhmm) {
+                var p = String(hhmm).split(':');
+                return Number(p[0]) * 60 + Number(p[1] || 0);
+            }
+
+            function formatoHora(hhmm) {
+                var m = aMinutos(hhmm), h = Math.floor(m / 60), min = m % 60;
+                return ((h % 12) || 12) + ':' + (min < 10 ? '0' : '') + min + (h < 12 ? ' a. m.' : ' p. m.');
+            }
+
+            // "a la 1:00 p. m." pero "a las 5:00 p. m."
+            function aLaHora(hhmm) {
+                return (Math.floor(aMinutos(hhmm) / 60) % 12 === 1 ? 'a la ' : 'a las ') + formatoHora(hhmm);
+            }
+
+            /* ---------- Indicador "Abierto ahora" de la administración ---------- */
+            function actualizarEstadoAdmin() {
+                var el = document.getElementById('estadoAdmin');
+                if (!el || !HORARIO.length) return;
+                var ahora = ahoraColombia();
+                var festivo = festivoDeHoy(ahora);
+                if (festivo) {
+                    el.className = 'estado-admin cerrado';
+                    el.textContent = 'Cerrado hoy · festivo (' + festivo + ')';
+                    el.hidden = false;
+                    return;
+                }
+                var franjas = [];
+                HORARIO.forEach(function (bloque) {
+                    if ((bloque.dias || []).indexOf(ahora.dia) !== -1) franjas = franjas.concat(bloque.franjas || []);
+                });
+                var abierta = franjas.filter(function (f) {
+                    return ahora.minutos >= aMinutos(f[0]) && ahora.minutos < aMinutos(f[1]);
+                })[0];
+                var proxima = franjas.filter(function (f) { return aMinutos(f[0]) > ahora.minutos; })
+                    .sort(function (a, b) { return aMinutos(a[0]) - aMinutos(b[0]); })[0];
+
+                el.className = 'estado-admin ' + (abierta ? 'abierto' : 'cerrado');
+                el.textContent = abierta ? 'Abierto ahora · cierra ' + aLaHora(abierta[1])
+                    : proxima ? 'Cerrado ahora · abre ' + aLaHora(proxima[0])
+                    : 'Cerrado ahora';
+                el.hidden = false;
+            }
+
+            /* ---------- Avisos desde Google Sheets (CSV) ---------- */
+            function parsearCsv(texto) {
+                var filas = [], fila = [], campo = '', comillas = false;
+                for (var i = 0; i < texto.length; i++) {
+                    var c = texto[i];
+                    if (comillas) {
+                        if (c === '"' && texto[i + 1] === '"') { campo += '"'; i++; }
+                        else if (c === '"') comillas = false;
+                        else campo += c;
+                    } else if (c === '"') comillas = true;
+                    else if (c === ',') { fila.push(campo); campo = ''; }
+                    else if (c === '\n' || c === '\r') {
+                        if (c === '\r' && texto[i + 1] === '\n') i++;
+                        fila.push(campo); filas.push(fila); fila = []; campo = '';
+                    } else campo += c;
+                }
+                if (campo || fila.length) { fila.push(campo); filas.push(fila); }
+                return filas;
+            }
+
+            // Acepta AAAA-MM-DD o DD/MM/AAAA (formato habitual de Sheets en español).
+            function normalizarFecha(valor) {
+                var v = String(valor || '').trim(), m;
+                if ((m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+                if ((m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+                return '';
+            }
+
+            // Acepta el enlace normal de una Google Sheet (compartida como "cualquier persona con el enlace: lector")
+            // y lo convierte en su exportación CSV (gviz permite leerla desde el sitio). Otra URL se usa tal cual.
+            function urlCsvAvisos(url) {
+                var m = String(url).match(/docs\.google\.com\/spreadsheets\/d\/([\w-]+)/);
+                if (!m || /output=csv|\/pub/.test(url)) return url;
+                return 'https://docs.google.com/spreadsheets/d/' + m[1] + '/gviz/tq?tqx=out:csv&headers=1';
+            }
+
+            function sinTildes(texto) {
+                return String(texto || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+            }
+
+            // Ubica las columnas por nombre ("Tipo mensaje", "Fecha desde"…); si no las encuentra, usa el orden
+            // mensaje, tipo, desde, hasta.
+            function columnasAvisos(cabecera) {
+                var h = cabecera.map(sinTildes);
+                function buscar(prueba, porDefecto) {
+                    for (var i = 0; i < h.length; i++) if (prueba(h[i])) return i;
+                    return porDefecto;
+                }
+                return {
+                    tipo: buscar(function (t) { return t.indexOf('tipo') !== -1; }, 1),
+                    mensaje: buscar(function (t) { return t.indexOf('mensaje') !== -1 && t.indexOf('tipo') === -1; }, 0),
+                    desde: buscar(function (t) { return t.indexOf('desde') !== -1 || t.indexOf('inicio') !== -1; }, 2),
+                    hasta: buscar(function (t) { return t.indexOf('hasta') !== -1 || t.indexOf('fin') !== -1; }, 3)
+                };
+            }
+
+            function cargarAvisos() {
+                var contenedor = document.getElementById('avisos');
+                if (!contenedor || !AVISOS_HOJA_URL) return;
+                fetch(urlCsvAvisos(AVISOS_HOJA_URL), { cache: 'no-store' })
+                    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+                    .then(function (texto) {
+                        var filas = parsearCsv(texto);
+                        var col = columnasAvisos(filas.shift() || []);
+                        var hoy = ahoraColombia().fecha;
+                        var iconos = { info: 'bi-info-circle-fill', importante: 'bi-megaphone-fill', urgente: 'bi-exclamation-triangle-fill' };
+
+                        var prioridad = { urgente: 0, importante: 1, info: 2 };
+                        var vigentes = filas.map(function (f, fila) {
+                            var tipo = sinTildes(f[col.tipo]);
+                            return {
+                                fila: fila,
+                                mensaje: (f[col.mensaje] || '').trim(),
+                                tipo: iconos[tipo] ? tipo : 'info',
+                                desde: normalizarFecha(f[col.desde]),
+                                hasta: normalizarFecha(f[col.hasta])
+                            };
+                        // "Desde" y "Hasta" son opcionales: sin "Hasta" el aviso queda publicado hasta que lo borren.
+                        }).filter(function (a) {
+                            return a.mensaje && (!a.desde || a.desde <= hoy) && (!a.hasta || a.hasta >= hoy);
+                        // Orden: Urgente, Importante, Info; dentro de cada tipo, el más reciente (más abajo en la hoja) primero.
+                        }).sort(function (a, b) {
+                            return (prioridad[a.tipo] - prioridad[b.tipo]) || (b.fila - a.fila);
+                        });
+
+                        if (!vigentes.length) return;
+
+                        function crearAviso(a) {
+                            var item = document.createElement('div');
+                            item.className = 'aviso aviso-' + a.tipo;
+                            var icono = document.createElement('i');
+                            icono.className = 'bi ' + iconos[a.tipo];
+                            var texto = document.createElement('span');
+                            texto.textContent = a.mensaje;
+                            item.appendChild(icono);
+                            item.appendChild(texto);
+                            return item;
+                        }
+
+                        // Se muestran 3; el resto queda detrás del botón "Ver más avisos (n)".
+                        var VISIBLES = 3;
+                        vigentes.slice(0, VISIBLES).forEach(function (a) { contenedor.appendChild(crearAviso(a)); });
+                        var resto = vigentes.slice(VISIBLES);
+                        if (resto.length) {
+                            var extra = document.createElement('div');
+                            extra.className = 'avisos-extra';
+                            extra.id = 'avisosExtra';
+                            extra.hidden = true;
+                            resto.forEach(function (a) { extra.appendChild(crearAviso(a)); });
+
+                            var boton = document.createElement('button');
+                            boton.type = 'button';
+                            boton.className = 'avisos-mas';
+                            boton.setAttribute('aria-controls', 'avisosExtra');
+                            boton.setAttribute('aria-expanded', 'false');
+                            var textoMas = 'Ver más avisos (' + resto.length + ')';
+                            boton.textContent = textoMas;
+                            boton.addEventListener('click', function () {
+                                extra.hidden = !extra.hidden;
+                                boton.setAttribute('aria-expanded', String(!extra.hidden));
+                                boton.textContent = extra.hidden ? textoMas : 'Ver menos avisos';
+                            });
+
+                            contenedor.appendChild(extra);
+                            contenedor.appendChild(boton);
+                        }
+                        contenedor.hidden = false;
+                    })
+                    .catch(function () { /* Sin avisos si la hoja no responde: el resto del inicio no se afecta. */ });
+            }
+
+            actualizarEstadoAdmin();
+            setInterval(actualizarEstadoAdmin, 60000);
+            cargarAvisos();
+        }());
+    </script>
 </body>
 </html>

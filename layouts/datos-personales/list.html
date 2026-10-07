@@ -112,10 +112,202 @@
     }
 
     html:not(.modo-reservas) .solo-reservas,
+    html:not(.modo-personal) .solo-personal,
+    html:not(.modo-documentos) .solo-documentos,
     html.modo-reservas .solo-datos,
+    html.modo-personal .solo-datos,
+    html.modo-documentos .solo-datos,
     html:not(.con-sesion) .solo-con-sesion,
     html.con-sesion .solo-sin-sesion {
       display: none !important
+    }
+
+    /* La franja "Ir a" siempre está visible; las pestañas de "Mis datos" solo cuando no se está en un módulo. */
+    html.en-modulo #profileTabsWrap {
+      display: none !important
+    }
+
+    .modulo-nav {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .4rem
+    }
+
+    .modulo-nav-label {
+      flex: 0 0 auto;
+      color: var(--bv-muted);
+      font-size: .85rem;
+      padding: 0 .4rem
+    }
+
+    .modulo-nav button {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      border: 0;
+      background: transparent;
+      color: var(--bv-primary);
+      font-weight: 600;
+      padding: .45rem .8rem;
+      border-radius: 50px;
+      white-space: nowrap
+    }
+
+    .modulo-nav button:hover {
+      background: #eef6ee
+    }
+
+    .modulo-nav button.active {
+      background: var(--bv-primary);
+      color: #fff
+    }
+
+    /* En celular: "Ir a" como 4 botones iguales (ícono arriba) y pestañas compactas en varias filas, sin desplazamiento lateral */
+    @media (max-width: 576px) {
+      .modulo-nav {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .25rem
+      }
+
+      .modulo-nav-label {
+        display: none
+      }
+
+      .modulo-nav button {
+        flex-direction: column;
+        gap: .15rem;
+        padding: .45rem .2rem;
+        border-radius: .75rem;
+        font-size: .78rem;
+        white-space: normal;
+        line-height: 1.15
+      }
+
+      .modulo-nav button i {
+        font-size: 1.2rem
+      }
+
+      #profileTabsWrap {
+        padding: .6rem !important
+      }
+
+      #profileTabs {
+        gap: .35rem !important
+      }
+
+      #profileTabs .nav-link {
+        padding: .4rem .7rem;
+        font-size: .88rem
+      }
+    }
+
+    .personal-titulo {
+      color: var(--bv-primary);
+      font-weight: 700;
+      margin-bottom: .75rem
+    }
+
+    .personal-imagen button {
+      display: block;
+      width: 100%;
+      padding: 0;
+      border: 1px solid var(--bv-border);
+      border-radius: .75rem;
+      overflow: hidden;
+      background: #fff;
+      cursor: zoom-in
+    }
+
+    .personal-visor {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      background: rgba(15, 20, 15, .94);
+      display: flex;
+      flex-direction: column
+    }
+
+    .personal-visor.hidden {
+      display: none
+    }
+
+    .personal-visor-barra {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: calc(.6rem + env(safe-area-inset-top, 0px)) .75rem .6rem;
+      color: #fff
+    }
+
+    .personal-visor-titulo {
+      flex: 1 1 auto;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    .personal-visor-btn {
+      flex: 0 0 auto;
+      width: 44px;
+      height: 44px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .15);
+      color: #fff;
+      font-size: 1.25rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .personal-visor-btn:hover,
+    .personal-visor-btn:focus-visible {
+      background: rgba(255, 255, 255, .3)
+    }
+
+    .personal-visor-lienzo {
+      flex: 1 1 auto;
+      overflow: auto;
+      display: flex;
+      padding: 0 .75rem calc(.75rem + env(safe-area-inset-bottom, 0px));
+      -webkit-overflow-scrolling: touch
+    }
+
+    .personal-visor-lienzo img {
+      margin: auto;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      background: #fff;
+      border-radius: .5rem;
+      cursor: zoom-in
+    }
+
+    /* Ampliado: la imagen se muestra al doble del ancho disponible y se recorre con scroll */
+    .personal-visor.ampliado .personal-visor-lienzo img {
+      max-width: none;
+      max-height: none;
+      width: 200%;
+      cursor: zoom-out
+    }
+
+    body.visor-abierto {
+      overflow: hidden
+    }
+
+    .personal-imagen img {
+      display: block;
+      width: 100%;
+      height: auto
+    }
+
+    .personal-imagen-vertical {
+      max-width: 640px;
+      margin: 0 auto
     }
 
     .reserva-beneficios li {
@@ -555,11 +747,14 @@
   {{ partial "header" . }}
 
   <script>
-    // Modo reservas (/reservas/ redirige aquí con ?modulo=reservas): se aplica antes de pintar para evitar parpadeo.
+    // Modo por módulo (/reservas/, /personal/ y /documentos/ redirigen aquí con ?modulo=...): se aplica antes de pintar para evitar parpadeo.
     // Con sesión iniciada, el modo lo decide la pestaña activa (ver actualizarEncabezado()).
-    if (new URLSearchParams(window.location.search).get('modulo') === 'reservas') {
-      document.documentElement.classList.add('modo-reservas');
-    }
+    (function () {
+      var modulo = new URLSearchParams(window.location.search).get('modulo');
+      if (modulo === 'reservas' || modulo === 'personal' || modulo === 'documentos') {
+        document.documentElement.classList.add('modo-' + modulo);
+      }
+    }());
   </script>
 
   <header class="page-header">
@@ -572,6 +767,16 @@
       <h1><i class="bi bi-calendar2-check me-2"></i>Reserva de zonas comunes</h1>
       <p class="mb-0 solo-sin-sesion">Identifícate con tu apartamento para consultar disponibilidad y reservar los espacios del club.</p>
       <p class="mb-0 solo-con-sesion">Consulta la disponibilidad, reserva los espacios del club y sigue el estado de tus reservas.</p>
+    </div>
+    <div class="container solo-personal">
+      <h1><i class="bi bi-people me-2"></i>Personal de la unidad</h1>
+      <p class="mb-0 solo-sin-sesion">Identifícate con tu apartamento para conocer al personal de vigilancia y aseo.</p>
+      <p class="mb-0 solo-con-sesion">Conoce al personal de vigilancia y aseo que trabaja en la unidad.</p>
+    </div>
+    <div class="container solo-documentos">
+      <h1><i class="bi bi-folder2-open me-2"></i>Documentos del club</h1>
+      <p class="mb-0 solo-sin-sesion">Identifícate con tu apartamento para consultar los documentos oficiales del club.</p>
+      <p class="mb-0 solo-con-sesion">Reglamentos, comunicados y documentos oficiales del club.</p>
     </div>
   </header>
 
@@ -591,6 +796,21 @@
               <li><i class="bi bi-clock-history"></i>Sigue el estado de tus reservas</li>
             </ul>
           </div>
+          <div class="solo-personal">
+            <h2 class="section-title h4">¿En qué apartamento vives?</h2>
+            <ul class="reserva-beneficios list-unstyled mb-0 mt-3">
+              <li><i class="bi bi-shield-check"></i>Personal de vigilancia por puesto</li>
+              <li><i class="bi bi-stars"></i>Personal de aseo por torre y servicio</li>
+            </ul>
+          </div>
+          <div class="solo-documentos">
+            <h2 class="section-title h4">¿En qué apartamento vives?</h2>
+            <ul class="reserva-beneficios list-unstyled mb-0 mt-3">
+              <li><i class="bi bi-journal-bookmark"></i>Reglamentos de la copropiedad</li>
+              <li><i class="bi bi-megaphone"></i>Comunicados y decisiones de asamblea</li>
+              <li><i class="bi bi-cash-coin"></i>Presupuesto e información de pagos</li>
+            </ul>
+          </div>
         </div>
         <div class="col-lg-7">
           <form id="unitForm" class="row g-3">
@@ -605,7 +825,7 @@
               <p class="small-note habeas-data-note mt-2 mb-0">
                 <i class="bi bi-shield-lock me-1"></i>
                 Al ingresar, registrar o modificar esta información aceptas nuestra política de tratamiento de datos personales (Ley 1581 de 2012).
-                <button type="button" class="btn btn-link btn-sm p-0 align-baseline habeas-data-trigger" data-bs-toggle="popover" data-bs-html="true" data-bs-placement="top" data-bs-title="Tratamiento de datos personales" data-bs-content="&lt;p&gt;En cumplimiento de la Ley 1581 de 2012 y el Decreto 1377 de 2013, el Club Residencial Bulevar Verde recolecta, almacena, usa, circula y suprime los datos personales que registras en este portal (información personal y de contacto, datos del grupo familiar y residentes, vehículos, mascotas y contactos de emergencia), con el fin de: garantizar la seguridad y el control de acceso a la copropiedad; informarte sobre eventos, novedades y situaciones de emergencia; gestionar comunicaciones administrativas; mantener actualizada la base de datos de residentes; y cumplir con las disposiciones legales aplicables a la propiedad horizontal.&lt;/p&gt;&lt;p&gt;Tus datos serán tratados de forma confidencial y segura. Tienes derecho a conocer, actualizar, rectificar y solicitar la supresión de tus datos personales, derechos que puedes ejercer escribiendo a &lt;a href=&quot;mailto:bulevarverdeadmon@gmail.com&quot;&gt;bulevarverdeadmon@gmail.com&lt;/a&gt; o en la oficina de administración, donde también puedes consultar la política de tratamiento de datos completa.&lt;/p&gt;">
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline habeas-data-trigger" data-bs-toggle="popover" data-bs-html="true" data-bs-placement="top" data-bs-title="Tratamiento de datos personales" data-bs-content="&lt;p&gt;En cumplimiento de la Ley 1581 de 2012 y el Decreto 1377 de 2013, el Club Residencial Bulevar Verde recolecta, almacena, usa, circula y suprime los datos personales que registras en este portal (información personal y de contacto, datos del grupo familiar y residentes, vehículos, mascotas y contactos de emergencia), con el fin de: garantizar la seguridad y el control de acceso a la copropiedad; informarte sobre eventos, novedades y situaciones de emergencia; gestionar comunicaciones administrativas; mantener actualizada la base de datos de residentes; y cumplir con las disposiciones legales aplicables a la propiedad horizontal.&lt;/p&gt;&lt;p&gt;Tus datos serán tratados de forma confidencial y segura. Tienes derecho a conocer, actualizar, rectificar y solicitar la supresión de tus datos personales, derechos que puedes ejercer escribiendo a &lt;a href=&quot;mailto:bulevarverdeadmon@gmail.com&quot;&gt;bulevarverdeadmon@gmail.com&lt;/a&gt; o en la oficina de administración, donde también puedes consultar la política de tratamiento de datos completa.&lt;/p&gt;&lt;p class=&quot;mb-0&quot;&gt;&lt;a href=&quot;{{ "politica-datos-personales/" | relURL }}&quot;&gt;&lt;strong&gt;Ver la política completa →&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;">
                   Ver detalle
                 </button>
               </p>
@@ -641,7 +861,7 @@
         <div id="emailOptions" class="d-grid gap-2 my-4"></div>
         <div class="row g-2">
           <div class="col-md-8 d-grid">
-            <button id="verifySecurityBtn" class="btn btn-primary btn-lg" type="submit"><span class="solo-datos">Verificar y entrar</span><span class="solo-reservas">Verificar e ir a reservas</span></button>
+            <button id="verifySecurityBtn" class="btn btn-primary btn-lg" type="submit"><span class="solo-datos">Verificar y entrar</span><span class="solo-reservas">Verificar e ir a reservas</span><span class="solo-personal">Verificar y ver el personal</span><span class="solo-documentos">Verificar y ver los documentos</span></button>
           </div>
           <div class="col-md-4 d-grid">
             <button id="backToDocumentBtn" class="btn btn-outline-secondary btn-lg" type="button">Regresar</button>
@@ -665,20 +885,29 @@
       <p class="small-note habeas-data-note mb-3">
         <i class="bi bi-shield-lock me-1"></i>
         Al ingresar, registrar o modificar esta información aceptas nuestra política de tratamiento de datos personales (Ley 1581 de 2012).
-        <button type="button" class="btn btn-link btn-sm p-0 align-baseline habeas-data-trigger" data-bs-toggle="popover" data-bs-html="true" data-bs-placement="top" data-bs-title="Tratamiento de datos personales" data-bs-content="&lt;p&gt;En cumplimiento de la Ley 1581 de 2012 y el Decreto 1377 de 2013, el Club Residencial Bulevar Verde recolecta, almacena, usa, circula y suprime los datos personales que registras en este portal (información personal y de contacto, datos del grupo familiar y residentes, vehículos, mascotas y contactos de emergencia), con el fin de: garantizar la seguridad y el control de acceso a la copropiedad; informarte sobre eventos, novedades y situaciones de emergencia; gestionar comunicaciones administrativas; mantener actualizada la base de datos de residentes; y cumplir con las disposiciones legales aplicables a la propiedad horizontal.&lt;/p&gt;&lt;p&gt;Tus datos serán tratados de forma confidencial y segura. Tienes derecho a conocer, actualizar, rectificar y solicitar la supresión de tus datos personales, derechos que puedes ejercer escribiendo a &lt;a href=&quot;mailto:bulevarverdeadmon@gmail.com&quot;&gt;bulevarverdeadmon@gmail.com&lt;/a&gt; o en la oficina de administración, donde también puedes consultar la política de tratamiento de datos completa.&lt;/p&gt;">
+        <button type="button" class="btn btn-link btn-sm p-0 align-baseline habeas-data-trigger" data-bs-toggle="popover" data-bs-html="true" data-bs-placement="top" data-bs-title="Tratamiento de datos personales" data-bs-content="&lt;p&gt;En cumplimiento de la Ley 1581 de 2012 y el Decreto 1377 de 2013, el Club Residencial Bulevar Verde recolecta, almacena, usa, circula y suprime los datos personales que registras en este portal (información personal y de contacto, datos del grupo familiar y residentes, vehículos, mascotas y contactos de emergencia), con el fin de: garantizar la seguridad y el control de acceso a la copropiedad; informarte sobre eventos, novedades y situaciones de emergencia; gestionar comunicaciones administrativas; mantener actualizada la base de datos de residentes; y cumplir con las disposiciones legales aplicables a la propiedad horizontal.&lt;/p&gt;&lt;p&gt;Tus datos serán tratados de forma confidencial y segura. Tienes derecho a conocer, actualizar, rectificar y solicitar la supresión de tus datos personales, derechos que puedes ejercer escribiendo a &lt;a href=&quot;mailto:bulevarverdeadmon@gmail.com&quot;&gt;bulevarverdeadmon@gmail.com&lt;/a&gt; o en la oficina de administración, donde también puedes consultar la política de tratamiento de datos completa.&lt;/p&gt;&lt;p class=&quot;mb-0&quot;&gt;&lt;a href=&quot;{{ "politica-datos-personales/" | relURL }}&quot;&gt;&lt;strong&gt;Ver la política completa →&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;">
           Ver detalle
         </button>
       </p>
 
-      <div class="surface p-3 mb-4">
+      <!-- Módulos del club (Reservas, Personal, Documentos): cada uno se muestra solo, sin las pestañas de "Mis datos". -->
+      <nav id="moduloNav" class="modulo-nav surface p-2 mb-4" aria-label="Ir a otro módulo">
+        <span class="modulo-nav-label">Ir a:</span>
+        <button type="button" data-modulo="reservas"><i class="bi bi-calendar2-check"></i>Reservas</button>
+        <button type="button" data-modulo="personal"><i class="bi bi-people"></i>Personal</button>
+        <button type="button" data-modulo="documentos"><i class="bi bi-folder2-open"></i>Documentos</button>
+        <button type="button" data-modulo=""><i class="bi bi-person-vcard"></i>Mis datos</button>
+      </nav>
+
+      <!-- Pestañas de "Mis datos" (datos de la unidad) -->
+      <div id="profileTabsWrap" class="surface p-3 mb-4">
         <ul class="nav nav-pills gap-2" id="profileTabs">
           <li class="nav-item" data-owner-only><button class="nav-link active" data-target="tabOverview" type="button">Resumen</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabContact" type="button">Contacto</button></li>
           <li class="nav-item" data-permission="RESIDENTES"><button class="nav-link" data-target="tabResidents" type="button">Residentes</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabVehicles" type="button">Vehículos</button></li>
-          <li class="nav-item"><button class="nav-link" data-target="tabOther" type="button">Otros datos</button></li>
-          <li class="nav-item" data-owner-only><button class="nav-link" data-target="tabDocumentos" type="button">Documentos</button></li>
-          <li class="nav-item"><button class="nav-link" data-target="tabReservas" type="button">Reservas</button></li>
+          <li class="nav-item"><button class="nav-link" data-target="tabOther" type="button">Mascotas y emergencia</button></li>
+          <li class="nav-item" data-owner-only><button class="nav-link" data-target="tabDocumentos" type="button">Facturación</button></li>
           <li class="nav-item"><button class="nav-link" data-target="tabSanciones" type="button">Sanciones</button></li>
         </ul>
       </div>
@@ -829,7 +1058,7 @@
 
       <div id="tabDocumentos" class="tab-pane-content hidden" data-owner-only>
         <div class="surface p-4">
-          <h3 class="section-title h5 mb-1">Documentos de la unidad</h3>
+          <h3 class="section-title h5 mb-1">Facturación de la unidad</h3>
           <p class="small-note">Descarga tus documentos de facturación y estado de cuenta.</p>
           <div id="documentosLoading" class="text-muted small py-3 hidden"><span class="spinner-border spinner-border-sm me-2"></span>Cargando documentos…</div>
           <div id="documentosError" class="alert alert-danger hidden mb-0"></div>
@@ -963,6 +1192,29 @@
           <h4 class="h6 mb-3">Mis reservas</h4>
           <div id="misReservasLoading" class="text-muted small" style="display:none;"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
           <div id="misReservasList"></div>
+        </div>
+      </div>
+
+      <div id="tabPersonal" class="tab-pane-content hidden">
+        <div class="surface p-4">
+          <h3 class="section-title h5 mb-1">Personal de la unidad</h3>
+          <p class="small-note mb-4">Toca una imagen para ampliarla.</p>
+          <div class="personal-bloque mb-4">
+            <h4 class="h6 personal-titulo"><i class="bi bi-shield-check me-2"></i>Personal de vigilancia</h4>
+            <div id="personalVigilancia" class="personal-imagen"></div>
+          </div>
+          <div class="personal-bloque">
+            <h4 class="h6 personal-titulo"><i class="bi bi-stars me-2"></i>Personal de aseo</h4>
+            <div id="personalAseo" class="personal-imagen personal-imagen-vertical"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tabDocumentosClub" class="tab-pane-content hidden">
+        <div class="surface p-4">
+          <h3 class="section-title h5 mb-1">Documentos del club</h3>
+          <p class="small-note mb-4">Toca un documento para verlo aquí mismo o descargarlo.</p>
+          {{ partial "documentos-club.html" . }}
         </div>
       </div>
 
@@ -1240,6 +1492,18 @@
     </div>
   </main>
 
+  <!-- Visor de imágenes del personal (pantalla completa, en la misma página) -->
+  <div id="personalVisor" class="personal-visor hidden" role="dialog" aria-modal="true" aria-label="Imagen ampliada">
+    <div class="personal-visor-barra">
+      <span id="personalVisorTitulo" class="personal-visor-titulo"></span>
+      <button id="personalVisorZoom" type="button" class="personal-visor-btn" aria-label="Ampliar"><i class="bi bi-zoom-in"></i></button>
+      <button id="personalVisorCerrar" type="button" class="personal-visor-btn" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div id="personalVisorLienzo" class="personal-visor-lienzo">
+      <img id="personalVisorImg" alt="">
+    </div>
+  </div>
+
   {{ partial "footer" . }}
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -1261,8 +1525,26 @@
       var sancionEvidenciasAportadas = [];
       var sancionApelacionEvidenciasAportadas = [];
 
-      [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]')).forEach(function (el) {
-        new bootstrap.Popover(el, { trigger: 'focus' });
+      // Recuadros "Ver detalle" (tratamiento de datos): se abren con clic y se cierran al tocar fuera o con Esc.
+      // No se usa trigger 'focus' porque cerraba el recuadro antes de poder pulsar sus enlaces.
+      var popovers = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]')).map(function (boton) {
+        var item = { boton: boton, popover: new bootstrap.Popover(boton, { trigger: 'manual' }) };
+        boton.addEventListener('click', function (event) {
+          event.preventDefault();
+          popovers.forEach(function (otro) { if (otro !== item) otro.popover.hide(); });
+          item.popover.toggle();
+        });
+        return item;
+      });
+      document.addEventListener('click', function (event) {
+        popovers.forEach(function (item) {
+          var id = item.boton.getAttribute('aria-describedby');
+          var abierto = id ? document.getElementById(id) : null;
+          if (abierto && !abierto.contains(event.target) && !item.boton.contains(event.target)) item.popover.hide();
+        });
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') popovers.forEach(function (item) { item.popover.hide(); });
       });
 
       function esc(value) {
@@ -1312,19 +1594,52 @@
         }
       }
 
-      var MODO_RESERVAS_URL = document.documentElement.classList.contains('modo-reservas');
+      // Módulos con entrada propia (?modulo=...): pestaña que abren y título de la página.
+      var MODULOS = {
+        reservas: { tab: 'tabReservas', titulo: 'Reserva de zonas comunes - {{ .Site.Title }}' },
+        personal: { tab: 'tabPersonal', titulo: 'Personal de la unidad - {{ .Site.Title }}' },
+        documentos: { tab: 'tabDocumentosClub', titulo: 'Documentos del club - {{ .Site.Title }}' }
+      };
+      // Módulo actual: '' = "Mis datos" (pestañas de la unidad). Arranca con el del enlace de entrada (?modulo=...).
+      var moduloActual = Object.keys(MODULOS).filter(function (clave) {
+        return document.documentElement.classList.contains('modo-' + clave);
+      })[0] || '';
       var TITULO_DATOS = document.title;
-      var TITULO_RESERVAS = 'Reserva de zonas comunes - {{ .Site.Title }}';
-      var tabActual = '';
 
-      // Sin sesión, el encabezado sigue al enlace de entrada (?modulo=reservas); con sesión, a la pestaña activa.
+      // El encabezado, la franja "Ir a" y las pestañas siguen al módulo actual.
       function actualizarEncabezado() {
         var conSesion = !$('profilePanel').classList.contains('hidden');
-        var modoReservas = conSesion ? tabActual === 'tabReservas' : MODO_RESERVAS_URL;
         document.documentElement.classList.toggle('con-sesion', conSesion);
-        document.documentElement.classList.toggle('modo-reservas', modoReservas);
-        document.title = modoReservas ? TITULO_RESERVAS : TITULO_DATOS;
+        document.documentElement.classList.toggle('en-modulo', !!moduloActual);
+        Object.keys(MODULOS).forEach(function (clave) {
+          document.documentElement.classList.toggle('modo-' + clave, clave === moduloActual);
+        });
+        document.querySelectorAll('#moduloNav [data-modulo]').forEach(function (boton) {
+          boton.classList.toggle('active', boton.dataset.modulo === moduloActual);
+        });
+        document.title = moduloActual ? MODULOS[moduloActual].titulo : TITULO_DATOS;
       }
+
+      function tabInicialDatos() {
+        return profile && profile.puedeVerResumen === true ? 'tabOverview' : 'tabContact';
+      }
+
+      // Cambia de módulo sin recargar (la sesión es la misma) y deja el módulo en la URL para que sobreviva a una recarga.
+      function irAModulo(modulo) {
+        moduloActual = MODULOS[modulo] ? modulo : '';
+        var url = new URL(window.location.href);
+        if (moduloActual) url.searchParams.set('modulo', moduloActual); else url.searchParams.delete('modulo');
+        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+        showTab(moduloActual ? MODULOS[moduloActual].tab : tabInicialDatos());
+        if (moduloActual === 'reservas' && !reservasCargados) cargarReservas();
+        if (moduloActual === 'personal' && !personalCargado) cargarPersonal();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      $('moduloNav').addEventListener('click', function (event) {
+        var boton = event.target.closest('[data-modulo]');
+        if (boton) irAModulo(boton.dataset.modulo);
+      });
 
       function switchPanel(id) {
         ['unitPanel', 'documentPanel', 'emailPanel', 'profilePanel'].forEach(function (panelId) {
@@ -1340,7 +1655,6 @@
         document.querySelectorAll('#profileTabs .nav-link').forEach(function (element) {
           element.classList.toggle('active', element.dataset.target === id);
         });
-        tabActual = id;
         actualizarEncabezado();
       }
 
@@ -1376,7 +1690,114 @@
         if (button.dataset.target === 'tabSanciones' && !sancionesCargadas) cargarSanciones();
         if (button.dataset.target === 'tabDocumentos' && !documentosCargados) renderBotonesDocumentos();
         if (button.dataset.target === 'tabReservas' && !reservasCargados) cargarReservas();
+        if (button.dataset.target === 'tabPersonal' && !personalCargado) cargarPersonal();
       });
+
+      /* ---------- Personal de la unidad ---------- */
+
+      {{- /*
+        Imágenes del personal, leídas AL GENERAR el sitio desde las subcarpetas de Drive cuyo nombre contiene
+        "vigilancia" y "aseo" (p. ej. "Personal vigilancia" / "Personal aseo"), dentro de personalDriveFolderId
+        (vacío = la carpeta de documentos). Cambio mensual: borrar la imagen vieja y subir la nueva a la subcarpeta;
+        se refleja en la siguiente publicación. Si una subcarpeta tiene varias imágenes se muestran todas, por nombre.
+      */ -}}
+      {{- $carpetaPersonal := site.Params.personalDriveFolderId | default site.Params.documentosDriveFolderId | default "" -}}
+      {{- $personal := dict "personalVigilancia" slice "personalAseo" slice -}}
+      {{- if $carpetaPersonal -}}
+        {{- range (partial "drive-carpeta.html" $carpetaPersonal).items -}}
+          {{- if .carpeta -}}
+            {{- $subcarpeta := . -}}
+            {{- $nombre := lower .nombre -}}
+            {{- $destino := cond (strings.Contains $nombre "vigilancia") "personalVigilancia" (cond (strings.Contains $nombre "aseo") "personalAseo" "") -}}
+            {{- if $destino -}}
+              {{- $imagenes := slice -}}
+              {{- range (partial "drive-carpeta.html" $subcarpeta.id).items -}}
+                {{- if strings.HasPrefix .mime "image" -}}
+                  {{- $imagenes = $imagenes | append (dict "id" .id "nombre" .nombre) -}}
+                {{- end -}}
+              {{- end -}}
+              {{- $personal = merge $personal (dict $destino (sort $imagenes "nombre")) -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end }}
+      var PERSONAL_IMAGENES = {{ $personal | jsonify | safeJS }};
+      var personalCargado = false;
+
+      function cargarPersonal() {
+        personalCargado = true;
+        Object.keys(PERSONAL_IMAGENES).forEach(function (contenedorId) {
+          var imagenes = (PERSONAL_IMAGENES[contenedorId] || []).filter(function (img) { return /^[\w-]{10,}$/.test(img.id); });
+          var label = contenedorId === 'personalVigilancia' ? 'Personal de vigilancia' : 'Personal de aseo';
+          if (!imagenes.length) {
+            $(contenedorId).innerHTML = '<p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Información no disponible por ahora.</p>';
+            return;
+          }
+          $(contenedorId).innerHTML = imagenes.map(function (img, i) {
+            var alt = label + (imagenes.length > 1 ? ' (' + (i + 1) + ')' : '');
+            var fallbackUrls = encodeURIComponent(JSON.stringify(['https://lh3.googleusercontent.com/d/' + img.id + '=w2000']));
+            return '<button type="button" class="mb-3" data-personal-ampliar aria-label="Ampliar ' + esc(alt) + '">' +
+              '<img src="https://drive.google.com/thumbnail?id=' + esc(img.id) + '&sz=w2000" alt="' + esc(alt) + '" ' +
+              'data-fallback-urls="' + esc(fallbackUrls) + '" referrerpolicy="no-referrer" decoding="async" ' +
+              'onerror="window.handlePersonalImageError_(this)"></button>';
+          }).join('');
+        });
+      }
+
+      // Visor a pantalla completa: se abre al tocar una imagen; se cierra con la X, la tecla Esc o tocando el fondo.
+      var personalVisorOrigen = null;
+
+      function abrirVisorPersonal(img) {
+        personalVisorOrigen = document.activeElement;
+        $('personalVisorImg').src = img.currentSrc || img.src;
+        $('personalVisorImg').alt = img.alt;
+        $('personalVisorTitulo').textContent = img.alt;
+        alternarZoomVisor(false);
+        $('personalVisor').classList.remove('hidden');
+        document.body.classList.add('visor-abierto');
+        $('personalVisorCerrar').focus();
+      }
+
+      function cerrarVisorPersonal() {
+        if ($('personalVisor').classList.contains('hidden')) return;
+        $('personalVisor').classList.add('hidden');
+        document.body.classList.remove('visor-abierto');
+        if (personalVisorOrigen && personalVisorOrigen.focus) personalVisorOrigen.focus();
+      }
+
+      function alternarZoomVisor(ampliar) {
+        var visor = $('personalVisor');
+        var activo = typeof ampliar === 'boolean' ? ampliar : !visor.classList.contains('ampliado');
+        visor.classList.toggle('ampliado', activo);
+        $('personalVisorZoom').innerHTML = '<i class="bi bi-zoom-' + (activo ? 'out' : 'in') + '"></i>';
+        $('personalVisorZoom').setAttribute('aria-label', activo ? 'Reducir' : 'Ampliar');
+        if (!activo) $('personalVisorLienzo').scrollTo(0, 0);
+      }
+
+      $('tabPersonal').addEventListener('click', function (event) {
+        var boton = event.target.closest('[data-personal-ampliar]');
+        if (boton) abrirVisorPersonal(boton.querySelector('img'));
+      });
+      $('personalVisorCerrar').addEventListener('click', cerrarVisorPersonal);
+      $('personalVisorZoom').addEventListener('click', function () { alternarZoomVisor(); });
+      $('personalVisorImg').addEventListener('click', function () { alternarZoomVisor(); });
+      $('personalVisorLienzo').addEventListener('click', function (event) {
+        if (event.target === event.currentTarget) cerrarVisorPersonal();
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') cerrarVisorPersonal();
+      });
+
+      window.handlePersonalImageError_ = function (img) {
+        var fallbackUrls = [];
+        try { fallbackUrls = JSON.parse(decodeURIComponent(img.getAttribute('data-fallback-urls') || '')); } catch (error) { fallbackUrls = []; }
+        if (fallbackUrls.length) {
+          img.setAttribute('data-fallback-urls', encodeURIComponent(JSON.stringify(fallbackUrls.slice(1))));
+          img.src = fallbackUrls[0];
+          return;
+        }
+        img.closest('.personal-imagen').innerHTML = '<p class="text-muted small mb-0"><i class="bi bi-exclamation-circle me-1"></i>No se pudo cargar la imagen. Intenta de nuevo más tarde.</p>';
+      };
 
       /* ---------- Sanciones de convivencia ---------- */
 
@@ -2920,11 +3341,9 @@
         switchPanel('unitPanel');
       });
 
-      // En modo reservas, al entrar se abre directamente la pestaña de Reservas.
+      // Si se entró por un módulo (?modulo=...), al ingresar se abre directamente ese módulo.
       function abrirTabInicial() {
-        if (!MODO_RESERVAS_URL) return;
-        showTab('tabReservas');
-        if (!reservasCargados) cargarReservas();
+        if (moduloActual) irAModulo(moduloActual);
       }
 
       function loadProfile() {
@@ -2955,7 +3374,8 @@
         var isOwner = profile.puedeVerResumen === true;
 
         applyPermissions();
-        showTab(isOwner ? 'tabOverview' : 'tabContact');
+        // Dentro de un módulo no se cambia de vista al refrescar el perfil.
+        if (!moduloActual) showTab(isOwner ? 'tabOverview' : 'tabContact');
 
         $('unitHeading').textContent = isOwner ? 'Unidad ' + esc(unit.codigoOficial) : 'Mis datos personales';
 
