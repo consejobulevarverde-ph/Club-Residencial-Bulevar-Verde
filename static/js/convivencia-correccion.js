@@ -119,7 +119,7 @@
         // progresivo; aún no se notificó, así que no aplica la ventana de corrección.
         return '<div class="border rounded p-2 mb-2 d-flex justify-content-between align-items-center gap-2 cv-correccion-item' + resaltado + '">' +
           '<div><strong>' + esc(caso.caseCode) + '</strong> · Apto ' + esc(caso.apartamento) + ' · ' + esc(caso.motivo) +
-          ' <span class="badge text-bg-warning">Pendiente de completar y notificar</span>' +
+          ' <span class="badge text-bg-warning">Pendiente de completar</span>' +
           '<br><small class="text-muted">Guardado ' + esc(haceCuanto(caso.fechaCreacion)) + ' · ' +
           caso.cantidadEvidencias + ' evidencia(s) cargada(s)</small></div>' +
           '<button type="button" class="btn btn-sm btn-outline-success cv-correccion-completar" data-id="' + esc(caso.id) + '">' +

@@ -440,9 +440,9 @@
       </div>
       <div class="alert alert-info">
         <i class="bi bi-info-circle me-2"></i>
-        <strong>Confirmación:</strong> Al guardar, el caso queda como «Pendiente de completar y notificar»
-        y se suben sus evidencias. El residente solo se notifica cuando pulses «Finalizar y notificar»,
-        con todas las evidencias cargadas o retiradas.
+        <strong>Confirmación:</strong> Al guardar, el caso queda como «Pendiente de completar»
+        y se suben sus evidencias. Cuando pulses «Finalizar» (con todas las evidencias cargadas o retiradas),
+        un llamado de atención se notifica de inmediato al residente; los demás casos los notifica la administración.
       </div>
       <div class="d-flex gap-2">
         <button type="button" class="btn btn-outline-secondary" id="convivenciaAnterior4">
@@ -457,8 +457,8 @@
   </form>
 
   <section id="convivenciaRegistros" class="hidden mt-4" aria-labelledby="convivenciaRegistrosTitulo">
-    <h5 id="convivenciaRegistrosTitulo"><i class="bi bi-hourglass-split me-2"></i>Pendientes de completar y notificar</h5>
-    <p class="small text-muted">Casos guardados cuyo residente aún no ha sido notificado. Se conservan en este dispositivo aunque recargues la página o pierdas la conexión.</p>
+    <h5 id="convivenciaRegistrosTitulo"><i class="bi bi-hourglass-split me-2"></i>Pendientes de completar y finalizar</h5>
+    <p class="small text-muted">Casos guardados que aún no han sido finalizados. Se conservan en este dispositivo aunque recargues la página o pierdas la conexión.</p>
     <div id="convivenciaRegistrosLista" aria-live="polite"></div>
   </section>
 

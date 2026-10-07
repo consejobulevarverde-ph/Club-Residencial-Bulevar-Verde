@@ -152,6 +152,56 @@ query ListarCasosConvivenciaPorRegistroAdmin(
   }
 }
 
+# Igual que ListarCasosConvivenciaPorRegistroAdmin, filtrando además por remisión a órganos de
+# gobierno (administración envía [true, false] en ambos; el comité y el consejo solo [true] en el
+# suyo). Operación nueva para no cambiar la firma de la anterior mientras convive con la API desplegada.
+query ListarCasosConvivenciaPorRemisionAdmin(
+  $estados: [String!]!
+  $severidades: [String!]!
+  $apartamentoContiene: String!
+  $motivoContiene: String!
+  $registros: [String!]!
+  $remitidoComite: [Boolean!]!
+  $remitidoConsejo: [Boolean!]!
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: NO_ACCESS) {
+  casos_convivencia(
+    where: {
+      registro: { in: $registros }
+      estado: { in: $estados }
+      severidad: { in: $severidades }
+      apartamento: { contains: $apartamentoContiene }
+      motivo: { contains: $motivoContiene }
+      remitidoComite: { in: $remitidoComite }
+      remitidoConsejo: { in: $remitidoConsejo }
+    }
+    orderBy: [{ fechaCreacion: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    caseCode
+    apartamento
+    motivo
+    severidad
+    requiereProcesoFormal
+    estado
+    registro
+    remitidoComite
+    remitidoConsejo
+    evidenciaOculta
+    pendienteNotificar
+    fechaCreacion
+    descargosResidente
+    # Solo para saber si hay adjuntos (cualquier contexto) — basta con una fila.
+    evidencias: evidencias_convivencia_on_caso(limit: 1) {
+      id
+    }
+  }
+}
+
 query ObtenerCasoConvivenciaDetalleAdmin(
   $id: UUID!
 )
@@ -192,6 +242,16 @@ query ObtenerCasoConvivenciaDetalleAdmin(
     registroVersion
     fechaFinalizacion
     finalizadoPorUid
+    remitidoComite
+    fechaRemisionComite
+    remitidoConsejo
+    fechaRemisionConsejo
+    evidenciaOculta
+    fechaCambioEvidenciaOculta
+    pendienteNotificar
+    fechaNotificacion
+    fechaLecturaResidente
+    lecturaResidentePorUid
     fechaCreacion
     fechaActualizacion
     evidencias: evidencias_convivencia_on_caso {
@@ -218,6 +278,10 @@ query ObtenerCasoConvivenciaDetalleAdmin(
       tipo
       estado
       intentos
+      envio
+      destinatariosJson
+      solicitadaPorUid
+      detalleJson
       destinatarios
       aceptados
       rechazados
@@ -540,7 +604,7 @@ query ListarCasosConvivenciaPorUnidadAdmin(
 @auth(level: NO_ACCESS) {
   unidad(id: $unidadId) {
     casos: casos_convivencia_on_unidad(
-      where: { estado: { ne: "ANULADO" }, registro: { eq: "FINALIZADO" } }
+      where: { estado: { ne: "ANULADO" }, registro: { eq: "FINALIZADO" }, pendienteNotificar: { eq: false } }
       orderBy: [{ fechaCreacion: DESC }]
       limit: $limit
       offset: $offset
@@ -581,7 +645,7 @@ query ObtenerCasoConvivenciaResidenteAdmin(
 )
 @auth(level: NO_ACCESS) {
   unidad(id: $unidadId) {
-    casos: casos_convivencia_on_unidad(where: { caseCode: { eq: $caseCode }, estado: { ne: "ANULADO" }, registro: { eq: "FINALIZADO" } }, limit: 1) {
+    casos: casos_convivencia_on_unidad(where: { caseCode: { eq: $caseCode }, estado: { ne: "ANULADO" }, registro: { eq: "FINALIZADO" }, pendienteNotificar: { eq: false } }, limit: 1) {
       id
       caseCode
       apartamento
@@ -606,6 +670,8 @@ query ObtenerCasoConvivenciaResidenteAdmin(
       fechaApelacion
       resolucion
       fechaCreacion
+      evidenciaOculta
+      fechaLecturaResidente
       evidencias: evidencias_convivencia_on_caso {
         id
         contexto
@@ -674,4 +740,145 @@ mutation AplicarAllanamientoCasoConvivenciaAdmin(
     id: $id
     data: { estado: "SANCION_APROBADA_ALLANAMIENTO", resolucion: $resolucion }
   )
+}
+
+# Remisión de un caso al Comité de Convivencia / al Consejo de Administración. Un solo UPDATE
+# condicional (atómico e idempotente): solo remite casos finalizados, no anulados y aún no remitidos
+# a ese órgano; @check(this == 1) aborta la transacción —sin evento— si otra solicitud ya lo remitió.
+mutation RemitirCasoConvivenciaComiteAdmin(
+  $id: UUID!
+  $porUid: String
+  $evento: EventoCasoConvivencia_Data!
+    @allow(fields: "casoId tipoEvento estadoAnterior estadoNuevo descripcion actorUid actorTipo")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  remitido: caso_convivencia_updateMany(
+    where: {
+      id: { eq: $id }
+      registro: { eq: "FINALIZADO" }
+      estado: { ne: "ANULADO" }
+      remitidoComite: { eq: false }
+    }
+    data: {
+      remitidoComite: true
+      fechaRemisionComite_expr: "request.time"
+      remitidoComitePorUid: $porUid
+      fechaActualizacion_expr: "request.time"
+    }
+  ) @check(expr: "this == 1", message: "REMISION_NO_APLICA")
+  evento_caso_convivencia_insert(data: $evento)
+}
+
+mutation RemitirCasoConvivenciaConsejoAdmin(
+  $id: UUID!
+  $porUid: String
+  $evento: EventoCasoConvivencia_Data!
+    @allow(fields: "casoId tipoEvento estadoAnterior estadoNuevo descripcion actorUid actorTipo")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  remitido: caso_convivencia_updateMany(
+    where: {
+      id: { eq: $id }
+      registro: { eq: "FINALIZADO" }
+      estado: { ne: "ANULADO" }
+      remitidoConsejo: { eq: false }
+    }
+    data: {
+      remitidoConsejo: true
+      fechaRemisionConsejo_expr: "request.time"
+      remitidoConsejoPorUid: $porUid
+      fechaActualizacion_expr: "request.time"
+    }
+  ) @check(expr: "this == 1", message: "REMISION_NO_APLICA")
+  evento_caso_convivencia_insert(data: $evento)
+}
+
+# Resumen (dashboard) de todos los casos: conteos agrupados por los campos no agregados.
+# Solo conteos — lo consultan también comité y consejo, que no tienen acceso a los casos no
+# remitidos. A lo sumo ~88 filas (estado × registro × remitidoComite × remitidoConsejo).
+query ResumenCasosConvivenciaAdmin @auth(level: NO_ACCESS) {
+  # limit explícito por encima del máximo de grupos posibles (no depender del límite por defecto).
+  casos_convivencia(limit: 500) {
+    estado
+    registro
+    pendienteNotificar
+    remitidoComite
+    remitidoConsejo
+    _count
+  }
+}
+
+# Ocultar / mostrar toda la evidencia del caso (solo administración la ve mientras esté oculta).
+# Cualquier estado y registro. Un solo UPDATE condicional: @check(this == 1) aborta —sin evento—
+# si el caso ya estaba en ese estado (p. ej. dos clics simultáneos).
+mutation CambiarEvidenciaOcultaCasoConvivenciaAdmin(
+  $id: UUID!
+  $oculta: Boolean!
+  $porUid: String
+  $evento: EventoCasoConvivencia_Data!
+    @allow(fields: "casoId tipoEvento estadoAnterior estadoNuevo descripcion actorUid actorTipo")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  cambiado: caso_convivencia_updateMany(
+    where: { id: { eq: $id }, evidenciaOculta: { ne: $oculta } }
+    data: {
+      evidenciaOculta: $oculta
+      fechaCambioEvidenciaOculta_expr: "request.time"
+      evidenciaOcultaPorUid: $porUid
+      fechaActualizacion_expr: "request.time"
+    }
+  ) @check(expr: "this == 1", message: "EVIDENCIA_OCULTA_SIN_CAMBIO")
+  evento_caso_convivencia_insert(data: $evento)
+}
+
+# El residente abrió el caso en el portal (el portal avisa a los 20 s, sin mostrar nada). Solo la
+# primera lectura: un UPDATE condicional con @check(this == 1) y el evento en la misma transacción,
+# así dos aperturas simultáneas dejan una sola marca y un solo evento.
+mutation MarcarCasoLeidoResidenteAdmin(
+  $casoId: UUID!
+  $porUid: String
+  $evento: EventoCasoConvivencia_Data!
+    @allow(fields: "casoId tipoEvento estadoAnterior estadoNuevo descripcion actorUid actorTipo")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  leido: caso_convivencia_updateMany(
+    where: {
+      id: { eq: $casoId }
+      registro: { eq: "FINALIZADO" }
+      pendienteNotificar: { eq: false }
+      estado: { ne: "ANULADO" }
+      fechaLecturaResidente: { isNull: true }
+    }
+    data: { fechaLecturaResidente_expr: "request.time", lecturaResidentePorUid: $porUid }
+  ) @check(expr: "this == 1", message: "LECTURA_YA_REGISTRADA")
+  evento_caso_convivencia_insert(data: $evento)
+}
+
+# Decisión del Consejo (aprobar o rechazar la sanción, ratificar o revocar tras el recurso) y su
+# comunicación escrita al residente en la MISMA transacción: nunca queda una decisión sin la
+# notificación pendiente de enviarse (reglamento art. 46: comunicar por escrito en 3 días hábiles;
+# art. 48 / Ley 675 art. 62: el mes para impugnar corre desde la comunicación). La API restringe
+# $estado a SANCION_APROBADA, CERRADO_SIN_SANCION, SANCION_RATIFICADA o SANCION_REVOCADA y valida el
+# estado anterior antes de invocarla. Sustituye en la API a Aprobar/RechazarConsejo… y
+# Ratificar/RevocarApelacion…, que se conservan para la versión desplegada.
+mutation RegistrarDecisionConsejoCasoConvivenciaAdmin(
+  $id: UUID!
+  $estado: String!
+  $resolucion: String!
+  $notasAdmin: String
+  $resueltoPorUid: String
+  $comunicacion: NotificacionCasoConvivencia_Data!
+    @allow(fields: "casoId tipo estado destinatariosJson detalleJson")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  caso_convivencia_update(
+    id: $id
+    data: { estado: $estado, resolucion: $resolucion, notasAdmin: $notasAdmin, resueltoPorUid: $resueltoPorUid }
+  )
+  notificacion_caso_convivencia_insert(data: $comunicacion)
 }

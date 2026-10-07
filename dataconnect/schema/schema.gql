@@ -353,6 +353,30 @@ type CasoConvivencia
   registroVersion: Int! @default(value: 0)
   fechaFinalizacion: Timestamp
   finalizadoPorUid: String
+  # Remisión a órganos de gobierno: administración gestiona todos los casos y decide cuáles
+  # pasan al Comité de Convivencia y/o al Consejo de Administración. Cada órgano solo ve los
+  # casos remitidos a él. Es definitiva (no hay retiro) y los casos existentes quedan sin remitir.
+  remitidoComite: Boolean! @default(value: false)
+  fechaRemisionComite: Timestamp
+  remitidoComitePorUid: String
+  remitidoConsejo: Boolean! @default(value: false)
+  fechaRemisionConsejo: Timestamp
+  remitidoConsejoPorUid: String
+  # Administración puede ocultar (y volver a mostrar) toda la evidencia del caso en cualquier
+  # momento: mientras esté oculta solo administración la ve; la API la omite para comité, consejo,
+  # residente y vigilancia.
+  evidenciaOculta: Boolean! @default(value: false)
+  # Casos de proceso formal quedan pendientes de notificar al finalizar: administración los
+  # notifica (eligiendo destinatarios). Un llamado de atención se notifica solo. Mientras esté
+  # pendiente el residente no ve el caso y no hay trámite (descargos, acta, propuesta...).
+  pendienteNotificar: Boolean! @default(value: false)
+  fechaNotificacion: Timestamp
+  # «Leída»: el residente abrió el caso en el portal (a los 20 s el portal avisa a la API, sin
+  # mostrar nada). Se guarda solo la primera lectura; volver a notificar no la reinicia.
+  fechaLecturaResidente: Timestamp
+  lecturaResidentePorUid: String
+  fechaCambioEvidenciaOculta: Timestamp
+  evidenciaOcultaPorUid: String
   fechaCreacion: Timestamp! @default(expr: "request.time")
   fechaActualizacion: Timestamp! @default(expr: "request.time")
 }
@@ -410,6 +434,9 @@ type AdjuntoConvivencia
 # Una fila por caso y destinatario (RESIDENTES | ADMINISTRACION): la clave compuesta impide
 # solicitudes duplicadas. estado: SOLICITADA → ENVIANDO → ENVIADA; FALLIDA_REINTENTABLE,
 # FALLIDA (requiere acción), INCIERTA (resultado ambiguo; no se reenvía sola), SIN_DESTINATARIOS.
+# POR_NOTIFICAR (solo RESIDENTES de un caso de proceso formal): espera a que administración notifique.
+# tipo: RESIDENTES | ADMINISTRACION | SANCION | RECURSO | CIERRE_SIN_SANCION (las tres últimas comunican
+# por escrito al residente las decisiones del Consejo: reglamento art. 46 y 48, Ley 675 arts. 51 y 62).
 type NotificacionCasoConvivencia
   @table(
     name: "notificaciones_caso_convivencia"
@@ -427,6 +454,15 @@ type NotificacionCasoConvivencia
   rechazados: Int
   messageId: String
   ultimoError: String
+  # Selección de administración: JSON [{ nombre, correo, rol }]. null = se calcula al enviar
+  # (envío automático del llamado de atención y aviso a administración).
+  destinatariosJson: String
+  # Número de envío (sube con cada «Notificar»/«Volver a notificar»): hace único el messageId.
+  envio: Int! @default(value: 0)
+  solicitadaPorUid: String
+  # Comunicaciones de decisiones del Consejo (tipo SANCION | RECURSO | CIERRE_SIN_SANCION): foto de la
+  # decisión al registrarla, JSON { decision, resolucion, tipoSancion, valor, fecha }.
+  detalleJson: String
   resueltoPorUid: String
   fechaEnvio: Timestamp
   fechaCreacion: Timestamp! @default(expr: "request.time")

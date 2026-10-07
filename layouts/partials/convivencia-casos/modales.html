@@ -65,3 +65,25 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="modalNotificarCaso" tabindex="-1" aria-labelledby="modalNotificarCasoTitulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalNotificarCasoTitulo">Notificar el caso</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">Estas son las personas a las que se pretendía notificar. Quita la marca de quien no deba recibir el aviso. «Notificado» solo se registra cuando el servidor de correo acepta el envío.</p>
+        <div id="notificarCasoAlerta" class="alert alert-danger hidden" role="alert"></div>
+        <div id="notificarCasoLista" class="table-responsive"><p class="text-muted mb-0">Cargando…</p></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button id="notificarCasoEnviarBtn" type="button" class="btn btn-success" disabled>
+          <i class="bi bi-send me-1"></i>Enviar notificación
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

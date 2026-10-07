@@ -15,7 +15,8 @@ Guía original de layouts/CLAUDE.md conservada íntegra el 2026-10-04. Confirma 
 - `/datos-personales/` — Resident portal: profile, family members, vehicles, pets, emergency contacts, **reservations**
 - `/administracion-datos/` — Admin panel (admin/superadmin only): data master, case registration, **zone catalog & reservation calendar**
 - `/vigilancia-datos/` — Surveillance staff calendar view (vigilancia role)
-- `/comite-convivencia-datos/` — Comité de Convivencia members (unlisted URL, document-only login, own session token): shared "Casos Convivencia" view limited to conciliatory actions
+- `/comite-convivencia-datos/` — Comité de Convivencia members (unlisted URL, document-only login, own session token): shared "Casos Convivencia" view limited to conciliatory actions and to cases remitted to the comité
+- `/consejo-administracion-datos/` — Consejo de Administración members (same shell, read-only): only cases remitted to the consejo
 
 **Deployment**: Auto-triggered by push to `origin/firebase` → Firebase Hosting (automatic)
 
@@ -178,8 +179,8 @@ mixing logic. This is not a single monolithic IIFE, but a hub-and-spoke pattern:
 - `layouts/partials/convivencia-casos/CLAUDE.md` — Casos Convivencia view shared with the Comité de Convivencia page
 - `layouts/partials/administracion-datos/reservas/CLAUDE.md` — Reservas sub-tabs, partials, and modules
 
-**Personal tab**: the "Comité de Convivencia" filter reuses the same table/form to manage comité members
-(`/api/v1/convivencia/comite/miembros`); for that role the form only asks for the document and an
+**Personal tab**: the "Comité de Convivencia" and "Consejo de Administración" filters reuse the same table/form to manage órgano members
+(`/api/v1/convivencia/comite/miembros` and `/api/v1/convivencia/consejo/miembros`); for that role the form only asks for the document and an
 informational cargo — the member must already be a registered resident.
 
 ## File Structure

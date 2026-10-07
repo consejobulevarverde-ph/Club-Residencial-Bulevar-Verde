@@ -159,8 +159,8 @@
       } else {
         statusEl.className = 'alert alert-warning';
         statusEl.innerHTML = '<i class="bi bi-cloud-arrow-up me-2"></i>' +
-          '<strong>' + count + '</strong> caso(s) pendiente(s) de completar y notificar. ' +
-          'La información permanece guardada en este dispositivo; el residente aún no ha sido notificado.';
+          '<strong>' + count + '</strong> caso(s) pendiente(s) de completar y finalizar. ' +
+          'La información permanece guardada en este dispositivo; el caso aún no ha sido finalizado.';
       }
     } else if (statusEl && (!statusEl.dataset.persistent)) {
       statusEl.hidden = true;
@@ -526,7 +526,7 @@
       if (btn) btn.disabled = true;
 
       // Registro progresivo: el texto y los archivos quedan en este dispositivo hasta que el
-      // servidor confirme cada uno; el residente solo se notifica con «Finalizar y notificar».
+      // servidor confirme cada uno; el caso solo se finaliza con «Finalizar».
       var caso = {
         version: 2,
         clientRequestId: createRequestId(),
@@ -555,8 +555,8 @@
 
       showStatus(
         'info',
-        'Caso guardado como «Pendiente de completar y notificar». Se están subiendo sus evidencias; ' +
-        'cuando todas estén cargadas, pulsa «Finalizar y notificar».'
+        'Caso guardado como «Pendiente de completar». Se están subiendo sus evidencias; ' +
+        'cuando todas estén cargadas, pulsa «Finalizar».'
       );
 
       await flushQueue(true, caso.clientRequestId, 'envío inmediato después de guardar');
@@ -946,7 +946,7 @@
   // =====================================================================================
   // Registro progresivo (cola v2): el texto se guarda como borrador en el servidor sin
   // notificar; cada archivo se declara, se sube directo a Cloud Storage (sesión reanudable)
-  // y se confirma. El caso solo se notifica cuando el usuario pulsa «Finalizar y notificar»
+  // y se confirma. El caso solo se finaliza (y, si es llamado de atención, se notifica) cuando el usuario pulsa «Finalizar»
   // y el servidor comprueba que no quedan archivos pendientes.
   // =====================================================================================
 
@@ -1262,7 +1262,7 @@
   // Items de la versión anterior del formulario que nunca llegaron a crear el caso: se
   // convierten en un registro progresivo. Las copias que hubieran llegado a Drive quedan
   // huérfanas (las reporta el inventario de la migración) y el caso no se notifica hasta
-  // «Finalizar y notificar».
+  // «Finalizar».
   async function migrarItemLegado(item) {
     normalizarItemCola(item);
     var adjuntos = [];
@@ -1321,7 +1321,9 @@
       showStatus(
         'success',
         'Caso ' + r.data.caseCode + (r.data.yaFinalizado ? ' ya estaba finalizado' : ' finalizado') +
-        '. Notificación solicitada: el envío se confirma en el detalle del caso.'
+        (r.data.notificacion === 'PENDIENTE_ADMINISTRACION'
+          ? '. La administración notificará al residente.'
+          : '. Llamado de atención: la notificación al residente se envió de inmediato; su confirmación aparece en el detalle del caso.')
       );
       document.dispatchEvent(new CustomEvent('bv:caso-convivencia-creado', { detail: r.data }));
     } catch (error) {
@@ -1468,10 +1470,10 @@
     return '<div class="card mb-3" data-registro-card="' + esc(item.clientRequestId) + '">' +
       '<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">' +
       '<strong class="text-break">' + esc(titulo) + '</strong>' +
-      '<span class="badge text-bg-warning">Pendiente de completar y notificar</span></div>' +
+      '<span class="badge text-bg-warning">Pendiente de completar</span></div>' +
       '<div class="card-body">' +
       '<p class="small mb-2">' + (item.casoId ? 'Texto del caso guardado. ' : 'Guardando el texto del caso… ') +
-      'Evidencias: ' + listos + ' de ' + activos + ' cargadas. El residente no ha sido notificado.</p>' +
+      'Evidencias: ' + listos + ' de ' + activos + ' cargadas. El caso aún no está finalizado.</p>' +
       (item.adjuntos.length ? '<ul class="list-group mb-2">' + item.adjuntos.map(function (a) { return htmlAdjunto(item, a); }).join('') + '</ul>' : '') +
       (item.lastError ? '<div class="alert alert-warning py-2 small mb-2">' + esc(item.lastError) + '</div>' : '') +
       '<div class="d-flex flex-wrap gap-2">' +
@@ -1479,7 +1481,7 @@
         '<input type="file" class="d-none" data-accion="agregar" data-registro="' + esc(item.clientRequestId) + '" accept="' + esc(window.BVEvidenceTypes.ACCEPT_FINAL) + '"></label>' : '') +
       '<button type="button" class="btn btn-outline-primary btn-sm" data-accion="reintentar" data-registro="' + esc(item.clientRequestId) + '"><i class="bi bi-arrow-repeat me-1"></i>Reintentar</button>' +
       '<button type="button" class="btn btn-success btn-sm" data-accion="finalizar" data-registro="' + esc(item.clientRequestId) + '"' + (listo ? '' : ' disabled') + '>' +
-      '<i class="bi bi-send-check me-1"></i>Finalizar y notificar</button>' +
+      '<i class="bi bi-send-check me-1"></i>Finalizar</button>' +
       '</div>' +
       (listo ? '' : '<small class="d-block text-muted mt-2">Se habilita cuando todos los archivos estén cargados o retirados.</small>') +
       '</div></div>';

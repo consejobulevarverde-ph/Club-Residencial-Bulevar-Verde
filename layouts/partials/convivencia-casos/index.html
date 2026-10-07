@@ -1,8 +1,106 @@
 <div id="casosConvivenciaAlert" class="alert hidden" aria-live="polite"></div>
 
-<div id="casosConvivenciaListView">
+<!-- Pestañas: «Resumen» (dashboard, solo conteos de todos los casos) y «Casos» (lista/detalle según el llamador). -->
+<ul id="casosConvivenciaTabs" class="nav nav-tabs mb-3" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button type="button" class="nav-link active" id="casosConvivenciaTabResumen" data-pestana="resumen" role="tab" aria-controls="casosConvivenciaResumenView" aria-selected="true">
+      <i class="bi bi-speedometer2 me-1"></i>Resumen
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button type="button" class="nav-link" id="casosConvivenciaTabCasos" data-pestana="casos" role="tab" aria-controls="casosConvivenciaListView" aria-selected="false">
+      <i class="bi bi-list-ul me-1"></i>Casos
+    </button>
+  </li>
+</ul>
+
+<div id="casosConvivenciaResumenView" role="tabpanel" aria-labelledby="casosConvivenciaTabResumen">
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h3 class="section-title h5 mb-0">Casos de convivencia</h3>
+    <div>
+      <h3 class="section-title h5 mb-0">Resumen de la gestión</h3>
+      <p class="small text-muted mb-0">Todos los casos de convivencia gestionados por la administración.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ "guia-casos-convivencia/" | relURL }}" target="_blank" rel="noopener" class="btn btn-outline-info btn-sm" title="Cómo funcionan los casos de convivencia (se abre en una pestaña nueva)" aria-label="Información: cómo funcionan los casos de convivencia, se abre en una pestaña nueva">
+        <i class="bi bi-info-circle me-1"></i>Info
+      </a>
+      <button type="button" id="casosConvivenciaResumenActualizarBtn" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+      </button>
+    </div>
+  </div>
+  <div class="row g-3 mb-3" aria-live="polite">
+      <div class="col-6 col-md-4 col-xl">
+        <div class="surface p-3 h-100">
+          <div class="small text-muted"><i class="bi bi-collection me-1" aria-hidden="true"></i>Total de casos</div>
+          <div id="resumenTotal" class="fs-2 fw-semibold lh-sm my-1">—</div>
+          <div class="small text-muted">Todos los registrados</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl">
+        <div class="surface p-3 h-100">
+          <div class="small text-muted"><i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>Pendientes</div>
+          <div id="resumenPendientes" class="fs-2 fw-semibold lh-sm my-1">—</div>
+          <div class="small text-muted">Por completar y finalizar</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl">
+        <div class="surface p-3 h-100">
+          <div class="small text-muted"><i class="bi bi-send me-1" aria-hidden="true"></i>Por notificar</div>
+          <div id="resumenPorNotificar" class="fs-2 fw-semibold lh-sm my-1">—</div>
+          <div class="small text-muted">Finalizados que la administración aún no notifica</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl">
+        <div class="surface p-3 h-100">
+          <div class="small text-muted"><i class="bi bi-folder2-open me-1" aria-hidden="true"></i>Abiertos</div>
+          <div id="resumenAbiertos" class="fs-2 fw-semibold lh-sm my-1">—</div>
+          <div class="small text-muted">Notificados y en trámite</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl">
+        <div class="surface p-3 h-100">
+          <div class="small text-muted"><i class="bi bi-check2-circle me-1" aria-hidden="true"></i>Cerrados</div>
+          <div id="resumenCerrados" class="fs-2 fw-semibold lh-sm my-1">—</div>
+          <div class="small text-muted">Con decisión final</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl">
+        <div class="surface p-3 h-100">
+          <div class="small text-muted"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Anulados</div>
+          <div id="resumenAnulados" class="fs-2 fw-semibold lh-sm my-1">—</div>
+          <div class="small text-muted">Sin efecto</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl">
+        <div class="surface p-3 h-100">
+          <div class="small text-muted"><i class="bi bi-people me-1" aria-hidden="true"></i>Enviados al Comité</div>
+          <div id="resumenComite" class="fs-2 fw-semibold lh-sm my-1">—</div>
+          <div class="small text-muted">Remitidos al Comité de Convivencia</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4 col-xl">
+        <div class="surface p-3 h-100">
+          <div class="small text-muted"><i class="bi bi-building me-1" aria-hidden="true"></i>Enviados al Consejo</div>
+          <div id="resumenConsejo" class="fs-2 fw-semibold lh-sm my-1">—</div>
+          <div class="small text-muted">Remitidos al Consejo de Administración</div>
+        </div>
+      </div>
+  </div>
+  <div class="surface p-4">
+    <h4 class="h6 mb-3">Casos notificados por estado</h4>
+    <div id="casosConvivenciaResumenEstados" class="table-responsive"><p class="text-muted mb-0">Cargando…</p></div>
+  </div>
+</div>
+
+<div id="casosConvivenciaListView" class="hidden" role="tabpanel" aria-labelledby="casosConvivenciaTabCasos">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+      <h3 class="section-title h5 mb-0">Casos de convivencia</h3>
+      <a href="{{ "guia-casos-convivencia/" | relURL }}" target="_blank" rel="noopener" class="btn btn-outline-info btn-sm" title="Cómo funcionan los casos de convivencia (se abre en una pestaña nueva)" aria-label="Información: cómo funcionan los casos de convivencia, se abre en una pestaña nueva">
+        <i class="bi bi-info-circle me-1"></i>Info
+      </a>
+    </div>
     <div class="d-flex flex-wrap gap-2">
       <input id="casosConvivenciaFiltroApartamento" type="text" class="form-control form-control-sm" style="max-width:140px" placeholder="Apartamento" autocomplete="off">
       <select id="casosConvivenciaFiltroSeveridad" class="form-select form-select-sm" style="max-width:180px" autocomplete="off">
@@ -50,6 +148,9 @@
     <button type="button" class="btn btn-outline-secondary btn-sm" id="casosConvivenciaVolverBtn">
       <i class="bi bi-arrow-left me-1"></i>Volver al listado
     </button>
+    <button type="button" class="btn btn-success btn-sm" id="casoDetailNotificarBtn">
+      <i class="bi bi-send me-1"></i><span id="casoDetailNotificarBtnTexto">Notificar</span>
+    </button>
     <button type="button" class="btn btn-outline-primary btn-sm" id="casoDetailEditarBtn">
       <i class="bi bi-pencil me-1"></i>Editar información
     </button>
@@ -67,6 +168,8 @@
       <div class="text-end">
         <div id="casoDetailEstado"></div>
         <div id="casoDetailRegistroBadge"></div>
+        <div id="casoDetailPendienteNotificarBadge"></div>
+        <div id="casoDetailEvidenciaOcultaBadge"></div>
         <div id="casoDetailTipoProceso" class="small text-muted mt-1"></div>
       </div>
     </div>
@@ -80,6 +183,15 @@
     <p id="casoDetailRazon"></p>
     <div id="casoDetailEvidenciasSection">
       <strong>Evidencias:</strong>
+      <!-- Administración puede ocultar toda la evidencia (acción OCULTAR_EVIDENCIA): solo ella la ve. -->
+      <div id="casoDetailEvidenciaOcultaControl" class="form-check form-switch mt-2 hidden">
+        <input class="form-check-input" type="checkbox" role="switch" id="casoDetailEvidenciaOcultaSwitch" autocomplete="off">
+        <label class="form-check-label" for="casoDetailEvidenciaOcultaSwitch">Ocultar evidencia</label>
+        <div class="form-text">Solo administración podrá verla; el comité, el consejo, el residente y vigilancia verán un aviso. Puedes volver a mostrarla en cualquier momento.</div>
+      </div>
+      <div id="casoDetailEvidenciaOcultaAviso" class="alert alert-secondary mt-2 mb-0 hidden" role="status">
+        <i class="bi bi-eye-slash me-1"></i>La administración restringió la visualización de la evidencia de este caso.
+      </div>
       <div id="casoDetailEvidencias" class="d-flex flex-wrap gap-2 mt-2"></div>
       <form id="casoDetailEvidenciaForm" class="row g-2 mt-2">
         <div class="col-12">
@@ -94,6 +206,38 @@
         </div>
       </form>
     </div>
+  </div>
+
+  <!-- Remisión a órganos de gobierno (solo administración, acción REMITIR). Cada etapa es independiente y definitiva. -->
+  <div id="casoDetailRemisionSection" class="surface p-4 mb-3 hidden">
+    <h5 class="section-title h6">Remisión del caso</h5>
+    <p class="small text-muted mb-3">Administración gestiona todos los casos y decide si pasan al Comité de Convivencia y/o al Consejo de Administración. Cada órgano solo ve los casos que se le remiten. La remisión no se puede deshacer.</p>
+    <div class="d-flex flex-wrap align-items-stretch gap-2" role="group" aria-label="Pipeline de remisión del caso">
+      <div class="border rounded p-3 bg-light">
+        <div class="small text-muted">Etapa 1</div>
+        <div class="fw-semibold"><i class="bi bi-check-circle-fill text-success me-1"></i>Administración</div>
+        <span class="badge text-bg-success mt-1">Gestiona el caso</span>
+      </div>
+      <div class="d-flex align-items-center text-muted" aria-hidden="true"><i class="bi bi-arrow-right fs-4"></i></div>
+      <div class="border rounded p-3">
+        <div class="small text-muted">Etapa 2 · opcional</div>
+        <div class="fw-semibold">Comité de Convivencia</div>
+        <div class="mt-1"><span id="casoRemisionComiteEtiqueta" class="badge text-bg-secondary">No remitido</span></div>
+        <button type="button" id="casoRemisionComiteBtn" class="btn btn-outline-success btn-sm mt-2" data-organo="COMITE">
+          <i class="bi bi-play-fill me-1"></i>Remitir al Comité
+        </button>
+      </div>
+      <div class="d-flex align-items-center text-muted" aria-hidden="true"><i class="bi bi-arrow-right fs-4"></i></div>
+      <div class="border rounded p-3">
+        <div class="small text-muted">Etapa 3 · opcional</div>
+        <div class="fw-semibold">Consejo de Administración</div>
+        <div class="mt-1"><span id="casoRemisionConsejoEtiqueta" class="badge text-bg-secondary">No remitido</span></div>
+        <button type="button" id="casoRemisionConsejoBtn" class="btn btn-outline-success btn-sm mt-2" data-organo="CONSEJO">
+          <i class="bi bi-play-fill me-1"></i>Remitir al Consejo
+        </button>
+      </div>
+    </div>
+    <div id="casoRemisionNota" class="small text-muted mt-2"></div>
   </div>
 
   <div id="casoDetailRegistroSection" class="surface p-4 mb-3 hidden">
@@ -303,14 +447,19 @@
 <script>
   window.CONVIVENCIA_CASOS_CONFIG = Object.assign(window.CONVIVENCIA_CASOS_CONFIG || {}, {
     apiBase: {{ .ctx.Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }},
-    {{- if eq $modo "comite" }}
+    {{- if eq $modo "consejo" }}
+    // Consejo: solo consulta de los casos que administración le remitió; las decisiones del Consejo las registra administración.
+    rutaCasos: '/api/v1/consejo-administracion',
+    acciones: [],
+    anularSoloSinSancion: true
+    {{- else if eq $modo "comite" }}
     rutaCasos: '/api/v1/comite-convivencia',
     acciones: ['ANULAR', 'ACTA_COMITE', 'CAMBIAR_SEVERIDAD', 'CIERRE', 'DESCARGOS_EN_NOMBRE'],
     anularSoloSinSancion: true
     {{- else }}
     rutaCasos: '/api/v1/convivencia',
     acciones: ['EDITAR', 'ANULAR', 'EVIDENCIA_CASO', 'ACTA_COMITE', 'CAMBIAR_SEVERIDAD', 'CIERRE',
-      'PROPONER_SANCION', 'CONSEJO_DECISION', 'RESOLVER_APELACION', 'DESCARGOS_EN_NOMBRE', 'NOTIFICACIONES'],
+      'PROPONER_SANCION', 'CONSEJO_DECISION', 'RESOLVER_APELACION', 'DESCARGOS_EN_NOMBRE', 'NOTIFICACIONES', 'REMITIR', 'OCULTAR_EVIDENCIA', 'NOTIFICAR'],
     anularSoloSinSancion: false
     {{- end }}
   });

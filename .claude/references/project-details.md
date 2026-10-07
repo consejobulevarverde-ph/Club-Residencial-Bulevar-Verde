@@ -11,7 +11,9 @@ Contenido original de CLAUDE.md conservado íntegro el 2026-10-04. Consulta solo
 **Key Pages**:
 - `/` — home (landing)
 - `/datos-personales/` — resident self-service portal (login, profile, residents, vehicles, pets, emergency, sanciones)
-- `/comite-convivencia-datos/` — Comité de Convivencia portal (unlisted URL, document-only login)
+- `/comite-convivencia-datos/` — Comité de Convivencia portal (unlisted URL, document-only login; only cases remitted to the comité)
+- `/consejo-administracion-datos/` — Consejo de Administración portal (unlisted URL, document-only login; read-only, only cases remitted to the consejo)
+- `/guia-casos-convivencia/` — public guide explaining how convivencia cases work (opened from the "Info" button of the cases view)
 - Other static pages and news
 
 **Deployment**: `hugo --gc --minify` → `firebase deploy --only hosting`
@@ -30,7 +32,7 @@ Stored in `sessionStorage` under key `bvDatosPersonalesToken`. Format: HMAC-SHA2
 Token obtained from backend (`/api/v1/datos-personales/validar`), then used for all authenticated requests to API. TTL: 2 hours.
 
 The Comité de Convivencia page uses the same token mechanism with its own key
-(`sessionStorage.bvComiteConvivenciaToken`, from `/api/v1/comite-convivencia/iniciar-sesion`). The API
+(`sessionStorage.bvComiteConvivenciaToken`, from `/api/v1/comite-convivencia/iniciar-sesion`); the Consejo page uses `bvConsejoAdministracionToken` from `/api/v1/consejo-administracion/iniciar-sesion`. The API
 signs each token type with a different purpose, so a comité token never works in `datos-personales` and
 vice versa.
 
@@ -157,8 +159,16 @@ while no `Sancion` exists.
    sanctions: it registers its acta, reclassifies severity, closes/archives, anula and registers
    descargos in the resident's name — only while the case has no `Sancion`. Members are registered
    residents in `MiembroOrganoGobierno` (`organo: "COMITE_CONVIVENCIA"`, informational `cargo`), managed
-   from the admin "Personal" tab with the "Comité de Convivencia" filter. The same table is ready for
-   `CONSEJO_ADMINISTRACION` later.
+   from the admin "Personal" tab with the "Comité de Convivencia" filter. The comité only sees cases
+   that administración remitted to it (`remitidoComite`).
+5. **Consejo de Administración** — `/consejo-administracion-datos/` renders the same partial in `consejo`
+   mode against `/api/v1/consejo-administracion` (read-only, no actions). Members are
+   `MiembroOrganoGobierno` rows with `organo: "CONSEJO_ADMINISTRACION"`, managed from the "Personal" tab
+   ("Consejo de Administración" filter). It only sees cases remitted to it (`remitidoConsejo`); the
+   Consejo's decisions are still recorded by administración (`CONSEJO_DECISION`).
+6. **Remisión** — administración sees every case and decides, per case and per órgano, whether to
+   remit it (pipeline Administración ▶ Comité ▶ Consejo in the case detail; definitive, logged as
+   `CASO_REMITIDO_COMITE` / `CASO_REMITIDO_CONSEJO`). Existing cases start unremitted.
 
 Evidence still lands in the same Google Drive folder as before (`soporte-sanciones-convivencia`),
 now uploaded by the API itself (`src/services/drive.ts` in bulevar-verde-api) via an OAuth2 refresh

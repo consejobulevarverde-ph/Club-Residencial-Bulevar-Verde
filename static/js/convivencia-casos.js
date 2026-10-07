@@ -1,5 +1,5 @@
-// convivencia-casos.js — vista "Casos Convivencia" compartida por /administracion-datos/ (Firebase)
-// y /comite-convivencia-datos/ (token del comité). Autocontenido: no depende de core.js.
+// convivencia-casos.js — vista "Casos Convivencia" compartida por /administracion-datos/ (Firebase),
+// /comite-convivencia-datos/ (token del comité) y /consejo-administracion-datos/ (token del consejo, solo consulta). Autocontenido: no depende de core.js.
 // La página anfitriona completa window.CONVIVENCIA_CASOS_CONFIG (obtenerToken, onNoAutorizado);
 // el partial convivencia-casos/index.html fija apiBase, rutaCasos, acciones y anularSoloSinSancion.
 (function () {
@@ -132,6 +132,7 @@
 
   function cargarCasosConvivencia(reset) {
     if (reset !== false) casosConvivenciaOffset = 0;
+    listaCargada = true;
     var seleccion = $('casosConvivenciaFiltroEstado').value;
     var estados = seleccion === 'EN_TRAMITE'
       ? ['PENDIENTE_DESCARGOS', 'CON_DESCARGOS']
@@ -168,9 +169,13 @@
         (caso.tieneAdjuntos ? ' <i class="bi bi-image text-muted ms-1" title="Tiene adjuntos" aria-label="Tiene adjuntos"></i>' : '') +
         '<br><small class="text-muted">' + esc(caso.caseCode) + ' · ' + esc(caso.fechaCreacion) + '</small></div>' +
         '<div>' + obtenerBadgeEstadoCaso(caso.estado) +
-        (caso.registro === 'BORRADOR' ? ' <span class="badge text-bg-warning">Pendiente de completar y notificar</span>' : '') +
+        (caso.registro === 'BORRADOR' ? ' <span class="badge text-bg-warning">Pendiente de completar</span>' : '') +
+        (caso.pendienteNotificar ? ' <span class="badge text-bg-warning">Pendiente de notificar</span>' : '') +
         (caso.severidad ? ' <span class="badge bg-secondary ms-1">' + esc(caso.severidad) + '</span>' : '') +
         (caso.tieneDescargos ? ' <span class="badge bg-info text-dark ms-1">Con descargos</span>' : '') +
+        (puede('OCULTAR_EVIDENCIA') && caso.evidenciaOculta ? ' <span class="badge text-bg-dark ms-1" title="Evidencia oculta: solo administración la ve"><i class="bi bi-eye-slash"></i> Evidencia oculta</span>' : '') +
+        (puede('REMITIR') && caso.remitidoComite ? ' <span class="badge text-bg-success ms-1" title="Remitido al Comité de Convivencia">Comité</span>' : '') +
+        (puede('REMITIR') && caso.remitidoConsejo ? ' <span class="badge text-bg-success ms-1" title="Remitido al Consejo de Administración">Consejo</span>' : '') +
         '</div></div>';
     }).join('');
   }
@@ -299,6 +304,7 @@
       casoConvivenciaActual = resp.data;
       renderDetalleCasoConvivencia(resp.data);
       $('casosConvivenciaListView').classList.add('hidden');
+      $('casosConvivenciaTabs').classList.add('hidden');
       $('casosConvivenciaDetailView').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }).catch(function (error) { msg(error.message); });
@@ -327,7 +333,18 @@
     APELACION_PRESENTADA: 'Apelación presentada',
     APELACION_RATIFICADA: 'Apelación ratificada',
     APELACION_REVOCADA: 'Apelación revocada',
-    ALLANAMIENTO_ACEPTADO: 'Residente aceptó los cargos (descuento del 50%)'
+    ALLANAMIENTO_ACEPTADO: 'Residente aceptó los cargos (descuento del 50%)',
+    CASO_REMITIDO_COMITE: 'Caso remitido al Comité de Convivencia',
+    CASO_REMITIDO_CONSEJO: 'Caso remitido al Consejo de Administración',
+    NOTIFICACION_SOLICITADA: 'Notificación solicitada por administración',
+    NOTIFICACION_LEIDA: 'El residente abrió el caso en el portal',
+    NOTIFICACION_ENVIADA: 'Notificación enviada',
+    NOTIFICACION_FALLIDA: 'Notificación fallida',
+    NOTIFICACION_INCIERTA: 'Notificación con resultado incierto',
+    NOTIFICACION_REINTENTADA: 'Notificación reintentada',
+    NOTIFICACION_MARCADA_ENVIADA: 'Notificación marcada como enviada',
+    EVIDENCIA_OCULTADA: 'Evidencia ocultada (solo administración la ve)',
+    EVIDENCIA_MOSTRADA: 'Evidencia visible nuevamente'
   };
 
   var ACTOR_LABELS = {
@@ -354,6 +371,172 @@
     }).join('');
   }
 
+  // ===== NOTIFICAR AL RESIDENTE (solo administración) =====
+  // Llamado de atención: se notifica solo al finalizar. Proceso formal: queda «Pendiente de notificar» y
+  // administración elige destinatarios en este modal (todos preseleccionados). Se puede volver a notificar.
+
+  var NOTIFICACION_EN_CURSO = ['SOLICITADA', 'ENVIANDO', 'FALLIDA_REINTENTABLE'];
+
+  function notificacionResidentes(caso) {
+    return (caso.notificaciones || []).filter(function (n) { return n.tipo === 'RESIDENTES'; })[0] || null;
+  }
+
+  function renderBotonNotificar(caso) {
+    var registro = notificacionResidentes(caso);
+    var enCurso = registro && NOTIFICACION_EN_CURSO.indexOf(registro.estado) !== -1;
+    var yaNotificado = !caso.pendienteNotificar && registro && registro.estado !== 'POR_NOTIFICAR';
+    var visible = puede('NOTIFICAR') && caso.registro !== 'BORRADOR' && caso.estado !== 'ANULADO' && !enCurso;
+    mostrarElemento('casoDetailNotificarBtn', visible);
+    $('casoDetailNotificarBtnTexto').textContent = yaNotificado ? 'Volver a notificar' : 'Notificar';
+    $('casoDetailNotificarBtn').className = 'btn btn-sm ' + (caso.pendienteNotificar ? 'btn-success' : 'btn-outline-success');
+  }
+
+  function actualizarBotonEnviarNotificacion() {
+    var marcados = $('notificarCasoLista').querySelectorAll('input.cv-notificar-check:checked').length;
+    $('notificarCasoEnviarBtn').disabled = marcados === 0;
+  }
+
+  function renderDestinatarios(destinatarios) {
+    if (!destinatarios.length) {
+      $('notificarCasoLista').innerHTML = '<p class="text-muted mb-0">La unidad no tiene propietarios ni residentes registrados para notificar.</p>';
+      return;
+    }
+    $('notificarCasoLista').innerHTML = '<table class="table table-sm align-middle mb-0">' +
+      '<thead><tr><th scope="col" style="width:2.5rem"><span class="visually-hidden">Notificar</span></th>' +
+      '<th scope="col">Nombre</th><th scope="col">Correo</th><th scope="col">Tipo</th></tr></thead><tbody>' +
+      destinatarios.map(function (d, i) {
+        var id = 'notificarCasoDest' + i;
+        var tieneCorreo = Boolean(d.correo);
+        return '<tr><td><input type="checkbox" class="form-check-input cv-notificar-check" id="' + id + '" value="' + esc(d.personaId) + '"' +
+          (d.seleccionado && tieneCorreo ? ' checked' : '') + (tieneCorreo ? '' : ' disabled') + ' autocomplete="off"></td>' +
+          '<td><label for="' + id + '" class="mb-0">' + esc(d.nombre) + '</label></td>' +
+          '<td>' + (tieneCorreo ? esc(d.correo) : '<span class="text-muted">Sin correo registrado</span>') + '</td>' +
+          '<td>' + esc(d.rol) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    actualizarBotonEnviarNotificacion();
+  }
+
+  $('casoDetailNotificarBtn').addEventListener('click', function () {
+    if (!casoConvivenciaActual) return;
+    hideMsg();
+    $('notificarCasoAlerta').classList.add('hidden');
+    $('notificarCasoLista').innerHTML = '<p class="text-muted mb-0">Cargando…</p>';
+    $('notificarCasoEnviarBtn').disabled = true;
+    $('modalNotificarCasoTitulo').textContent = 'Notificar el caso ' + (casoConvivenciaActual.caseCode || '');
+    var m = modal('modalNotificarCaso');
+    if (m) m.show();
+    apiFetch('/casos/' + casoConvivenciaActual.id + '/destinatarios').then(function (resp) {
+      renderDestinatarios((resp.data && resp.data.destinatarios) || []);
+    }).catch(function (error) {
+      $('notificarCasoLista').innerHTML = '';
+      $('notificarCasoAlerta').textContent = error.message;
+      $('notificarCasoAlerta').classList.remove('hidden');
+    });
+  });
+
+  $('notificarCasoLista').addEventListener('change', actualizarBotonEnviarNotificacion);
+
+  $('notificarCasoEnviarBtn').addEventListener('click', function () {
+    var btn = this;
+    if (!casoConvivenciaActual) return;
+    var ids = Array.prototype.map.call($('notificarCasoLista').querySelectorAll('input.cv-notificar-check:checked'), function (el) { return el.value; });
+    if (!ids.length) return;
+    $('notificarCasoAlerta').classList.add('hidden');
+    busy(btn, true, 'Enviando…');
+    apiFetch('/casos/' + casoConvivenciaActual.id + '/notificar', { method: 'POST', body: { personaIds: ids } })
+      .then(function (resp) {
+        var m = modal('modalNotificarCaso');
+        if (m) m.hide();
+        aplicarCasoActualizado(resp.data, 'Notificación solicitada: el envío se confirma en «Registro y notificación» cuando el servidor de correo lo acepte.');
+      })
+      .catch(function (error) {
+        $('notificarCasoAlerta').textContent = error.message;
+        $('notificarCasoAlerta').classList.remove('hidden');
+      })
+      .finally(function () { busy(btn, false, 'Enviar notificación'); actualizarBotonEnviarNotificacion(); });
+  });
+
+  // ===== EVIDENCIA OCULTA =====
+  // Administración marca/desmarca; la API ya omite la evidencia para los demás llamadores, aquí solo
+  // se explica por qué no hay evidencias (comité y consejo) y se muestra el estado (administración).
+
+  function renderEvidenciaOculta(caso) {
+    var oculta = Boolean(caso.evidenciaOculta);
+    var admin = puede('OCULTAR_EVIDENCIA');
+    mostrarElemento('casoDetailEvidenciaOcultaControl', admin);
+    mostrarElemento('casoDetailEvidenciaOcultaAviso', oculta && !admin);
+    $('casoDetailEvidenciaOcultaSwitch').checked = oculta;
+    $('casoDetailEvidenciaOcultaBadge').innerHTML = admin && oculta
+      ? '<span class="badge text-bg-dark mt-1"><i class="bi bi-eye-slash me-1"></i>Evidencia oculta</span>'
+      : '';
+  }
+
+  $('casoDetailEvidenciaOcultaSwitch').addEventListener('change', function () {
+    var interruptor = this;
+    var oculta = interruptor.checked;
+    if (!casoConvivenciaActual) return;
+    interruptor.disabled = true;
+    apiFetch('/casos/' + casoConvivenciaActual.id + '/evidencia-oculta', { method: 'PATCH', body: { oculta: oculta } })
+      .then(function (resp) {
+        aplicarCasoActualizado(resp.data, oculta
+          ? 'Evidencia oculta: solo administración puede verla.'
+          : 'La evidencia vuelve a ser visible para quienes tienen acceso al caso.');
+      })
+      .catch(function (error) {
+        interruptor.checked = !oculta;
+        msg(error.message);
+      })
+      .finally(function () { interruptor.disabled = false; });
+  });
+
+  // ===== REMISIÓN A COMITÉ / CONSEJO (solo administración) =====
+
+  var ORGANOS_REMISION = {
+    COMITE: { campo: 'remitidoComite', fecha: 'fechaRemisionComite', etiqueta: 'casoRemisionComiteEtiqueta', boton: 'casoRemisionComiteBtn', nombre: 'Comité de Convivencia' },
+    CONSEJO: { campo: 'remitidoConsejo', fecha: 'fechaRemisionConsejo', etiqueta: 'casoRemisionConsejoEtiqueta', boton: 'casoRemisionConsejoBtn', nombre: 'Consejo de Administración' }
+  };
+
+  function formatearFechaRemision(valor) {
+    var fecha = valor ? new Date(valor) : null;
+    return fecha && !isNaN(fecha.getTime()) ? fecha.toLocaleDateString('es-CO') : '';
+  }
+
+  function renderRemision(caso) {
+    var visible = puede('REMITIR');
+    mostrarElemento('casoDetailRemisionSection', visible);
+    if (!visible) return;
+    var borrador = caso.registro === 'BORRADOR';
+    var anulado = caso.estado === 'ANULADO';
+    Object.keys(ORGANOS_REMISION).forEach(function (clave) {
+      var organo = ORGANOS_REMISION[clave];
+      var remitido = Boolean(caso[organo.campo]);
+      var etiqueta = $(organo.etiqueta);
+      var fecha = formatearFechaRemision(caso[organo.fecha]);
+      etiqueta.textContent = remitido ? 'Remitido' + (fecha ? ' el ' + fecha : '') : 'No remitido';
+      etiqueta.className = 'badge ' + (remitido ? 'text-bg-success' : 'text-bg-secondary');
+      var boton = $(organo.boton);
+      boton.classList.toggle('hidden', remitido);
+      boton.disabled = borrador || anulado;
+    });
+    $('casoRemisionNota').textContent = borrador
+      ? 'Finaliza y notifica el caso antes de poder remitirlo.'
+      : anulado ? 'Un caso anulado no se puede remitir.' : '';
+  }
+
+  Object.keys(ORGANOS_REMISION).forEach(function (clave) {
+    var organo = ORGANOS_REMISION[clave];
+    $(organo.boton).addEventListener('click', function () {
+      var btn = this;
+      if (!casoConvivenciaActual) return;
+      if (!confirm('¿Remitir este caso al ' + organo.nombre + '? Podrán consultarlo sus miembros y la remisión no se puede deshacer.')) return;
+      busy(btn, true, 'Remitiendo…');
+      apiFetch('/casos/' + casoConvivenciaActual.id + '/remitir', { method: 'POST', body: { organo: clave } })
+        .then(function (resp) { aplicarCasoActualizado(resp.data, 'Caso remitido al ' + organo.nombre + '.'); })
+        .catch(function (error) { msg(error.message); })
+        .finally(function () { busy(btn, false, '<i class="bi bi-play-fill me-1"></i>Remitir al ' + (clave === 'COMITE' ? 'Comité' : 'Consejo')); });
+    });
+  });
+
   // Cada bloque se muestra si el llamador tiene la acción Y el estado del caso la admite.
   function actualizarAccionesDisponibles(caso) {
     var borrador = caso.registro === 'BORRADOR';
@@ -361,6 +544,8 @@
     var terminal = ESTADOS_TERMINALES.indexOf(caso.estado) !== -1;
 
     mostrarElemento('casoDetailEditarBtn', puede('EDITAR'));
+    renderBotonNotificar(caso);
+    renderRemision(caso);
     mostrarElemento('casoDetailAnularBtn',
       puede('ANULAR') && caso.estado !== 'ANULADO' && !(config().anularSoloSinSancion && caso.sancion));
     mostrarElemento('casoAccionesSeveridad', puede('CAMBIAR_SEVERIDAD') && !caso.sancion && !terminal);
@@ -382,6 +567,7 @@
   // "Enviada" significa aceptada por el servidor de correo; nunca se muestra "Notificado" solo
   // porque se solicitó el envío.
   var ETIQUETA_NOTIFICACION = {
+    POR_NOTIFICAR: ['Pendiente de notificar', 'text-bg-warning'],
     SOLICITADA: ['Envío solicitado', 'text-bg-info'],
     ENVIANDO: ['Enviando', 'text-bg-info'],
     ENVIADA: ['Enviada (aceptada por el servidor de correo)', 'text-bg-success'],
@@ -390,7 +576,25 @@
     INCIERTA: ['Resultado incierto; revisar', 'text-bg-danger'],
     SIN_DESTINATARIOS: ['Sin destinatarios con correo', 'text-bg-danger']
   };
-  var DESTINATARIO_NOTIFICACION = { RESIDENTES: 'Residentes', ADMINISTRACION: 'Administración' };
+  var TITULO_NOTIFICACION = {
+    RESIDENTES: 'Notificación a residentes',
+    ADMINISTRACION: 'Notificación a administración',
+    SANCION: 'Comunicación de la sanción al residente',
+    RECURSO: 'Comunicación de la decisión del recurso al residente',
+    CIERRE_SIN_SANCION: 'Comunicación del cierre sin sanción al residente'
+  };
+
+  // «Leída» = el residente abrió el caso en el portal (a los 20 s); no es una confirmación de lectura del correo.
+  function lineaLecturaResidente(caso, notificacion) {
+    if (notificacion.tipo !== 'RESIDENTES' || notificacion.estado === 'POR_NOTIFICAR') return '';
+    if (caso.fechaLecturaResidente) {
+      var fecha = new Date(caso.fechaLecturaResidente);
+      var texto = isNaN(fecha.getTime()) ? caso.fechaLecturaResidente : fecha.toLocaleString('es-CO');
+      return '<small class="d-block text-success"><i class="bi bi-eye me-1"></i>Leída por el residente el ' + esc(texto) +
+        ' (abrió el caso en el portal)</small>';
+    }
+    return '<small class="d-block text-muted"><i class="bi bi-eye-slash me-1"></i>Sin abrir en el portal</small>';
+  }
 
   function renderRegistroYNotificacion(caso) {
     var seccion = $('casoDetailRegistroSection');
@@ -398,7 +602,7 @@
     var adjuntos = caso.adjuntos || [];
     var notificaciones = caso.notificaciones || [];
     var borrador = caso.registro === 'BORRADOR';
-    if (!borrador && !notificaciones.length) {
+    if (!borrador && !notificaciones.length && !caso.pendienteNotificar) {
       seccion.classList.add('hidden');
       return;
     }
@@ -415,6 +619,10 @@
         }).join('') + '</ul>';
       }
     }
+    if (caso.pendienteNotificar) {
+      html += '<p class="small mb-2">El residente aún no ha sido notificado: no ve el caso y no hay trámite hasta que administración lo notifique' +
+        (puede('NOTIFICAR') ? ' con el botón «Notificar».' : '.') + '</p>';
+    }
     if (notificaciones.length) {
       html += '<ul class="list-group">' + notificaciones.map(function (n) {
         var etiqueta = ETIQUETA_NOTIFICACION[n.estado] || [n.estado, 'text-bg-secondary'];
@@ -426,12 +634,16 @@
           acciones += ' <button type="button" class="btn btn-outline-secondary btn-sm cv-notificacion-accion" data-tipo="' + esc(n.tipo) + '" data-accion="marcar-enviada">Marcar como enviada</button>';
         }
         return '<li class="list-group-item">' +
-          '<div class="d-flex justify-content-between gap-2"><span>Notificación a ' + esc(DESTINATARIO_NOTIFICACION[n.tipo] || n.tipo) + '</span>' +
+          '<div class="d-flex justify-content-between gap-2"><span>' + esc(TITULO_NOTIFICACION[n.tipo] || ('Notificación ' + n.tipo)) + '</span>' +
           '<span class="badge ' + etiqueta[1] + ' align-self-start">' + esc(etiqueta[0]) + '</span></div>' +
           '<small class="text-muted d-block">Intentos: ' + Number(n.intentos || 0) +
           (n.fechaEnvio ? ' · Enviada ' + esc(n.fechaEnvio) : '') +
           (n.aceptados != null ? ' · Destinatarios aceptados: ' + Number(n.aceptados) : '') + '</small>' +
           (n.ultimoError ? '<small class="d-block text-danger">' + esc(n.ultimoError) + '</small>' : '') +
+          lineaLecturaResidente(caso, n) +
+          (n.tipo === 'SANCION' && n.estado === 'ENVIADA'
+            ? '<small class="d-block text-muted">Desde esta comunicación corren 5 días hábiles para el recurso de reposición ante el Consejo y 1 mes para la impugnación judicial (reglamento arts. 46 y 48).</small>'
+            : '') +
           (n.estado === 'INCIERTA' ? '<small class="d-block text-muted">El correo pudo haber salido. Revise el registro del proveedor antes de reintentar para evitar un duplicado.</small>' : '') +
           (acciones ? '<div class="mt-1">' + acciones + '</div>' : '') +
           '</li>';
@@ -459,9 +671,13 @@
     $('casoDetailMotivo').textContent = caso.motivo;
     $('casoDetailEstado').innerHTML = obtenerBadgeEstadoCaso(caso.estado);
     $('casoDetailRegistroBadge').innerHTML = caso.registro === 'BORRADOR'
-      ? '<span class="badge text-bg-warning mt-1">Pendiente de completar y notificar</span>'
+      ? '<span class="badge text-bg-warning mt-1">Pendiente de completar</span>'
+      : '';
+    $('casoDetailPendienteNotificarBadge').innerHTML = caso.pendienteNotificar
+      ? '<span class="badge text-bg-warning mt-1">Pendiente de notificar</span>'
       : '';
     renderRegistroYNotificacion(caso);
+    renderEvidenciaOculta(caso);
     $('casoDetailTipoProceso').textContent = caso.requiereProcesoFormal
       ? 'Proceso sancionatorio formal'
       : 'Llamado de atención — no requiere proceso formal';
@@ -612,8 +828,7 @@
 
   $('casosConvivenciaVolverBtn').addEventListener('click', function () {
     hideMsg();
-    $('casosConvivenciaDetailView').classList.add('hidden');
-    $('casosConvivenciaListView').classList.remove('hidden');
+    mostrarPestana('casos');
     cargarCasosConvivencia(true);
   });
 
@@ -958,13 +1173,77 @@
     if ($('casoDescargosEvidenciaInput')) $('casoDescargosEvidenciaInput').setAttribute('accept', acceptStr);
   }
 
+  // ===== PESTAÑAS Y RESUMEN =====
+  // El resumen solo trae conteos de TODOS los casos (también para comité y consejo); la lista sigue
+  // limitada por la API a lo que cada llamador puede ver.
+
+  var ORDEN_ESTADOS_RESUMEN = [
+    'PENDIENTE_DESCARGOS', 'CON_DESCARGOS', 'PENDIENTE_APROBACION_CONSEJO', 'SANCION_APROBADA', 'EN_APELACION',
+    'CERRADO_SIN_SANCION', 'SANCION_RATIFICADA', 'SANCION_APROBADA_ALLANAMIENTO', 'SANCION_REVOCADA', 'ARCHIVADO', 'ANULADO'
+  ];
+  var CAMPOS_RESUMEN = {
+    resumenTotal: 'total', resumenPendientes: 'pendientes', resumenPorNotificar: 'porNotificar', resumenAbiertos: 'abiertos', resumenCerrados: 'cerrados',
+    resumenAnulados: 'anulados', resumenComite: 'remitidosComite', resumenConsejo: 'remitidosConsejo'
+  };
+  var listaCargada = false;
+
+  function formatearConteo(valor) {
+    return Number(valor || 0).toLocaleString('es-CO');
+  }
+
+  function cargarResumen() {
+    Object.keys(CAMPOS_RESUMEN).forEach(function (id) { $(id).textContent = '—'; });
+    apiFetch('/resumen').then(function (resp) {
+      var resumen = resp.data || {};
+      Object.keys(CAMPOS_RESUMEN).forEach(function (id) {
+        $(id).textContent = formatearConteo(resumen[CAMPOS_RESUMEN[id]]);
+      });
+      var porEstado = resumen.porEstado || {};
+      var filas = ORDEN_ESTADOS_RESUMEN.map(function (estado) {
+        return '<tr><td>' + obtenerBadgeEstadoCaso(estado) + '</td><td class="text-end fw-semibold">' +
+          esc(formatearConteo(porEstado[estado])) + '</td></tr>';
+      }).join('');
+      $('casosConvivenciaResumenEstados').innerHTML = '<table class="table table-sm align-middle mb-0">' +
+        '<thead><tr><th scope="col">Estado</th><th scope="col" class="text-end">Casos</th></tr></thead><tbody>' + filas + '</tbody></table>';
+    }).catch(function (error) {
+      $('casosConvivenciaResumenEstados').innerHTML = '<p class="text-muted mb-0">No fue posible cargar el resumen.</p>';
+      msg(error.message);
+    });
+  }
+
+  function mostrarPestana(pestana) {
+    var resumen = pestana === 'resumen';
+    $('casosConvivenciaTabs').classList.remove('hidden');
+    $('casosConvivenciaDetailView').classList.add('hidden');
+    $('casosConvivenciaResumenView').classList.toggle('hidden', !resumen);
+    $('casosConvivenciaListView').classList.toggle('hidden', resumen);
+    [['casosConvivenciaTabResumen', resumen], ['casosConvivenciaTabCasos', !resumen]].forEach(function (par) {
+      $(par[0]).classList.toggle('active', par[1]);
+      $(par[0]).setAttribute('aria-selected', par[1] ? 'true' : 'false');
+    });
+    // El resumen se recarga cada vez (son solo conteos); la lista, solo la primera vez.
+    if (resumen) cargarResumen();
+    else if (!listaCargada) cargarCasosConvivencia(true);
+  }
+
+  ['casosConvivenciaTabResumen', 'casosConvivenciaTabCasos'].forEach(function (id) {
+    $(id).addEventListener('click', function () {
+      hideMsg();
+      mostrarPestana(this.dataset.pestana);
+    });
+  });
+  $('casosConvivenciaResumenActualizarBtn').addEventListener('click', function () {
+    hideMsg();
+    cargarResumen();
+  });
+
   window.BVConvivenciaCasos = {
-    // Muestra el listado (desde cero) — lo llaman el stub de administración y la página del comité.
+    // Abre la vista desde cero en la pestaña «Resumen» — lo llaman el stub de administración y las
+    // páginas del comité y del consejo. La lista se carga al entrar por primera vez a «Casos».
     mostrar: function () {
       hideMsg();
-      $('casosConvivenciaDetailView').classList.add('hidden');
-      $('casosConvivenciaListView').classList.remove('hidden');
-      cargarCasosConvivencia(true);
+      listaCargada = false;
+      mostrarPestana('resumen');
     }
   };
 }());

@@ -1811,18 +1811,28 @@ var config = window.ADMIN_DATOS_CONFIG || {};
       });
 
       // ===== PERSONAL CRUD =====
-      // El filtro "Comité de Convivencia" reutiliza la misma tabla y formulario, pero sus filas son
-      // membresías de residentes (/api/v1/convivencia/comite/miembros), no colaboradores.
+      // Los filtros "Comité de Convivencia" y "Consejo de Administración" reutilizan la misma tabla y
+      // formulario, pero sus filas son membresías de residentes (/api/v1/convivencia/{comite|consejo}/miembros),
+      // no colaboradores.
 
-      var API_COMITE_MIEMBROS = '/api/v1/convivencia/comite/miembros';
+      var ORGANOS_PERSONAL = {
+        COMITE: { ruta: '/api/v1/convivencia/comite/miembros', nombre: 'Comité de Convivencia', miembro: 'del comité', portal: 'comité' },
+        CONSEJO: { ruta: '/api/v1/convivencia/consejo/miembros', nombre: 'Consejo de Administración', miembro: 'del consejo', portal: 'consejo' }
+      };
       var personalComiteCache = [];
 
+      // Órgano del filtro seleccionado, o null si es personal (colaboradores).
+      function organoDelFiltro() {
+        return ORGANOS_PERSONAL[$('personalFiltroRol').value] || null;
+      }
+
       function esFiltroComite() {
-        return $('personalFiltroRol').value === 'COMITE';
+        return organoDelFiltro() !== null;
       }
 
       function actualizarCamposPersonalPorRol() {
-        var comite = $('personalRol').value === 'COMITE';
+        var organoForm = ORGANOS_PERSONAL[$('personalRol').value] || null;
+        var comite = organoForm !== null;
         ['personalGrupoNombre', 'personalGrupoTelefono', 'personalGrupoCorreo'].forEach(function (id) {
           $(id).classList.toggle('hidden', comite);
         });
@@ -1830,7 +1840,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         $('personalNombreCompleto').required = !comite;
         $('personalGrupoCargo').classList.toggle('hidden', !comite);
         $('personalNotaComite').classList.toggle('hidden', !comite);
-        $('personalFormTitulo').textContent = comite ? 'Agregar miembro del Comité de Convivencia' : 'Agregar personal';
+        $('personalFormTitulo').textContent = comite ? 'Agregar miembro del ' + organoForm.nombre : 'Agregar personal';
       }
 
       function prepararFormularioPersonal() {
@@ -1840,14 +1850,14 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         $('personalNumeroDocumento').disabled = false;
         $('personalRol').disabled = false;
         $('personalCancelarEdicion').classList.add('hidden');
-        if (esFiltroComite()) $('personalRol').value = 'COMITE';
+        if (esFiltroComite()) $('personalRol').value = $('personalFiltroRol').value;
         actualizarCamposPersonalPorRol();
       }
 
       function loadPersonal() {
         return withIdToken(function (idToken) {
           if (esFiltroComite()) {
-            return apiFetch(API_COMITE_MIEMBROS, idToken).then(function (resp) {
+            return apiFetch(organoDelFiltro().ruta, idToken).then(function (resp) {
               personalComiteCache = resp.data || [];
               renderPersonalTabla(personalComiteCache);
             });
@@ -1877,7 +1887,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
       }
 
       $('personalFiltroRol').addEventListener('change', function () {
-        if (!esFiltroComite() && $('personalRol').value === 'COMITE') $('personalRol').value = 'VIGILANTE';
+        if (!esFiltroComite() && ORGANOS_PERSONAL[$('personalRol').value]) $('personalRol').value = 'VIGILANTE';
         prepararFormularioPersonal();
         loadPersonal();
       });
@@ -1888,7 +1898,8 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         event.preventDefault();
         hideMsg();
         var id = $('personalId').value;
-        var esComite = $('personalRol').value === 'COMITE';
+        var organoForm = ORGANOS_PERSONAL[$('personalRol').value] || null;
+        var esComite = organoForm !== null;
         var button = event.target.querySelector('button[type="submit"]');
         busy(button, true, 'Guardando…');
 
@@ -1896,8 +1907,8 @@ var config = window.ADMIN_DATOS_CONFIG || {};
           if (esComite) {
             var cargo = $('personalCargo').value.trim();
             return id
-              ? apiFetch(API_COMITE_MIEMBROS + '/' + id, idToken, { method: 'PATCH', body: { cargo: cargo || null } })
-              : apiFetch(API_COMITE_MIEMBROS, idToken, {
+              ? apiFetch(organoForm.ruta + '/' + id, idToken, { method: 'PATCH', body: { cargo: cargo || null } })
+              : apiFetch(organoForm.ruta, idToken, {
                 method: 'POST',
                 body: {
                   tipoDocumento: $('personalTipoDocumento').value.trim(),
@@ -1918,8 +1929,8 @@ var config = window.ADMIN_DATOS_CONFIG || {};
             ? apiFetch('/api/v1/personal/' + id, idToken, { method: 'PATCH', body: payload })
             : apiFetch('/api/v1/personal', idToken, { method: 'POST', body: payload });
         }).then(function () {
-          msg(esComite ? 'Miembro del Comité de Convivencia guardado.' : 'Personal guardado.', 'success');
-          if (esComite && !esFiltroComite()) $('personalFiltroRol').value = 'COMITE';
+          msg(esComite ? 'Miembro del ' + organoForm.nombre + ' guardado.' : 'Personal guardado.', 'success');
+          if (esComite && $('personalFiltroRol').value !== $('personalRol').value) $('personalFiltroRol').value = $('personalRol').value;
           prepararFormularioPersonal();
           loadPersonal();
         }).catch(function (error) { msg(error.message); })
@@ -1931,18 +1942,19 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         if (editBtn) { cargarPersonalEnFormulario(editBtn.dataset.id); return; }
         var delBtn = event.target.closest('.personal-desactivar');
         if (delBtn) {
-          var comite = esFiltroComite();
+          var organo = organoDelFiltro();
+          var comite = organo !== null;
           var pregunta = comite
-            ? '¿Desactivar este miembro del Comité de Convivencia? Perderá el acceso al portal del comité de inmediato.'
+            ? '¿Desactivar este miembro del ' + organo.nombre + '? Perderá el acceso al portal del ' + organo.portal + ' de inmediato.'
             : '¿Desactivar este miembro del personal?';
           if (!confirm(pregunta)) return;
           var button = delBtn;
           busy(button, true, 'Desactivando…');
           withIdToken(function (idToken) {
             return comite
-              ? apiFetch(API_COMITE_MIEMBROS + '/' + delBtn.dataset.id, idToken, { method: 'PATCH', body: { activo: false } })
+              ? apiFetch(organo.ruta + '/' + delBtn.dataset.id, idToken, { method: 'PATCH', body: { activo: false } })
               : apiFetch('/api/v1/personal/' + delBtn.dataset.id, idToken, { method: 'DELETE' });
-          }).then(function () { msg(comite ? 'Miembro del comité desactivado.' : 'Personal desactivado.', 'success'); loadPersonal(); })
+          }).then(function () { msg(comite ? 'Miembro ' + organo.miembro + ' desactivado.' : 'Personal desactivado.', 'success'); loadPersonal(); })
             .catch(function (error) { msg(error.message); })
             .finally(function () { busy(button, false, 'Desactivar'); });
         }
@@ -1962,7 +1974,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
           $('personalNumeroDocumento').disabled = true;
           $('personalRol').disabled = true;
           $('personalCargo').value = miembro.cargo || '';
-          $('personalFormTitulo').textContent = 'Editar miembro del Comité de Convivencia';
+          $('personalFormTitulo').textContent = 'Editar miembro del ' + organoDelFiltro().nombre;
           $('personalCancelarEdicion').classList.remove('hidden');
           return;
         }

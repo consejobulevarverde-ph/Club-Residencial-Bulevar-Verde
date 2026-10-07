@@ -1013,6 +1013,11 @@
             <div id="sancionDetailEvidencias"></div>
           </div>
 
+          <!-- La administración puede restringir la visualización de la evidencia del caso: la API no la envía. -->
+          <div id="sancionEvidenciaOcultaAviso" class="alert alert-secondary mb-3 hidden" role="status">
+            <i class="bi bi-eye-slash me-1"></i>La administración restringió la visualización de la evidencia de este caso.
+          </div>
+
           <div id="sancionActaComiteSection" class="surface p-4 mb-3 hidden">
             <h5 class="section-title h6 mb-3"><i class="bi bi-people me-2"></i>Acta del Comité de Convivencia</h5>
             <p class="text-muted small mb-1" id="sancionActaComiteFecha"></p>
@@ -1428,6 +1433,7 @@
       }
 
       function mostrarListadoSanciones(casos) {
+        cancelarLecturaSancion();
         $('sancionDetailView').classList.add('hidden');
         $('sancionesListView').classList.remove('hidden');
 
@@ -1456,8 +1462,47 @@
         if (item) verDetalleSancion(item.dataset.caseId);
       });
 
+      /* Lectura: a los 20 s de abrir el caso se avisa a la API (la administración ve «leída»).
+         Es silencioso a propósito: no se muestra nada al residente y un error se ignora; se reintenta al reabrir. */
+      var LECTURA_SANCION_MS = 20000;
+      var lecturaSancionTimer = null;
+      var lecturaSancionReportada = {};
+
+      function cancelarLecturaSancion() {
+        if (lecturaSancionTimer) {
+          clearTimeout(lecturaSancionTimer);
+          lecturaSancionTimer = null;
+        }
+      }
+
+      function programarLecturaSancion(caseCode) {
+        cancelarLecturaSancion();
+        if (!caseCode || lecturaSancionReportada[caseCode]) return;
+        lecturaSancionTimer = setTimeout(function () {
+          lecturaSancionTimer = null;
+          function reportar() {
+            // Solo si el residente sigue viendo ese caso (detalle abierto y su pestaña visible).
+            var detalle = $('sancionDetailView');
+            if (!currentSancion || currentSancion.id !== caseCode || detalle.classList.contains('hidden') || detalle.offsetParent === null) return;
+            apiFetch('/sanciones/' + encodeURIComponent(caseCode) + '/lectura', { method: 'POST' })
+              .then(function () { lecturaSancionReportada[caseCode] = true; })
+              .catch(function () { /* silencioso */ });
+          }
+          if (document.hidden) {
+            document.addEventListener('visibilitychange', function alVolver() {
+              if (document.hidden) return;
+              document.removeEventListener('visibilitychange', alVolver);
+              reportar();
+            });
+          } else {
+            reportar();
+          }
+        }, LECTURA_SANCION_MS);
+      }
+
       function verDetalleSancion(caseId) {
         clearAlert();
+        cancelarLecturaSancion();
 
         apiFetch('/sanciones/' + encodeURIComponent(caseId))
           .then(function (body) {
@@ -1466,11 +1511,13 @@
             $('sancionesListView').classList.add('hidden');
             $('sancionDetailView').classList.remove('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
+            programarLecturaSancion(body.data.id);
           })
           .catch(function (error) { alertMessage('Error de conexión: ' + error.message); });
       }
 
       $('sancionVolverBtn').addEventListener('click', function () {
+        cancelarLecturaSancion();
         cargarSanciones();
       });
 
@@ -1485,6 +1532,7 @@
         $('sancionDetailDescripcion').textContent = caso.descripcion || 'No se registraron los hechos en este caso.';
         $('sancionDetailRazonNotificacion').textContent = caso.razonNotificacion || 'No se registró la justificación de la notificación en este caso.';
 
+        $('sancionEvidenciaOcultaAviso').classList.toggle('hidden', !caso.evidenciaOculta);
         var evidenciasGcs = evidenciasGcsDe(caso, 'CASO');
         if ((Array.isArray(caso.evidencias) && caso.evidencias.length > 0) || evidenciasGcs.length > 0) {
           $('sancionEvidenciasSection').classList.remove('hidden');

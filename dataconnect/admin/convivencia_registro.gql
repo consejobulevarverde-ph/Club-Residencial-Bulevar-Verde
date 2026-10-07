@@ -19,6 +19,8 @@ query ObtenerRegistroCasoConvivenciaAdmin($id: UUID!)
     severidad
     notificadorAdmin
     creadoPorUid
+    requiereProcesoFormal
+    pendienteNotificar
     estado
     registro
     registroVersion
@@ -45,6 +47,10 @@ query ObtenerRegistroCasoConvivenciaAdmin($id: UUID!)
       tipo
       estado
       intentos
+      envio
+      destinatariosJson
+      solicitadaPorUid
+      detalleJson
       destinatarios
       aceptados
       rechazados
@@ -173,6 +179,106 @@ mutation FinalizarCasoConvivenciaAdmin(
   ) @check(expr: "this == 1", message: "CASO_CONCURRENCIA")
   notificacion_caso_convivencia_insertMany(data: $notificaciones)
   evento_caso_convivencia_insert(data: $evento)
+}
+
+# Igual que FinalizarCasoConvivenciaAdmin, y además fija `pendienteNotificar` en el mismo UPDATE:
+# los casos de proceso formal quedan pendientes de que administración los notifique (la fila
+# RESIDENTES llega en estado POR_NOTIFICAR); el llamado de atención se notifica de inmediato.
+# Operación nueva para no cambiar la firma de la anterior mientras convive con la API desplegada.
+mutation FinalizarCasoConvivenciaV2Admin(
+  $id: UUID!
+  $versionEsperada: Int!
+  $finalizadoPorUid: String
+  $pendienteNotificar: Boolean!
+  $notificaciones: [NotificacionCasoConvivencia_Data!]!
+    @allow(fields: "casoId tipo estado")
+  $evento: EventoCasoConvivencia_Data!
+    @allow(fields: "casoId tipoEvento estadoAnterior estadoNuevo descripcion actorUid actorTipo")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  query {
+    pendientes: adjuntos_convivencia(
+      where: { casoId: { eq: $id }, estado: { nin: ["LISTO", "RETIRADO"] } }
+    ) @check(expr: "this.size() == 0", message: "ADJUNTOS_PENDIENTES") {
+      id
+    }
+  }
+  finalizado: caso_convivencia_updateMany(
+    where: { id: { eq: $id }, registro: { eq: "BORRADOR" }, registroVersion: { eq: $versionEsperada } }
+    data: {
+      registro: "FINALIZADO"
+      pendienteNotificar: $pendienteNotificar
+      fechaFinalizacion_expr: "request.time"
+      finalizadoPorUid: $finalizadoPorUid
+      registroVersion_update: [{ inc: 1 }]
+      fechaActualizacion_expr: "request.time"
+    }
+  ) @check(expr: "this == 1", message: "CASO_CONCURRENCIA")
+  notificacion_caso_convivencia_insertMany(data: $notificaciones)
+  evento_caso_convivencia_insert(data: $evento)
+}
+
+# Administración notifica al residente («Notificar» / «Volver a notificar») con los destinatarios
+# elegidos. Un solo UPDATE condicional (solo si la notificación RESIDENTES no está en curso);
+# @check(this == 1) aborta la transacción —sin evento— si otra solicitud ya la tomó.
+mutation SolicitarNotificacionCasoConvivenciaAdmin(
+  $casoId: UUID!
+  $destinatariosJson: String!
+  $porUid: String
+  $evento: EventoCasoConvivencia_Data!
+    @allow(fields: "casoId tipoEvento estadoAnterior estadoNuevo descripcion actorUid actorTipo")
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  solicitada: notificacion_caso_convivencia_updateMany(
+    where: {
+      casoId: { eq: $casoId }
+      tipo: { eq: "RESIDENTES" }
+      estado: { in: ["POR_NOTIFICAR", "ENVIADA", "FALLIDA", "INCIERTA", "SIN_DESTINATARIOS"] }
+    }
+    data: {
+      estado: "SOLICITADA"
+      intentos: 0
+      envio_update: [{ inc: 1 }]
+      destinatariosJson: $destinatariosJson
+      solicitadaPorUid: $porUid
+      destinatarios: null
+      aceptados: null
+      rechazados: null
+      messageId: null
+      ultimoError: null
+      fechaEnvio: null
+      leaseHasta: null
+      fechaActualizacion_expr: "request.time"
+    }
+  ) @check(expr: "this == 1", message: "NOTIFICACION_EN_CURSO")
+  caso_convivencia_updateMany(
+    where: { id: { eq: $casoId } }
+    data: {
+      pendienteNotificar: false
+      fechaNotificacion_expr: "request.time"
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+  evento_caso_convivencia_insert(data: $evento)
+}
+
+# Crea la fila RESIDENTES en POR_NOTIFICAR para un caso que no la tiene (casos anteriores al
+# registro progresivo, o contrato legado de proceso formal). `$pendienteCaso` marca también el caso
+# como pendiente de notificar (legado) o lo deja como está (caso antiguo ya notificado).
+# La clave [caso, tipo] impide duplicados: si ya existe, la inserción falla y la API lo ignora.
+mutation CrearNotificacionPendienteCasoConvivenciaAdmin(
+  $casoId: UUID!
+  $pendienteCaso: Boolean!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  notificacion_caso_convivencia_insert(data: { casoId: $casoId, tipo: "RESIDENTES", estado: "POR_NOTIFICAR" })
+  caso_convivencia_updateMany(
+    where: { id: { eq: $casoId }, registro: { eq: "FINALIZADO" } }
+    data: { pendienteNotificar: $pendienteCaso, fechaActualizacion_expr: "request.time" }
+  )
 }
 
 # Toma una notificación para enviarla: solo una ejecución a la vez (ENVIANDO con plazo).
