@@ -1,3 +1,11 @@
+{{- /*
+  Este partial lo incluyen la página de administración y la de vigilancia. Con `modo` igual a "admin"
+  se añade la pestaña Configuración (tarifas y días de gracia). Es ocultamiento de UI: la autorización
+  real la aplica la API con requireRoles sobre PUT /tarifas.
+  Siempre se invoca con un dict: {{ partial "vehiculos/index.html" (dict "ctx" . "modo" "admin") }}
+*/ -}}
+{{- $ctx := .ctx -}}
+{{- $modo := .modo | default "vigilancia" -}}
 <div class="vehiculos-panel">
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h3 class="section-title h5 mb-0"><i class="bi bi-car-front me-2"></i>Gestión de Vehículos</h3>
@@ -11,17 +19,26 @@
       <button id="showVehiculosSanciones" type="button" class="btn btn-outline-success mode-button">
         <i class="bi bi-exclamation-octagon me-1"></i>Sanciones
       </button>
+      {{- if eq $modo "admin" }}
+      <button id="showVehiculosConfiguracion" type="button" class="btn btn-outline-success mode-button">
+        <i class="bi bi-sliders me-1"></i>Configuración
+      </button>
+      {{- end }}
     </div>
   </div>
 
-  {{ partial "vehiculos/registrar.html" . }}
-  {{ partial "vehiculos/reporte.html" . }}
-  {{ partial "vehiculos/sanciones.html" . }}
+  {{ partial "vehiculos/registrar.html" $ctx }}
+  {{ partial "vehiculos/reporte.html" $ctx }}
+  {{ partial "vehiculos/sanciones.html" (dict "ctx" $ctx "modo" $modo) }}
+  {{- if eq $modo "admin" }}
+  {{ partial "vehiculos/configuracion.html" $ctx }}
+  {{- end }}
 </div>
 
 <script>
   window.VEHICULOS_CONFIG = {
-    apiBase: {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }}
+    apiBase: {{ $ctx.Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }},
+    modo: {{ $modo | jsonify | safeJS }}
   };
 </script>
-<script src="{{ "js/vehiculos.js" | relURL }}?v=4"></script>
+<script src="{{ "js/vehiculos.js" | relURL }}?v=5"></script>

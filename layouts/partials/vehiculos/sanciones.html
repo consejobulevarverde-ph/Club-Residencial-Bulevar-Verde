@@ -128,6 +128,36 @@
     <p id="vsEmpty" class="small-note my-3 hidden">Sin registros.</p>
     <div id="vsLista"></div>
   </div>
+
+  {{- /*
+    Controversias: solo administración. Aceptar desasocia el registro del apartamento (no lo borra) y
+    lo deja reasignable; la API vuelve a exigir el rol en la resolución.
+  */ -}}
+  {{- if eq (.modo | default "vigilancia") "admin" }}
+  <div class="surface p-3 p-lg-5 mt-3">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <h3 class="section-title h5 mb-0">
+        <i class="bi bi-chat-left-text me-2"></i>Controversias de residentes
+      </h3>
+      <div class="d-flex flex-wrap gap-2">
+        <select id="vkEstado" class="form-select form-select-sm" style="max-width:12rem" aria-label="Estado de la controversia">
+          <option value="PENDIENTE">Pendientes</option>
+          <option value="ACEPTADA">Aceptadas</option>
+          <option value="RECHAZADA">Rechazadas</option>
+        </select>
+        <button id="vkRecargar" type="button" class="btn btn-outline-secondary btn-sm" aria-label="Recargar">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+    </div>
+
+    <div id="vkAlert" class="alert hidden" role="alert"></div>
+    <div id="vkLoading" class="small-note my-3 hidden"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+    <div id="vkError" class="alert alert-danger hidden"></div>
+    <p id="vkEmpty" class="small-note my-3 hidden">Sin controversias en este estado.</p>
+    <div id="vkLista"></div>
+  </div>
+  {{- end }}
 </div>
 
 <div id="vsVisor" class="vs-visor hidden" role="dialog" aria-modal="true" aria-label="Foto del vehículo">

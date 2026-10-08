@@ -17,6 +17,8 @@
   var reporteDesactualizado = false;
   var registrosSancion = [];
   var sancionesIniciado = false;
+  var configuracionIniciado = false;
+  var tarifas = [];
   var editandoId = null;
   var fotosUrl = {};
   var observadorMiniaturas = null;
@@ -96,13 +98,18 @@
     subVista = name;
     var registrar = name === 'registrar';
     var sanciones = name === 'sanciones';
-    var reporte = !registrar && !sanciones;
+    var configuracion = name === 'configuracion';
+    // El reporte es el valor por defecto sólo para un nombre vacío o desconocido; antes era
+    // `!registrar && !sanciones`, que mostraba el reporte junto a cualquier vista nueva.
+    var reporte = !registrar && !sanciones && !configuracion;
     show('vehiculosRegistrarView', registrar);
     show('vehiculosReporteView', reporte);
     show('vehiculosSancionesView', sanciones);
+    if ($('vehiculosConfiguracionView')) show('vehiculosConfiguracionView', configuracion);
     $('showVehiculosRegistrar').classList.toggle('active', registrar);
     $('showVehiculosReporte').classList.toggle('active', reporte);
     $('showVehiculosSanciones').classList.toggle('active', sanciones);
+    if ($('showVehiculosConfiguracion')) $('showVehiculosConfiguracion').classList.toggle('active', configuracion);
 
     if (registrar) {
       $('vehApartment').focus();
@@ -111,6 +118,13 @@
         sancionesIniciado = true;
         setRangoSanciones('mes');
         consultarSanciones();
+        // El bloque de controversias solo existe en administración.
+        if ($('vkLista')) cargarControversias();
+      }
+    } else if (configuracion) {
+      if (!configuracionIniciado) {
+        configuracionIniciado = true;
+        cargarTarifas();
       }
     } else if (!reporteIniciado) {
       reporteIniciado = true;
@@ -141,6 +155,116 @@
     return false;
   }
 
+  // El vigilante no escribe quién autoriza: al teclear el apartamento se cargan sus residentes y solo
+  // elige. Una llamada resuelve apartamento → personas.
+  var autorizaApartamento = '';
+  var autorizaPeticion = 0;
+
+  function estadoAutoriza(texto) {
+    $('vehAutorizaEstado').textContent = texto || '';
+  }
+
+  // No toca autorizaApartamento: ese memo evita reconsultar el mismo apartamento en cada blur, y se
+  // limpia solo donde hay que volver a pedir los datos.
+  function limpiarAutoriza(mensaje) {
+    $('vehAutoriza').innerHTML = '<option value="">' + esc(mensaje) + '</option>';
+    $('vehAutoriza').disabled = true;
+  }
+
+  function reiniciarAutoriza() {
+    autorizaApartamento = '';
+    limpiarAutoriza('Escribe primero el apartamento…');
+    estadoAutoriza('');
+  }
+
+  function cargarAutorizantes() {
+    var apartamento = $('vehApartment').value.trim();
+    if (apartamento === autorizaApartamento) return;
+    if (!/^\d{1,4}$/.test(apartamento)) {
+      reiniciarAutoriza();
+      return;
+    }
+
+    autorizaApartamento = apartamento;
+    var miPeticion = ++autorizaPeticion;
+    limpiarAutoriza('Cargando residentes…');
+    estadoAutoriza('');
+
+    apiFetch('/api/v1/vigilancia/apartamentos/' + encodeURIComponent(apartamento) + '/residentes')
+      .then(function (body) {
+        if (miPeticion !== autorizaPeticion) return;
+        var residentes = (body.data && body.data.residentes) || [];
+        if (!residentes.length) {
+          limpiarAutoriza('Sin residentes registrados');
+          estadoAutoriza('Este apartamento no tiene personas registradas. Avisa a administración.');
+          return;
+        }
+        $('vehAutoriza').innerHTML = '<option value="">Selecciona quién autoriza…</option>' +
+          residentes.map(function (residente) {
+            return '<option value="' + esc(residente.persona.id) + '">' +
+              esc(residente.persona.nombreCompleto) + ' · ' + esc(residente.tipoRelacion) + '</option>';
+          }).join('');
+        $('vehAutoriza').disabled = false;
+        estadoAutoriza(residentes.length + ' persona(s) en el apartamento.');
+      })
+      .catch(function (error) {
+        if (miPeticion !== autorizaPeticion) return;
+        autorizaApartamento = '';
+        limpiarAutoriza('No fue posible cargar los residentes');
+        estadoAutoriza(error.message);
+      });
+  }
+
+  // Si un residente ya pre-autorizó la placa desde su portal, el vigilante no llena nada más: la
+  // autorización ya dice qué apartamento responde y quién la dio.
+  var preautorizadaPlaca = '';
+  var preautorizadaPeticion = 0;
+
+  function mostrarPreautorizada(datos) {
+    var caja = $('vehPreautorizada');
+    if (!datos || !datos.autorizada) {
+      caja.classList.add('hidden');
+      caja.textContent = '';
+      return;
+    }
+    caja.innerHTML = '<i class="bi bi-check-circle me-1"></i>Ya autorizada por ' +
+      esc(datos.autorizadaPor || 'un residente') +
+      ' del apartamento <strong>' + esc(datos.apartamento || '—') + '</strong>' +
+      (datos.vigenteHasta ? ', hasta ' + esc(formatFechaCorta(datos.vigenteHasta)) : '') +
+      '. No necesitas registrarla.';
+    caja.classList.remove('hidden');
+  }
+
+  function consultarPreautorizacion() {
+    var placa = $('vehPlaca').value.trim().toUpperCase().replace(/\s+/g, ' ');
+    if (placa === preautorizadaPlaca) return;
+    preautorizadaPlaca = placa;
+    if (!placa) {
+      mostrarPreautorizada(null);
+      return;
+    }
+
+    var miPeticion = ++preautorizadaPeticion;
+    apiFetch('/api/v1/vigilancia/parqueadero-visitantes/autorizacion-vigente?placa=' + encodeURIComponent(placa))
+      .then(function (body) {
+        if (miPeticion !== preautorizadaPeticion) return;
+        mostrarPreautorizada(body.data);
+      })
+      .catch(function () {
+        // Es una ayuda, no un requisito: si falla, el vigilante registra como siempre.
+        if (miPeticion !== preautorizadaPeticion) return;
+        preautorizadaPlaca = '';
+        mostrarPreautorizada(null);
+      });
+  }
+
+  // Quien autoriza solo aplica a visitantes.
+  function sincronizarAutoriza() {
+    var esVisitante = $('vehTipoVinculo').value === 'VISITANTE';
+    $('vehAutorizaBloque').classList.toggle('hidden', !esVisitante);
+    if (esVisitante) cargarAutorizantes();
+  }
+
   function registrarVehiculo(event) {
     event.preventDefault();
     registroHideMsg();
@@ -163,6 +287,13 @@
       return;
     }
 
+    var tipoVinculo = $('vehTipoVinculo').value;
+    var autoriza = $('vehAutoriza').value;
+    if (tipoVinculo === 'VISITANTE' && !autoriza) {
+      registroMsg('Indica qué residente autoriza el ingreso del visitante.', 'warning');
+      return;
+    }
+
     var button = $('registerVehicleBtn');
     busy(button, true, 'Registrando…');
 
@@ -171,12 +302,17 @@
       body: {
         apartamento: apartment,
         tipoVehiculo: tipoVehiculo,
-        tipoVinculo: $('vehTipoVinculo').value,
-        placa: placa
+        tipoVinculo: tipoVinculo,
+        placa: placa,
+        autorizadoPorPersonaId: autoriza || undefined
       }
     }).then(function (body) {
       renderRegistroResultado(body.data);
       $('vehicleRegistrationForm').reset();
+      reiniciarAutoriza();
+      sincronizarAutoriza();
+      preautorizadaPlaca = '';
+      mostrarPreautorizada(null);
       registroMsg('El vehículo fue registrado correctamente.', 'success');
       reporteDesactualizado = true;
     }).catch(function (error) {
@@ -599,6 +735,241 @@
 
   // ===== Init =====
 
+  // ===== Controversias de residentes — solo administración =====
+
+  var RUTA_CONTROVERSIAS = '/api/v1/vigilancia/parqueadero-visitantes/controversias';
+  var controversias = [];
+
+  function avisoControversias(mensaje, tipo) {
+    var caja = $('vkAlert');
+    caja.className = 'alert alert-' + (tipo || 'danger');
+    caja.textContent = mensaje;
+    caja.classList.remove('hidden');
+  }
+
+  function contextoVinculo(vinculo) {
+    if (!vinculo) {
+      return '<p class="small-note mb-0"><i class="bi bi-exclamation-triangle me-1"></i>' +
+        'Sin vínculo congelado: el apartamento se asignó a mano o el registro es anterior a este dato.</p>';
+    }
+    // Un vínculo retirado después de la foto es la huella de un intento de evadir la sanción.
+    var alerta = vinculo.retiradoTrasLaCaptura
+      ? '<div class="alert alert-warning py-2 px-3 small mb-2">' +
+        '<i class="bi bi-exclamation-triangle me-1"></i>El vínculo se retiró <strong>después</strong> de la captura' +
+        (vinculo.retiradoPor ? ', por ' + esc(vinculo.retiradoPor) : '') + '.</div>'
+      : '';
+    return alerta +
+      '<p class="small-note mb-0">' +
+      'Vínculo: <strong>' + esc(vinculo.tipoVinculo) + '</strong>' +
+      ' · ' + esc(vinculo.estadoVinculo) +
+      (vinculo.apartamento ? ' · Apto ' + esc(vinculo.apartamento) : '') +
+      ' · desde ' + esc(formatFechaCorta(vinculo.vigenteDesde)) +
+      (vinculo.vigenteHasta ? ' hasta ' + esc(formatFechaCorta(vinculo.vigenteHasta)) : ' (vigente)') +
+      (vinculo.autorizadoPor ? ' · autorizó ' + esc(vinculo.autorizadoPor) : '') +
+      '</p>';
+  }
+
+  function renderControversias() {
+    show('vkEmpty', controversias.length === 0);
+    $('vkLista').innerHTML = controversias.map(function (item) {
+      var pendiente = item.estado === 'PENDIENTE';
+      // Botones explícitos, no un form: con submit, Enter en el campo aceptaría la controversia sin
+      // querer, y aceptar desasocia el registro del apartamento.
+      var acciones = pendiente
+        ? '<div class="row g-2 align-items-end mt-2" data-vk-item="' + esc(item.id) + '">' +
+          '<div class="col-md-8">' +
+          '<label class="form-label small mb-1" for="vkMotivo' + esc(item.id) + '">Motivo de la decisión</label>' +
+          '<input id="vkMotivo' + esc(item.id) + '" class="form-control form-control-sm" data-vk-motivo minlength="10" maxlength="2000">' +
+          '</div>' +
+          '<div class="col-md-4 d-flex gap-2">' +
+          '<button type="button" class="btn btn-success btn-sm flex-grow-1" data-vk-decision="ACEPTAR">Aceptar</button>' +
+          '<button type="button" class="btn btn-outline-danger btn-sm flex-grow-1" data-vk-decision="RECHAZAR">Rechazar</button>' +
+          '</div></div>'
+        : '<p class="small-note mb-0 mt-2">' +
+          (item.estado === 'ACEPTADA' ? 'Aceptada' : 'Rechazada') +
+          (item.resueltaPor ? ' por ' + esc(item.resueltaPor) : '') +
+          (item.fechaResolucion ? ' · ' + esc(formatFechaCorta(item.fechaResolucion)) : '') +
+          (item.motivoResolucion ? '<br>' + esc(item.motivoResolucion) : '') +
+          '</p>';
+
+      return '<div class="vs-item flex-column align-items-stretch">' +
+        '<div class="d-flex flex-wrap align-items-center gap-2">' +
+        '<span class="vs-placa">' + esc(item.placa) + '</span>' +
+        '<i class="bi ' + (item.tipoVehiculo === 'MOTO' ? 'bi-scooter' : 'bi-car-front') + '"></i>' +
+        '<span class="small-note">' + esc(formatFechaCorta(item.fechaCaptura)) + '</span>' +
+        '<span class="small-note"><i class="bi bi-house me-1"></i>' + esc(item.apartamento || 'Sin apartamento') + '</span>' +
+        (item.origenAsignacion ? '<span class="badge text-bg-secondary">' + esc(item.origenAsignacion) + '</span>' : '') +
+        (item.procesado ? '<span class="badge text-bg-success">Procesado</span>' : '<span class="badge text-bg-secondary">Por procesar</span>') +
+        '</div>' +
+        '<p class="mb-1 mt-2"><strong>' + esc(item.presentadaPor || 'Residente') + '</strong> ' +
+        '<span class="small-note">' + esc(formatFechaCorta(item.fecha)) + '</span></p>' +
+        '<div class="locked rounded p-2 small">' + esc(item.texto || '') + '</div>' +
+        '<div class="mt-2">' + contextoVinculo(item.vinculo) + '</div>' +
+        acciones +
+        '</div>';
+    }).join('');
+  }
+
+  function cargarControversias() {
+    show('vkLoading', true);
+    show('vkError', false);
+    show('vkEmpty', false);
+    $('vkAlert').classList.add('hidden');
+    $('vkLista').innerHTML = '';
+
+    return apiFetch(RUTA_CONTROVERSIAS + '?estado=' + encodeURIComponent($('vkEstado').value))
+      .then(function (body) {
+        controversias = (body.data && body.data.controversias) || [];
+        show('vkLoading', false);
+        renderControversias();
+      })
+      .catch(function (error) {
+        show('vkLoading', false);
+        $('vkError').textContent = error.message;
+        show('vkError', true);
+      });
+  }
+
+  function resolverControversia(fila, decision) {
+    var id = fila.dataset.vkItem;
+    var motivo = fila.querySelector('[data-vk-motivo]').value.trim();
+    if (motivo.length < 10) {
+      avisoControversias('Escribe el motivo de la decisión (mínimo 10 caracteres).');
+      return;
+    }
+
+    var boton = fila.querySelector('[data-vk-decision="' + decision + '"]');
+    busy(boton, true, 'Guardando…');
+
+    apiFetch(RUTA_CONTROVERSIAS + '/' + encodeURIComponent(id) + '/resolucion', {
+      method: 'POST',
+      body: { decision: decision, motivo: motivo }
+    })
+      .then(function () {
+        avisoControversias(
+          decision === 'ACEPTAR'
+            ? 'Controversia aceptada: el registro quedó sin apartamento y se puede reasignar.'
+            : 'Controversia rechazada.',
+          'success'
+        );
+        // Aceptar deja el registro sin apartamento, y el listado de arriba lo muestra.
+        if (sancionesIniciado) consultarSanciones();
+        return cargarControversias();
+      })
+      .catch(function (error) {
+        avisoControversias(error.message);
+        busy(boton, false, decision === 'ACEPTAR' ? 'Aceptar' : 'Rechazar');
+      });
+  }
+
+  // ===== Configuración (tarifas y días de gracia) — solo administración =====
+
+  var RUTA_TARIFAS = '/api/v1/vigilancia/parqueadero-visitantes/tarifas';
+
+  function etiquetaTipo(tipo) {
+    return tipo === 'MOTO' ? 'Motos' : 'Carros';
+  }
+
+  function avisoConfiguracion(mensaje, tipo) {
+    var caja = $('vcAlert');
+    caja.className = 'alert alert-' + (tipo || 'danger');
+    caja.textContent = mensaje;
+    caja.classList.remove('hidden');
+  }
+
+  function renderTarifas() {
+    $('vcTarifas').innerHTML = tarifas.map(function (tarifa) {
+      var tipo = esc(tarifa.tipoVehiculo);
+      var meta = tarifa.actualizadoPorNombre
+        ? 'Última modificación: ' + esc(tarifa.actualizadoPorNombre) + ' · ' + esc(formatFechaCorta(tarifa.fechaActualizacion))
+        : 'Sin configurar';
+      return '<div class="col-md-6">' +
+        '<div class="vc-card">' +
+        '<h5 class="h6 mb-3"><i class="bi ' + (tarifa.tipoVehiculo === 'MOTO' ? 'bi-scooter' : 'bi-car-front') + ' me-2"></i>' + esc(etiquetaTipo(tarifa.tipoVehiculo)) + '</h5>' +
+        '<div class="mb-2">' +
+        '<label class="form-label small" for="vcValor' + tipo + '">Valor de la sanción (COP)</label>' +
+        '<input id="vcValor' + tipo + '" class="form-control form-control-sm" type="number" min="0" step="100" required ' +
+        'data-vc-campo="valorSancion" data-vc-tipo="' + tipo + '" value="' + (tarifa.valorSancion == null ? '' : esc(tarifa.valorSancion)) + '">' +
+        '</div>' +
+        '<div class="row g-2">' +
+        '<div class="col-6">' +
+        '<label class="form-label small" for="vcGraciaVis' + tipo + '">Días de gracia · visitante</label>' +
+        '<input id="vcGraciaVis' + tipo + '" class="form-control form-control-sm" type="number" min="0" max="60" required ' +
+        'data-vc-campo="diasGraciaVisitante" data-vc-tipo="' + tipo + '" value="' + (tarifa.diasGraciaVisitante == null ? '' : esc(tarifa.diasGraciaVisitante)) + '">' +
+        '</div>' +
+        '<div class="col-6">' +
+        '<label class="form-label small" for="vcGraciaRes' + tipo + '">Días de gracia · residente</label>' +
+        '<input id="vcGraciaRes' + tipo + '" class="form-control form-control-sm" type="number" min="0" max="60" required ' +
+        'data-vc-campo="diasGraciaResidente" data-vc-tipo="' + tipo + '" value="' + (tarifa.diasGraciaResidente == null ? '' : esc(tarifa.diasGraciaResidente)) + '">' +
+        '</div>' +
+        '</div>' +
+        '<p class="vc-meta mt-2 mb-0">' + meta + '</p>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  var RUTA_CONFIGURACION = '/api/v1/vigilancia/parqueadero-visitantes/configuracion';
+
+  function cargarTarifas() {
+    show('vcLoading', true);
+    show('vcError', false);
+    show('vcForm', false);
+
+    Promise.all([apiFetch(RUTA_TARIFAS), apiFetch(RUTA_CONFIGURACION)])
+      .then(function (respuestas) {
+        tarifas = (respuestas[0].data && respuestas[0].data.tarifas) || [];
+        renderTarifas();
+        var cfg = respuestas[1].data || {};
+        $('vcMaxHoras').value = cfg.maxHorasAutorizacionVisitante == null ? '' : cfg.maxHorasAutorizacionVisitante;
+        $('vcMaxHorasMeta').textContent = cfg.actualizadoPorNombre
+          ? 'Última modificación: ' + cfg.actualizadoPorNombre
+          : '';
+        show('vcLoading', false);
+        show('vcForm', true);
+      })
+      .catch(function (error) {
+        show('vcLoading', false);
+        $('vcError').textContent = error.message;
+        show('vcError', true);
+      });
+  }
+
+  function leerTarifa(tipo) {
+    var valor = {};
+    document.querySelectorAll('[data-vc-tipo="' + tipo + '"]').forEach(function (campo) {
+      valor[campo.dataset.vcCampo] = Number(campo.value);
+    });
+    return valor;
+  }
+
+  function guardarTarifas(event) {
+    event.preventDefault();
+    $('vcAlert').classList.add('hidden');
+    var boton = $('vcGuardarBtn');
+    busy(boton, true, 'Guardando…');
+
+    // Un PUT por tipo más el de la configuración global: la API valida y atribuye cada uno con el
+    // actor del token.
+    var peticiones = tarifas.map(function (tarifa) {
+      return apiFetch(RUTA_TARIFAS + '/' + encodeURIComponent(tarifa.tipoVehiculo), {
+        method: 'PUT',
+        body: leerTarifa(tarifa.tipoVehiculo)
+      });
+    });
+    peticiones.push(apiFetch(RUTA_CONFIGURACION, {
+      method: 'PUT',
+      body: { maxHorasAutorizacionVisitante: Number($('vcMaxHoras').value) }
+    }));
+
+    Promise.all(peticiones)
+      .then(function () {
+        avisoConfiguracion('Configuración guardada.', 'success');
+        return cargarTarifas();
+      })
+      .catch(function (error) { avisoConfiguracion(error.message); })
+      .then(function () { busy(boton, false, 'Guardar configuración'); });
+  }
+
   function init() {
     if (!$('vehiculosRegistrarView')) return;
 
@@ -608,6 +979,13 @@
     $('vehApartment').addEventListener('input', function () {
       this.value = this.value.replace(/\D/g, '').slice(0, 4);
     });
+    // Al salir del campo (o al cambiar la relación) se precargan los residentes del apartamento.
+    $('vehApartment').addEventListener('change', sincronizarAutoriza);
+    $('vehApartment').addEventListener('blur', sincronizarAutoriza);
+    $('vehTipoVinculo').addEventListener('change', sincronizarAutoriza);
+    $('vehPlaca').addEventListener('change', consultarPreautorizacion);
+    $('vehPlaca').addEventListener('blur', consultarPreautorizacion);
+    sincronizarAutoriza();
     $('vehPlaca').addEventListener('input', function () {
       this.value = this.value.toUpperCase();
     });
@@ -659,6 +1037,24 @@
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && !$('vsVisor').classList.contains('hidden')) cerrarFoto();
     });
+
+    // La pestaña Configuración solo se renderiza en administración: $() no comprueba null.
+    if ($('showVehiculosConfiguracion')) {
+      $('showVehiculosConfiguracion').addEventListener('click', function () { modoVehiculos('configuracion'); });
+      $('vcForm').addEventListener('submit', guardarTarifas);
+    }
+
+    // El bloque de controversias tampoco existe en la página de vigilancia.
+    if ($('vkLista')) {
+      $('vkEstado').addEventListener('change', cargarControversias);
+      $('vkRecargar').addEventListener('click', cargarControversias);
+      $('vkLista').addEventListener('click', function (event) {
+        var boton = event.target.closest('[data-vk-decision]');
+        if (!boton) return;
+        var fila = boton.closest('[data-vk-item]');
+        if (fila) resolverControversia(fila, boton.dataset.vkDecision);
+      });
+    }
   }
 
   function mostrar() {

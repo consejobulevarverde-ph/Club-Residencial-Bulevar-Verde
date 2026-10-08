@@ -11,6 +11,7 @@ La API está en ../bulevar-verde-api. El schema y operaciones Data Connect está
 - .claude/references/project-details.md: guía original, para consultar por sección y contrastar con código.
 - .claude/references/layouts-details.md: detalle histórico de pantallas y reservas, para consultas puntuales.
 - .claude/references/cross-repo.md: cambios que atraviesan frontend/API/GraphQL.
+- .claude/references/parqueadero-visitantes-pendiente.md: estado, pendientes y trampas de las sanciones de parqueadero de visitantes; léelo antes de retomar ese módulo.
 
 ## Validación local
 - hugo server sirve normalmente http://localhost:1313. Comprueba apiBaseUrl antes de acciones desde el navegador: servir localmente no vuelve local a la API.

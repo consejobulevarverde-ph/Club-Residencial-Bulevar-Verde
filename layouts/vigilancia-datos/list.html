@@ -452,7 +452,7 @@
       </section>
 
       <section id="vehiculosView" class="hidden">
-        {{ partial "vehiculos/index.html" . }}
+        {{ partial "vehiculos/index.html" (dict "ctx" . "modo" "vigilancia") }}
       </section>
 
       <section id="lectorPlacasView" class="hidden">

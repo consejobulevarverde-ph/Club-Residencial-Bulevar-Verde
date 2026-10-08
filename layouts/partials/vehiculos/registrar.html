@@ -60,6 +60,8 @@
         <small class="d-block text-muted mt-1">
           Si el vehículo no tiene placa (ej. moto eléctrica), escribe <strong>ELECTRICO</strong> o <strong>SIN PLACA</strong>.
         </small>
+        <!-- Aviso cuando un residente ya pre-autorizó esta placa desde su portal. -->
+        <div id="vehPreautorizada" class="alert alert-success py-2 px-3 mt-2 mb-0 hidden" role="status"></div>
       </div>
 
       <!-- Relación con el apartamento -->
@@ -67,9 +69,18 @@
       <div class="col-md-6">
         <label class="form-label" for="vehTipoVinculo">Tipo de vinculación</label>
         <select id="vehTipoVinculo" class="form-select" required>
+          <option value="VISITANTE" selected>Visitante</option>
           <option value="RESIDENTE">Residente</option>
-          <option value="VISITANTE">Visitante</option>
         </select>
+      </div>
+
+      <!-- Quién autoriza: se precarga al escribir el apartamento, para que el vigilante solo elija. -->
+      <div class="col-md-6" id="vehAutorizaBloque">
+        <label class="form-label" for="vehAutoriza">Quién autoriza el ingreso</label>
+        <select id="vehAutoriza" class="form-select" disabled>
+          <option value="">Escribe primero el apartamento…</option>
+        </select>
+        <small id="vehAutorizaEstado" class="d-block text-muted mt-1"></small>
       </div>
 
       <div class="col-12">

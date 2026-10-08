@@ -1,0 +1,55 @@
+{{- /*
+  Configuración del parqueadero de visitantes: valor de la sanción y días de gracia por tipo de
+  vehículo. Solo se renderiza con modo "admin"; la API vuelve a exigir el rol en el PUT.
+  Prefijo de ids: vc* (registrar usa veh*, reporte vr*, sanciones vs*).
+*/ -}}
+<style>
+  .vehiculos-panel .vc-card {
+    border: 1px solid var(--b, #d8e6d9);
+    border-radius: .6rem;
+    padding: 1rem;
+    background: #fff;
+  }
+
+  .vehiculos-panel .vc-meta {
+    font-size: .82rem;
+    color: #6b776c;
+  }
+</style>
+
+<div id="vehiculosConfiguracionView" class="hidden">
+  <div class="alert alert-info d-flex align-items-start gap-2" role="note">
+    <i class="bi bi-info-circle mt-1"></i>
+    <div>
+      Valor que se cobra por cada registro del parqueadero de visitantes y días de cortesía antes de
+      sancionar. Los días de gracia se aplican según el vínculo del vehículo: visitante real o
+      vehículo de un residente.
+    </div>
+  </div>
+
+  <div id="vcAlert" class="alert hidden" role="alert"></div>
+  <div id="vcLoading" class="text-muted small py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando configuración…</div>
+  <div id="vcError" class="alert alert-danger hidden"></div>
+
+  <form id="vcForm" class="row g-3 hidden">
+    <div id="vcTarifas" class="row g-3 m-0 p-0"></div>
+
+    <div class="col-md-6">
+      <div class="vc-card">
+        <h5 class="h6 mb-3"><i class="bi bi-clock-history me-2"></i>Pre-autorización de visitantes</h5>
+        <label class="form-label small" for="vcMaxHoras">Duración máxima que puede elegir el residente (horas)</label>
+        <input id="vcMaxHoras" class="form-control form-control-sm" type="number" min="1" max="720" required>
+        <p class="vc-meta mt-2 mb-0">
+          El residente autoriza por 24 horas por defecto y puede ampliarlo hasta este tope.
+          <span id="vcMaxHorasMeta"></span>
+        </p>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <button type="submit" class="btn btn-success" id="vcGuardarBtn">
+        <i class="bi bi-save me-1"></i>Guardar configuración
+      </button>
+    </div>
+  </form>
+</div>

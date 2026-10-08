@@ -198,7 +198,8 @@
         gap: .35rem !important
       }
 
-      #profileTabs .nav-link {
+      #profileTabs .nav-link,
+      #sancionesSubTabs .nav-link {
         padding: .4rem .7rem;
         font-size: .88rem
       }
@@ -453,6 +454,83 @@
       bottom: -2rem;
       width: 2px;
       background: var(--bv-border)
+    }
+
+    /* Parqueadero de visitantes: equivalentes de .vs-* de partials/vehiculos/sanciones.html */
+    .pv-item {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .6rem 0;
+      border-top: 1px solid var(--bv-border);
+      cursor: pointer
+    }
+
+    .pv-item:hover { background: #f7faf7 }
+
+    .pv-foto {
+      width: 96px;
+      height: 64px;
+      flex: none;
+      padding: 0;
+      border: 0;
+      border-radius: .35rem;
+      overflow: hidden;
+      background: #eef2ee;
+      color: #7a867b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-in
+    }
+
+    .pv-foto img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover
+    }
+
+    .pv-placa {
+      display: inline-block;
+      padding: .05rem .5rem;
+      background: #f7d117;
+      color: #111;
+      border: 2px solid #111;
+      border-radius: .35rem;
+      font-family: ui-monospace, monospace;
+      font-weight: 800;
+      letter-spacing: .1em
+    }
+
+    .pv-detalle-foto {
+      max-width: 320px;
+      border-radius: .5rem;
+      cursor: zoom-in
+    }
+
+    .pv-visor {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      background: rgba(0, 0, 0, .9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      color: #fff
+    }
+
+    .pv-visor img {
+      max-width: 100%;
+      max-height: calc(100% - 5rem);
+      border-radius: .5rem
+    }
+
+    .pv-visor .pv-visor-cerrar {
+      position: absolute;
+      top: max(.75rem, env(safe-area-inset-top));
+      right: .75rem
     }
 
     /* Reservas Wizard Styles */
@@ -1026,6 +1104,41 @@
             <div class="col-md-2 d-grid"><button class="btn btn-outline-success btn-sm" type="submit"><i class="bi bi-plus-lg"></i> Agregar</button></div>
           </form>
         </div>
+
+        {{- /*
+          Pre-autorización de visitantes: avisa de antemano que una placa entra como tu visitante.
+          Dentro de la ventana, un registro del parqueadero de visitantes se atribuye a este
+          apartamento, así que el aviso es explícito sobre la responsabilidad.
+        */ -}}
+        <div class="surface p-4 mt-3">
+          <h3 class="section-title h5 mb-1">Autorizar el ingreso de un visitante</h3>
+          <p class="small-note">
+            Avisa que una placa entra como tu visitante. Mientras la autorización esté vigente, lo que
+            vigilancia registre de ese vehículo en el parqueadero de visitantes queda a nombre de tu
+            apartamento.
+          </p>
+
+          <form id="avForm" class="row g-2 align-items-end border-bottom pb-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label small" for="avPlaca">Placa del visitante</label>
+              <input id="avPlaca" class="form-control form-control-sm text-uppercase" maxlength="10" required placeholder="ABC123">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small" for="avHoras">Vigencia</label>
+              <select id="avHoras" class="form-select form-select-sm"></select>
+            </div>
+            <div class="col-md-4 d-grid">
+              <button class="btn btn-outline-success btn-sm" type="submit" id="avGuardarBtn">
+                <i class="bi bi-shield-check me-1"></i>Autorizar
+              </button>
+            </div>
+          </form>
+
+          <div id="avLoading" class="text-muted small py-2"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+          <div id="avError" class="alert alert-danger hidden mb-0"></div>
+          <div id="avEmpty" class="alert alert-info hidden mb-0"><i class="bi bi-info-circle me-2"></i>No has autorizado visitantes todavía.</div>
+          <div id="avLista"></div>
+        </div>
       </div>
 
       <div id="tabOther" class="tab-pane-content hidden">
@@ -1219,6 +1332,26 @@
       </div>
 
       <div id="tabSanciones" class="tab-pane-content hidden">
+        {{- /*
+          Sub-pestañas de Sanciones. Los paneles NO llevan .tab-pane-content: showTab conmuta todos los
+          elementos con esa clase y los ocultaría al cambiar de pestaña del nav superior.
+        */ -}}
+        <ul id="sancionesSubTabs" class="nav nav-tabs mb-3" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button type="button" class="nav-link active" id="sancionesSubTabConvivencia" data-subtab="convivencia"
+                    role="tab" aria-controls="sancionesConvivenciaPane" aria-selected="true">
+              <i class="bi bi-people me-1"></i>Convivencia
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button type="button" class="nav-link" id="sancionesSubTabParqueadero" data-subtab="parqueadero"
+                    role="tab" aria-controls="sancionesParqueaderoPane" aria-selected="false">
+              <i class="bi bi-p-square me-1"></i>Parq Visitantes
+            </button>
+          </li>
+        </ul>
+
+        <div id="sancionesConvivenciaPane" role="tabpanel" aria-labelledby="sancionesSubTabConvivencia">
         <div id="sancionesListView">
           <div class="surface p-4">
             <h3 class="section-title h5 mb-1">Sanciones de convivencia</h3>
@@ -1397,8 +1530,89 @@
             </div>
           </div>
         </div>
+        </div>
+
+        <div id="sancionesParqueaderoPane" class="hidden" role="tabpanel" aria-labelledby="sancionesSubTabParqueadero">
+          <div id="pvListView">
+            <div class="surface p-4">
+              <h3 class="section-title h5 mb-1">Parqueadero de visitantes</h3>
+              <p class="small-note">Vehículos que vigilancia fotografió en el parqueadero de visitantes y quedaron reportados a tu apartamento.</p>
+              <div id="pvLoading" class="text-muted small py-3"><span class="spinner-border spinner-border-sm me-2"></span>Cargando…</div>
+              <div id="pvError" class="alert alert-danger hidden mb-0"></div>
+              <div id="pvEmpty" class="alert alert-info hidden mb-0"><i class="bi bi-info-circle me-2"></i>No hay registros del parqueadero de visitantes reportados a esta unidad.</div>
+              <div id="pvLista"></div>
+              <div class="text-center mt-3">
+                <button type="button" id="pvVerMas" class="btn btn-outline-secondary btn-sm hidden"><i class="bi bi-arrow-down-circle me-1"></i>Ver más</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="pvDetailView" class="hidden">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h3 class="section-title h5 mb-0">Detalle del registro</h3>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="pvVolverBtn"><i class="bi bi-arrow-left me-1"></i>Volver</button>
+            </div>
+
+            <div class="surface p-4 mb-3">
+              <div class="row">
+                <div class="col-md-6">
+                  <p><strong>Placa:</strong> <span id="pvDetallePlaca" class="pv-placa"></span></p>
+                  <p><strong>Tipo de vehículo:</strong> <span id="pvDetalleTipo"></span></p>
+                  <p><strong>Apartamento:</strong> <span id="pvDetalleApto"></span></p>
+                </div>
+                <div class="col-md-6">
+                  <p><strong>Fecha de la captura:</strong> <span id="pvDetalleFecha"></span></p>
+                  <p><strong>Estado:</strong> <span id="pvDetalleEstado"></span></p>
+                </div>
+              </div>
+              <div id="pvDetalleFoto" class="mt-2"></div>
+            </div>
+
+            <div id="pvControversiaSection" class="surface p-4 mb-3 hidden">
+              <h5 class="section-title h6 mb-3"><i class="bi bi-chat-left-text me-2"></i>Presentar una controversia</h5>
+              <p class="small-note">Si este registro no corresponde a tu apartamento, explícalo aquí y administración lo revisará. Solo texto: no admite archivos adjuntos.</p>
+              <form id="pvControversiaForm" class="row g-3">
+                <div class="col-12">
+                  <label class="form-label" for="pvControversiaTexto">Tu explicación</label>
+                  <textarea id="pvControversiaTexto" class="form-control" rows="5" minlength="20" maxlength="2000" required></textarea>
+                  <small class="text-muted"><span id="pvControversiaCharCount">0</span>/2000 · mínimo 20 caracteres</small>
+                </div>
+                <div class="col-12">
+                  <button type="submit" class="btn btn-primary" id="pvControversiaGuardarBtn"><i class="bi bi-send me-2"></i>Enviar controversia</button>
+                  <span id="pvControversiaStatus" class="ms-2"></span>
+                </div>
+              </form>
+            </div>
+
+            <div id="pvControversiaExistente" class="surface p-4 mb-3 hidden">
+              <h5 class="section-title h6 mb-3"><i class="bi bi-chat-left-text me-2"></i>Tu controversia</h5>
+              <p><strong>Fecha:</strong> <span id="pvControversiaFecha"></span></p>
+              <p><strong>Estado:</strong> <span id="pvControversiaEstado"></span></p>
+              <p><strong>Tu explicación:</strong></p>
+              <div id="pvControversiaTextoRegistrado" class="locked rounded p-3"></div>
+              <div id="pvControversiaRespuesta" class="mt-3 hidden">
+                <p class="mb-1"><strong>Respuesta de administración</strong> <span id="pvControversiaFechaRespuesta" class="small-note"></span></p>
+                <div id="pvControversiaMotivo" class="locked rounded p-3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
+
+    {{- /*
+      Visor de la foto del parqueadero: vive fuera de #tabSanciones y el init lo mueve a <body>, porque
+      con un ancestro oculto o con transform el position:fixed no cubre la pantalla. Overlay propio, no
+      un modal de Bootstrap (no se anidan modales en vistas con ancestros ocultos).
+    */ -}}
+    <div id="pvVisor" class="pv-visor hidden" role="dialog" aria-modal="true" aria-label="Foto del vehículo">
+      <button type="button" class="btn btn-light btn-sm pv-visor-cerrar" id="pvVisorCerrar" aria-label="Cerrar">
+        <i class="bi bi-x-lg"></i>
+      </button>
+      <div id="pvVisorCargando" class="text-white"><span class="spinner-border spinner-border-sm me-2"></span>Cargando foto…</div>
+      <img id="pvVisorImg" class="hidden" alt="Vehículo registrado en el parqueadero de visitantes">
+      <p id="pvVisorTexto" class="text-white small mt-2 mb-0"></p>
+    </div>
 
     <div class="modal fade" id="editResidentModal" tabindex="-1">
       <div class="modal-dialog">
@@ -1687,7 +1901,9 @@
         var button = event.target.closest('button[data-target]');
         if (!button || button.closest('.hidden')) return;
         showTab(button.dataset.target);
-        if (button.dataset.target === 'tabSanciones' && !sancionesCargadas) cargarSanciones();
+        // La carga diferida de cada sub-pestaña la decide el conmutador, que además conserva la elegida.
+        if (button.dataset.target === 'tabSanciones') mostrarSubPestanaSanciones(subPestanaSanciones);
+        if (button.dataset.target === 'tabVehicles' && !avCargado) cargarAutorizaciones();
         if (button.dataset.target === 'tabDocumentos' && !documentosCargados) renderBotonesDocumentos();
         if (button.dataset.target === 'tabReservas' && !reservasCargados) cargarReservas();
         if (button.dataset.target === 'tabPersonal' && !personalCargado) cargarPersonal();
@@ -2631,6 +2847,457 @@
           uploadStatus.innerHTML = '';
         });
       }
+
+      /* ---------- Parqueadero de visitantes ---------- */
+
+      var PV_LIMIT = 50;
+      var PV_RUTA = '/parqueadero-visitantes/registros';
+      var pvCargado = false;
+      var pvRegistros = [];
+      var pvActual = null;
+      var pvHayMas = false;
+      var pvApto = '';
+      // Blob URLs por 'id|variante': el bucket es privado, así que la imagen se pide con el token y se
+      // convierte en object URL. Se revocan al reiniciar la lista porque el histórico puede ser largo.
+      var pvFotos = {};
+      var pvObservador = null;
+      var pvFocoPrevio = null;
+      // Testigo de la última petición: la lista se concatena, así que una respuesta de una consulta ya
+      // reemplazada (conmutar rápido de sub-pestaña, o «Ver más» repetido) duplicaría filas.
+      var pvPeticion = 0;
+
+      function pvFormatFecha(iso) {
+        if (!iso) return '';
+        return new Date(iso).toLocaleString('es-CO', {
+          timeZone: 'America/Bogota',
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false
+        });
+      }
+
+      function pvBadgeEstado(procesado) {
+        return procesado
+          ? '<span class="badge badge-resolved">Procesado</span>'
+          : '<span class="badge badge-pending">Por procesar</span>';
+      }
+
+      function pvBadgeControversia(estado) {
+        if (estado === 'ACEPTADA') return '<span class="badge badge-resolved">Aceptada</span>';
+        if (estado === 'RECHAZADA') return '<span class="badge badge-pending">No procede</span>';
+        return '<span class="badge badge-with-response">En revisión</span>';
+      }
+
+      function pvIconoVehiculo(tipo) {
+        return String(tipo).toUpperCase() === 'MOTO' ? 'bi-scooter' : 'bi-car-front';
+      }
+
+      function pvLiberarFotos() {
+        Object.keys(pvFotos).forEach(function (clave) {
+          var entrada = pvFotos[clave];
+          if (entrada && entrada.url) URL.revokeObjectURL(entrada.url);
+        });
+        pvFotos = {};
+      }
+
+      // El bucket es privado: apiFetch devuelve JSON, así que aquí se pide la imagen en crudo.
+      function pvBlobUrl(id, variante) {
+        var clave = id + '|' + variante;
+        if (pvFotos[clave]) return pvFotos[clave].promesa;
+        var entrada = {
+          url: '',
+          promesa: fetch(API_BASE + '/api/v1/datos-personales' + PV_RUTA + '/' + encodeURIComponent(id) + '/' + variante, {
+            headers: token ? { Authorization: 'Bearer ' + token } : {}
+          }).then(function (response) {
+            if (!response.ok) throw new Error('Error ' + response.status);
+            return response.blob();
+          }).then(function (blob) {
+            entrada.url = URL.createObjectURL(blob);
+            return entrada.url;
+          })
+        };
+        entrada.promesa.catch(function () { delete pvFotos[clave]; });
+        pvFotos[clave] = entrada;
+        return entrada.promesa;
+      }
+
+      function pvPintarMiniatura(boton) {
+        if (boton.dataset.pvCargada) return;
+        boton.dataset.pvCargada = '1';
+        pvBlobUrl(boton.dataset.pvFoto, 'miniatura')
+          .then(function (url) {
+            boton.innerHTML = '<img src="' + esc(url) + '" alt="Vehículo con placa ' + esc(boton.dataset.pvPlaca) + '">';
+          })
+          .catch(function () {
+            delete boton.dataset.pvCargada;
+            boton.innerHTML = '<i class="bi bi-image"></i>';
+          });
+      }
+
+      function pvCargarMiniaturas() {
+        if (pvObservador) pvObservador.disconnect();
+        var botones = $('pvLista').querySelectorAll('[data-pv-foto]');
+        if (!('IntersectionObserver' in window)) {
+          Array.prototype.forEach.call(botones, pvPintarMiniatura);
+          return;
+        }
+        pvObservador = new IntersectionObserver(function (entradas) {
+          entradas.forEach(function (entrada) {
+            if (!entrada.isIntersecting) return;
+            pvObservador.unobserve(entrada.target);
+            pvPintarMiniatura(entrada.target);
+          });
+        }, { rootMargin: '200px' });
+        Array.prototype.forEach.call(botones, function (boton) { pvObservador.observe(boton); });
+      }
+
+      function pvRender() {
+        $('pvEmpty').classList.toggle('hidden', pvRegistros.length > 0);
+        $('pvLista').innerHTML = pvRegistros.map(function (registro) {
+          return '<div class="pv-item" data-pv-detalle="' + esc(registro.id) + '">' +
+            '<button type="button" class="pv-foto" data-pv-foto="' + esc(registro.id) + '"' +
+            ' data-pv-placa="' + esc(registro.placa) + '" aria-label="Ver la foto de la placa ' + esc(registro.placa) + '">' +
+            '<i class="bi bi-image"></i></button>' +
+            '<div class="flex-grow-1">' +
+            '<div class="mb-1"><span class="pv-placa">' + esc(registro.placa) + '</span>' +
+            ' <i class="bi ' + pvIconoVehiculo(registro.tipoVehiculo) + ' ms-1" title="' + esc(registro.tipoVehiculo) + '"></i></div>' +
+            '<div class="small-note">' + esc(pvFormatFecha(registro.fechaCaptura)) + '</div>' +
+            '</div>' +
+            '<div class="text-end">' + pvBadgeEstado(registro.procesado) +
+            (registro.tieneControversia ? ' <span class="badge badge-with-response ms-1">Controversia enviada</span>' : '') +
+            '</div></div>';
+        }).join('');
+        $('pvVerMas').classList.toggle('hidden', !pvHayMas);
+        pvCargarMiniaturas();
+      }
+
+      function cargarRegistrosParqueadero(reiniciar) {
+        var miPeticion = ++pvPeticion;
+        if (reiniciar) {
+          pvRegistros = [];
+          pvLiberarFotos();
+          $('pvLista').innerHTML = '';
+          $('pvVerMas').classList.add('hidden');
+        }
+        $('pvLoading').classList.remove('hidden');
+        $('pvError').classList.add('hidden');
+        $('pvEmpty').classList.add('hidden');
+
+        // El offset sale de lo ya cargado: si una página falla, reintentar no se salta registros.
+        return apiFetch(PV_RUTA + '?limit=' + PV_LIMIT + '&offset=' + pvRegistros.length)
+          .then(function (body) {
+            if (miPeticion !== pvPeticion) return;
+            pvCargado = true;
+            $('pvLoading').classList.add('hidden');
+            var data = body.data || {};
+            pvApto = data.apto || '';
+            pvHayMas = data.hayMas === true;
+            pvRegistros = pvRegistros.concat(data.registros || []);
+            pvRender();
+          })
+          .catch(function (error) {
+            if (miPeticion !== pvPeticion) return;
+            pvCargado = true;
+            $('pvLoading').classList.add('hidden');
+            $('pvError').textContent = 'Error de conexión: ' + error.message;
+            $('pvError').classList.remove('hidden');
+          });
+      }
+
+      function pvVolverALista() {
+        pvCerrarVisor();
+        pvActual = null;
+        $('pvDetailView').classList.add('hidden');
+        $('pvListView').classList.remove('hidden');
+      }
+
+      function pvRenderDetalle(registro) {
+        $('pvDetallePlaca').textContent = registro.placa;
+        $('pvDetalleTipo').textContent = registro.tipoVehiculo;
+        $('pvDetalleApto').textContent = registro.apto || 'Sin apartamento';
+        $('pvDetalleFecha').textContent = pvFormatFecha(registro.fechaCaptura);
+        $('pvDetalleEstado').innerHTML = pvBadgeEstado(registro.procesado);
+
+        $('pvDetalleFoto').innerHTML =
+          '<button type="button" class="btn btn-outline-secondary btn-sm" data-pv-foto-detalle="' + esc(registro.id) + '">' +
+          '<i class="bi bi-camera me-1"></i>Ver la foto</button>';
+
+        var puede = registro.puedeControvertir === true;
+        $('pvControversiaSection').classList.toggle('hidden', !puede);
+        $('pvControversiaExistente').classList.toggle('hidden', puede);
+        if (puede) {
+          $('pvControversiaForm').reset();
+          $('pvControversiaCharCount').textContent = '0';
+          $('pvControversiaStatus').innerHTML = '';
+        } else {
+          $('pvControversiaFecha').textContent = pvFormatFecha(registro.fechaControversia);
+          $('pvControversiaTextoRegistrado').textContent = registro.controversiaTexto || '';
+          $('pvControversiaEstado').innerHTML = pvBadgeControversia(registro.controversiaEstado);
+          // Una controversia aceptada desasocia el registro de la unidad y deja de aparecer aquí; lo
+          // que el residente ve en la práctica es el rechazo con su motivo.
+          var resuelta = !!registro.controversiaResolucionMotivo;
+          $('pvControversiaRespuesta').classList.toggle('hidden', !resuelta);
+          if (resuelta) {
+            $('pvControversiaFechaRespuesta').textContent = pvFormatFecha(registro.fechaResolucionControversia);
+            $('pvControversiaMotivo').textContent = registro.controversiaResolucionMotivo;
+          }
+        }
+      }
+
+      function pvVerDetalle(id) {
+        clearAlert();
+        return apiFetch(PV_RUTA + '/' + encodeURIComponent(id))
+          .then(function (body) {
+            pvActual = body.data;
+            pvRenderDetalle(body.data);
+            $('pvListView').classList.add('hidden');
+            $('pvDetailView').classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          })
+          .catch(function (error) { alertMessage('Error de conexión: ' + error.message); });
+      }
+
+      function pvVerFoto(id) {
+        var registro = pvRegistros.filter(function (item) { return item.id === id; })[0] || pvActual;
+        pvFocoPrevio = document.activeElement;
+        $('pvVisorTexto').textContent = registro
+          ? registro.placa + ' · ' + pvFormatFecha(registro.fechaCaptura) + (pvApto ? ' · Apto ' + pvApto : '')
+          : '';
+        $('pvVisorImg').classList.add('hidden');
+        $('pvVisorCargando').classList.remove('hidden');
+        $('pvVisor').classList.remove('hidden');
+        $('pvVisorCerrar').focus();
+
+        pvBlobUrl(id, 'foto')
+          .then(function (url) {
+            $('pvVisorImg').src = url;
+            $('pvVisorImg').classList.remove('hidden');
+            $('pvVisorCargando').classList.add('hidden');
+          })
+          .catch(function () {
+            $('pvVisorCargando').textContent = 'No fue posible cargar la foto.';
+          });
+      }
+
+      function pvCerrarVisor() {
+        if ($('pvVisor').classList.contains('hidden')) return;
+        $('pvVisor').classList.add('hidden');
+        $('pvVisorCargando').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Cargando foto…';
+        $('pvVisorCargando').classList.remove('hidden');
+        $('pvVisorImg').classList.add('hidden');
+        $('pvVisorImg').removeAttribute('src');
+        if (pvFocoPrevio && document.contains(pvFocoPrevio)) pvFocoPrevio.focus();
+        pvFocoPrevio = null;
+      }
+
+      $('sancionesParqueaderoPane').addEventListener('click', function (event) {
+        var foto = event.target.closest('[data-pv-foto]');
+        if (foto) {
+          pvVerFoto(foto.dataset.pvFoto);
+          return;
+        }
+        var fotoDetalle = event.target.closest('[data-pv-foto-detalle]');
+        if (fotoDetalle) {
+          pvVerFoto(fotoDetalle.dataset.pvFotoDetalle);
+          return;
+        }
+        var item = event.target.closest('[data-pv-detalle]');
+        if (item) {
+          pvVerDetalle(item.dataset.pvDetalle);
+          return;
+        }
+        if (event.target.closest('#pvVerMas')) {
+          cargarRegistrosParqueadero(false);
+          return;
+        }
+        if (event.target.closest('#pvVolverBtn')) pvVolverALista();
+      });
+
+      $('pvVisorCerrar').addEventListener('click', pvCerrarVisor);
+      $('pvVisor').addEventListener('click', function (event) {
+        if (event.target === $('pvVisor')) pvCerrarVisor();
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') pvCerrarVisor();
+      });
+
+      // El visor es position:fixed: dentro de un pane oculto no cubriría la pantalla.
+      document.body.appendChild($('pvVisor'));
+
+      $('pvControversiaTexto').addEventListener('input', function () {
+        $('pvControversiaCharCount').textContent = this.value.length;
+      });
+
+      $('pvControversiaForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!pvActual) return;
+        var texto = $('pvControversiaTexto').value.trim();
+        if (texto.length < 20) {
+          alertMessage('Explica la controversia con al menos 20 caracteres.');
+          return;
+        }
+
+        var boton = $('pvControversiaGuardarBtn');
+        var id = pvActual.id;
+        loading(boton, true, 'Enviando…');
+
+        apiFetch(PV_RUTA + '/' + encodeURIComponent(id) + '/controversia', {
+          method: 'POST',
+          body: { texto: texto }
+        })
+          .then(function () {
+            pvRegistros.forEach(function (registro) {
+              if (registro.id === id) registro.tieneControversia = true;
+            });
+            pvRender();
+            // El aviso va después de recargar el detalle: pvVerDetalle empieza con clearAlert().
+            return pvVerDetalle(id).then(function () {
+              alertMessage('Tu controversia quedó registrada y se envió a administración.', 'success');
+            });
+          })
+          .catch(function (error) {
+            // Con 409 (otra pestaña ya la envió) el mensaje de la API ya es claro; se recarga el
+            // detalle para mostrar el texto que quedó guardado y luego se avisa, porque pvVerDetalle
+            // empieza con clearAlert().
+            return pvVerDetalle(id).then(function () { alertMessage(error.message); });
+          })
+          .finally(function () { loading(boton, false, 'Enviar controversia'); });
+      });
+
+      /* ---------- Autorización de ingreso de visitantes ---------- */
+
+      var AV_RUTA = '/autorizaciones-visitante';
+      var avCargado = false;
+      var avMaxHoras = 72;
+      var avPeticion = 0;
+
+      function avBadgeEstado(estado) {
+        if (estado === 'VIGENTE') return '<span class="badge badge-resolved">Vigente</span>';
+        if (estado === 'PROGRAMADA') return '<span class="badge badge-with-response">Programada</span>';
+        if (estado === 'ANULADA') return '<span class="badge bg-secondary">Anulada</span>';
+        return '<span class="badge badge-pending">Vencida</span>';
+      }
+
+      // Opciones de vigencia hasta el tope que fija administración; 24 h preseleccionadas.
+      function avOpcionesHoras() {
+        var opciones = [6, 12, 24, 48, 72, 120, 168].filter(function (horas) { return horas <= avMaxHoras; });
+        if (opciones.indexOf(avMaxHoras) === -1) opciones.push(avMaxHoras);
+        $('avHoras').innerHTML = opciones.map(function (horas) {
+          var etiqueta = horas < 24
+            ? horas + ' horas'
+            : (horas / 24) + (horas === 24 ? ' día' : ' días');
+          return '<option value="' + horas + '"' + (horas === 24 ? ' selected' : '') + '>' + esc(etiqueta) + '</option>';
+        }).join('');
+      }
+
+      function avRender(autorizaciones) {
+        $('avEmpty').classList.toggle('hidden', autorizaciones.length > 0);
+        $('avLista').innerHTML = autorizaciones.map(function (item) {
+          var anulable = item.estado === 'VIGENTE' || item.estado === 'PROGRAMADA';
+          return '<div class="pv-item">' +
+            '<div class="flex-grow-1">' +
+            '<div class="mb-1"><span class="pv-placa">' + esc(item.placa || '—') + '</span></div>' +
+            '<div class="small-note">Hasta ' + esc(pvFormatFecha(item.vigenteHasta)) +
+            (item.autorizadaPor ? ' · ' + esc(item.autorizadaPor) : '') + '</div>' +
+            '</div>' +
+            '<div class="text-end">' + avBadgeEstado(item.estado) +
+            (anulable
+              ? ' <button type="button" class="btn btn-outline-secondary btn-sm ms-2" data-av-anular="' + esc(item.id) + '">Anular</button>'
+              : '') +
+            '</div></div>';
+        }).join('');
+      }
+
+      function cargarAutorizaciones() {
+        var miPeticion = ++avPeticion;
+        $('avLoading').classList.remove('hidden');
+        $('avError').classList.add('hidden');
+        $('avEmpty').classList.add('hidden');
+
+        return apiFetch(AV_RUTA)
+          .then(function (body) {
+            if (miPeticion !== avPeticion) return;
+            avCargado = true;
+            $('avLoading').classList.add('hidden');
+            var data = body.data || {};
+            avMaxHoras = data.maxHoras || 72;
+            avOpcionesHoras();
+            avRender(data.autorizaciones || []);
+          })
+          .catch(function (error) {
+            if (miPeticion !== avPeticion) return;
+            avCargado = true;
+            $('avLoading').classList.add('hidden');
+            $('avError').textContent = 'Error de conexión: ' + error.message;
+            $('avError').classList.remove('hidden');
+          });
+      }
+
+      $('avForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var placa = $('avPlaca').value.trim().toUpperCase();
+        if (!placa) return;
+
+        var boton = $('avGuardarBtn');
+        loading(boton, true, 'Autorizando…');
+
+        apiFetch(AV_RUTA, { method: 'POST', body: { placa: placa, horas: Number($('avHoras').value) } })
+          .then(function () {
+            $('avPlaca').value = '';
+            alertMessage('Visitante autorizado. Vigilancia ya lo verá al registrar la placa.', 'success');
+            return cargarAutorizaciones();
+          })
+          .catch(function (error) { alertMessage(error.message); })
+          .finally(function () { loading(boton, false, 'Autorizar'); });
+      });
+
+      $('avLista').addEventListener('click', function (event) {
+        var boton = event.target.closest('[data-av-anular]');
+        if (!boton) return;
+        loading(boton, true, 'Anulando…');
+        apiFetch(AV_RUTA + '/' + encodeURIComponent(boton.dataset.avAnular), { method: 'DELETE' })
+          .then(function () {
+            alertMessage('Autorización anulada.', 'success');
+            return cargarAutorizaciones();
+          })
+          .catch(function (error) {
+            alertMessage(error.message);
+            loading(boton, false, 'Anular');
+          });
+      });
+
+      /* ---------- Sub-pestañas de Sanciones ---------- */
+
+      var subPestanaSanciones = 'convivencia';
+
+      function mostrarSubPestanaSanciones(nombre) {
+        var esConvivencia = nombre !== 'parqueadero';
+        subPestanaSanciones = esConvivencia ? 'convivencia' : 'parqueadero';
+        cancelarLecturaSancion();
+        pvCerrarVisor();
+        $('sancionesConvivenciaPane').classList.toggle('hidden', !esConvivencia);
+        $('sancionesParqueaderoPane').classList.toggle('hidden', esConvivencia);
+        [['sancionesSubTabConvivencia', esConvivencia], ['sancionesSubTabParqueadero', !esConvivencia]].forEach(function (par) {
+          $(par[0]).classList.toggle('active', par[1]);
+          $(par[0]).setAttribute('aria-selected', par[1] ? 'true' : 'false');
+        });
+
+        // Se vuelve siempre a la lista del destino: un detalle abierto detrás confunde al reentrar.
+        if (esConvivencia) {
+          $('sancionDetailView').classList.add('hidden');
+          $('sancionesListView').classList.remove('hidden');
+          if (!sancionesCargadas) cargarSanciones();
+        } else {
+          pvVolverALista();
+          if (!pvCargado) cargarRegistrosParqueadero(true);
+        }
+      }
+
+      $('sancionesSubTabs').addEventListener('click', function (event) {
+        var boton = event.target.closest('button[data-subtab]');
+        if (!boton) return;
+        clearAlert();
+        mostrarSubPestanaSanciones(boton.dataset.subtab);
+      });
 
       /* ---------- Documentos PhEnLinea ---------- */
 
