@@ -112,7 +112,7 @@ mutation CrearVehiculo(
 }
 
 mutation CrearVinculoVehiculoUnidad(
-  $input: VinculoVehiculoUnidad_Data! @allow(fields: "vehiculoId unidadId tipoVinculo estadoVinculo esActual vigenteDesde origenRegistro")
+  $input: VinculoVehiculoUnidad_Data! @allow(fields: "vehiculoId unidadId tipoVinculo estadoVinculo esActual vigenteDesde origenRegistro registradoPorUid autorizadoPorPersonaId")
 )
 @auth(level: USER, insecureReason: "La API restringe este endpoint al rol vigilancia antes de invocar la mutación.")
 @transaction {

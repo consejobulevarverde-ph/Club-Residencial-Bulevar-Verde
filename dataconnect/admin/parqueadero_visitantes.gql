@@ -164,6 +164,9 @@ query ObtenerRegistroParqueaderoVisitanteResidenteAdmin($unidadId: UUID!, $id: U
       fotoObjeto
       controversiaTexto
       fechaControversia
+      controversiaEstado
+      controversiaResolucionMotivo
+      fechaResolucionControversia
     }
   }
 }
@@ -188,7 +191,189 @@ mutation GuardarControversiaParqueaderoVisitanteResidenteAdmin(
     data: {
       controversiaTexto: $controversiaTexto
       controversiaPersonaId: $personaId
+      controversiaEstado: "PENDIENTE"
       fechaControversia_expr: "request.time"
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Administración: resolución de controversias. Aceptar desasocia la unidad del registro (no lo borra)
+# y lo deja reasignable; rechazar la deja como estaba. La guarda por estado PENDIENTE va en el where
+# para que dos resoluciones simultáneas no se pisen.
+# ---------------------------------------------------------------------------
+
+query ListarControversiasParqueaderoVisitanteAdmin($estado: String!, $limite: Int!)
+@auth(level: NO_ACCESS) {
+  registros_parqueadero_visitante(
+    where: { controversiaEstado: { eq: $estado } }
+    orderBy: [{ fechaControversia: DESC }]
+    limit: $limite
+  ) {
+    id
+    placa
+    tipoVehiculo
+    fechaCaptura
+    fechaPosprocesamiento
+    vinculoId
+    unidadOrigenAsignacion
+    controversiaTexto
+    fechaControversia
+    controversiaEstado
+    controversiaResolucionMotivo
+    fechaResolucionControversia
+    controversiaResueltaPorNombre
+    controversiaPersona {
+      nombreCompleto
+    }
+    unidad {
+      id
+      apartamento
+    }
+  }
+}
+
+# Contexto congelado de los vínculos que atribuyeron esos registros. Va en una consulta aparte porque
+# `vinculoId` es un escalar: Data Connect no admite una relación a VinculoVehiculoUnidad (clave
+# compuesta con campos de referencia), así que no se puede navegar desde el registro.
+query ObtenerVinculosVehiculoPorIdsAdmin($ids: [UUID!]!)
+@auth(level: NO_ACCESS) {
+  vinculos_vehiculo_unidad(where: { id: { in: $ids } }) {
+    id
+    tipoVinculo
+    estadoVinculo
+    esActual
+    vigenteDesde
+    vigenteHasta
+    origenRegistro
+    retiradoPorNombre
+    vehiculo {
+      placa
+    }
+    unidad {
+      apartamento
+    }
+    autorizadoPorPersona {
+      nombreCompleto
+    }
+  }
+}
+
+mutation AceptarControversiaParqueaderoVisitanteAdmin(
+  $id: UUID!
+  $motivo: String!
+  $resueltaPorUid: String!
+  $resueltaPorNombre: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  actualizados: registro_parqueadero_visitante_updateMany(
+    where: { id: { eq: $id }, controversiaEstado: { eq: "PENDIENTE" } }
+    data: {
+      unidadId: null
+      unidadOrigenAsignacion: null
+      controversiaEstado: "ACEPTADA"
+      controversiaResolucionMotivo: $motivo
+      controversiaResueltaPorUid: $resueltaPorUid
+      controversiaResueltaPorNombre: $resueltaPorNombre
+      fechaResolucionControversia_expr: "request.time"
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}
+
+mutation RechazarControversiaParqueaderoVisitanteAdmin(
+  $id: UUID!
+  $motivo: String!
+  $resueltaPorUid: String!
+  $resueltaPorNombre: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  actualizados: registro_parqueadero_visitante_updateMany(
+    where: { id: { eq: $id }, controversiaEstado: { eq: "PENDIENTE" } }
+    data: {
+      controversiaEstado: "RECHAZADA"
+      controversiaResolucionMotivo: $motivo
+      controversiaResueltaPorUid: $resueltaPorUid
+      controversiaResueltaPorNombre: $resueltaPorNombre
+      fechaResolucionControversia_expr: "request.time"
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Asignación retroactiva: al asociar un vehículo a una unidad, los registros de esa placa que quedaron
+# sin apartamento vuelven a esa unidad. Cierra la evasión de «no registrar el vehículo».
+# No toca los que ya tienen apartamento ni los ya posprocesados (el corte de valor vigente).
+# ---------------------------------------------------------------------------
+mutation AsignarRetroactivoRegistrosParqueaderoVisitanteAdmin(
+  $placa: String!
+  $unidadId: UUID!
+  $vehiculoId: UUID!
+  $vinculoId: UUID!
+  $desde: Timestamp!
+  $asignadaPorUid: String!
+  $asignadaPorNombre: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  asignados: registro_parqueadero_visitante_updateMany(
+    where: {
+      placa: { eq: $placa }
+      unidadId: { isNull: true }
+      fechaPosprocesamiento: { isNull: true }
+      fechaCaptura: { ge: $desde }
+    }
+    data: {
+      unidadId: $unidadId
+      vehiculoId: $vehiculoId
+      vinculoId: $vinculoId
+      unidadOrigenAsignacion: "RETROACTIVA"
+      unidadAsignadaPorUid: $asignadaPorUid
+      unidadAsignadaPorNombre: $asignadaPorNombre
+      fechaAsignacionUnidad_expr: "request.time"
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Tarifas y días de gracia. Las lee vigilancia; solo administración las escribe (lo impone la API).
+# ---------------------------------------------------------------------------
+
+query ListarTarifasParqueaderoVisitanteAdmin
+@auth(level: NO_ACCESS) {
+  tarifas_parqueadero_visitante(orderBy: [{ tipoVehiculo: ASC }]) {
+    tipoVehiculo
+    valorSancion
+    diasGraciaVisitante
+    diasGraciaResidente
+    actualizadoPorNombre
+    fechaActualizacion
+  }
+}
+
+mutation GuardarTarifaParqueaderoVisitanteAdmin(
+  $tipoVehiculo: String!
+  $valorSancion: Float!
+  $diasGraciaVisitante: Int!
+  $diasGraciaResidente: Int!
+  $actualizadoPorUid: String!
+  $actualizadoPorNombre: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  tarifa_parqueadero_visitante_upsert(
+    data: {
+      tipoVehiculo: $tipoVehiculo
+      valorSancion: $valorSancion
+      diasGraciaVisitante: $diasGraciaVisitante
+      diasGraciaResidente: $diasGraciaResidente
+      actualizadoPorUid: $actualizadoPorUid
+      actualizadoPorNombre: $actualizadoPorNombre
       fechaActualizacion_expr: "request.time"
     }
   )

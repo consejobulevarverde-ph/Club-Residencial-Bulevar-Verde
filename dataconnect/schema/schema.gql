@@ -103,6 +103,12 @@ type VinculoVehiculoUnidad
   confianza: String
   estadoRevision: String
   registradoPorUid: String
+  # Quién autorizó el ingreso del visitante (la persona de la unidad que lo recibe) y quién retiró el
+  # vínculo. El retiro se conserva (esActual=false) pero antes no quedaba atribuido a nadie, y
+  # administración lo necesita al resolver una controversia de parqueadero.
+  autorizadoPorPersona: Persona
+  retiradoPorUid: String
+  retiradoPorNombre: String
   fechaCreacion: Timestamp! @default(expr: "request.time")
   fechaActualizacion: Timestamp! @default(expr: "request.time")
 }
@@ -553,7 +559,37 @@ type RegistroParqueaderoVisitante
   controversiaTexto: String
   fechaControversia: Timestamp
   controversiaPersona: Persona
+  # Resolución por administración. PENDIENTE | ACEPTADA | RECHAZADA; null si no hay controversia.
+  # Aceptar desasocia la unidad del registro (no lo elimina) y lo deja reasignable a otro apartamento.
+  controversiaEstado: String
+  controversiaResolucionMotivo: String
+  fechaResolucionControversia: Timestamp
+  controversiaResueltaPorUid: String
+  controversiaResueltaPorNombre: String
   clientRequestId: String! @unique
   fechaCreacion: Timestamp! @default(expr: "request.time")
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
+# Valor de la sanción del parqueadero de visitantes y días de gracia, por tipo de vehículo. Lo edita
+# administración en la pestaña Configuración del módulo de vehículos; vigilancia solo lo lee. Una fila
+# por tipo (CARRO, MOTO), no un key/value genérico, porque los parámetros son fijos y tipados.
+# El cálculo del valor sobre los registros es una etapa posterior, todavía no implementada: aquí solo
+# se guarda el parámetro vigente.
+type TarifaParqueaderoVisitante
+  @table(
+    name: "tarifas_parqueadero_visitante"
+    singular: "tarifa_parqueadero_visitante"
+    plural: "tarifas_parqueadero_visitante"
+    key: "tipoVehiculo"
+  ) {
+  tipoVehiculo: String!
+  valorSancion: Float! @col(dataType: "numeric(16,2)")
+  # Días de cortesía antes de sancionar. La asamblea autorizó 3 para visitantes reales y 0 para
+  # vehículos de residentes; se distinguen por el tipoVinculo del vínculo congelado en el registro.
+  diasGraciaVisitante: Int! @default(value: 0)
+  diasGraciaResidente: Int! @default(value: 0)
+  actualizadoPorUid: String
+  actualizadoPorNombre: String
   fechaActualizacion: Timestamp! @default(expr: "request.time")
 }

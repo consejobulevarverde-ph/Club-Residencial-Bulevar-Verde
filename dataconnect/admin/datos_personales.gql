@@ -212,6 +212,8 @@ mutation CrearVinculoVehiculoUnidadAdmin(
         esActual
         vigenteDesde
         origenRegistro
+        registradoPorUid
+        autorizadoPorPersonaId
       """
     )
 )
@@ -220,15 +222,52 @@ mutation CrearVinculoVehiculoUnidadAdmin(
   vinculo_vehiculo_unidad_insert(data: $input)
 }
 
+# El where exige la unidad del residente autenticado: antes solo filtraba por id, y los ids se exponen
+# en el listado del portal, así que cualquier residente podía retirar el vínculo de un vehículo ajeno.
+# Devuelve el número de filas: 0 significa que el vínculo no existe o no es de esa unidad.
 mutation RetirarVinculoVehiculoUnidadAdmin(
   $id: UUID!
+  $unidadId: UUID!
   $vigenteHasta: Timestamp!
+  $retiradoPorUid: String!
+  $retiradoPorNombre: String
 )
 @auth(level: NO_ACCESS)
 @transaction {
   vinculo_vehiculo_unidad_updateMany(
-    where: { id: { eq: $id } }
-    data: { esActual: false, estadoVinculo: "RETIRADO", vigenteHasta: $vigenteHasta }
+    where: { id: { eq: $id }, unidadId: { eq: $unidadId } }
+    data: {
+      esActual: false
+      estadoVinculo: "RETIRADO"
+      vigenteHasta: $vigenteHasta
+      retiradoPorUid: $retiradoPorUid
+      retiradoPorNombre: $retiradoPorNombre
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}
+
+# Cierra los vínculos vigentes de un vehículo antes de crear el nuevo: un vehículo tiene una sola
+# unidad actual. Sin esto quedaban varios esActual=true y UnidadesVigentesPorPlacaAdmin devolvía más
+# de una unidad, con lo que el registro del parqueadero quedaba sin apartamento y sin sanción.
+mutation CerrarVinculosVigentesVehiculoAdmin(
+  $vehiculoId: UUID!
+  $vigenteHasta: Timestamp!
+  $retiradoPorUid: String!
+  $retiradoPorNombre: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  cerrados: vinculo_vehiculo_unidad_updateMany(
+    where: { vehiculoId: { eq: $vehiculoId }, esActual: { eq: true } }
+    data: {
+      esActual: false
+      estadoVinculo: "REEMPLAZADO"
+      vigenteHasta: $vigenteHasta
+      retiradoPorUid: $retiradoPorUid
+      retiradoPorNombre: $retiradoPorNombre
+      fechaActualizacion_expr: "request.time"
+    }
   )
 }
 
