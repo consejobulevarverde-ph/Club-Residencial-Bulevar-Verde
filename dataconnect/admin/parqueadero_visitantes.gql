@@ -31,6 +31,9 @@ mutation CrearRegistroParqueaderoVisitanteAdmin(
         vigilanteNombre
         registradoPorUid
         fechaCaptura
+        vehiculoId
+        vinculoId
+        unidadOrigenAsignacion
         clientRequestId
       """
     )
@@ -40,11 +43,15 @@ mutation CrearRegistroParqueaderoVisitanteAdmin(
   registro_parqueadero_visitante_insert(data: $input)
 }
 
-# Unidades con vínculo vigente para una placa exacta (para asignar la unidad del registro).
+# Unidades con vínculo vigente para una placa exacta (para asignar la unidad del registro). Devuelve
+# también el vehículo y el vínculo para congelarlos en el registro: administración los necesita al
+# resolver una controversia, incluso si el vínculo se retira después.
 query UnidadesVigentesPorPlacaAdmin($placa: String!)
 @auth(level: NO_ACCESS) {
   vehiculos(where: { placa: { eq: $placa } }, limit: 1) {
+    id
     vinculos: vinculos_vehiculo_unidad_on_vehiculo(where: { esActual: { eq: true } }) {
+      id
       unidad {
         id
         apartamento
@@ -105,7 +112,83 @@ mutation AsignarUnidadRegistroParqueaderoVisitanteAdmin(
       unidadId: $unidadId
       unidadAsignadaPorUid: $asignadaPorUid
       unidadAsignadaPorNombre: $asignadaPorNombre
+      unidadOrigenAsignacion: "MANUAL"
       fechaAsignacionUnidad_expr: "request.time"
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Portal del residente: solo los registros del propio apartamento. La unidad la impone Data Connect
+# entrando por unidad(id: $unidadId), no un id que declare el cliente. `fotoObjeto` solo aparece en el
+# detalle porque la API necesita la ruta del bucket; nunca se devuelve al navegador.
+# ---------------------------------------------------------------------------
+
+query ListarRegistrosParqueaderoVisitantePorUnidadAdmin(
+  $unidadId: UUID!
+  $limit: Int!
+  $offset: Int!
+)
+@auth(level: NO_ACCESS) {
+  unidad(id: $unidadId) {
+    apartamento
+    registros: registros_parqueadero_visitante_on_unidad(
+      orderBy: [{ fechaCaptura: DESC }]
+      limit: $limit
+      offset: $offset
+    ) {
+      id
+      placa
+      tipoVehiculo
+      fechaCaptura
+      fechaPosprocesamiento
+      fechaControversia
+    }
+  }
+}
+
+query ObtenerRegistroParqueaderoVisitanteResidenteAdmin($unidadId: UUID!, $id: UUID!)
+@auth(level: NO_ACCESS) {
+  unidad(id: $unidadId) {
+    apartamento
+    registros: registros_parqueadero_visitante_on_unidad(
+      where: { id: { eq: $id } }
+      limit: 1
+    ) {
+      id
+      placa
+      tipoVehiculo
+      fechaCaptura
+      fechaPosprocesamiento
+      fotoObjeto
+      controversiaTexto
+      fechaControversia
+    }
+  }
+}
+
+# Guarda la controversia solo si el registro es de esa unidad y aún no tiene una. `actualizados: 0`
+# significa «no es de esta unidad» o «ya tiene controversia»; la API distingue releyendo el registro.
+# updateMany con la guarda en el where, no _update(id:), para que sea atómico en un solo statement.
+mutation GuardarControversiaParqueaderoVisitanteResidenteAdmin(
+  $id: UUID!
+  $unidadId: UUID!
+  $controversiaTexto: String!
+  $personaId: UUID!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  actualizados: registro_parqueadero_visitante_updateMany(
+    where: {
+      id: { eq: $id }
+      unidadId: { eq: $unidadId }
+      controversiaTexto: { isNull: true }
+    }
+    data: {
+      controversiaTexto: $controversiaTexto
+      controversiaPersonaId: $personaId
+      fechaControversia_expr: "request.time"
       fechaActualizacion_expr: "request.time"
     }
   )

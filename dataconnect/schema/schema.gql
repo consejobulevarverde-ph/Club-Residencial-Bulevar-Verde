@@ -539,6 +539,20 @@ type RegistroParqueaderoVisitante
   unidadAsignadaPorUid: String
   unidadAsignadaPorNombre: String
   fechaAsignacionUnidad: Timestamp
+  # Vehículo y vínculo que atribuyeron la unidad, congelados al capturar: administración debe poder ver
+  # la relación al resolver una controversia aunque el vínculo se haya retirado después.
+  # `vinculoId` es escalar y no una relación a VinculoVehiculoUnidad a propósito: su clave es compuesta
+  # y contiene campos de referencia, así que Data Connect rechaza apuntarle
+  # ("Reference another reference field"). Apunta a VinculoVehiculoUnidad.id, que es @unique.
+  vehiculo: Vehiculo
+  vinculoId: UUID
+  # Cómo llegó la unidad: PLACA (coincidencia al capturar), MANUAL (un vigilante la asignó) o
+  # RETROACTIVA (se asignó al crearse el vínculo del vehículo). Null cuando no hay unidad.
+  unidadOrigenAsignacion: String
+  # Controversia del residente desde el portal. Solo texto y una sola vez por registro.
+  controversiaTexto: String
+  fechaControversia: Timestamp
+  controversiaPersona: Persona
   clientRequestId: String! @unique
   fechaCreacion: Timestamp! @default(expr: "request.time")
   fechaActualizacion: Timestamp! @default(expr: "request.time")
