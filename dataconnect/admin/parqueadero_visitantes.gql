@@ -33,6 +33,7 @@ mutation CrearRegistroParqueaderoVisitanteAdmin(
         fechaCaptura
         vehiculoId
         vinculoId
+        autorizacionId
         unidadOrigenAsignacion
         clientRequestId
       """
@@ -52,6 +53,8 @@ query UnidadesVigentesPorPlacaAdmin($placa: String!)
     id
     vinculos: vinculos_vehiculo_unidad_on_vehiculo(where: { esActual: { eq: true } }) {
       id
+      # Decide la precedencia: un vínculo de residente manda sobre una pre-autorización de visitante.
+      tipoVinculo
       unidad {
         id
         apartamento
@@ -313,7 +316,9 @@ mutation AsignarRetroactivoRegistrosParqueaderoVisitanteAdmin(
   $placa: String!
   $unidadId: UUID!
   $vehiculoId: UUID!
-  $vinculoId: UUID!
+  # Nulos según de dónde salga la atribución: un vínculo de residente o una pre-autorización vigente.
+  $vinculoId: UUID
+  $autorizacionId: UUID
   $desde: Timestamp!
   $asignadaPorUid: String!
   $asignadaPorNombre: String
@@ -331,6 +336,7 @@ mutation AsignarRetroactivoRegistrosParqueaderoVisitanteAdmin(
       unidadId: $unidadId
       vehiculoId: $vehiculoId
       vinculoId: $vinculoId
+      autorizacionId: $autorizacionId
       unidadOrigenAsignacion: "RETROACTIVA"
       unidadAsignadaPorUid: $asignadaPorUid
       unidadAsignadaPorNombre: $asignadaPorNombre

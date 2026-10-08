@@ -1,0 +1,124 @@
+# Pre-autorizaciones de ingreso de visitantes, creadas por el residente desde el portal.
+# NO_ACCESS: la API valida la sesión del residente (unidad y persona salen del token, nunca del
+# cliente) y restringe las rutas de vigilancia por rol.
+
+# Autorización vigente para una placa exacta, para atribuir el registro del parqueadero. `ahora` lo
+# pone la API: así la ventana se evalúa con una sola fuente de tiempo.
+query AutorizacionVigentePorPlacaAdmin($placa: String!, $ahora: Timestamp!)
+@auth(level: NO_ACCESS) {
+  vehiculos(where: { placa: { eq: $placa } }, limit: 1) {
+    id
+    autorizaciones: autorizaciones_ingreso_visitante_on_vehiculo(
+      where: {
+        vigenteDesde: { le: $ahora }
+        vigenteHasta: { ge: $ahora }
+        anuladaEn: { isNull: true }
+      }
+      orderBy: [{ vigenteDesde: DESC }]
+      limit: 1
+    ) {
+      id
+      vigenteDesde
+      vigenteHasta
+      unidad {
+        id
+        apartamento
+        codigoOficial
+      }
+      autorizadoPorPersona {
+        id
+        nombreCompleto
+      }
+    }
+  }
+}
+
+query ListarAutorizacionesPorUnidadAdmin($unidadId: UUID!, $limit: Int!, $offset: Int!)
+@auth(level: NO_ACCESS) {
+  unidad(id: $unidadId) {
+    autorizaciones: autorizaciones_ingreso_visitante_on_unidad(
+      orderBy: [{ vigenteDesde: DESC }]
+      limit: $limit
+      offset: $offset
+    ) {
+      id
+      vigenteDesde
+      vigenteHasta
+      anuladaEn
+      vehiculo {
+        placa
+        tipoVehiculo
+      }
+      autorizadoPorPersona {
+        nombreCompleto
+      }
+    }
+  }
+}
+
+mutation CrearAutorizacionIngresoVisitanteAdmin(
+  $vehiculoId: UUID!
+  $unidadId: UUID!
+  $personaId: UUID!
+  $vigenteDesde: Timestamp!
+  $vigenteHasta: Timestamp!
+  $creadaPorUid: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  autorizacion_ingreso_visitante_insert(
+    data: {
+      vehiculoId: $vehiculoId
+      unidadId: $unidadId
+      autorizadoPorPersonaId: $personaId
+      vigenteDesde: $vigenteDesde
+      vigenteHasta: $vigenteHasta
+      creadaPorUid: $creadaPorUid
+    }
+  )
+}
+
+# Anula una autorización vigente de la propia unidad. La guarda va en el where para que la unidad del
+# token sea la condición, no una comprobación previa en JavaScript.
+mutation AnularAutorizacionIngresoVisitanteAdmin(
+  $id: UUID!
+  $unidadId: UUID!
+  $anuladaPorUid: String!
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  anuladas: autorizacion_ingreso_visitante_updateMany(
+    where: { id: { eq: $id }, unidadId: { eq: $unidadId }, anuladaEn: { isNull: true } }
+    data: { anuladaEn_expr: "request.time", anuladaPorUid: $anuladaPorUid }
+  )
+}
+
+# Configuración global (una sola fila, id = "GLOBAL").
+query ObtenerConfiguracionParqueaderoVisitanteAdmin($id: String!)
+@auth(level: NO_ACCESS) {
+  configuracion_parqueadero_visitante(id: $id) {
+    id
+    maxHorasAutorizacionVisitante
+    actualizadoPorNombre
+    fechaActualizacion
+  }
+}
+
+mutation GuardarConfiguracionParqueaderoVisitanteAdmin(
+  $id: String!
+  $maxHorasAutorizacionVisitante: Int!
+  $actualizadoPorUid: String!
+  $actualizadoPorNombre: String
+)
+@auth(level: NO_ACCESS)
+@transaction {
+  configuracion_parqueadero_visitante_upsert(
+    data: {
+      id: $id
+      maxHorasAutorizacionVisitante: $maxHorasAutorizacionVisitante
+      actualizadoPorUid: $actualizadoPorUid
+      actualizadoPorNombre: $actualizadoPorNombre
+      fechaActualizacion_expr: "request.time"
+    }
+  )
+}

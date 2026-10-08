@@ -552,8 +552,11 @@ type RegistroParqueaderoVisitante
   # ("Reference another reference field"). Apunta a VinculoVehiculoUnidad.id, que es @unique.
   vehiculo: Vehiculo
   vinculoId: UUID
-  # Cómo llegó la unidad: PLACA (coincidencia al capturar), MANUAL (un vigilante la asignó) o
-  # RETROACTIVA (se asignó al crearse el vínculo del vehículo). Null cuando no hay unidad.
+  # Autorización de ingreso que atribuyó la unidad, cuando el vehículo no tenía vínculo de residente.
+  autorizacion: AutorizacionIngresoVisitante
+  # Cómo llegó la unidad: PLACA (vínculo vigente al capturar), AUTORIZACION (pre-autorización de un
+  # residente), MANUAL (un vigilante la asignó) o RETROACTIVA (se asignó al crearse el vínculo del
+  # vehículo). Null cuando no hay unidad.
   unidadOrigenAsignacion: String
   # Controversia del residente desde el portal. Solo texto y una sola vez por registro.
   controversiaTexto: String
@@ -576,6 +579,50 @@ type RegistroParqueaderoVisitante
 # por tipo (CARRO, MOTO), no un key/value genérico, porque los parámetros son fijos y tipados.
 # El cálculo del valor sobre los registros es una etapa posterior, todavía no implementada: aquí solo
 # se guarda el parámetro vigente.
+# Pre-autorización de ingreso de un visitante, hecha por un residente desde el portal con una ventana
+# de validez. Tabla propia y no una fila de VinculoVehiculoUnidad a propósito: crear un vínculo cierra
+# los vigentes del vehículo (un vehículo tiene una sola unidad actual), así que autorizar una placa
+# ajena desvincularía ese vehículo del apartamento de su dueño.
+# La autorización atribuye el registro del parqueadero al apartamento que autorizó, pero solo cuando
+# el vehículo NO tiene un vínculo de residente vigente: si lo tiene, manda el vínculo, para que nadie
+# pueda trasladar la sanción de su propio carro haciéndolo «autorizar» por otro apartamento.
+type AutorizacionIngresoVisitante
+  @table(
+    name: "autorizaciones_ingreso_visitante"
+    singular: "autorizacion_ingreso_visitante"
+    plural: "autorizaciones_ingreso_visitante"
+    key: "id"
+  ) {
+  id: UUID! @default(expr: "uuidV4()")
+  vehiculo: Vehiculo!
+  unidad: Unidad!
+  autorizadoPorPersona: Persona!
+  vigenteDesde: Timestamp!
+  vigenteHasta: Timestamp!
+  # Anulada por el propio residente antes de que venciera; se conserva la fila.
+  anuladaEn: Timestamp
+  anuladaPorUid: String
+  creadaPorUid: String!
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+}
+
+# Parámetros globales del parqueadero de visitantes, una sola fila (id = "GLOBAL"). Los valores por
+# tipo de vehículo viven en TarifaParqueaderoVisitante.
+type ConfiguracionParqueaderoVisitante
+  @table(
+    name: "configuracion_parqueadero_visitante"
+    singular: "configuracion_parqueadero_visitante"
+    plural: "configuraciones_parqueadero_visitante"
+    key: "id"
+  ) {
+  id: String!
+  # Tope de la ventana que puede elegir el residente al pre-autorizar un visitante.
+  maxHorasAutorizacionVisitante: Int! @default(value: 72)
+  actualizadoPorUid: String
+  actualizadoPorNombre: String
+  fechaActualizacion: Timestamp! @default(expr: "request.time")
+}
+
 type TarifaParqueaderoVisitante
   @table(
     name: "tarifas_parqueadero_visitante"
