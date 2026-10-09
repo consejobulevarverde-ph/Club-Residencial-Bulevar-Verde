@@ -70,7 +70,64 @@ no tiene rastro). `.env.example` sí está rastreado y es lo correcto.
 
 ---
 
-## 1. Entorno local con una base de datos parecida a producción
+## 1. Entorno local con una base de datos parecida a producción — **implementado 2026-10-09 (sin commitear)**
+
+### Estado de la implementación
+**Uso**: desde `bulevar-verde-api`, `npm run local`. Levanta emuladores de Auth, Storage y Data Connect
+(proyecto `demo-bulevar-verde`), aplica la semilla, arranca la API (8080) y `hugo server --environment local`
+(1313). `Ctrl+C` lo cierra todo. Los datos viven en memoria: cada arranque parte de cero. El primer arranque
+tarda varios minutos (descarga el runtime de reglas de Storage y la UI de los emuladores); los siguientes,
+menos. `npm run local:seed` ejecuta solo la semilla contra emuladores ya levantados.
+
+**Puertos**: Auth 9109, Storage 9209, Data Connect 9419 (Postgres interno en 5433), UI 4710, hub 4810,
+logging 4910. Se evitaron 9099, 9399, 9499, 4400-4500 porque había emuladores antiguos tuyos ocupándolos
+(procesos de firebase-tools del 29/09 y del 04/10); el script aborta con un mensaje si algún puerto está ocupado.
+
+**Archivos** (frontend): `firebase.json` (bloque `emulators` y `storage`), `storage.rules` (solo emulador; lectura
+abierta porque el emulador no firma URLs), `config/local/hugo.toml` (anula `apiBaseUrl`, el proyecto Firebase y
+**vacía las URLs de los Apps Script** para que local no escriba en hojas reales), `.gitignore` (logs de
+emuladores), y `useEmulator` en `administracion-datos/core.js` y `vigilancia-datos/list.html`, activado solo con
+proyecto `demo-*`. **Archivos** (API): `scripts/local/run.mjs`, `scripts/local/seed.ts`,
+`src/services/storage-local.ts`, y modo demo en `config/environment.ts` (`esProyectoDemo`), `config/firebase.ts`,
+`services/tasks.ts`, `middleware/cloud-task-authentication.ts`, `services/evidencias-storage.ts` y
+`services/storage.ts`. `package.json` declara ahora `@google-cloud/storage` como dependencia directa (antes era
+transitiva de firebase-admin; sube de 7.21.0 a 7.22.0).
+
+**Guardas**: con un proyecto `demo-*` la API se niega a arrancar si faltan los tres hosts de emulador, usa una
+credencial nula (nunca `applicationDefault`), y las tareas y las URLs de lectura tienen sustitutos locales. El
+script construye el entorno de la API **desde cero**, quitando variables de producción heredadas (`SMTP_*`,
+`PH_EN_LINEA_*`, `GOOGLE_*`, `FIREBASE_*`, secretos…), y apunta `DOTENV_CONFIG_PATH` a un archivo inexistente
+para que un `.env` real de la API no se cargue. La semilla aborta si el proyecto no empieza por `demo-`.
+
+**Semilla** (determinista, RNG con semilla fija): 90 unidades (torres 1, 2, 3, 4, 8; ajustable con `SEED_TORRES`,
+`SEED_PISOS`, `SEED_APTOS_POR_PISO`), 180 personas con correos `@example.test` (~5 % sin correo), 66 vehículos
+(incluida una moto `ABC12`), 33 parqueaderos, 3 vigilantes (con su cuenta en el emulador de Auth), tarifas,
+60 registros de parqueadero de visitantes con foto y miniatura de relleno (~20 % con `placaDetectada ≠ placa`),
+controversias en los tres estados (3 pendientes, 1 aceptada, 1 rechazada) y 3 autorizaciones. Accesos:
+`admin@example.test` y `superadmin@example.test` con clave `local-1234`; vigilancia con los documentos
+`90000001`-`90000003`; residente con el apartamento `1101` y el documento `1000000001`. Los apartamentos son
+únicos en todo el conjunto (`<torre><piso><número>`) porque el login del residente busca la unidad **solo por
+número de apartamento**: la primera versión de la semilla repetía `101` en cinco torres y daba 409
+`unidad_ambigua`. **No incluye** todavía: convivencia, reservas, cartera, PQRS ni mantenimiento. Datos de acceso y
+pruebas: `doc/ENTORNO_LOCAL.md`.
+
+**Verificado** (arranque real, 2026-10-09): emuladores listos; semilla completa; `GET /health`; login de admin por
+el emulador y `GET /dashboard/metricas` (90/180/66/33); listado de unidades; controversias pendientes; login de
+vigilancia por documento con intercambio del token personalizado; listado de 60 registros y descarga de una
+foto desde el emulador de Storage. `tsc` y los 240 tests de la API pasan.
+
+**Sin verificar**: nada probado en navegador (login de admin/vigilancia con `useEmulator`, pantallas de
+parqueadero con miniaturas); el flujo de **subida reanudable** de convivencia contra el emulador; el sustituto
+local de **Cloud Tasks** (notificaciones de convivencia); y el correo, porque **Mailpit no está instalado**
+(sin él, `npm run local` avisa y los flujos que envían correo responden 503; se instala descargando el
+ejecutable y apuntando `MAILPIT_PATH` a él).
+
+**Requisito instalado en esta máquina**: JDK 21 (Temurin 21.0.12 con winget), porque firebase-tools 15 exige
+Java ≥ 21 para el emulador de Storage. Java 11 sigue instalado; el script busca el JDK 21 por sí mismo si el
+`java` del PATH es más viejo.
+
+**Pendiente de decidir**: el `local:reset` previsto no existe, porque el estado ya es efímero; si se quiere
+conservar datos entre arranques haría falta `--export-on-exit`/`--import`, con la semilla ya incluida.
 
 ### Decisiones (2026-10-09)
 - Datos: **sintéticos con la forma de producción** (opción A), con semilla fija.

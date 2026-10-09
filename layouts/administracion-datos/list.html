@@ -128,7 +128,8 @@
       apiBase: {{ .Site.Params.apiBaseUrl | default "http://localhost:8080" | jsonify | safeJS }},
       firebaseApiKey: {{ .Site.Params.apiFirebaseApiKey | default "" | jsonify | safeJS }},
       firebaseAuthDomain: {{ .Site.Params.apiFirebaseAuthDomain | default "" | jsonify | safeJS }},
-      firebaseProjectId: {{ .Site.Params.apiFirebaseProjectId | default "" | jsonify | safeJS }}
+      firebaseProjectId: {{ .Site.Params.apiFirebaseProjectId | default "" | jsonify | safeJS }},
+      firebaseAuthEmulatorUrl: {{ .Site.Params.apiFirebaseAuthEmulatorUrl | default "" | jsonify | safeJS }}
     };
   </script>
 

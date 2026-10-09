@@ -18,5 +18,17 @@
   },
   "dataconnect": {
     "source": "dataconnect"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "emulators": {
+    "singleProjectMode": false,
+    "auth": { "host": "127.0.0.1", "port": 9109 },
+    "storage": { "host": "127.0.0.1", "port": 9209 },
+    "dataconnect": { "host": "127.0.0.1", "port": 9419 },
+    "hub": { "host": "127.0.0.1", "port": 4810 },
+    "logging": { "host": "127.0.0.1", "port": 4910 },
+    "ui": { "enabled": true, "host": "127.0.0.1", "port": 4710 }
   }
 }

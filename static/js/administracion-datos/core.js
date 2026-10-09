@@ -11,6 +11,11 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         projectId: config.firebaseProjectId
       });
 
+      // Entorno local: solo con un proyecto demo-* se apunta Auth al emulador; nunca contra producción.
+      if (config.firebaseAuthEmulatorUrl && /^demo-/.test(config.firebaseProjectId || '')) {
+        firebase.auth().useEmulator(config.firebaseAuthEmulatorUrl, { disableWarnings: true });
+      }
+
       window.AdminDatos = window.AdminDatos || {};
       var AdminDatos = window.AdminDatos;
 

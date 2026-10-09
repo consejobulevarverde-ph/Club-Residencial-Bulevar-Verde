@@ -532,6 +532,12 @@
         projectId: {{ .Site.Params.apiFirebaseProjectId | default "" | jsonify | safeJS }}
       });
 
+      // Entorno local: solo con un proyecto demo-* se apunta Auth al emulador; nunca contra producción.
+      var authEmulatorUrl = {{ .Site.Params.apiFirebaseAuthEmulatorUrl | default "" | jsonify | safeJS }};
+      if (authEmulatorUrl && /^demo-/.test({{ .Site.Params.apiFirebaseProjectId | default "" | jsonify | safeJS }})) {
+        firebase.auth().useEmulator(authEmulatorUrl, { disableWarnings: true });
+      }
+
       var $ = function (id) { return document.getElementById(id); };
 
       function esc(value) {

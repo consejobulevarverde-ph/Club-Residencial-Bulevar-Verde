@@ -1,0 +1,12 @@
+// Solo para el emulador local (datos sintéticos). La API escribe con el Admin SDK, que ignora estas reglas.
+// La lectura queda abierta porque el emulador no firma URLs: la API local devuelve su URL directa para que
+// <img> y <video> funcionen. Estas reglas no se despliegan (firebase-deploy.yml usa --only).
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

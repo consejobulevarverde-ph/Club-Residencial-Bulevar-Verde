@@ -7,6 +7,8 @@ resources/_gen/
 .firebase/
 # Generado por la extensión/emulador de Data Connect (prelude y esquema para el editor)
 dataconnect/.dataconnect/
+# Logs de los emuladores locales (npm run local, en bulevar-verde-api)
+*-debug.log
 
 # Fonts (commercial licenses - not for version control)
 static/fonts/*.woff

@@ -1,0 +1,17 @@
+# Entorno local: `hugo server --environment local` (lo lanza `npm run local` de bulevar-verde-api).
+# Se fusiona sobre hugo.toml. Todo lo que apunta a producción se anula o se redirige a emuladores.
+baseURL = 'http://localhost:1313/'
+
+[params]
+  apiBaseUrl = "http://localhost:8080"
+  # Proyecto demo-*: ningún cliente puede tocar servicios reales. La clave no es una credencial.
+  apiFirebaseApiKey = "demo-api-key"
+  apiFirebaseAuthDomain = "localhost"
+  apiFirebaseProjectId = "demo-bulevar-verde"
+  apiFirebaseAuthEmulatorUrl = "http://127.0.0.1:9109"
+
+  # Apps Script heredados de producción: vacíos para que el entorno local no escriba en hojas reales.
+  portalWebAppUrl = ""
+  pqrsWebAppUrl = ""
+  reservasWebAppUrl = ""
+  sancionesWebAppUrl = ""
