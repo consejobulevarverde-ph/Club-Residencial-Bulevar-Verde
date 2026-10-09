@@ -58,6 +58,9 @@
           <button id="showDashboard" type="button" class="btn btn-outline-success mode-button active">
             <i class="bi bi-speedometer2 me-1"></i>Panel General
           </button>
+          <button id="showBusqueda" type="button" class="btn btn-outline-success mode-button">
+            <i class="bi bi-search me-1"></i>Búsqueda
+          </button>
           <button id="showConvivencia" type="button" class="btn btn-outline-success mode-button">
             <i class="bi bi-exclamation-circle me-1"></i>Registrar Caso
           </button>
@@ -84,6 +87,10 @@
 
       <section id="dashboardView">
         {{ partial "administracion-datos/dashboard" . }}
+      </section>
+
+      <section id="busquedaView" class="hidden">
+        {{ partial "administracion-datos/busqueda" . }}
       </section>
 
       <section id="convivenciaView" class="hidden">
@@ -128,6 +135,7 @@
   <script src="{{ "js/evidence-types.js" | relURL }}?v=2"></script>
   <script src="{{ "js/administracion-datos/core.js" | relURL }}?v=2"></script>
   <script src="{{ "js/administracion-datos/dashboard.js" | relURL }}?v=1"></script>
+  <script src="{{ "js/administracion-datos/busqueda.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/reservas-catalogo.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/reservas-agenda.js" | relURL }}?v=1"></script>
   <script src="{{ "js/administracion-datos/reservas-formulario.js" | relURL }}?v=1"></script>

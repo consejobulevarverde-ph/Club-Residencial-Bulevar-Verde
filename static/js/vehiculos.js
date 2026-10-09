@@ -155,6 +155,13 @@
     return false;
   }
 
+  // Mayúsculas, sin espacios, puntos ni guiones (data/REGLAS_OPERATIVAS.md). Los marcadores conservan su
+  // forma («SIN PLACA» lleva un espacio).
+  function normalizarPlaca(valor) {
+    var v = String(valor || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    return PLACAS_SIN_PLACA.indexOf(v) !== -1 ? v : v.replace(/[\s.-]+/g, '');
+  }
+
   // El vigilante no escribe quién autoriza: al teclear el apartamento se cargan sus residentes y solo
   // elige. Una llamada resuelve apartamento → personas.
   var autorizaApartamento = '';
@@ -236,7 +243,7 @@
   }
 
   function consultarPreautorizacion() {
-    var placa = $('vehPlaca').value.trim().toUpperCase().replace(/\s+/g, ' ');
+    var placa = normalizarPlaca($('vehPlaca').value);
     if (placa === preautorizadaPlaca) return;
     preautorizadaPlaca = placa;
     if (!placa) {
@@ -265,6 +272,37 @@
     if (esVisitante) cargarAutorizantes();
   }
 
+  // El tipo se deduce del formato de la placa (ABC123 = carro, ABC12D = moto) y el vigilante puede
+  // corregirlo. Una placa como ELECTRICO / SIN PLACA no permite deducir nada: se deja lo elegido.
+  function tipoPorPlaca(placa) {
+    if (/^[A-Z]{3}\d{3}$/.test(placa)) return 'CARRO';
+    if (/^[A-Z]{3}\d{2}[A-Z]$/.test(placa)) return 'MOTO';
+    return null;
+  }
+
+  var tipoCorregidoPara = null;
+
+  function placaNormalizada() {
+    return normalizarPlaca($('vehPlaca').value);
+  }
+
+  function detectarTipoVehiculo() {
+    var placa = placaNormalizada();
+    var tipo = tipoPorPlaca(placa);
+    var ayuda = $('vehTipoAyuda');
+
+    if (!tipo) {
+      ayuda.textContent = placa
+        ? 'No se puede deducir de esta placa; elige el tipo.'
+        : 'Se reconoce por el formato de la placa; puedes cambiarlo.';
+      return;
+    }
+    // Si el vigilante lo corrigió para esta misma placa, se respeta; con otra placa se vuelve a deducir.
+    if (tipoCorregidoPara === placa) return;
+    $('vehTipoVehiculo').value = tipo;
+    ayuda.textContent = 'Reconocido por la placa: ' + (tipo === 'MOTO' ? 'moto' : 'carro') + '. Puedes cambiarlo.';
+  }
+
   function registrarVehiculo(event) {
     event.preventDefault();
     registroHideMsg();
@@ -281,7 +319,7 @@
     }
 
     var tipoVehiculo = $('vehTipoVehiculo').value;
-    var placa = $('vehPlaca').value.trim().toUpperCase().replace(/\s+/g, ' ');
+    var placa = normalizarPlaca($('vehPlaca').value);
     if (!placaValida(placa, tipoVehiculo)) {
       registroMsg('La placa no corresponde al formato del tipo de vehículo (o escribe ELECTRICO / SIN PLACA).', 'warning');
       return;
@@ -311,6 +349,8 @@
       $('vehicleRegistrationForm').reset();
       reiniciarAutoriza();
       sincronizarAutoriza();
+      tipoCorregidoPara = null;
+      detectarTipoVehiculo();
       preautorizadaPlaca = '';
       mostrarPreautorizada(null);
       registroMsg('El vehículo fue registrado correctamente.', 'success');
@@ -983,6 +1023,12 @@
     $('vehApartment').addEventListener('change', sincronizarAutoriza);
     $('vehApartment').addEventListener('blur', sincronizarAutoriza);
     $('vehTipoVinculo').addEventListener('change', sincronizarAutoriza);
+    $('vehPlaca').addEventListener('input', detectarTipoVehiculo);
+    $('vehTipoVehiculo').addEventListener('change', function () {
+      // Corrección manual: vale para la placa que hay escrita ahora.
+      tipoCorregidoPara = placaNormalizada();
+      $('vehTipoAyuda').textContent = 'Tipo elegido por ti.';
+    });
     $('vehPlaca').addEventListener('change', consultarPreautorizacion);
     $('vehPlaca').addEventListener('blur', consultarPreautorizacion);
     sincronizarAutoriza();

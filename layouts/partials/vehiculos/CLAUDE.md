@@ -57,5 +57,6 @@ El resto de endpoints vive en el router de vigilancia, que admite los roles vigi
 - La validación de placa (`placaValida`) debe coincidir con `src/modules/vigilancia/placas.ts` en la API.
 - `$()` es `getElementById` sin null-check: los bloques que solo existen en administración se enganchan dentro de un `if ($(...))`, o `init()` revienta en la página de vigilancia.
 - `modoVehiculos()` muestra el Reporte solo cuando el nombre es `reporte`; no uses un fallback por descarte al añadir una vista nueva.
+- El formulario de registro va en este orden: apartamento, placa, tipo. El tipo se deduce del formato de la placa (`ABC123` carro, `ABC12D` moto; tolera espacios y guion) y es editable: una corrección manual vale para esa placa y, si se escribe otra, se vuelve a deducir. Con `ELECTRICO`/`SIN PLACA` no se deduce nada. La API sigue exigiendo que placa y tipo coincidan, así que corregir el tipo solo sirve con esas dos placas especiales.
 - Registrar un vehículo cierra los vínculos vigentes de esa placa (un vehículo tiene una sola unidad actual) y recupera los registros del parqueadero que quedaron sin apartamento en los últimos 30 días.
 - No anidar modales dentro de estas vistas (ver `layouts/CLAUDE.md`); el visor de foto de Sanciones es un overlay propio movido a `<body>`, no un modal de Bootstrap.

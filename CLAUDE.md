@@ -11,6 +11,7 @@ La API está en ../bulevar-verde-api. El schema y operaciones Data Connect está
 - .claude/references/project-details.md: guía original, para consultar por sección y contrastar con código.
 - .claude/references/layouts-details.md: detalle histórico de pantallas y reservas, para consultas puntuales.
 - .claude/references/cross-repo.md: cambios que atraviesan frontend/API/GraphQL.
+- .claude/references/todos.md: tareas abiertas (entorno local con datos, expiración de sesiones, warnings de Hugo, limpieza) con hallazgos de seguridad pendientes; léelo antes de empezar cualquiera de ellas.
 - .claude/references/parqueadero-visitantes-pendiente.md: estado, pendientes y trampas de las sanciones de parqueadero de visitantes; léelo antes de retomar ese módulo.
 
 ## Validación local

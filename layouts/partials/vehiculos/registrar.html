@@ -39,16 +39,8 @@
           required>
       </div>
 
-      <!-- Tipo de vehículo -->
+      <!-- Vehículo: primero la placa y de su formato se deduce el tipo, que el vigilante puede corregir. -->
       <div class="col-12 pt-2"><small class="text-muted fw-semibold">Vehículo</small></div>
-      <div class="col-md-6">
-        <label class="form-label" for="vehTipoVehiculo">Tipo de vehículo</label>
-        <select id="vehTipoVehiculo" class="form-select" required>
-          <option value="CARRO">Carro</option>
-          <option value="MOTO">Moto</option>
-        </select>
-      </div>
-
       <div class="col-md-6">
         <label class="form-label" for="vehPlaca">Placa</label>
         <input
@@ -56,12 +48,23 @@
           class="form-control plate"
           maxlength="10"
           placeholder="Ej.: ABC123"
+          autocomplete="off"
+          autocapitalize="characters"
           required>
         <small class="d-block text-muted mt-1">
           Si el vehículo no tiene placa (ej. moto eléctrica), escribe <strong>ELECTRICO</strong> o <strong>SIN PLACA</strong>.
         </small>
         <!-- Aviso cuando un residente ya pre-autorizó esta placa desde su portal. -->
         <div id="vehPreautorizada" class="alert alert-success py-2 px-3 mt-2 mb-0 hidden" role="status"></div>
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label" for="vehTipoVehiculo">Tipo de vehículo</label>
+        <select id="vehTipoVehiculo" class="form-select" required>
+          <option value="CARRO">Carro</option>
+          <option value="MOTO">Moto</option>
+        </select>
+        <small id="vehTipoAyuda" class="d-block text-muted mt-1">Se reconoce por el formato de la placa; puedes cambiarlo.</small>
       </div>
 
       <!-- Relación con el apartamento -->
