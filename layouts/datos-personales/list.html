@@ -3531,15 +3531,24 @@
       }
 
       function calcularFechasAnticipacion(zona) {
+        // Mismos valores que resolverPolitica en la API: la modalidad recreativa usa sus overrides (0 / 14 si son null).
+        var recreativa = zona.tipo === 'CANCHA' && zona.soportaModalidadRecreativa && $('modalidadRecreativo').checked;
+        var anticipacionMinHabiles = recreativa
+          ? (zona.anticipacionMinHabilesRecreativo != null ? zona.anticipacionMinHabilesRecreativo : 0)
+          : zona.anticipacionMinHabiles;
+        var anticipacionMaxDias = recreativa
+          ? (zona.anticipacionMaxDiasRecreativo != null ? zona.anticipacionMaxDiasRecreativo : 14)
+          : zona.anticipacionMaxDias;
+
         var ahora = new Date();
         var minDate = new Date(ahora);
         var maxDate = new Date(ahora);
-        maxDate.setDate(maxDate.getDate() + zona.anticipacionMaxDias);
+        maxDate.setDate(maxDate.getDate() + anticipacionMaxDias);
 
         // Calcular primer día hábil válido (anticipación mínima)
         var diasHabiles = 0;
         var checker = new Date(ahora);
-        while (diasHabiles < zona.anticipacionMinHabiles) {
+        while (diasHabiles < anticipacionMinHabiles) {
           checker.setDate(checker.getDate() + 1);
           var dayOfWeek = checker.getDay();
           if (dayOfWeek >= 1 && dayOfWeek <= 5) {
@@ -3695,6 +3704,21 @@
         var esRecreativa = card.dataset.recreativa === 'true';
         $('modalidadUsoDiv').style.display = 'block';
         $('modalidadRecreativaDiv').style.display = esRecreativa ? 'block' : 'none';
+      });
+
+      // La anticipación depende de la modalidad: recalcular el rango y conservar la fecha si sigue habilitada.
+      document.querySelectorAll('input[name="modalidadUso"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+          if (!reservasData.zonaSeleccionada) return;
+          var zona = reservasData.zonas.find(function (z) { return z.id === reservasData.zonaSeleccionada; });
+          if (!zona) return;
+          var fechaActual = $('reservaFechaConsulta').value;
+          initFlatpickr(zona);
+          renderQuickDateButtons(zona);
+          if (fechaActual) {
+            window.reservaFechaConsultaPicker.setDate(fechaActual, true);
+          }
+        });
       });
 
       $('irPaso2').addEventListener('click', function () {

@@ -637,10 +637,21 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         $('editZonaDeposito').value = zona.depositoGarantia || '';
         $('editZonaRequierePago').checked = zona.requierePago;
         $('editZonaRequiereAprobacion').checked = zona.requiereAprobacion;
+        $('editZonaAnticipacionMin').value = zona.anticipacionMinHabiles;
+        $('editZonaAnticipacionMax').value = zona.anticipacionMaxDias;
+        $('editZonaAnticipacionMinRecreativo').value = zona.anticipacionMinHabilesRecreativo != null ? zona.anticipacionMinHabilesRecreativo : '';
+        $('editZonaAnticipacionMaxRecreativo').value = zona.anticipacionMaxDiasRecreativo != null ? zona.anticipacionMaxDiasRecreativo : '';
         $('editZonaSoportaRecreativa').checked = zona.soportaModalidadRecreativa;
+        actualizarAnticipacionRecreativaVisible();
         $('editZonaActivo').checked = zona.activo;
         if (modalEditarZona) modalEditarZona.show();
       });
+
+      function actualizarAnticipacionRecreativaVisible() {
+        $('editZonaAnticipacionRecreativaDiv').classList.toggle('hidden', !$('editZonaSoportaRecreativa').checked);
+      }
+
+      $('editZonaSoportaRecreativa').addEventListener('change', actualizarAnticipacionRecreativaVisible);
 
       var reservasFrm = $('crearZonaForm');
       if (reservasFrm) reservasFrm.addEventListener('submit', function (e) {
@@ -676,6 +687,18 @@ var config = window.ADMIN_DATOS_CONFIG || {};
       if (editSubmitBtn) editSubmitBtn.addEventListener('click', function () {
         if (!zonaEditandoId) return;
         hideMsg();
+        var anticipacionMinVal = parseInt($('editZonaAnticipacionMin').value, 10);
+        var anticipacionMaxVal = parseInt($('editZonaAnticipacionMax').value, 10);
+        var anticipacionMinRecVal = parseInt($('editZonaAnticipacionMinRecreativo').value, 10);
+        var anticipacionMaxRecVal = parseInt($('editZonaAnticipacionMaxRecreativo').value, 10);
+        if (isNaN(anticipacionMinVal) || anticipacionMinVal < 0 || isNaN(anticipacionMaxVal) || anticipacionMaxVal < 1) {
+          msg('Indica la anticipación mínima (0 o más días hábiles) y máxima (1 o más días).');
+          return;
+        }
+        if ((!isNaN(anticipacionMinRecVal) && anticipacionMinRecVal < 0) || (!isNaN(anticipacionMaxRecVal) && anticipacionMaxRecVal < 1)) {
+          msg('La anticipación recreativa debe ser 0 o más días hábiles (mínima) y 1 o más días (máxima).');
+          return;
+        }
         var btn = this;
         busy(btn, true, 'Guardando…');
         var costoVal = parseFloat($('editZonaCosto').value);
@@ -693,6 +716,10 @@ var config = window.ADMIN_DATOS_CONFIG || {};
               depositoGarantia: isNaN(depositoVal) ? undefined : depositoVal,
               requierePago: $('editZonaRequierePago').checked,
               requiereAprobacion: $('editZonaRequiereAprobacion').checked,
+              anticipacionMinHabiles: anticipacionMinVal,
+              anticipacionMaxDias: anticipacionMaxVal,
+              anticipacionMinHabilesRecreativo: isNaN(anticipacionMinRecVal) ? undefined : anticipacionMinRecVal,
+              anticipacionMaxDiasRecreativo: isNaN(anticipacionMaxRecVal) ? undefined : anticipacionMaxRecVal,
               soportaModalidadRecreativa: $('editZonaSoportaRecreativa').checked,
               activo: $('editZonaActivo').checked
             }

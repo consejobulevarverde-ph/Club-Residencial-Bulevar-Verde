@@ -43,6 +43,26 @@
             <label for="editZonaDeposito"class="form-label small">Depósito</label>
             <input id="editZonaDeposito" type="number" class="form-control form-control-sm" step="0.01" min="0" autocomplete="off">
           </div>
+          <div class="col-lg-3">
+            <label for="editZonaAnticipacionMin" class="form-label small">Anticipación mín. (días hábiles)</label>
+            <input id="editZonaAnticipacionMin" type="number" class="form-control form-control-sm" min="0" step="1" required autocomplete="off">
+          </div>
+          <div class="col-lg-3">
+            <label for="editZonaAnticipacionMax" class="form-label small">Anticipación máx. (días)</label>
+            <input id="editZonaAnticipacionMax" type="number" class="form-control form-control-sm" min="1" step="1" required autocomplete="off">
+          </div>
+          <div id="editZonaAnticipacionRecreativaDiv" class="col-lg-6 hidden">
+            <div class="row g-3">
+              <div class="col-6">
+                <label for="editZonaAnticipacionMinRecreativo" class="form-label small">Recreativa: anticipación mín. (días hábiles)</label>
+                <input id="editZonaAnticipacionMinRecreativo" type="number" class="form-control form-control-sm" min="0" step="1" placeholder="0" autocomplete="off">
+              </div>
+              <div class="col-6">
+                <label for="editZonaAnticipacionMaxRecreativo" class="form-label small">Recreativa: anticipación máx. (días)</label>
+                <input id="editZonaAnticipacionMaxRecreativo" type="number" class="form-control form-control-sm" min="1" step="1" placeholder="14" autocomplete="off">
+              </div>
+            </div>
+          </div>
           <div class="col-lg-2">
             <div class="form-check mt-4">
               <input id="editZonaRequierePago" type="checkbox" class="form-check-input" autocomplete="off">
