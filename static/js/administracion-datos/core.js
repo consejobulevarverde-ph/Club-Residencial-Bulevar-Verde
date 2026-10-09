@@ -832,7 +832,10 @@ var config = window.ADMIN_DATOS_CONFIG || {};
       var showReservasCatalogo = $('showReservasCatalogo');
       var showReservasReservar = $('showReservasReservar');
       var showReservasAgenda = $('showReservasAgenda');
-      if (showReservasCatalogo) showReservasCatalogo.addEventListener('click', function () { modeReservas('catalogo'); });
+      if (showReservasCatalogo) showReservasCatalogo.addEventListener('click', function () {
+        modeReservas('catalogo');
+        if (!zonasCatalogoCache.length) cargarReservasCatalogo();
+      });
       if (showReservasReservar) showReservasReservar.addEventListener('click', function () {
         modeReservas('reservar');
         var catalogoListo = zonasCatalogoCache.length ? Promise.resolve() : cargarReservasCatalogo();

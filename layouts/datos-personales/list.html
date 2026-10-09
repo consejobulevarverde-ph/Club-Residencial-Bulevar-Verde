@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ .Site.LanguageCode | default "es" }}">
+<html lang="{{ .Site.Language.Locale | default "es" }}">
 
 <head>
   <meta charset="UTF-8">
@@ -3339,7 +3339,12 @@
         var tipoInfo = tiposDocumentos.find(function (t) { return t.id === docTipo; });
         if (!tipoInfo) return;
 
+        // Puede ser null (navegadores internos de WhatsApp/Instagram, bloqueo de ventanas emergentes).
         var ventana = window.open('', '_blank');
+        var documentosError = $('documentosError');
+        documentosError.classList.add('hidden');
+        documentosError.classList.replace('alert-info', 'alert-danger');
+        documentosError.textContent = '';
         button.disabled = true;
         button.dataset.old = button.innerHTML;
         button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Descargando…';
@@ -3353,27 +3358,49 @@
           var url = (cuenta && cuenta.ruta) || (informe && informe.url) || null;
 
           if (success && url) {
-            ventana.location.href = url;
+            if (ventana) {
+              ventana.location.href = url;
+            } else {
+              mostrarEnlaceDocumento(documentosError, tipoInfo, url);
+            }
             button.disabled = false;
             button.innerHTML = button.dataset.old;
           } else {
-            ventana.close();
+            if (ventana) ventana.close();
             marcarDocumentoNoDisponible(button, tipoInfo);
           }
         }).catch(function (error) {
-          ventana.close();
+          if (ventana) ventana.close();
           button.disabled = false;
           button.innerHTML = button.dataset.old;
-          $('documentosError').textContent = 'Error al descargar ' + tipoInfo.label + ': ' + esc(error.message);
-          $('documentosError').classList.remove('hidden');
+          documentosError.textContent = 'Error al descargar ' + tipoInfo.label + ': ' + error.message;
+          documentosError.classList.remove('hidden');
         });
+      }
+
+      // Sin ventana previa, el documento se abre con un clic del residente, que el bloqueador permite.
+      function mostrarEnlaceDocumento(contenedor, tipoInfo, url) {
+        if (!/^https?:\/\//i.test(url)) {
+          contenedor.textContent = 'No se pudo abrir ' + tipoInfo.label + '. Intenta de nuevo.';
+          contenedor.classList.remove('hidden');
+          return;
+        }
+        var enlace = document.createElement('a');
+        enlace.href = url;
+        enlace.target = '_blank';
+        enlace.rel = 'noopener';
+        enlace.textContent = 'Abrir documento';
+        contenedor.textContent = tipoInfo.label + ' listo: ';
+        contenedor.appendChild(enlace);
+        contenedor.classList.replace('alert-danger', 'alert-info');
+        contenedor.classList.remove('hidden');
       }
 
       function marcarDocumentoNoDisponible(button, tipoInfo) {
         var icon = '<i class="bi ' + esc(tipoInfo.icono) + ' me-2"></i>';
         button.className = 'btn btn-secondary btn-sm mt-auto btn-descargar-documento';
         button.disabled = true;
-        button.dataset.old = undefined;
+        delete button.dataset.old;
         button.innerHTML = icon + 'No disponible';
       }
 

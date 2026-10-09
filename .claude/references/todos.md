@@ -28,7 +28,7 @@ de residente, comité y consejo**: el HMAC es lo único que las protege.
   `NODE_ENV=test` cae a la rama aleatoria.
 - No copiar el valor a ningún documento ni log.
 
-### 0.2 Trazas `DEBUG` en el arranque
+### 0.2 Trazas `DEBUG` en el arranque — **hecho 2026-10-09** (sin desplegar)
 `bulevar-verde-api/src/server.ts` líneas 5-7 imprimen si el secreto está presente, `NODE_ENV` y los
 nombres de las variables de entorno que contengan `RESIDENT` o `NODE`. Quitar las tres líneas. No filtran
 el valor, pero son ruido en producción y revelan qué variables existen.
@@ -151,7 +151,10 @@ revocan los refresh tokens de un usuario, su sesión muere en el servidor. Hoy n
 
 ---
 
-## 3. Resolver los warnings de Hugo
+## 3. Resolver los warnings de Hugo — **hecho 2026-10-09**
+
+CI subido a 0.167.0 en el mismo cambio. Build local: 0 WARN, 30 páginas, `lang="es-co"`. **Falta** ver el
+build de CI en verde antes de fusionar. Lo de abajo queda como registro.
 
 Son tres y salen de dos causas. **Antes de tocar nada hay un bloqueo.**
 
@@ -428,6 +431,10 @@ unidad, y consultar PhEnLinea con **autenticación y consulta que pueden tardar 
 | 5 | La URL que devuelve PhEnLinea se abre tal cual. Si es de un solo uso, caduca o es `http://` | Descarga que falla en el tercero, no en nuestro código. **Sin comprobar** |
 | 6 | Un fallo y «no hay documento» se tratan igual en pantalla («No disponible») | El residente no distingue «aún no existe» de «hubo un error, reintenta» |
 
+**2026-10-09: corregidos 1, 2 y 4** en el cliente. Con `window.open` nulo se muestra un enlace «Abrir
+documento» (solo `http(s)`); el error previo se limpia en cada clic. Solo `node --check`, sin navegador.
+Siguen abiertos 3, 5 y 6.
+
 ### Enfoque propuesto
 1. **Reproducir primero** con el caso real y con DevTools (móvil si el síntoma es móvil).
 2. Corregir 1, 2 y 4 sin discusión: son defectos del cliente.
@@ -446,7 +453,10 @@ unidad, y consultar PhEnLinea con **autenticación y consulta que pueden tardar 
 
 ---
 
-## 10. Bug: «Gestión de zonas comunes» no carga al primer clic
+## 10. Bug: «Gestión de zonas comunes» no carga al primer clic — **hecho 2026-10-09**
+
+Arreglo mínimo (punto 1): el clic de Catálogo carga si la caché está vacía. Puntos 2-3 sin hacer. Sin
+probar en navegador.
 
 ### Síntoma
 En administración → Reservas, al pulsar la última pestaña (**Catálogo**, gestión de zonas comunes) no

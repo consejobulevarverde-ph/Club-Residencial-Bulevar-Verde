@@ -1,6 +1,8 @@
 baseURL = 'https://bulevar-verde-app.web.app/'
-languageCode = 'es-co'
+locale = 'es-co'
 title = 'Club Residencial Bulevar Verde'
+# El sitio no usa tags ni categorías; sin esto Hugo genera páginas de taxonomía sin plantilla.
+disableKinds = ['taxonomy', 'term']
 
 [params]
   description = 'Club Residencial Bulevar Verde - Itagüí, Antioquia'
