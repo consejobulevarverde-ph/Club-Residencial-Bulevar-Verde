@@ -1,10 +1,13 @@
-# Todos — entorno local, sesiones, warnings, limpieza, supervisor, dashboard, migraciones, bugs, placas y offline
+# Todos — entorno local, sesiones, warnings, limpieza, supervisor, dashboard, migraciones, bugs, placas, offline e importador
 
 Escrito el 2026-10-08. Cada punto parte de lo que se **verificó** en el código ese día, no de
 suposiciones; lo que no se pudo comprobar está marcado. Contrasta con el repositorio antes de actuar.
 
-Orden sugerido: **0 → 3 → 2 → 4 → 1**. Los warnings (3) son lo más barato y destraban el CI; el entorno
-local (1) es lo más grande y conviene hacerlo con la limpieza (4) ya hecha, para no sembrar sobre ruido.
+**2026-10-09 — sesión de planeación.** Se verificaron en solo lectura las dudas marcadas «sin comprobar» y
+se respondieron todas las preguntas abiertas salvo 0.1 y N7, que quedan **aplazadas**. Cada punto tiene
+ahora un bloque **Decisiones (2026-10-09)** y, cuando aplica, **Hallazgos verificados**; donde chocan con el
+texto original, mandan las decisiones. El orden de trabajo está al final. Nada de esto se implementó: son
+planes.
 
 ---
 
@@ -12,7 +15,18 @@ local (1) es lo más grande y conviene hacerlo con la limpieza (4) ya hecha, par
 
 Salieron al explorar y pesan más que cualquiera de los cuatro puntos.
 
-### 0.1 Secreto de producción escrito en el código fuente  — prioridad alta
+### 0.1 Secreto de producción escrito en el código fuente  — prioridad alta, **aplazado 2026-10-09**
+**Decisión (2026-10-09):** aplazado por completo («no por ahora»): ni rotar ni retirar el fallback en esta
+tanda. Hallazgos que condicionan el plan cuando se retome:
+- El fallback sigue en `resident-token.ts:15`, y `Dockerfile:10` fija `NODE_ENV=production`: está vivo si
+  falta la variable. `environment.ts:17` la declara opcional, así que la API arranca sin ella.
+- La configuración de Cloud Run **no está en el repositorio** (despliega un trigger de Cloud Build;
+  `.github/workflows/deploy.yml` solo valida). El `--set-env-vars` de `README.md:119` **no incluye**
+  `RESIDENT_SESSION_SECRET`. Desde el código no se puede saber si producción firma hoy con el valor commiteado.
+- Por eso el paso (3) de abajo («fallar al arrancar») **no se puede hacer antes** de confirmar que la variable
+  está definida en Cloud Run (consultar solo el nombre, nunca el valor): si no lo está, tumbaría producción.
+  Y si no lo está, definirla equivale a rotar.
+
 `bulevar-verde-api/src/services/resident-token.ts` (función `getSecret`): si `RESIDENT_SESSION_SECRET`
 no está definido **y** `NODE_ENV === "production"`, devuelve una cadena hexadecimal fija escrita en el
 código y commiteada. Con ese valor cualquiera con acceso al repositorio puede **firmar sesiones válidas
@@ -28,7 +42,7 @@ de residente, comité y consejo**: el HMAC es lo único que las protege.
   `NODE_ENV=test` cae a la rama aleatoria.
 - No copiar el valor a ningún documento ni log.
 
-### 0.2 Trazas `DEBUG` en el arranque — **hecho 2026-10-09** (sin desplegar)
+### 0.2 Trazas `DEBUG` en el arranque — **hecho y desplegado 2026-10-09**
 `bulevar-verde-api/src/server.ts` líneas 5-7 imprimen si el secreto está presente, `NODE_ENV` y los
 nombres de las variables de entorno que contengan `RESIDENT` o `NODE`. Quitar las tres líneas. No filtran
 el valor, pero son ruido en producción y revelan qué variables existen.
@@ -43,9 +57,53 @@ Si la API con la Fase 2 ya se desplegó, conviene revisar si hubo registros de e
 `client_secret_*.json` y `.env` de la API están en `.gitignore` y **nunca se commitearon** (el historial
 no tiene rastro). `.env.example` sí está rastreado y es lo correcto.
 
+### 0.5 Hallazgos nuevos del 2026-10-09
+| # | Hallazgo | Dónde | Qué pasa con él |
+|---|---|---|---|
+| **N7** | **Grave.** Vigilancia, comité y consejo inician sesión **solo con el número de documento**, sin clave ni segundo factor y sin límite de intentos (la API no tiene rate limit en ninguna ruta). El de vigilancia devuelve un `customToken` con `roles:["vigilancia"]` y responde **404 / 409 / 200** según el documento exista o no, así que además permite enumerar documentos. Comité y consejo responden un 401 genérico, pero dan acceso a casos de convivencia remitidos. El residente, en cambio, sí pasa un reto por correo (`datos-personales/routes.ts:443-529`). Una cédula no es un secreto, y esto hace secundaria la expiración del punto 2 | `personal/routes.ts:26-56` (usado en `vigilancia-datos/list.html:687-701`), `comite-convivencia/iniciar-sesion.ts` | **Aplazado** por decisión del 2026-10-09. Riesgo abierto, sin plan |
+| N1 | `test-pqrs-login.js` y `test-pqrs-detailed.js` contienen claves de gestión de mantenimiento escritas en el código | raíz del repo | Se borran en el punto 4. La clave compartida desaparece con el rol `mantenimiento` (puntos 5 y 7); hasta entonces, si coincide con la vigente, sigue en el historial |
+| N2 | El cliente de mantenimiento acepta fotos de hasta 5 MB, pero el servidor rechaza las de más de 2 MB. La cola reintenta siempre los rechazos, así que **un reporte con una foto de 2-5 MB queda atascado para siempre** | `google/pqrs.js:29,2034`; `pqrs-maintenance.js:25-28` | Se corrige en el punto 7 (un solo límite, igual en cliente y servidor) |
+| N3 | La consulta pública de mantenimiento muestra, solo con el radicado, la descripción, la ubicación, las fotos (URL de Drive) y la bitácora. El límite anti-enumeración es **global** y no por IP, así que cualquiera lo agota y bloquea la consulta para todos | `google/pqrs.js:841-906` | Desaparece en el punto 7: no habrá consulta pública |
+| N4 | La gestión de mantenimiento usa **una sola clave compartida** y un nombre libre. El límite de intentos se cuenta por nombre, así que cambiar el nombre lo reinicia | `google/pqrs.js:615-700` | Se sustituye por el rol `mantenimiento` (punto 7) |
+| N5 | El puente de Apps Script responde con `postMessage(..., '*')` | `google/pqrs.js:275-315` | Desaparece con la migración (7 y 8) |
+| N6 | Si el residente no tiene un correo válido, el consejo no recibe copia de los correos de mantenimiento | `google/pqrs.js:2429-2431` y similares | Se corrige en el punto 7 |
+
 ---
 
 ## 1. Entorno local con una base de datos parecida a producción
+
+### Decisiones (2026-10-09)
+- Datos: **sintéticos con la forma de producción** (opción A), con semilla fija.
+- Correo: **Mailpit** como ejecutable descargado fuera del repo (UI en `http://localhost:8025`), sin cambios de
+  código.
+- Comando único: **`npm run local` en la API** (que ya tiene `package.json`), apuntando a
+  `../Club-Residencial-Bulevar-Verde`, y `npm run local:reset` para reiniciar limpio.
+
+### Hallazgos verificados (2026-10-09)
+- **Cliente Firebase** (resuelve el «sin comprobar» del alcance 3): SDK *compat* 10.12.2 por CDN.
+  `initializeApp` está en `static/js/administracion-datos/core.js:8-12` (config de `window.ADMIN_DATOS_CONFIG`)
+  y en `layouts/vigilancia-datos/list.html:529-532`. Ahí va `auth().useEmulator(...)`, activado **solo** si el
+  proyecto empieza por `demo-`.
+- `apiBaseUrl` llega por plantilla Hugo (`.Site.Params.apiBaseUrl | default "http://localhost:8080"`) en 9
+  sitios, así que `config/local/hugo.toml` o `HUGO_PARAMS_APIBASEURL` bastan sin tocar JS. No existe `config/`.
+- `firebase-deploy.yml` despliega con `--only`, así que añadir `emulators` y `storage` a `firebase.json` no
+  publica nada.
+- **Servicios que escaparían del emulador** (hay que adaptarlos; es código, no configuración):
+  - `evidencias-storage.ts:11,42` crea la sesión reanudable con `GoogleAuth` (ADC) contra
+    `https://storage.googleapis.com` **fijo**, así que ignora `STORAGE_EMULATOR_HOST`. Además `getSignedUrl`
+    (`evidencias-storage.ts:107`, `storage.ts:32,44`) necesita credenciales que firmen. En modo demo tienen que
+    usar el host del emulador y no firmar.
+  - `config/firebase.ts` usa `applicationDefault()`, y en esta máquina hay `gcloud`, así que probablemente hay
+    ADC reales: lo que no respete el emulador iría a Google **con credenciales reales**.
+  - `services/tasks.ts` (Cloud Tasks) no tiene emulador y sin `CLOUD_RUN_SERVICE_URL` responde 503. Necesita un
+    modo local que ejecute la tarea contra `localhost`; la verificación OIDC del receptor solo se relaja si el
+    proyecto es `demo-*`.
+  - `services/email.ts:47`: sin `SMTP_HOST` responde **503** en vez de omitir el envío, y eso rompe los flujos
+    que envían correo en la misma operación. De ahí Mailpit.
+  - PhEnLinea sin credenciales responde 503, que es lo correcto en local.
+- Herramientas en la máquina: firebase-tools 15.30.2, **Java 11** (comprobar al arrancar si los emuladores de
+  Auth y Storage exigen una versión mayor), sin Docker, Node 24 y Python 3.11.
+- La API no tiene ningún script de semilla ni de emuladores. Sus tests (vitest) están junto al código en `src`.
 
 ### Estado hoy
 - La API arranca con `npm run dev` (`tsx watch`) y tiene `.env.example`, pero **no hay emuladores
@@ -60,7 +118,7 @@ no tiene rastro). `.env.example` sí está rastreado y es lo correcto.
   trabajo del parqueadero de visitantes). En la máquina hay dos emuladores viejos ocupando los puertos
   9399 y 9499 desde el 29/09 y el 04/10; hay que pararlos o usar otros puertos.
 
-### Decisión que hay que tomar primero: ¿de dónde salen los datos?
+### ¿De dónde salen los datos? — decidido: opción A
 | Opción | Ventaja | Riesgo |
 |---|---|---|
 | **A. Sintéticos con la forma de producción** (recomendada) | No sale ningún dato personal de producción. Reproducible con semilla fija | Hay que modelar bien la distribución para que se parezca |
@@ -93,6 +151,11 @@ unidad, proporción carro/moto, cuántos registros de parqueadero por mes. Todo 
   `FIREBASE_PROJECT_ID` es el de producción. Un `seed` apuntando por error a producción es el peor caso.
 - Las fotos de relleno no son fotos reales de vehículos.
 - Ningún valor de `.env` de producción se copia al entorno local.
+- Con un proyecto `demo-*`, la API arranca **sin ADC** (sin `GOOGLE_APPLICATION_CREDENTIALS` y sin credenciales
+  reales de `applicationDefault`). Así, cualquier llamada que escape del emulador falla en vez de tocar
+  producción.
+- La semilla incluye los casos de los demás puntos: placas `ABC12`, vehículos con código sin placa (punto 11),
+  capturas con `placaDetectada ≠ placa` (puntos 5 y 12), y PQRS y mantenimiento cuando existan (puntos 7 y 8).
 
 ### Criterios de aceptación
 - Con un comando, el portal del residente, vigilancia y administración funcionan contra datos locales y
@@ -104,6 +167,29 @@ unidad, proporción carro/moto, cuántos registros de parqueadero por mes. Todo 
 ---
 
 ## 2. Que las sesiones expiren
+
+### Decisiones (2026-10-09)
+- Edad máxima **absoluta** en el servidor (por `auth_time`): **administración 8 h, vigilancia 12 h**.
+  Residente, comité y consejo siguen en 2 h. Si un usuario tiene varios roles, vale el límite más largo.
+- **Inactividad** en el cliente, con aviso previo: **administración 30 min, vigilancia 60 min**. La cola del
+  lector se conserva siempre.
+- `setPersistence(SESSION)` en administración y vigilancia.
+- Nota: con N7 (sección 0.5) abierto, cualquiera que tenga una cédula abre una sesión nueva. La expiración
+  limita la duración de las sesiones, no quién las abre.
+
+### Hallazgos verificados (2026-10-09)
+- `auth_time` **no se usa** en ningún sitio de la API. `authenticate` está en
+  `middleware/authentication.ts:20-31`. Patrón de test: `vi.hoisted` + `vi.mock("../../config/firebase.js")`
+  en `vigilancia/registrar-vehiculo.routes.test.ts`.
+- **Ningún** `apiFetch` maneja el 401: ni administración (`core.js:61-81`), ni vigilancia
+  (`vigilancia-datos/list.html:655-673`), ni el portal del residente (`datos-personales/list.html:1879-1895`).
+  El patrón a copiar es `onNoAutorizado` → `cerrarSesion(...)` de `partials/organo-portal.html:78-112`, que se
+  dispara desde `convivencia-casos.js:100-101`.
+- **Lector**: ante un 401, la cola reintenta cada 30 s **indefinidamente y en silencio**
+  (`lector-placas-cola.js:18,164-170`). No pierde capturas, pero el vigilante no se entera de que debe volver
+  a ingresar. El plan: pausar, pedir reingreso y reanudar con el mismo `clientRequestId`.
+- **Gestión de PQRS** (resuelve el «sin revisar» de la tabla): el Apps Script **sí valida** la expiración en
+  cada acción (`google/pqrs.js:1461-1483`, sesión en caché de 6 h). Esta sesión desaparece con el punto 7.
 
 ### Estado hoy — **hay tres tipos de sesión y solo uno es el problema**
 | Sesión | Mecanismo | ¿Expira? |
@@ -130,11 +216,7 @@ revocan los refresh tokens de un usuario, su sesión muere en el servidor. Hoy n
    sesión no es válida o expiró» en cada pantalla. Debe volver al login con un mensaje claro, como ya hace
    `partials/organo-portal.html`.
 
-### Decisiones que hay que tomar
-- **Duración por rol.** Propuesta de partida, a confirmar con quien conoce la operación: administración
-  8 h; vigilancia lo que dure un turno (¿12 h?); residente/comité/consejo se queda en 2 h. ¿Absoluta o por
-  inactividad en cada caso?
-- ¿El cierre por inactividad en vigilancia es aceptable durante una ronda con el lector de placas?
+### Decisiones que había que tomar — resueltas arriba (2026-10-09)
 
 ### Cuidado con el lector de placas
 `lector-placas-cola.js` guarda las capturas en IndexedDB y **reintenta ante 401/403**
@@ -153,8 +235,8 @@ revocan los refresh tokens de un usuario, su sesión muere en el servidor. Hoy n
 
 ## 3. Resolver los warnings de Hugo — **hecho 2026-10-09**
 
-CI subido a 0.167.0 en el mismo cambio. Build local: 0 WARN, 30 páginas, `lang="es-co"`. **Falta** ver el
-build de CI en verde antes de fusionar. Lo de abajo queda como registro.
+CI subido a 0.167.0 en el mismo cambio. Build local: 0 WARN, 30 páginas, `lang="es-co"`. Desplegado el
+2026-10-09. Lo de abajo queda como registro.
 
 Son tres y salen de dos causas. **Antes de tocar nada hay un bloqueo.**
 
@@ -184,6 +266,24 @@ Orden obligatorio: subir la versión del CI y verificar que compila, y solo desp
 **Regla: nada se borra sin que lo apruebes**, y aquí solo hay una lista clasificada con su evidencia.
 Todo está en git, así que borrar es reversible, pero conviene hacerlo en commits separados por grupo.
 
+### Decisiones (2026-10-09)
+- **Aprobado borrar**, porque nada de esto se usa: `layouts/` y `content/prueba-api-unidades`,
+  `test-pqrs-*.js`, `.github/workflows/hugo.yml` + `redirect.html`, y los scripts de parqueaderos de la API
+  (`analizar-`, `hacer-import-` e `importar-parqueaderos.js`).
+- Tras borrar `hugo.yml`, **desactivar GitHub Pages** (Settings → Pages, o con `gh` si se autoriza). Borrar el
+  workflow no retira la página ya publicada.
+- Lo único que se usará es una **importación inicial de todos los datos** al implantar el software en una
+  copropiedad nueva: es el **punto 14**. Hasta que exista, se conservan `data/*.py` como base.
+- También se borran, porque la evidencia es concluyente: `reservas-catalogo.js` y `reservas-formulario.js`
+  (IIFE vacías, cargadas en `administracion-datos/list.html:139,141`; quitar también los `<script>`), y
+  `skills-lock.json` (solo registra una skill de Prisma, ajena al proyecto).
+
+### Hallazgos verificados (2026-10-09)
+- El venv es `data/.venv/`, y **ya está ignorado** por su propio `.gitignore` (`*`). No hay que tocarlo.
+- `hugo.yml` publica en GitHub Pages en cada push a `main`. `redirect.html` hace una redirección meta a
+  `https://bulevar-verde-app.web.app/`.
+- Código muerto en la API: `npx knip`, sin añadirlo como dependencia.
+
 ### A. Parece seguro
 | Qué | Evidencia |
 |---|---|
@@ -192,7 +292,7 @@ Todo está en git, así que borrar es reversible, pero conviene hacerlo en commi
 | `githubci.log` (API) | `*.log` ya está en `.gitignore`; es un residuo local |
 | Carpetas vacías `themes/` e `i18n/` | 0 archivos; git no las rastrea |
 
-### B. Probablemente sobra — confirma tú
+### B. Probablemente sobra — confirmado: se borra (2026-10-09)
 | Qué | Evidencia | Duda |
 |---|---|---|
 | `layouts/prueba-api-unidades/` y `content/prueba-api-unidades/` | Ningún enlace, menú, ni documento la referencia (búsqueda en `layouts`, `content`, `static`, `hugo.toml` y los `.md`). Es una página de prueba con login de Firebase | Se publica en Hosting, así que hoy es una pantalla accesible por URL directa. Confirmar que nadie la usa |
@@ -227,7 +327,42 @@ No se ejecutó ninguna herramienta de detección. Propuesta:
 
 ---
 
-## 5. Rol de supervisor de vigilancia
+## 5. Rol de supervisor de vigilancia (y rol de mantenimiento)
+
+### Decisiones (2026-10-09)
+- **Qué hace el supervisor**: todo lo de vigilancia, más **reportes y un dashboard por vigilante** para comparar
+  tiempos, rendimiento y otras métricas. **No resuelve controversias**. Se le añadirán más funciones después.
+- **Sin concepto de turno por ahora**: el «turno» es el tiempo de un vigilante, así que las métricas van por
+  vigilante y rango de fechas.
+- **Métricas v1**, todas a partir de datos que ya existen:
+  - Capturas y ritmo: número de capturas, capturas por hora y tiempo entre capturas.
+  - Calidad: % de capturas sin apartamento, controversias aceptadas (capturas erróneas) y acierto del OCR
+    (`placaDetectada = placa`).
+  - Retraso de envío: `fechaCreacion − fechaCaptura`, es decir, cuánto trabaja sin red.
+  - Otras actividades: vehículos registrados, casos de convivencia y reservas creadas.
+- **UI**: leer `getIdTokenResult().claims.roles` en el cliente para mostrar las pestañas extra; el servidor
+  sigue siendo quien autoriza. Es el primer caso en el proyecto y vale igual para mantenimiento.
+- **Rol nuevo `mantenimiento`** (de los puntos 7 y N1): sustituye la clave compartida de la gestión de
+  mantenimiento. Crea y gestiona reportes.
+
+### Hallazgos verificados (2026-10-09)
+- Datos atribuibles a cada vigilante (`dataconnect/schema/schema.gql`):
+  - `RegistroParqueaderoVisitante`: `registradoPorUid`, `vigilanteNombre`, `fechaCaptura`, `fechaCreacion`,
+    `placaDetectada`/`placa`, `unidadOrigenAsignacion`, `unidadAsignadaPorUid` y `controversiaEstado`.
+  - `VinculoVehiculoUnidad.registradoPorUid`, `CasoConvivencia.creadoPorUid` y `Reserva.creadoPorUid`.
+
+  Ninguna tabla tiene turno.
+- El personal vive en `Colaborador`: `ROLES_COLABORADOR = ["VIGILANTE","ASEADOR"]` en `personal/schemas.ts:5`.
+  `provisionarCuentaVigilancia` (`personal/firebase-account.ts:9-13`) crea la cuenta de Firebase con el claim
+  `vigilancia`. Plan: añadir `SUPERVISOR_VIGILANCIA` y `MANTENIMIENTO`, y generalizarla a
+  `provisionarCuenta(rol)`.
+- Las listas de roles: `VIGILANCIA_ROLES` (`vigilancia/routes.ts:36`), `ADMIN_ROLES` (`parqueadero-visitantes.ts:76`
+  y `convivencia/routes.ts:93`), `CONVIVENCIA_ROLES` (`convivencia/routes.ts:92`), `STAFF_ROLES` y
+  `CATALOG_ROLES` (`reservas/routes.ts:12-13`). Hay `requireRoles` escritos a mano en `cartera`, `personal`,
+  `dashboard`, `parqueaderos`, `unidades`, `usuarios` y `notificaciones`, y un chequeo en línea en
+  `vigilancia/routes.ts:521`.
+- Sobre `getRoles`: cualquier claim `=== true` cuenta como rol, incluido `email_verified`. En el módulo central,
+  leer solo `claims.roles` (o una lista blanca).
 
 ### Estado hoy
 - **No existe**: ninguna mención de `supervisor` en la API ni en el frontend.
@@ -245,7 +380,7 @@ No se ejecutó ninguna herramienta de detección. Propuesta:
   `partials/vehiculos/index.html`). Un supervisor que entre por la página de vigilancia vería lo mismo que
   un vigilante salvo que se introduzca un patrón nuevo.
 
-### Qué hay que definir primero (no está en ninguna parte)
+### Qué hay que definir primero — definido arriba (2026-10-09)
 ¿Qué puede hacer un supervisor que un vigilante no? Sin eso cualquier implementación es inventada.
 Candidatos, a confirmar con quien conoce la operación: ver sanciones y controversias en solo lectura;
 corregir un apartamento asignado por error (hoy la asignación es de un solo sentido); anular una captura
@@ -273,6 +408,24 @@ cambia a quién se cobra y es de administración.
 ---
 
 ## 6. Mejorar el dashboard de administración
+
+### Decisiones (2026-10-09)
+- Ventana de **novedades: últimos 7 días**, con conmutador a 24 h.
+- **Pendientes v1 en las cuatro áreas**:
+  - Parqueadero: controversias `PENDIENTE` y capturas sin unidad.
+  - Convivencia: pendientes de notificar y casos en trámite.
+  - Reservas: `estado = PENDIENTE` y `estadoPago` pendiente.
+  - Datos: personas sin correo y unidades sin propietario.
+
+  PQRS y mantenimiento se suman cuando existan (puntos 7 y 8), con las vencidas y las próximas a vencer.
+
+### Hallazgos verificados (2026-10-09)
+- `_count` **ya se usa**: `ResumenCasosConvivenciaAdmin` (`dataconnect/admin/convivencia.gql:801-811`) agrupa
+  los casos con `_count`. Sirve tal cual para el área de convivencia.
+- El comentario de `dashboard_metricas.gql` («Data Connect no tiene COUNT») es **falso**. Hoy trae hasta 20 000
+  ids por lista para medir su longitud.
+- No existe campo de «leído por administración» para descargos y apelaciones (`fechaLecturaResidente` es la
+  lectura del residente). Lo pendiente se deduce del `estado` del caso.
 
 ### Estado hoy
 - `GET /dashboard/metricas` (`dashboard/routes.ts`, 37 líneas) devuelve **cuatro conteos**: unidades,
@@ -317,6 +470,42 @@ cada área devuelve su estado de forma independiente (`ok` / `error`).
 
 ## 7. Migrar mantenimiento a base de datos y bucket
 
+### Decisiones (2026-10-09)
+- **Quién crea reportes**: el personal de mantenimiento (rol nuevo), el residente desde su portal (el reporte
+  queda ligado a persona y unidad), vigilancia y administración. **Desaparecen el formulario público sin login
+  y la consulta pública por radicado**, y con ellos N3.
+- **Quién gestiona** (ver, En proceso, cerrar con evidencia): el rol `mantenimiento` y administración. La clave
+  compartida desaparece (N1, N4).
+- **Modelo separado de PQRS, con piezas comunes**: tablas propias (`ReporteMantenimiento`,
+  `AdjuntoMantenimiento`, `EventoMantenimiento`, este último en lugar de la bitácora de texto). Se comparten el
+  generador de radicado, el envío de correos, los adjuntos en bucket y la bitácora de eventos.
+- **Subida de archivos: toda reanudable** (fotos iniciales y evidencia de cierre, video incluido). Patrón de
+  convivencia: `crearSesionSubida`, `leerMetadatosObjeto` y `urlFirmadaLectura` en
+  `API/src/services/evidencias-storage.ts`, con el flujo DECLARADO → SUBIENDO → LISTO de
+  `convivencia/registro.ts`. La cola offline guarda los archivos y ejecuta, de forma idempotente, crear →
+  declarar adjunto → subir → confirmar.
+- **Histórico: migrar todo** (hoja + Drive → base + bucket), de forma idempotente y verificando conteos. Google
+  queda en solo lectura hasta validar.
+- Correos: copia al consejo **siempre**, también cuando el residente no tiene correo (corrige N6). Un único
+  límite de tamaño, igual en cliente y servidor (corrige N2).
+
+### Hallazgos verificados (2026-10-09) — inventario de `google/pqrs.js`
+- Mantenimiento **ya es un módulo aparte** en el servidor, separado de la PQRS general: otra pestaña (`Reportes
+  Mantenimiento`, 19 columnas, más formatos antiguos de 21 y 23 que siguen leyéndose) y acciones propias.
+- **Estados** `Abierto → En proceso → Cerrado`, sin reapertura (`Resuelto` se trata como cerrado). La prioridad
+  vale `Media` por defecto y ninguna pantalla la cambia. **No hay** plazos, SLA ni triggers temporales.
+- Radicado `MANT-yyyyMMdd-HHmmss-XXXXX`: el sufijo sale del SHA-256 del `clientRequestId`, así que es estable
+  entre reintentos. Hay que conservarlo al migrar.
+- **Archivos**: hasta 3 fotos iniciales, que el cliente comprime a unos 900 KB y que el servidor limita a 2 MB
+  (N2). La evidencia de cierre admite imágenes de 2 MB y video de 15 MB; solo la primera llega a la columna
+  `Foto Cierre`, el resto queda como URL dentro del texto de observaciones.
+- **Colas en el navegador**: creación en `bulevar-verde-pqrs` / `maintenanceQueue` (clave `MREQ-<uuid>`) y
+  cierre en `bulevar-verde-pqrs-gestion` / `closureQueue` (`MCLOSE-<uuid>`, evidencias `MEVID-<uuid>`). El
+  Web App viejo debe seguir aceptando mientras queden colas antiguas.
+- **Correos**: se envían por `POST /api/v1/notificaciones/enviar` de la API, con `MailApp` de respaldo. Hay tres
+  eventos (creado, En proceso, Cerrado) y un resumen por correo.
+- La gestión solo tiene contadores calculados en el navegador, una búsqueda y un filtro: no hay exportación.
+
 ### Estado hoy
 «Mantenimiento» no es un módulo independiente: está **dentro del bloque PQRS**
 (`static/js/pqrs-maintenance.js`, 1.130 líneas). Los reportes se guardan en **Google Sheets y Drive**, por
@@ -335,7 +524,7 @@ por reporte y la reenvía al Web App. **No hay nada en la API ni en Data Connect
   (`scripts/crear-bucket-*.sh`), `descargarFotoRegistro`, y la cola offline idempotente con
   `clientRequestId` del lector de placas.
 
-### Puntos a decidir
+### Puntos a decidir — resueltos arriba (2026-10-09)
 1. **Subida de fotos**: base64 dentro del JSON (patrón del parqueadero, aceptable con 3 fotos comprimidas)
    o sesión reanudable directa al bucket (patrón de convivencia). Una petición mayor de 32 MiB en Cloud Run
    devuelve un 413 del balanceador que **no aparece en los logs**.
@@ -360,6 +549,33 @@ datos reales en local.
 ---
 
 ## 8. Migrar PQRS a base de datos y abrir el dashboard del consejo
+
+### Hallazgo que cambia el planteamiento (2026-10-09)
+Lo que el portal llama «gestión» y «consulta» de PQRS es **solo de mantenimiento**. La **PQRS general** es un
+**Google Form**, hoja `Respuestas de formulario 1`, con un único trigger `onFormSubmit` (`google/pqrs.js:63`).
+Ese trigger asigna `PQRS-yyyyMMdd-HHmmss` (dos envíos en el mismo segundo colisionan), pone `Pendiente` y avisa
+**solo a administración**. **No hay gestión, ni estados, ni consulta, ni correo al residente**, que nunca recibe
+su radicado. Los tipos y las categorías existen solo en el Form. Así que esto no es una migración: es **construir
+el módulo**.
+
+### Decisiones (2026-10-09)
+- **Módulo completo**:
+  - Radicado sin colisiones.
+  - Estados Recibida → En trámite → Respondida → Cerrada.
+  - Respuesta de administración y correo al residente en cada cambio.
+  - Consulta desde el portal.
+- **Solo residentes, desde su portal.** No hay formulario público, así que tampoco hacen falta antispam ni una
+  consulta con segundo factor.
+- **Modelo separado de mantenimiento, con piezas comunes** (ver punto 7).
+- **Plazos configurables con alerta**: días hábiles por tipo, que administración configura. El dashboard (punto
+  6) marca las vencidas y las próximas a vencer.
+- **Consejo: las remitidas + un resumen**. Administración remite, como en convivencia (`remitidoConsejo…`). El
+  consejo ve las remitidas y un resumen de solo conteos de todas, en solo lectura. Un test comprueba que no ve lo
+  no remitido.
+- **Histórico: migrar** las respuestas del Form. Después se retiran el Form y `onFormSubmit`.
+- Antes de modelar: extraer del Google Form los tipos y categorías vigentes.
+- Las fases de abajo siguen valiendo. El «Inventario» (fase 1) ya está hecho para lo que hay en código; falta
+  solo el Form.
 
 ### Estado hoy
 Es una **aplicación entera sobre Apps Script**, no un almacenamiento:
@@ -433,7 +649,12 @@ unidad, y consultar PhEnLinea con **autenticación y consulta que pueden tardar 
 
 **2026-10-09: corregidos 1, 2 y 4** en el cliente. Con `window.open` nulo se muestra un enlace «Abrir
 documento» (solo `http(s)`); el error previo se limpia en cada clic. Solo `node --check`, sin navegador.
-Siguen abiertos 3, 5 y 6.
+Desplegado el 2026-10-09. Siguen abiertos 3, 5 y 6.
+
+**Decisión (2026-10-09):** el síntoma original **no se conoce**, porque no lo reportó quien decide. El primer
+paso es una prueba con un residente real, en móvil y en escritorio, para ver si después de los arreglos queda
+algún síntoma. Los defectos 3 (pestaña en blanco), 6 (errores indistinguibles) y 5 (PDF desde la API, más el
+token de PhEnLinea en caché) son mejoras cuyo orden depende de esa prueba.
 
 ### Enfoque propuesto
 1. **Reproducir primero** con el caso real y con DevTools (móvil si el síntoma es móvil).
@@ -455,8 +676,17 @@ Siguen abiertos 3, 5 y 6.
 
 ## 10. Bug: «Gestión de zonas comunes» no carga al primer clic — **hecho 2026-10-09**
 
-Arreglo mínimo (punto 1): el clic de Catálogo carga si la caché está vacía. Puntos 2-3 sin hacer. Sin
-probar en navegador.
+Arreglo mínimo (punto 1): el clic de Catálogo carga si la caché está vacía. Puntos 2-3 sin hacer.
+Desplegado el 2026-10-09; no se verificó en navegador.
+
+**Decisión (2026-10-09):** **refrescar siempre** al entrar a Catálogo, con un único `asegurarCatalogo()` que
+también use Reservar.
+
+**Hallazgos (2026-10-09):**
+- El subpunto 4 **ya está cubierto**: crear y editar una zona llaman a `cargarReservasCatalogo()`
+  (`core.js:666,698`).
+- Los desplegables de reserva (`core.js:900,1292`) leen la caché al dibujarse y **no se reconstruyen** tras
+  editar una zona. Hay que incluirlo.
 
 ### Síntoma
 En administración → Reservas, al pulsar la última pestaña (**Catálogo**, gestión de zonas comunes) no
@@ -505,6 +735,32 @@ depende de otra. Y al entrar al módulo (`showReservas`) solo se carga la **agen
 
 ## 11. Unificar en un solo punto el formato de placas colombianas
 
+### Decisiones (2026-10-09)
+- **Formatos válidos en todas las puertas** (portal, vigilancia, lector/OCR, autorizaciones): `ABC123`
+  (carro), `ABC12D` (moto) y **`ABC12`** (moto antigua). Hoy solo el portal acepta `ABC12`; pasa a aceptarlo
+  todo el sistema. Esto le añade al OCR (punto 12) un patrón de 5 caracteres, `LLLDD`.
+- **Vehículos sin placa**: dejan de compartir identidad. Cada uno lleva un **código único** que digita quien lo
+  registra: el prefijo marcador más un identificador distinguible, p. ej. `ELECTRICO-205`, el número del
+  apartamento o una característica identificable. La UI sugiere el apartamento; la API exige el sufijo y la
+  unicidad. Una migración separa la fila compartida actual en una por vínculo. Ojo: `normalizarPlaca` hoy
+  quitaría el guion, así que el código necesita su propia normalización.
+- El fichero de casos compartido se ejecuta con vitest en la API. En el frontend, que **no tiene ninguna
+  infraestructura de tests** (no hay `package.json`), se usa un `node --test` mínimo que cargue
+  `placas-colombia.js`.
+
+### Hallazgos verificados (2026-10-09)
+- Copias confirmadas (8):
+  - API: `placas.ts:15-16`.
+  - Frontend: `vehiculos.js` (dos en el mismo archivo, `:151-154` y `:277-279`), `lector-placas-ocr.js:29-31` y
+    `:691-692`, y **la distinta**, `datos-personales/list.html:4327`.
+  - Heredadas: `google/datos_maestros_info_aptos.js:5519-5520`, `google/sanciones.js` (×4) y
+    `data/importar_registro_vehicular.py:40-41`.
+- El portal escribe `estadoVehiculo: "VALIDADO_FORMATO"` (`datos-personales/routes.ts:721`) **sin haber validado
+  el formato**: `vehiculoSchema` (`:310-314`) solo exige `min(1)`.
+- En vigilancia: `registrarParqueaderoVisitanteSchema` valida con `placaTieneFormato` y rechaza los marcadores;
+  `registrarVehiculoSchema` valida con `placaCoincideConTipo` y acepta los marcadores. `consultarAutorizacionQuerySchema`
+  solo valida la longitud.
+
 ### Estado hoy: el mismo formato escrito en al menos nueve sitios, y **no todos dicen lo mismo**
 | Dónde | Qué define |
 |---|---|
@@ -530,7 +786,7 @@ copia** a absorber por el módulo único.
 El residente puede registrar `ABC12` (formato antiguo de moto) desde su portal, y vigilancia **no puede**
 registrar ni leer esa misma placa. Son dos puertas con reglas distintas sobre la misma tabla.
 
-### Decisiones previas a unificar
+### Decisiones previas a unificar — tomadas arriba (2026-10-09)
 1. **¿Qué formatos son válidos?** Hoy: carro `ABC123` y moto `ABC12D`. El portal añade `ABC12`. Faltan por
    decidir, con una fuente oficial (Ministerio de Transporte / RUNT) y no de memoria: motos antiguas,
    remolques, vehículos oficiales y diplomáticos, y si el parqueadero de visitantes debe aceptarlos.
@@ -568,6 +824,27 @@ con scooter eléctrico quedan vinculados al *mismo* vehículo en los reportes. O
 ---
 
 ## 12. Reparar y mejorar la identificación de placas del lector
+
+### Decisiones (2026-10-09)
+- **Corpus**: está **autorizado** usar las fotos del bucket de producción, copiadas a una carpeta local
+  **fuera del repositorio** y sin subirlas a ningún sitio. La etiqueta es la `placa` confirmada por el
+  vigilante, excluyendo los registros con controversia aceptada.
+- **Paso 0, antes del arnés**: calcular el acierto base de producción con los pares
+  (`placaDetectada`, `placa`) que ya están guardados. Es una consulta: no necesita fotos ni Tesseract.
+- **Ajuste a placas conocidas**: por **consulta a la API**, que devuelve los candidatos a una sustitución. Sin
+  red se omite. **Ninguna lista de placas en el dispositivo.**
+- El formato `ABC12` (punto 11) entra en el algoritmo como patrón `LLLDD`.
+
+### Hallazgos verificados (2026-10-09)
+- Tesseract.js 5.1.1 (`static/vendor/tesseract/VERSION.txt`), datos `eng` 4.0.0 best_int, OEM 1 (LSTM).
+- Parámetros: whitelist `A-Z0-9` y `user_defined_dpi 300`; PSM 7 para carro, 6 para moto y 11 para la búsqueda en
+  la foto completa.
+- Lee la confianza por símbolo, porque con whitelist la de palabra y línea vale 0. **Nunca pide ni lee
+  `choices`.**
+- Puntaje y tablas, confirmados tal como se describen abajo:
+  - Confianza media − 15 × cambios − 8 × sobrantes, más 8 si coincide con el tipo esperado.
+  - Se descartan las lecturas por debajo de 40.
+  - Se conservan las alternativas a menos de 12 puntos de la mejor.
 
 ### Lo primero: lo que dices que falla, **en el texto ya funciona**
 Se ejecutó la función real `corregir()` de `lector-placas-ocr.js` con tus ejemplos:
@@ -624,6 +901,23 @@ consecuencia del algoritmo.
 
 ## 13. Mejorar el modo offline del lector de placas
 
+### Decisiones (2026-10-09)
+- **Dispositivos: Android + Chrome.** El service worker y `navigator.storage.persist()` tienen soporte completo
+  ahí, así que iOS/Safari queda fuera del alcance y de las pruebas.
+
+### Hallazgos verificados (2026-10-09)
+- No hay service worker en ninguna parte. `static/site.webmanifest` existe, pero **la página del lector no lo
+  enlaza** (solo `index`, `sanciones` y `pqrs`).
+- La cola usa la base IndexedDB `bv-lector-placas` y el almacén `registros`. Reintenta cada 30 s con
+  `setInterval`. No usa `navigator.storage`. Pasan a `rechazado` los 4xx que no sean 401, 403, 408, 425 ni 429.
+- **El hueco 7 está confirmado**:
+  - `atribucionPorPlaca` (`parqueadero-visitantes.ts:297-345`) usa `UnidadesVigentesPorPlacaAdmin`, que filtra
+    solo por `esActual: true`, sin rango de fechas.
+  - Las autorizaciones se evalúan con `ahora = new Date()` (`:274`). `fechaCaptura` solo se guarda.
+  - Plan: resolver con `vigenteDesde`/`vigenteHasta` y con `ahora = fechaCaptura`, con un test que cambie el
+    vínculo entre la captura y el envío.
+- Lo de la cola ante un 401 está en el punto 2.
+
 ### Lo que ya funciona
 La cola (`lector-placas-cola.js`) es sólida: guarda en IndexedDB, **reenvía al volver la red** (evento
 `online`) y por temporizador, **en orden de captura**, se detiene al primer error transitorio y **libera
@@ -672,36 +966,59 @@ almacenamiento. Conviene que lo cubra el entorno local del punto 1 con una API q
 
 ---
 
-## Orden sugerido para la segunda tanda
+## 14. Importador inicial para una copropiedad nueva — nuevo 2026-10-09
 
-**Los dos bugs (9 y 10) van antes que todo lo demás de esta tanda**: son defectos que el usuario ya sufre
-y son pequeños. El 10 es un arreglo de pocas líneas con causa confirmada; el 9 necesita primero que
-alguien describa el síntoma.
+### Origen
+Decisión de la limpieza (punto 4): los importadores puntuales sobran. Lo único que se usará es una
+**importación de todos los datos iniciales** cuando el software se implante en una copropiedad nueva.
 
-El punto 11 (formato único de placas) va **antes** que el 12 (OCR): el OCR debe apoyarse en la definición
-única, no en una copia más. El 12 empieza por montar el corpus de fotos y el arnés de medida, y el 13
-(offline) es independiente de ambos salvo por la parte de atribuir la unidad a la fecha de captura.
+### Decisiones (2026-10-09)
+- **Plantilla Excel + CLI**. La plantilla `.xlsx` tiene una hoja por entidad: unidades, personas, vínculos,
+  vehículos y parqueaderos. Un script de la API la procesa así:
+  - valida todo, incluidas las placas con el módulo único del punto 11;
+  - imprime un informe de lo que haría;
+  - **solo escribe con `--aplicar`**, de forma idempotente.
 
-Después, `1 (entorno local)` primero, porque 7 y 8 mueven datos con personas y hay que ensayar contra datos
-sintéticos. Luego `5 (roles)`, que condiciona 6 y 8. Después `7` y `8` decididos juntos, y `6 (dashboard)`
-al final, cuando existan las fuentes que mostrar, aunque su primera versión (parqueadero y convivencia)
-puede salir antes.
+  Lo ejecuta el técnico que implanta.
+
+### Enfoque
+- Comparte generadores y validadores con la semilla del punto 1: la semilla sintética y la importación real
+  tienen que producir la misma forma de datos.
+- Los `data/*.py` (`importar_unidades_csv_real_admin.py`, `importar_personas_vinculos.py`,
+  `importar_registro_vehicular.py`, …) son la base para conocer las reglas, y se retiran cuando el importador
+  exista. `data/REGLAS_OPERATIVAS.md` se conserva o se integra.
+- Se prueba solo contra el entorno local (punto 1). **Nunca contra producción** sin una decisión explícita.
+
+### Criterios de aceptación
+- Una plantilla con errores (placa inválida, documento duplicado, unidad inexistente en un vínculo) produce un
+  informe con fila y causa, y no escribe nada.
+- Ejecutarlo dos veces con `--aplicar` no duplica nada.
+- Los conteos del informe coinciden con lo que queda en la base.
+
+---
+
+## Orden de trabajo (2026-10-09)
+
+1. **10** (catálogo, pequeño) y **paso 1 del 9** (prueba con un residente real).
+2. **11** placas, antes que el 12: el OCR se apoya en la definición única.
+3. **4** limpieza, que es barata y quita ruido antes de sembrar.
+4. **1** entorno local: habilita probar 2, 7, 8 y 13 sin datos reales.
+5. **2** expiración de sesiones.
+6. **5** roles centralizados, más los roles supervisor y mantenimiento. Condiciona 6, 7 y 8.
+7. **13** offline y **12** OCR. El 12 empieza por el acierto base y el corpus.
+8. **6** dashboard v1 (parqueadero, convivencia, reservas y datos).
+9. **7** mantenimiento, luego **8** PQRS + consejo (con sus áreas en el dashboard).
+10. **14** importador, reutilizando la semilla del punto 1.
+
+**Aplazados sin plan**: 0.1 (secreto de sesión) y N7 (login solo con documento).
 
 ---
 
 ## Preguntas abiertas para quien decide
 
-1. Entorno local: ¿sintéticos con la forma de producción (recomendado) o volcado anonimizado?
-2. Expiración: ¿qué duración por rol, y absoluta o por inactividad? ¿Cuánto dura un turno de vigilancia?
-3. ¿Se puede rotar `RESIDENT_SESSION_SECRET` en Cloud Run (cierra las sesiones vigentes, máx. 2 h)?
-4. Limpieza: ¿`prueba-api-unidades` y `hugo.yml`/`redirect.html` siguen en uso?
-5. Supervisor: ¿qué puede hacer que un vigilante no? ¿Puede corregir un apartamento asignado por error?
-6. Dashboard: ¿qué pendientes son críticos para administración? ¿Ventana de «novedades»: 24 h, 7 días?
-7. Mantenimiento y PQRS: ¿modelo común o separado? ¿Quién reporta mantenimiento y con qué identidad?
-8. Consejo: ¿ve todas las PQRS o solo las remitidas? ¿«Dashboard» es una vista nueva o la lista actual ampliada?
-9. Descarga de documentos: ¿qué pantalla (Facturación o Documentos del club), qué dispositivo y qué ocurre exactamente al fallar?
-10. Zonas comunes: ¿el catálogo debe refrescarse en cada entrada a la pestaña o basta con cargarlo una vez?
-11. Placas: ¿qué formatos son válidos (motos antiguas, remolques, oficiales, diplomáticos)? ¿Cuál es la fuente oficial?
-12. OCR: ¿hay fotos de placas utilizables como corpus de prueba, sin usar las del bucket de producción?
-13. Sin placa: ¿una placa sintética única por vehículo o dejar de registrarlos en `Vehiculo`?
-14. Offline: ¿qué dispositivos usa vigilancia (Android o iOS, y qué navegador)? Condiciona el service worker y la persistencia.
+Las 14 preguntas del 2026-10-08 se respondieron el 2026-10-09; las respuestas están en el bloque
+**Decisiones** de cada punto. Siguen abiertas:
+
+1. **0.1**: ¿está definida `RESIDENT_SESSION_SECRET` en Cloud Run? ¿Cuándo se retoma la rotación?
+2. **N7**: ¿qué segundo factor para vigilancia, comité y consejo (PIN por persona, reto por correo como el del
+   residente)? Y como mínimo, ¿límite de intentos y respuesta genérica?
