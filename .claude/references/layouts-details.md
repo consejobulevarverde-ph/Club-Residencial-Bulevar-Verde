@@ -15,7 +15,7 @@ Guía original de layouts/CLAUDE.md conservada íntegra el 2026-10-04. Confirma 
 - `/datos-personales/` — Resident portal: profile, family members, vehicles, pets, emergency contacts, **reservations**
 - `/administracion-datos/` — Admin panel (admin/superadmin only): data master, case registration, **zone catalog & reservation calendar**
 - `/vigilancia-datos/` — Surveillance staff calendar view (vigilancia role)
-- `/comite-convivencia-datos/` — Comité de Convivencia members (unlisted URL, document-only login, own session token): shared "Casos Convivencia" view limited to conciliatory actions and to cases remitted to the comité
+- `/comite-convivencia-datos/` — Comité de Convivencia members (unlisted URL, document + 4-digit PIN login, own session token): shared "Casos Convivencia" view limited to conciliatory actions and to cases remitted to the comité
 - `/consejo-administracion-datos/` — Consejo de Administración members (same shell, read-only): only cases remitted to the consejo
 
 **Deployment**: Auto-triggered by push to `origin/firebase` → Firebase Hosting (automatic)

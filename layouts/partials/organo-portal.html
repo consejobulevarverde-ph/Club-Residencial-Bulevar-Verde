@@ -37,6 +37,12 @@
           <input id="{{ .prefijo }}NumeroDocumento" type="text" class="form-control text-uppercase" inputmode="text"
             placeholder="1234567890" required autocomplete="off">
         </div>
+        <div class="col-12">
+          <label class="form-label" for="{{ .prefijo }}Pin">PIN (4 dígitos)</label>
+          <input id="{{ .prefijo }}Pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+            class="form-control" required autocomplete="current-password">
+          <div class="form-text">La primera vez tu PIN son los 4 últimos dígitos de tu documento; se te pedirá cambiarlo.</div>
+        </div>
         <div class="col-12 d-grid">
           <button id="{{ .prefijo }}LoginBtn" class="btn btn-primary btn-lg" type="submit">Ingresar</button>
         </div>
@@ -49,7 +55,10 @@
           <h2 class="section-title h3 mb-0">Casos de convivencia</h2>
           <div id="{{ .prefijo }}Usuario" class="small-note"></div>
         </div>
-        <button id="{{ .prefijo }}SalirBtn" type="button" class="btn btn-outline-secondary">Salir</button>
+        <div class="d-flex gap-2">
+          <button id="{{ .prefijo }}PerfilBtn" type="button" class="btn btn-outline-secondary"><i class="bi bi-key me-1"></i>Cambiar PIN</button>
+          <button id="{{ .prefijo }}SalirBtn" type="button" class="btn btn-outline-secondary">Salir</button>
+        </div>
       </div>
 
       {{ partial "convivencia-casos/index.html" (dict "ctx" .ctx "modo" .modo) }}
@@ -59,6 +68,7 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ "js/acceso-pin.js" | relURL }}?v=1"></script>
   <script src="{{ "js/evidence-types.js" | relURL }}?v=2"></script>
   <script src="{{ "js/convivencia-casos.js" | relURL }}?v=2"></script>
   <script>
@@ -115,31 +125,64 @@
         this.value = this.value.replace(/\s+/g, '').toUpperCase();
       });
 
+      var RUTA_LOGIN = {{ .rutaLogin | jsonify | safeJS }};
+      var RUTA_BASE = RUTA_LOGIN.replace(/\/iniciar-sesion$/, '');
+
+      function guardarSesion(data) {
+        sessionStorage.setItem(STORAGE_KEY, data.token);
+        sessionStorage.setItem(STORAGE_USUARIO_KEY, JSON.stringify({
+          nombreCompleto: data.nombreCompleto,
+          cargo: data.cargo
+        }));
+      }
+
+      // Primer ingreso (o tras un reinicio): el PIN inicial no abre sesión; hay que elegir uno propio.
+      function elegirPinInicial(tokenCambio) {
+        return new Promise(function (resolve, reject) {
+          BVAccesoPin.abrir({
+            titulo: 'Elige tu PIN',
+            descripcion: 'Es tu primer ingreso. Elige un PIN de 4 dígitos distinto de los 4 últimos dígitos de tu documento.',
+            pedirActual: false,
+            enviar: function (valores) {
+              return BVAccesoPin.post(API_BASE + RUTA_BASE + '/cambiar-pin-inicial', {
+                tokenCambio: tokenCambio,
+                pinNuevo: valores.pinNuevo
+              });
+            },
+            alCompletar: resolve,
+            alCancelar: function () { reject(new Error('Debes elegir un PIN para ingresar.')); }
+          });
+        });
+      }
+
+      $('{{ .prefijo }}PerfilBtn').addEventListener('click', function () {
+        BVAccesoPin.abrir({
+          titulo: 'Cambiar mi PIN',
+          descripcion: 'Escribe tu PIN actual y el nuevo. Tres intentos fallidos con el PIN actual bloquean el acceso durante 1 hora. Al cambiarlo se cierran tus otras sesiones.',
+          pedirActual: true,
+          enviar: function (valores) {
+            return BVAccesoPin.post(API_BASE + RUTA_BASE + '/mi-pin', valores, leerToken());
+          },
+          alCompletar: function (data) { guardarSesion(data); }
+        });
+      });
+
       $('{{ .prefijo }}LoginForm').addEventListener('submit', function (event) {
         event.preventDefault();
         var numeroDocumento = $('{{ .prefijo }}NumeroDocumento').value.trim();
-        if (!numeroDocumento) return;
+        var pin = $('{{ .prefijo }}Pin').value;
+        if (!numeroDocumento || !pin) return;
 
         var boton = $('{{ .prefijo }}LoginBtn');
         boton.disabled = true;
         boton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Ingresando…';
         $('{{ .prefijo }}LoginAlert').classList.add('hidden');
 
-        fetch(API_BASE + '{{ .rutaLogin }}', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ numeroDocumento: numeroDocumento })
-        }).then(function (response) {
-          return response.json().catch(function () { return {}; }).then(function (body) {
-            if (!response.ok) throw new Error((body.error && body.error.message) || 'No fue posible ingresar.');
-            return body.data;
-          });
+        BVAccesoPin.post(API_BASE + RUTA_LOGIN, { numeroDocumento: numeroDocumento, pin: pin })
+        .then(function (data) {
+          return data.requiereCambioPin ? elegirPinInicial(data.tokenCambio) : data;
         }).then(function (data) {
-          sessionStorage.setItem(STORAGE_KEY, data.token);
-          sessionStorage.setItem(STORAGE_USUARIO_KEY, JSON.stringify({
-            nombreCompleto: data.nombreCompleto,
-            cargo: data.cargo
-          }));
+          guardarSesion(data);
           $('{{ .prefijo }}LoginForm').reset();
           mostrarApp();
         }).catch(function (error) {

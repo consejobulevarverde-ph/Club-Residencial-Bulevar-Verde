@@ -12,7 +12,7 @@ por cuatro páginas con autenticación distinta:
 | `/consejo-administracion-datos/` | `consejo` | `/api/v1/consejo-administracion` | Token de sesión del consejo (`sessionStorage.bvConsejoAdministracionToken`); **solo consulta** (`acciones: []`) |
 | `/revisor-fiscal-datos/` | `revisor` | `/api/v1/revisor-fiscal` | Token de la revisoría (`sessionStorage.bvRevisorFiscalToken`, propósito `SESION_REVISOR_FISCAL`); **solo consulta**, ve los mismos casos que el consejo |
 
-Las páginas del comité, del consejo y de la revisoría fiscal comparten el shell `layouts/partials/organo-portal.html` (login por documento + esta vista);
+Las páginas del comité, del consejo y de la revisoría fiscal comparten el shell `layouts/partials/organo-portal.html` (login por documento + PIN de 4 dígitos, cambio de PIN en «Cambiar PIN», y esta vista; el modal es `static/js/acceso-pin.js`, compartido con `/vigilancia-datos/`);
 cada `list.html` solo le pasa prefijo de IDs, ruta de login y claves de `sessionStorage`.
 
 Mismo patrón que `layouts/partials/vehiculos/` (partial + script autocontenido), extendido con token y

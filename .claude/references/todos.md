@@ -61,7 +61,7 @@ no tiene rastro). `.env.example` sí está rastreado y es lo correcto.
 ### 0.5 Hallazgos nuevos del 2026-10-09
 | # | Hallazgo | Dónde | Qué pasa con él |
 |---|---|---|---|
-| **N7** | **Grave.** Vigilancia, comité y consejo inician sesión **solo con el número de documento**, sin clave ni segundo factor y sin límite de intentos (la API no tiene rate limit en ninguna ruta). El de vigilancia devuelve un `customToken` con `roles:["vigilancia"]` y responde **404 / 409 / 200** según el documento exista o no, así que además permite enumerar documentos. Comité y consejo responden un 401 genérico, pero dan acceso a casos de convivencia remitidos. El residente, en cambio, sí pasa un reto por correo (`datos-personales/routes.ts:443-529`). Una cédula no es un secreto, y esto hace secundaria la expiración del punto 2 | `personal/routes.ts:26-56` (usado en `vigilancia-datos/list.html:687-701`), `comite-convivencia/iniciar-sesion.ts` | **Planeado en el punto 15** (documento + PIN de 4 dígitos, bloqueo tras 3 intentos), 2026-10-09. Sin implementar: el riesgo sigue abierto. Alcanza también a supervisor y revisor fiscal |
+| **N7** | **Grave.** Vigilancia, comité y consejo inician sesión **solo con el número de documento**, sin clave ni segundo factor y sin límite de intentos (la API no tiene rate limit en ninguna ruta). El de vigilancia devuelve un `customToken` con `roles:["vigilancia"]` y responde **404 / 409 / 200** según el documento exista o no, así que además permite enumerar documentos. Comité y consejo responden un 401 genérico, pero dan acceso a casos de convivencia remitidos. El residente, en cambio, sí pasa un reto por correo (`datos-personales/routes.ts:443-529`). Una cédula no es un secreto, y esto hace secundaria la expiración del punto 2 | `personal/routes.ts:26-56` (usado en `vigilancia-datos/list.html:687-701`), `comite-convivencia/iniciar-sesion.ts` | **Implementado en el punto 15** (documento + PIN de 4 dígitos, bloqueo tras 3 intentos), 2026-10-10. **Sin desplegar**: el riesgo sigue abierto en producción hasta el despliegue. Alcanza también a supervisor y revisor fiscal |
 | N1 | `test-pqrs-login.js` y `test-pqrs-detailed.js` contienen claves de gestión de mantenimiento escritas en el código | raíz del repo | Se borran en el punto 4. La clave compartida desaparece con el rol `mantenimiento` (puntos 5 y 7); hasta entonces, si coincide con la vigente, sigue en el historial |
 | N2 | El cliente de mantenimiento acepta fotos de hasta 5 MB, pero el servidor rechaza las de más de 2 MB. La cola reintenta siempre los rechazos, así que **un reporte con una foto de 2-5 MB queda atascado para siempre** | `google/pqrs.js:29,2034`; `pqrs-maintenance.js:25-28` | Se corrige en el punto 7 (un solo límite, igual en cliente y servidor) |
 | N3 | La consulta pública de mantenimiento muestra, solo con el radicado, la descripción, la ubicación, las fotos (URL de Drive) y la bitácora. El límite anti-enumeración es **global** y no por IP, así que cualquiera lo agota y bloquea la consulta para todos | `google/pqrs.js:841-906` | Desaparece en el punto 7: no habrá consulta pública |
@@ -497,7 +497,7 @@ cambia a quién se cobra y es de administración.
 | Vista de sanciones/controversias | ❌ | N/A | Pendiente (PDP) |
 | Anular captura errónea | ❌ | N/A | Pendiente (PDP) |
 | Casos de convivencia en solo lectura | ✅ (por heredencia) | ✅ | Incluido |
-| Acceso con documento + PIN (punto 15) | ❌ | ❌ | Pendiente (PDP) |
+| Acceso con documento + PIN (punto 15) | ✅ | ✅ | Implementado 2026-10-10, sin desplegar |
 | **Tests y documentación** | | | |
 | Middleware tests | ✅ (revisor) | ✅ | Incluido |
 | Matrix rol × ruta | ❌ | ❌ | Pendiente (PDP) |
@@ -1099,7 +1099,32 @@ Decisión de la limpieza (punto 4): los importadores puntuales sobran. Lo único
 
 ---
 
-## 15. Acceso con documento + PIN de 4 dígitos (cierra N7) — nuevo 2026-10-09, **sin implementar**
+## 15. Acceso con documento + PIN de 4 dígitos (cierra N7) — nuevo 2026-10-09, **implementado 2026-10-10 (sin desplegar)**
+
+### Estado de la implementación (2026-10-10)
+Decisiones finales: **un PIN por documento** (sirve a todos los portales de la persona), PIN inicial = 4 últimos
+**dígitos** (con menos de 4, ceros a la izquierda), mensaje de bloqueo claro («Intenta de nuevo en N minutos»), sin
+rechazo de PIN triviales (solo el inicial y el actual) y **límite por IP** (30 por 15 min). Lo que abajo dice «propuesto»
+quedó así salvo lo anotado aquí.
+
+- **Datos** (repo frontend): `type CredencialPin` (`schema/schema.gql`, clave `numeroDocumento`) y
+  `admin/credenciales_pin.gql`; `colaboradores.gql` añade `ObtenerColaboradorPorFirebaseUidAdmin` y
+  `BuscarColaboradorActivoPorDocumentoAdmin`. El emulador de Data Connect carga el esquema y el conector sin errores.
+- **API**: `services/pin.ts` (hash scrypt, intento reservado **antes** de comparar, bloqueo, token `CAMBIO_PIN`),
+  `middleware/rate-limit.ts`, `comite-convivencia/iniciar-sesion.ts` (login, `cambiar-pin-inicial`, `mi-pin` de órganos),
+  `personal/routes.ts` (login de vigilancia sin 404/409, `cambiar-pin-inicial`, `mi-pin`, `:id/reiniciar-pin`) y
+  `…/miembros/:id/reiniciar-pin` en convivencia. `autenticarOrgano` compara `pinVersion` del token con la de la credencial.
+- **Frontend**: `static/js/acceso-pin.js` (modal compartido), campo PIN y «Mi perfil» en `vigilancia-datos`, campo PIN y
+  «Cambiar PIN» en `organo-portal.html`, botón «Reiniciar PIN» por fila en Personal.
+- **Verificado**: `npm run check` (285 tests, incluidos 15 del servicio y los recorridos HTTP de comité, consejo, revisoría y
+  vigilancia), `node --check`, `hugo --minify` y sintaxis de los scripts de las páginas renderizadas.
+- **No verificado**: la concurrencia contra **Postgres real** (el emulador serializa; solo se probó contra una simulación con la
+  misma semántica) y el flujo en un navegador. Pendiente antes del despliegue: probarlo con `npm run local` y reproducir las
+  20 peticiones simultáneas con `embedded-postgres` (ver la memoria de mutación en un statement).
+- **Despliegue**: `sql:migrate` + conector admin, luego API y Hosting **seguidos**; avisar el PIN inicial a vigilantes, supervisores y
+  miembros. Las sesiones de órganos abiertas antes del corte dejan de servir (el token no trae `pinVersion`).
+- **Límites conocidos**: el rate limit es por instancia; un token de órgano sigue pudiendo falsificarse si 0.1 sigue abierto;
+  vigilancia mantiene hasta 1 h el ID token ya emitido salvo que `verifyIdToken(…, true)` lo revoque (lo hace) tras un reinicio.
 
 ### Alcance
 Todos los que hoy entran **solo con el número de documento**:

@@ -11,8 +11,8 @@ Contenido original de CLAUDE.md conservado íntegro el 2026-10-04. Consulta solo
 **Key Pages**:
 - `/` — home (landing)
 - `/datos-personales/` — resident self-service portal (login, profile, residents, vehicles, pets, emergency, sanciones)
-- `/comite-convivencia-datos/` — Comité de Convivencia portal (unlisted URL, document-only login; only cases remitted to the comité)
-- `/consejo-administracion-datos/` — Consejo de Administración portal (unlisted URL, document-only login; read-only, only cases remitted to the consejo)
+- `/comite-convivencia-datos/` — Comité de Convivencia portal (unlisted URL, login with document + 4-digit PIN; only cases remitted to the comité)
+- `/consejo-administracion-datos/` — Consejo de Administración portal (unlisted URL, login with document + 4-digit PIN; read-only, only cases remitted to the consejo)
 - `/guia-casos-convivencia/` — public guide explaining how convivencia cases work (opened from the "Info" button of the cases view)
 - Other static pages and news
 

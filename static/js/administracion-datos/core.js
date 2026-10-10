@@ -1906,6 +1906,11 @@ var config = window.ADMIN_DATOS_CONFIG || {};
         }).catch(function (error) { msg(error.message); });
       }
 
+      // Entran con documento + PIN: miembros de órganos y colaboradores con cuenta (no los aseadores).
+      function tienePin(c) {
+        return esFiltroComite() || c.rol === 'VIGILANTE' || c.rol === 'SUPERVISOR_VIGILANCIA';
+      }
+
       function renderPersonalTabla(items) {
         if (!items.length) { $('personalTabla').innerHTML = '<p class="text-muted">Sin registros.</p>'; return; }
         var rows = items.map(function (c) {
@@ -1916,6 +1921,7 @@ var config = window.ADMIN_DATOS_CONFIG || {};
             '<td>' + (c.activo ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>') + '</td>' +
             '<td class="text-end">' +
             '<button class="btn btn-sm btn-outline-primary personal-editar" data-id="' + esc(c.id) + '">Editar</button> ' +
+            (tienePin(c) ? '<button class="btn btn-sm btn-outline-warning personal-reiniciar-pin" data-id="' + esc(c.id) + '" title="Vuelve al PIN inicial y desbloquea">Reiniciar PIN</button> ' : '') +
             '<button class="btn btn-sm btn-outline-danger personal-desactivar" data-id="' + esc(c.id) + '" ' + (c.activo ? '' : 'disabled') + '>Desactivar</button>' +
             '</td></tr>';
         }).join('');
@@ -1976,6 +1982,20 @@ var config = window.ADMIN_DATOS_CONFIG || {};
       $('personalTabla').addEventListener('click', function (event) {
         var editBtn = event.target.closest('.personal-editar');
         if (editBtn) { cargarPersonalEnFormulario(editBtn.dataset.id); return; }
+        var pinBtn = event.target.closest('.personal-reiniciar-pin');
+        if (pinBtn) {
+          var organoPin = organoDelFiltro();
+          if (!confirm('¿Reiniciar el PIN? Volverá a ser los 4 últimos dígitos del documento, se le pedirá cambiarlo al ingresar, se desbloquea su acceso y se cierran sus sesiones abiertas.' +
+            (organoPin ? ' El PIN es por documento: también afecta a los demás portales de esta persona.' : ''))) return;
+          busy(pinBtn, true, 'Reiniciando…');
+          withIdToken(function (idToken) {
+            var ruta = organoPin ? organoPin.ruta + '/' + pinBtn.dataset.id + '/reiniciar-pin' : '/api/v1/personal/' + pinBtn.dataset.id + '/reiniciar-pin';
+            return apiFetch(ruta, idToken, { method: 'POST' });
+          }).then(function () { msg('PIN reiniciado.', 'success'); })
+            .catch(function (error) { msg(error.message); })
+            .finally(function () { busy(pinBtn, false, 'Reiniciar PIN'); });
+          return;
+        }
         var delBtn = event.target.closest('.personal-desactivar');
         if (delBtn) {
           var organo = organoDelFiltro();
