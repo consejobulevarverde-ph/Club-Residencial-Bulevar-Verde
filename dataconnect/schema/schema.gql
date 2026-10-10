@@ -495,8 +495,8 @@ type EventoCasoConvivencia
 
 # Membresía de una persona (residente) a un órgano de gobierno de la copropiedad.
 # Una fila por persona y órgano (clave compuesta): una persona puede estar en
-# ninguno, uno o ambos órganos, cada uno con su propio cargo y estado.
-# organo: "COMITE_CONVIVENCIA" | "CONSEJO_ADMINISTRACION" (string, no enum de schema).
+# ninguno, uno o varios órganos, cada uno con su propio cargo y estado.
+# organo: "COMITE_CONVIVENCIA" | "CONSEJO_ADMINISTRACION" | "REVISOR_FISCAL" (string, no enum de schema).
 # cargo es informativo (Presidente, Secretario, Tesorero, Vocal…); nunca decide permisos.
 type MiembroOrganoGobierno
   @table(

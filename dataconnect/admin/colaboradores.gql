@@ -119,7 +119,7 @@ query BuscarColaboradorPorDocumentoAdmin(
 )
 @auth(level: NO_ACCESS) {
   colaboradores(
-    where: { numeroDocumento: { eq: $numeroDocumento }, activo: { eq: true }, rol: { eq: "VIGILANTE" } }
+    where: { numeroDocumento: { eq: $numeroDocumento }, activo: { eq: true }, rol: { in: ["VIGILANTE", "SUPERVISOR_VIGILANCIA"] } }
     limit: 1
   ) {
     id

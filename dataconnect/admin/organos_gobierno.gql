@@ -1,6 +1,6 @@
 # Membresía de personas (residentes) a órganos de gobierno de la copropiedad:
-# COMITE_CONVIVENCIA y CONSEJO_ADMINISTRACION. Todas NO_ACCESS: la API autoriza antes
-# de invocarlas (login del comité/consejo sin sesión Firebase, gestión solo
+# COMITE_CONVIVENCIA, CONSEJO_ADMINISTRACION y REVISOR_FISCAL. Todas NO_ACCESS: la API autoriza antes
+# de invocarlas (login del comité/consejo/revisoría sin sesión Firebase, gestión solo
 # administrador/superadmin).
 
 query BuscarMiembroOrganoPorDocumentoAdmin(
