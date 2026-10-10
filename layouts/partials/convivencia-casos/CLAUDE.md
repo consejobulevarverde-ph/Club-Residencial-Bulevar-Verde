@@ -3,15 +3,16 @@
 ## Propósito
 
 Vista "Casos Convivencia" — lista, detalle y acciones de la máquina de estados (Ley 675/2001) — compartida
-por tres páginas con autenticación distinta:
+por cuatro páginas con autenticación distinta:
 
 | Página | Modo | API | Token |
 |--------|------|-----|-------|
 | `/administracion-datos/` (tab "Casos Convivencia") | `admin` | `/api/v1/convivencia` | Firebase ID token |
 | `/comite-convivencia-datos/` | `comite` | `/api/v1/comite-convivencia` | Token de sesión del comité (`sessionStorage.bvComiteConvivenciaToken`) |
 | `/consejo-administracion-datos/` | `consejo` | `/api/v1/consejo-administracion` | Token de sesión del consejo (`sessionStorage.bvConsejoAdministracionToken`); **solo consulta** (`acciones: []`) |
+| `/revisor-fiscal-datos/` | `revisor` | `/api/v1/revisor-fiscal` | Token de la revisoría (`sessionStorage.bvRevisorFiscalToken`, propósito `SESION_REVISOR_FISCAL`); **solo consulta**, ve los mismos casos que el consejo |
 
-Las páginas del comité y del consejo comparten el shell `layouts/partials/organo-portal.html` (login por documento + esta vista);
+Las páginas del comité, del consejo y de la revisoría fiscal comparten el shell `layouts/partials/organo-portal.html` (login por documento + esta vista);
 cada `list.html` solo le pasa prefijo de IDs, ruta de login y claves de `sessionStorage`.
 
 Mismo patrón que `layouts/partials/vehiculos/` (partial + script autocontenido), extendido con token y

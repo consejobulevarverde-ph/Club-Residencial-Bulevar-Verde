@@ -4,7 +4,8 @@ Escrito el 2026-10-08. Cada punto parte de lo que se **verificó** en el código
 suposiciones; lo que no se pudo comprobar está marcado. Contrasta con el repositorio antes de actuar.
 
 **2026-10-09 — sesión de planeación.** Se verificaron en solo lectura las dudas marcadas «sin comprobar» y
-se respondieron todas las preguntas abiertas salvo 0.1 y N7, que quedan **aplazadas**. Cada punto tiene
+se respondieron todas las preguntas abiertas salvo 0.1, que queda **aplazada**; N7 se planeó después, en el
+punto 15 (documento + PIN). Cada punto tiene
 ahora un bloque **Decisiones (2026-10-09)** y, cuando aplica, **Hallazgos verificados**; donde chocan con el
 texto original, mandan las decisiones. El orden de trabajo está al final. Nada de esto se implementó: son
 planes.
@@ -60,7 +61,7 @@ no tiene rastro). `.env.example` sí está rastreado y es lo correcto.
 ### 0.5 Hallazgos nuevos del 2026-10-09
 | # | Hallazgo | Dónde | Qué pasa con él |
 |---|---|---|---|
-| **N7** | **Grave.** Vigilancia, comité y consejo inician sesión **solo con el número de documento**, sin clave ni segundo factor y sin límite de intentos (la API no tiene rate limit en ninguna ruta). El de vigilancia devuelve un `customToken` con `roles:["vigilancia"]` y responde **404 / 409 / 200** según el documento exista o no, así que además permite enumerar documentos. Comité y consejo responden un 401 genérico, pero dan acceso a casos de convivencia remitidos. El residente, en cambio, sí pasa un reto por correo (`datos-personales/routes.ts:443-529`). Una cédula no es un secreto, y esto hace secundaria la expiración del punto 2 | `personal/routes.ts:26-56` (usado en `vigilancia-datos/list.html:687-701`), `comite-convivencia/iniciar-sesion.ts` | **Aplazado** por decisión del 2026-10-09. Riesgo abierto, sin plan |
+| **N7** | **Grave.** Vigilancia, comité y consejo inician sesión **solo con el número de documento**, sin clave ni segundo factor y sin límite de intentos (la API no tiene rate limit en ninguna ruta). El de vigilancia devuelve un `customToken` con `roles:["vigilancia"]` y responde **404 / 409 / 200** según el documento exista o no, así que además permite enumerar documentos. Comité y consejo responden un 401 genérico, pero dan acceso a casos de convivencia remitidos. El residente, en cambio, sí pasa un reto por correo (`datos-personales/routes.ts:443-529`). Una cédula no es un secreto, y esto hace secundaria la expiración del punto 2 | `personal/routes.ts:26-56` (usado en `vigilancia-datos/list.html:687-701`), `comite-convivencia/iniciar-sesion.ts` | **Planeado en el punto 15** (documento + PIN de 4 dígitos, bloqueo tras 3 intentos), 2026-10-09. Sin implementar: el riesgo sigue abierto. Alcanza también a supervisor y revisor fiscal |
 | N1 | `test-pqrs-login.js` y `test-pqrs-detailed.js` contienen claves de gestión de mantenimiento escritas en el código | raíz del repo | Se borran en el punto 4. La clave compartida desaparece con el rol `mantenimiento` (puntos 5 y 7); hasta entonces, si coincide con la vigente, sigue en el historial |
 | N2 | El cliente de mantenimiento acepta fotos de hasta 5 MB, pero el servidor rechaza las de más de 2 MB. La cola reintenta siempre los rechazos, así que **un reporte con una foto de 2-5 MB queda atascado para siempre** | `google/pqrs.js:29,2034`; `pqrs-maintenance.js:25-28` | Se corrige en el punto 7 (un solo límite, igual en cliente y servidor) |
 | N3 | La consulta pública de mantenimiento muestra, solo con el radicado, la descripción, la ubicación, las fotos (URL de Drive) y la bitácora. El límite anti-enumeración es **global** y no por IP, así que cualquiera lo agota y bloquea la consulta para todos | `google/pqrs.js:841-906` | Desaparece en el punto 7: no habrá consulta pública |
@@ -421,8 +422,20 @@ No se ejecutó ninguna herramienta de detección. Propuesta:
 - Sobre `getRoles`: cualquier claim `=== true` cuenta como rol, incluido `email_verified`. En el módulo central,
   leer solo `claims.roles` (o una lista blanca).
 
-### Estado hoy
-- **No existe**: ninguna mención de `supervisor` en la API ni en el frontend.
+### Avance (2026-10-09) — opciones incluidas, sin funciones propias todavía
+- **Supervisor**: rol de colaborador `SUPERVISOR_VIGILANCIA` (pestaña Personal). Su cuenta Firebase lleva los
+  claims `["vigilancia", "supervisor_vigilancia"]` (`personal/firebase-account.ts`), así entra por
+  `/vigilancia-datos/` y ve lo mismo que un vigilante sin tocar las listas de roles; al cambiar de rol con
+  cuenta ya creada se reescriben los claims. `BuscarColaboradorPorDocumentoAdmin` admite ambos roles
+  (**requiere desplegar el conector admin**). Pendiente: reportes/dashboard por vigilante, centralizar roles
+  y la matriz de tests.
+- **Revisor fiscal** (no estaba en este plan): órgano `REVISOR_FISCAL` en `MiembroOrganoGobierno`, miembros desde
+  Personal (`/api/v1/convivencia/revisor-fiscal/miembros`), portal `/revisor-fiscal-datos/` con login por
+  documento y API `/api/v1/revisor-fiscal` (mismo router que el consejo, `crearRouterConsultaConsejo`): ve en
+  solo lectura los casos remitidos al Consejo.
+
+### Estado previo (antes del avance)
+- **No existía**: ninguna mención de `supervisor` en la API ni en el frontend.
 - Los roles son **cadenas libres** en los custom claims de Firebase (`roles: [...]`);
   `PUT /usuarios/:uid/roles` acepta cualquier texto de 2 a 50 caracteres. Crear el rol en sí es solo
   asignar la cadena; el trabajo está en decidir **dónde** se admite.
@@ -461,6 +474,38 @@ cambia a quién se cobra y es de administración.
 - Un usuario con solo `supervisor_vigilancia` accede a lo de vigilancia y a lo definido para él, y recibe
   403 en todo lo de administración.
 - Cero listas de roles duplicadas.
+
+### Tabla de estados — §5 (supervisor y revisor fiscal)
+
+| Funcionalidad | Supervisor | Revisor Fiscal | Estado |
+|---|---|---|---|
+| **Rol y asignación** | | | |
+| Opción en Personal (filtro/formulario) | ✅ | ✅ | Incluido |
+| Claims de Firebase (vigilancia + supervisor_vigilancia) | ✅ | N/A | Incluido |
+| Órgano en MiembroOrganoGobierno | N/A | ✅ | Incluido |
+| Gestión de miembros en convivencia API | N/A | ✅ | Incluido |
+| Query `BuscarColaboradorPorDocumentoAdmin` | ⚠️ Requiere deploy conector | N/A | Pendiente |
+| **Acceso y autenticación** | | | |
+| Portal en `/vigilancia-datos/` | ✅ (por claims) | N/A | Incluido |
+| Portal en `/revisor-fiscal-datos/` | N/A | ✅ | Incluido |
+| Login por número de documento | ✅ (heredado) | ✅ | Incluido |
+| Token de sesión con propósito único | ✅ (claims Firebase) | ✅ (SESION_REVISOR_FISCAL) | Incluido |
+| Rutas API montadas | ✅ (vigilancia/) | ✅ (/api/v1/revisor-fiscal) | Incluido |
+| **Funcionalidad propia** | | | |
+| Reportes por vigilante | ❌ | N/A | Pendiente (PDP) |
+| Dashboard con métricas | ❌ | N/A | Pendiente (PDP) |
+| Vista de sanciones/controversias | ❌ | N/A | Pendiente (PDP) |
+| Anular captura errónea | ❌ | N/A | Pendiente (PDP) |
+| Casos de convivencia en solo lectura | ✅ (por heredencia) | ✅ | Incluido |
+| Acceso con documento + PIN (punto 15) | ❌ | ❌ | Pendiente (PDP) |
+| **Tests y documentación** | | | |
+| Middleware tests | ✅ (revisor) | ✅ | Incluido |
+| Matrix rol × ruta | ❌ | ❌ | Pendiente (PDP) |
+| Centralizar roles en módulo único | ❌ | ❌ | Pendiente (PDP) |
+| Guía de casos actualizada | ✅ (revisor) | ✅ | Incluido |
+| Swagger documentado | ✅ (revisor) | ✅ | Incluido |
+
+**Leyenda**: ✅ = Hecho | ⚠️ = Bloqueado (requiere acción) | ❌ = Pendiente (PDP) | N/A = No aplica
 
 ---
 
@@ -1054,6 +1099,129 @@ Decisión de la limpieza (punto 4): los importadores puntuales sobran. Lo único
 
 ---
 
+## 15. Acceso con documento + PIN de 4 dígitos (cierra N7) — nuevo 2026-10-09, **sin implementar**
+
+### Alcance
+Todos los que hoy entran **solo con el número de documento**:
+- **Colaboradores con cuenta**: vigilante y supervisor de vigilancia (`POST /api/v1/personal/iniciar-sesion`,
+  portal `/vigilancia-datos/`).
+- **Órganos**: Comité de Convivencia, Consejo de Administración y Revisoría Fiscal
+  (`crearIniciarSesionOrgano` en `comite-convivencia/iniciar-sesion.ts`, portales sobre `partials/organo-portal.html`).
+
+El residente queda fuera: ya pasa un reto por correo (`datos-personales/routes.ts:443-529`).
+
+### Decisiones (2026-10-09)
+- Acceso con **documento + PIN de 4 dígitos**.
+- **PIN inicial = los 4 últimos dígitos del documento**. En el primer inicio de sesión se **obliga a cambiarlo**
+  antes de dar acceso.
+- **Administración puede reiniciar el PIN** (vuelve al inicial y obliga a cambiarlo de nuevo).
+- **3 intentos fallidos → bloqueo de 1 hora**.
+- La persona puede **cambiar su PIN cuando quiera desde su perfil**.
+
+### Hallazgos verificados (2026-10-09)
+- No existe nada de PIN, intentos ni bloqueo en la API (sin `scrypt`/`bcrypt`, sin contadores de intentos de login)
+  y **no hay rate limit en ninguna ruta**.
+- Vigilancia: el login responde **404 / 409 / 200** según el documento (`personal/routes.ts:26-56`) y el
+  front lo llama en `vigilancia-datos/list.html:686-714`. Ese portal **no tiene perfil**: solo el botón «Salir»
+  (`#logout`).
+- Órganos: el login ya responde un 401 genérico. El token es HMAC sin estado (2 h) y el middleware
+  (`autenticarOrgano`) **ya consulta la base en cada request** para revalidar la membresía. El portal tampoco
+  tiene perfil: solo «Salir».
+- El colaborador (`Colaborador`) y el miembro de un órgano (`Persona` + `MiembroOrganoGobierno`) son entidades
+  distintas. Una misma persona puede estar en varios órganos y además ser colaborador.
+- Data Connect compila cada mutación en un solo statement: «leer intentos y luego sumar» **no es atómico**.
+  Usa el patrón de `_updateMany` condicional por `version` (como `CupoReservaDia`, ver
+  `bulevar-verde-api/doc/RESERVAS_CUPO_DIARIO.md`). El emulador serializa y no detecta la carrera.
+
+### Diseño propuesto
+**Modelo** — tabla nueva `CredencialPin`, una fila por sujeto:
+- `sujetoTipo` (`COLABORADOR` | `PERSONA`) + `sujetoId` (clave única)
+- `pinHash` (scrypt de `node:crypto` con sal por fila), `debeCambiar`, `intentosFallidos`, `bloqueadoHasta`
+- `version` (para los updates condicionales) y auditoría (`fechaCambio`, `reiniciadoPorUid`, `fechaReinicio`)
+
+**Sin fila = PIN inicial con `debeCambiar`.** Así no hace falta migrar datos: todos los actuales arrancan con
+los 4 últimos dígitos y se les pide cambiarlo.
+
+Con 4 dígitos hay solo 10.000 combinaciones: el hash solo evita leer el PIN en claro. La protección real es el
+bloqueo. Compara con `timingSafeEqual`.
+
+**Inicio de sesión** — `iniciar-sesion` recibe `{ numeroDocumento, pin }`:
+1. Si el documento no existe → **401 genérico** («Documento o PIN incorrectos»), también en vigilancia (quita la
+   enumeración del 404/409).
+2. Si `bloqueadoHasta > ahora` → rechazar sin verificar el PIN (ver decisión abierta 3 sobre el mensaje).
+3. PIN incorrecto → incremento atómico. En el 3.er fallo: `bloqueadoHasta = ahora + 1 h` e intentos a 0. Responde
+   el mismo 401 genérico.
+4. PIN correcto → intentos a 0. Entonces:
+   - si `debeCambiar`: no se emite la sesión, sino un **token corto (10 min) con propósito nuevo `CAMBIO_PIN`**
+     que solo sirve para `POST …/cambiar-pin-inicial { token, pinNuevo }`; al guardar se emite la sesión normal
+     (`customToken` o token del órgano);
+   - si no: se emite la sesión como hoy.
+
+**Reglas del PIN nuevo**: exactamente 4 dígitos, distinto del inicial y del actual. Ver decisión abierta 4 sobre
+rechazar PINs triviales.
+
+**Cambio voluntario («Mi perfil»)** — pide PIN actual + nuevo + confirmación. Los fallos del PIN actual
+**cuentan para el bloqueo**:
+- Vigilancia: `POST /api/v1/personal/mi-pin` con token Firebase. El colaborador se resuelve por `firebaseUid`
+  (*sin comprobar* si ya existe una query por `firebaseUid`). En la UI, un botón «Mi perfil» junto a «Salir» con un
+  modal de cambio de PIN.
+- Órganos: `POST /api/v1/{comite-convivencia|consejo-administracion|revisor-fiscal}/mi-pin` con la sesión del
+  órgano. En la UI, un botón «Cambiar PIN» junto a «Salir» en `organo-portal.html` (sirve para los tres).
+
+**Reinicio desde administración** — botón «Reiniciar PIN» en cada fila de la pestaña Personal:
+- Colaboradores: `POST /api/v1/personal/:id/reiniciar-pin`.
+- Miembros: `POST /api/v1/convivencia/{comite|consejo|revisor-fiscal}/miembros/:id/reiniciar-pin`.
+
+Efecto: PIN inicial, `debeCambiar`, intentos a 0 y **desbloqueo**. Se registra quién lo hizo y cuándo. Si el PIN
+es por persona (decisión abierta 1), el diálogo de confirmación avisa que afecta a todos sus órganos.
+
+**Sesiones vigentes al reiniciar o cambiar el PIN**:
+- Vigilancia: `firebaseAuth.revokeRefreshTokens(uid)`.
+- Órganos: incluir `version` en el token y compararla en `autenticarOrgano`, que ya consulta la base en cada
+  request. Así, al reiniciar el PIN se cierran las sesiones abiertas.
+
+### Riesgos que hay que conocer
+1. **El PIN inicial es predecible.** Hasta que la persona entre por primera vez, quien conozca su documento puede
+   entrar y **fijar el PIN él mismo**, dejando fuera al titular. Mitigación: pedir a cada uno que entre en cuanto
+   se despliegue; administración reinicia si alguien no puede entrar.
+2. **El bloqueo sirve para denegar el servicio.** Con el documento de un vigilante, alguien puede bloquearlo 1 h
+   una y otra vez. Mitigación: el reinicio desde administración desbloquea.
+3. **Sin rate limit por IP**, se puede probar «4 últimos dígitos» contra muchos documentos: un intento por
+   documento nunca activa el bloqueo. Afecta a quien no ha cambiado el PIN. Un rate limit por IP en los
+   `iniciar-sesion` lo frena (en Cloud Run la IP llega en `X-Forwarded-For`).
+4. **0.1 sigue abierto**: si producción firma con el secreto commiteado, se pueden fabricar tokens de órgano sin
+   conocer el PIN. Vigilancia no se ve afectada (usa `customToken` de Firebase). El PIN de los órganos solo
+   protege de verdad cuando se cierre 0.1.
+
+### Despliegue
+- La tabla nueva necesita `sql:migrate` y el deploy del conector admin (son operaciones nuevas, no rompen firmas;
+  ver la memoria de deploy de Data Connect).
+- **API y frontend van juntos**: en cuanto la API exige el PIN, el formulario viejo (solo documento) deja de
+  funcionar. Orden: conector → API → Hosting, seguidos.
+- Comunicar a vigilantes y miembros, antes del corte, que su PIN inicial son los 4 últimos dígitos del documento.
+
+### Decisiones abiertas
+1. **¿Un PIN por persona o uno por órgano?** Recomendado: uno por persona para todos sus órganos. El colaborador
+   tiene el suyo aparte, porque es otra entidad.
+2. **Documentos con letras o con menos de 4 dígitos** (pasaporte, CE): ¿se toman los 4 últimos dígitos
+   ignorando las letras? ¿Y si tiene menos de 4? (*Sin comprobar* si hay casos así en los datos.)
+3. **Mensaje del bloqueo**: decir «Bloqueado, intenta en N minutos» confirma que el documento existe. Responder
+   siempre el 401 genérico no da pistas, pero confunde al usuario legítimo. ¿Mostrar los intentos restantes?
+4. ¿Rechazar PINs triviales (`0000`, `1111`, `1234`, `4321`…)?
+5. ¿Se añade un rate limit por IP en los `iniciar-sesion` (riesgo 3)? Es la primera vez que la API tendría uno.
+
+### Criterios de aceptación
+- Sin PIN, o con un PIN incorrecto, no se entra a ningún portal. Documento inexistente y PIN incorrecto dan la
+  misma respuesta.
+- El primer inicio de sesión no da acceso hasta cambiar el PIN, y el PIN nuevo no puede ser el inicial.
+- Tres fallos bloquean 1 h, incluso con peticiones concurrentes (test contra Postgres real, no contra el
+  emulador).
+- El reinicio desde administración desbloquea, obliga a cambiar el PIN y cierra las sesiones abiertas.
+- El cambio desde el perfil exige el PIN actual, y sus fallos cuentan para el bloqueo.
+- Tests de rutas para los cinco portales: vigilancia/supervisor, comité, consejo y revisoría.
+
+---
+
 ## Orden de trabajo (2026-10-09)
 
 1. **10** (catálogo, pequeño) y **paso 1 del 9** (prueba con un residente real).
@@ -1067,7 +1235,9 @@ Decisión de la limpieza (punto 4): los importadores puntuales sobran. Lo único
 9. **7** mantenimiento, luego **8** PQRS + consejo (con sus áreas en el dashboard).
 10. **14** importador, reutilizando la semilla del punto 1.
 
-**Aplazados sin plan**: 0.1 (secreto de sesión) y N7 (login solo con documento).
+**Aplazado sin plan**: 0.1 (secreto de sesión). **N7** ya tiene plan en el punto **15** (documento + PIN), sin
+lugar asignado en este orden. Va antes de dar acceso real a supervisor y revisor fiscal, y rinde más si 0.1 se
+cierra antes (riesgo 4 del punto 15).
 
 ---
 
@@ -1077,5 +1247,5 @@ Las 14 preguntas del 2026-10-08 se respondieron el 2026-10-09; las respuestas es
 **Decisiones** de cada punto. Siguen abiertas:
 
 1. **0.1**: ¿está definida `RESIDENT_SESSION_SECRET` en Cloud Run? ¿Cuándo se retoma la rotación?
-2. **N7**: ¿qué segundo factor para vigilancia, comité y consejo (PIN por persona, reto por correo como el del
-   residente)? Y como mínimo, ¿límite de intentos y respuesta genérica?
+2. **N7**: respondida el 2026-10-09 → documento + PIN (punto 15). Quedan las 5 decisiones abiertas del punto 15
+   (PIN por persona u órgano, documentos con letras, mensaje del bloqueo, PINs triviales y rate limit por IP).

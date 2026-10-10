@@ -452,6 +452,11 @@
     rutaCasos: '/api/v1/consejo-administracion',
     acciones: [],
     anularSoloSinSancion: true
+    {{- else if eq $modo "revisor" }}
+    // Revisoría Fiscal: solo consulta de los mismos casos que ve el Consejo.
+    rutaCasos: '/api/v1/revisor-fiscal',
+    acciones: [],
+    anularSoloSinSancion: true
     {{- else if eq $modo "comite" }}
     rutaCasos: '/api/v1/comite-convivencia',
     acciones: ['ANULAR', 'ACTA_COMITE', 'CAMBIAR_SEVERIDAD', 'CIERRE', 'DESCARGOS_EN_NOMBRE'],

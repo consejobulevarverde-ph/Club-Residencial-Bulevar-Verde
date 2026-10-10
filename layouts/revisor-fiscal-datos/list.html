@@ -1,0 +1,13 @@
+{{ partial "organo-portal.html" (dict
+  "ctx" .
+  "modo" "revisor"
+  "prefijo" "revisor"
+  "icono" "bi-clipboard-check"
+  "titulo" "Revisoría Fiscal"
+  "descripcion" "Consulta, en solo lectura, de los casos de convivencia remitidos al Consejo de Administración."
+  "deOrgano" "de la Revisoría Fiscal"
+  "alOrgano" "a la Revisoría Fiscal"
+  "rutaLogin" "/api/v1/revisor-fiscal/iniciar-sesion"
+  "storageKey" "bvRevisorFiscalToken"
+  "storageUsuarioKey" "bvRevisorFiscalUsuario"
+) }}

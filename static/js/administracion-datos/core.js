@@ -1846,13 +1846,14 @@ var config = window.ADMIN_DATOS_CONFIG || {};
       });
 
       // ===== PERSONAL CRUD =====
-      // Los filtros "Comité de Convivencia" y "Consejo de Administración" reutilizan la misma tabla y
-      // formulario, pero sus filas son membresías de residentes (/api/v1/convivencia/{comite|consejo}/miembros),
-      // no colaboradores.
+      // Los filtros "Comité de Convivencia", "Consejo de Administración" y "Revisoría Fiscal" reutilizan la
+      // misma tabla y formulario, pero sus filas son membresías de residentes
+      // (/api/v1/convivencia/{comite|consejo|revisor-fiscal}/miembros), no colaboradores.
 
       var ORGANOS_PERSONAL = {
         COMITE: { ruta: '/api/v1/convivencia/comite/miembros', nombre: 'Comité de Convivencia', miembro: 'del comité', portal: 'comité' },
-        CONSEJO: { ruta: '/api/v1/convivencia/consejo/miembros', nombre: 'Consejo de Administración', miembro: 'del consejo', portal: 'consejo' }
+        CONSEJO: { ruta: '/api/v1/convivencia/consejo/miembros', nombre: 'Consejo de Administración', miembro: 'del consejo', portal: 'consejo' },
+        REVISOR_FISCAL: { ruta: '/api/v1/convivencia/revisor-fiscal/miembros', nombre: 'equipo de Revisoría Fiscal', miembro: 'de la revisoría fiscal', portal: 'revisor fiscal' }
       };
       var personalComiteCache = [];
 
