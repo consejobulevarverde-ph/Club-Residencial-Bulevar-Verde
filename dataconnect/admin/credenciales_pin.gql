@@ -1,0 +1,93 @@
+# PIN de acceso de vigilancia, comité, consejo y revisoría fiscal (ver type CredencialPin). Todas
+# NO_ACCESS: la API autoriza antes de invocarlas (login sin sesión Firebase; reinicio solo
+# administrador/superadmin).
+#
+# Intentos: la API llama ReservarIntentoPinAdmin ANTES de comparar el PIN. El UPDATE condicional
+# (intentosFallidos < $maximo y sin bloqueo) es atómico por fila: con N peticiones simultáneas solo
+# $maximo consiguen una verificación; las demás reciben PIN_BLOQUEADO. Un PIN correcto llama
+# ExitoPinAdmin (intentos a 0); el fallo que llega a $maximo llama BloquearPinAdmin.
+
+query ObtenerCredencialPinAdmin($numeroDocumento: String!)
+@auth(level: NO_ACCESS) {
+  credencial_pin(key: { numeroDocumento: $numeroDocumento }) {
+    numeroDocumento
+    pinHash
+    debeCambiar
+    intentosFallidos
+    bloqueadoHasta
+    version
+  }
+}
+
+mutation AsegurarCredencialPinAdmin($numeroDocumento: String!)
+@auth(level: NO_ACCESS) {
+  credencial_pin_upsert(data: { numeroDocumento: $numeroDocumento })
+}
+
+mutation ReservarIntentoPinAdmin($numeroDocumento: String!, $maximo: Int!)
+@auth(level: NO_ACCESS)
+@transaction {
+  reservado: credencial_pin_updateMany(
+    where: { numeroDocumento: { eq: $numeroDocumento }, intentosFallidos: { lt: $maximo }, bloqueadoHasta: { isNull: true } }
+    data: { intentosFallidos_update: [{ inc: 1 }] }
+  ) @check(expr: "this == 1", message: "PIN_BLOQUEADO")
+}
+
+mutation ExitoPinAdmin($numeroDocumento: String!)
+@auth(level: NO_ACCESS) {
+  credencial_pin_updateMany(
+    where: { numeroDocumento: { eq: $numeroDocumento } }
+    data: { intentosFallidos: 0, bloqueadoHasta: null }
+  )
+}
+
+# Idempotente: solo bloquea si ya se agotaron los intentos y todavía no hay bloqueo.
+mutation BloquearPinAdmin($numeroDocumento: String!, $maximo: Int!, $hasta: Timestamp!)
+@auth(level: NO_ACCESS) {
+  credencial_pin_updateMany(
+    where: { numeroDocumento: { eq: $numeroDocumento }, intentosFallidos: { ge: $maximo }, bloqueadoHasta: { isNull: true } }
+    data: { bloqueadoHasta: $hasta }
+  )
+}
+
+# Idempotente: levanta un bloqueo ya vencido y devuelve los intentos a 0.
+mutation DesbloquearPinVencidoAdmin($numeroDocumento: String!, $ahora: Timestamp!)
+@auth(level: NO_ACCESS) {
+  credencial_pin_updateMany(
+    where: { numeroDocumento: { eq: $numeroDocumento }, bloqueadoHasta: { le: $ahora } }
+    data: { intentosFallidos: 0, bloqueadoHasta: null }
+  )
+}
+
+mutation GuardarPinAdmin($numeroDocumento: String!, $pinHash: String!)
+@auth(level: NO_ACCESS) {
+  credencial_pin_updateMany(
+    where: { numeroDocumento: { eq: $numeroDocumento } }
+    data: {
+      pinHash: $pinHash
+      debeCambiar: false
+      intentosFallidos: 0
+      bloqueadoHasta: null
+      version_update: [{ inc: 1 }]
+      fechaCambio_expr: "request.time"
+    }
+  )
+}
+
+# Vuelve al PIN inicial (pinHash NULL), obliga a cambiarlo, desbloquea y sube la versión (cierra
+# las sesiones de órganos abiertas). La API llama antes AsegurarCredencialPinAdmin.
+mutation ReiniciarPinAdmin($numeroDocumento: String!, $porUid: String!)
+@auth(level: NO_ACCESS) {
+  credencial_pin_updateMany(
+    where: { numeroDocumento: { eq: $numeroDocumento } }
+    data: {
+      pinHash: null
+      debeCambiar: true
+      intentosFallidos: 0
+      bloqueadoHasta: null
+      version_update: [{ inc: 1 }]
+      reiniciadoPorUid: $porUid
+      fechaReinicio_expr: "request.time"
+    }
+  )
+}

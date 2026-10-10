@@ -128,3 +128,27 @@ query BuscarColaboradorPorDocumentoAdmin(
     activo
   }
 }
+
+# Colaborador de la sesión Firebase actual (cambio de PIN propio). La API ya autenticó el token.
+query ObtenerColaboradorPorFirebaseUidAdmin(
+  $firebaseUid: String!
+)
+@auth(level: NO_ACCESS) {
+  colaboradores(where: { firebaseUid: { eq: $firebaseUid }, activo: { eq: true } }, limit: 1) {
+    id
+    numeroDocumento
+    nombreCompleto
+    rol
+  }
+}
+
+# Cierre de sesiones al reiniciar el PIN: el colaborador (si lo hay) que comparte ese documento.
+query BuscarColaboradorActivoPorDocumentoAdmin(
+  $numeroDocumento: String!
+)
+@auth(level: NO_ACCESS) {
+  colaboradores(where: { numeroDocumento: { eq: $numeroDocumento }, activo: { eq: true } }, limit: 1) {
+    id
+    firebaseUid
+  }
+}

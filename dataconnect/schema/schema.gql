@@ -517,6 +517,27 @@ type MiembroOrganoGobierno
   fechaActualizacion: Timestamp! @default(expr: "request.time")
 }
 
+# PIN de 4 dígitos de quien entra por documento (vigilancia, comité, consejo y revisoría fiscal).
+# Una fila por número de documento (mayúsculas): el mismo PIN sirve a todos los portales de la persona.
+# Sin fila, o con pinHash NULL, el PIN es el inicial (4 últimos dígitos del documento) y debeCambiar
+# obliga a cambiarlo en el primer ingreso. intentosFallidos se reserva ANTES de verificar el PIN con un
+# UPDATE condicional (< 3), así peticiones concurrentes no superan los intentos permitidos.
+# bloqueadoHasta lo fija el tercer fallo. version sube al cambiar o reiniciar el PIN y cierra sesiones
+# de órganos emitidas antes (el token la lleva).
+type CredencialPin
+  @table(name: "credenciales_pin", singular: "credencial_pin", plural: "credenciales_pin", key: "numeroDocumento") {
+  numeroDocumento: String!
+  pinHash: String
+  debeCambiar: Boolean! @default(value: true)
+  intentosFallidos: Int! @default(value: 0)
+  bloqueadoHasta: Timestamp
+  version: Int! @default(value: 0)
+  fechaCambio: Timestamp
+  reiniciadoPorUid: String
+  fechaReinicio: Timestamp
+  fechaCreacion: Timestamp! @default(expr: "request.time")
+}
+
 # Vehículo fotografiado por vigilancia en el parqueadero de visitantes. Este registro solo guarda la
 # evidencia; la sanción (moto/carro, con valor que puede cambiar de un mes a otro) se calcula en una
 # etapa posterior, que marca fechaPosprocesamiento. `placa` es la confirmada por el vigilante y
